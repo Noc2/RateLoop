@@ -314,6 +314,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyPacket, setBusyPacket] = useState<string | null>(null);
+  const [showEvidenceSettings, setShowEvidenceSettings] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -390,13 +391,23 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
         <div className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 className="text-2xl font-semibold">Decision records and exports</h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-base-content/55">
-              Inspect the exact review policy, verdict, signature, coverage history, and external-anchor state.
-            </p>
           </div>
-          <button type="button" className="btn btn-sm border-white/10 bg-white/[0.06]" onClick={() => void load()}>
-            Refresh
-          </button>
+          <div className="flex flex-wrap gap-2">
+            {canManage ? (
+              <button
+                type="button"
+                className="btn btn-sm border-white/10 bg-white/[0.06]"
+                aria-controls="evidence-settings"
+                aria-expanded={showEvidenceSettings}
+                onClick={() => setShowEvidenceSettings(current => !current)}
+              >
+                {showEvidenceSettings ? "Close settings" : "Evidence settings"}
+              </button>
+            ) : null}
+            <button type="button" className="btn btn-sm border-white/10 bg-white/[0.06]" onClick={() => void load()}>
+              Refresh
+            </button>
+          </div>
         </div>
       </section>
 
@@ -417,6 +428,15 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
           {packets.map(({ packet, projectName, suiteName }) => {
             const outcome = packet.payload.aggregation.suite.outcome;
             const attestation = attestationByDigest.get(packet.packetDigest);
+            const sourceSubpanels = packet.payload.aggregation.reviewerCoverage?.sourceSubpanels ?? [];
+            const targetReviewerCount = sourceSubpanels.reduce(
+              (total, source) => total + source.targetReviewerCount,
+              0,
+            );
+            const respondingReviewerCount = sourceSubpanels.reduce(
+              (total, source) => total + source.respondingReviewerCount,
+              0,
+            );
             const settlementLinks = (packet.payload.settlement?.links ?? [])
               .map(safeExternalEvidenceLink)
               .filter((link): link is string => link !== null);
@@ -453,76 +473,39 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                     {busyPacket === packet.payload.packetId ? "Exporting…" : "Export packet"}
                   </button>
                 </div>
-                <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
                   <div>
                     <dt className="text-xs text-base-content/55">Generated</dt>
                     <dd className="mt-1">{new Date(packet.payload.generatedAt).toLocaleString()}</dd>
                   </div>
-                  <div>
-                    <dt className="text-xs text-base-content/55">Trigger</dt>
-                    <dd className="mt-1 capitalize">
-                      {packet.payload.reviewContext?.selectionTrigger?.kind?.replaceAll("_", " ") ?? "Not recorded"}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-base-content/55">Gate</dt>
-                    <dd className="mt-1 capitalize">{packet.payload.reviewContext?.gate?.type ?? "Not recorded"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-base-content/55">Signing key</dt>
-                    <dd className="mt-1 break-all font-mono text-xs">{packet.signing.keyId}</dd>
-                  </div>
-                </dl>
-                <div className="mt-4 grid gap-4 border-t border-white/10 pt-4 lg:grid-cols-2">
-                  <section aria-label="Settlement evidence">
-                    <h4 className="text-sm font-semibold">Settlement evidence</h4>
-                    <p className="mt-2 text-sm leading-6 text-base-content/65">
-                      {packet.payload.settlement?.statement ?? "Settlement evidence was not recorded in this packet."}
-                    </p>
-                    {settlementLinks.length > 0 ? (
-                      <ul className="mt-2 space-y-1 text-xs">
-                        {settlementLinks.map(link => (
-                          <li key={link}>
-                            <a className="link break-all" href={link} rel="noreferrer">
-                              {link}
-                            </a>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </section>
-                  <section aria-label="Reviewer provenance">
-                    <h4 className="text-sm font-semibold">Reviewer provenance</h4>
-                    <div className="mt-2 space-y-2 text-sm text-base-content/65">
-                      {(packet.payload.aggregation.reviewerCoverage?.sourceSubpanels ?? []).map(source => (
-                        <p key={source.source}>
-                          <span className="capitalize">{source.source.replaceAll("_", " ")}</span>:{" "}
-                          {source.assignedReviewerCount} of {source.targetReviewerCount} assigned;{" "}
-                          {source.respondingReviewerCount} responded; {source.completeJudgmentSetReviewerCount}{" "}
-                          complete; {source.paidReviewerCount} paid.
-                        </p>
-                      ))}
-                      {packet.payload.reviewContext?.reviewerQualifications ? (
-                        <p>
-                          Qualification categories:{" "}
-                          {packet.payload.reviewContext.reviewerQualifications.categories.length > 0
-                            ? packet.payload.reviewContext.reviewerQualifications.categories
-                                .map(category => `${category.key} (${category.reviewerCount ?? "suppressed"})`)
-                                .join(", ")
-                            : `suppressed below the ${packet.payload.reviewContext.reviewerQualifications.minimumAggregationSize}-reviewer privacy threshold`}
-                          .
-                        </p>
-                      ) : (
-                        <p>Qualification provenance was not recorded.</p>
-                      )}
+                  {targetReviewerCount > 0 ? (
+                    <div>
+                      <dt className="text-xs text-base-content/55">Responses</dt>
+                      <dd className="mt-1">
+                        {respondingReviewerCount} of {targetReviewerCount}
+                      </dd>
                     </div>
-                  </section>
-                </div>
+                  ) : null}
+                </dl>
                 <details className="mt-4 border-t border-white/10 pt-4">
                   <summary className="cursor-pointer text-sm font-semibold text-base-content/65">
-                    Anchor details
+                    Verification details
                   </summary>
-                  <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+                  <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+                    <div>
+                      <dt className="text-xs text-base-content/55">Trigger</dt>
+                      <dd className="mt-1 capitalize">
+                        {packet.payload.reviewContext?.selectionTrigger?.kind?.replaceAll("_", " ") ?? "Not recorded"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-base-content/55">Gate</dt>
+                      <dd className="mt-1 capitalize">{packet.payload.reviewContext?.gate?.type ?? "Not recorded"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-base-content/55">Signing key</dt>
+                      <dd className="mt-1 break-all font-mono text-xs">{packet.signing.keyId}</dd>
+                    </div>
                     <div>
                       <dt className="text-xs text-base-content/55">Packet digest</dt>
                       <dd className="mt-1 break-all font-mono text-xs">{packet.packetDigest}</dd>
@@ -535,6 +518,51 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                       </dd>
                     </div>
                   </dl>
+                  <div className="mt-4 grid gap-4 border-t border-white/10 pt-4 lg:grid-cols-2">
+                    <section aria-label="Settlement evidence">
+                      <h4 className="text-sm font-semibold">Settlement evidence</h4>
+                      <p className="mt-2 text-sm leading-6 text-base-content/65">
+                        {packet.payload.settlement?.statement ?? "Settlement evidence was not recorded in this packet."}
+                      </p>
+                      {settlementLinks.length > 0 ? (
+                        <ul className="mt-2 space-y-1 text-xs">
+                          {settlementLinks.map(link => (
+                            <li key={link}>
+                              <a className="link break-all" href={link} rel="noreferrer">
+                                {link}
+                              </a>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </section>
+                    <section aria-label="Reviewer provenance">
+                      <h4 className="text-sm font-semibold">Reviewer provenance</h4>
+                      <div className="mt-2 space-y-2 text-sm text-base-content/65">
+                        {sourceSubpanels.map(source => (
+                          <p key={source.source}>
+                            <span className="capitalize">{source.source.replaceAll("_", " ")}</span>:{" "}
+                            {source.assignedReviewerCount} of {source.targetReviewerCount} assigned;{" "}
+                            {source.respondingReviewerCount} responded; {source.completeJudgmentSetReviewerCount}{" "}
+                            complete; {source.paidReviewerCount} paid.
+                          </p>
+                        ))}
+                        {packet.payload.reviewContext?.reviewerQualifications ? (
+                          <p>
+                            Qualification categories:{" "}
+                            {packet.payload.reviewContext.reviewerQualifications.categories.length > 0
+                              ? packet.payload.reviewContext.reviewerQualifications.categories
+                                  .map(category => `${category.key} (${category.reviewerCount ?? "suppressed"})`)
+                                  .join(", ")
+                              : `suppressed below the ${packet.payload.reviewContext.reviewerQualifications.minimumAggregationSize}-reviewer privacy threshold`}
+                            .
+                          </p>
+                        ) : (
+                          <p>Qualification provenance was not recorded.</p>
+                        )}
+                      </div>
+                    </section>
+                  </div>
                   {attestation?.lastError ? (
                     <p className="mt-3 text-xs text-red-100" role="status">
                       {attestation.lastError}
@@ -554,8 +582,19 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
         trustedKeyDownloadUrl={selectedTrustedKeyDownloadUrl}
       />
 
-      {canManage ? (
-        <section className="surface-card rounded-2xl p-6" aria-labelledby="compliance-export-heading">
+      {canManage && untrustedPacketKeyCount > 0 ? (
+        <p className="rounded-xl border border-red-300/20 bg-red-300/[0.06] p-3 text-sm text-red-100" role="alert">
+          {untrustedPacketKeyCount} packet signing {untrustedPacketKeyCount === 1 ? "key is" : "keys are"} not in the
+          configured trust anchor.
+        </p>
+      ) : null}
+
+      {canManage && showEvidenceSettings ? (
+        <section
+          id="evidence-settings"
+          className="surface-card rounded-2xl p-6"
+          aria-labelledby="compliance-export-heading"
+        >
           <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-green)]">Workspace controls</p>
           <h2 id="compliance-export-heading" className="mt-2 text-xl font-semibold">
             Compliance exports
@@ -573,21 +612,12 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
         </section>
       ) : null}
 
-      {canManage ? (
+      {canManage && showEvidenceSettings ? (
         <section className="surface-card rounded-2xl p-6" aria-labelledby="trusted-key-heading">
           <h2 id="trusted-key-heading" className="text-xl font-semibold">
             Trusted verification keys
           </h2>
           <p className="mt-2 text-sm text-base-content/55">Current and retired keys remain visible for old packets.</p>
-          {untrustedPacketKeyCount > 0 ? (
-            <p
-              className="mt-4 rounded-xl border border-red-300/20 bg-red-300/[0.06] p-3 text-sm text-red-100"
-              role="alert"
-            >
-              {untrustedPacketKeyCount} packet signing {untrustedPacketKeyCount === 1 ? "key is" : "keys are"} not in
-              the configured trust anchor.
-            </p>
-          ) : null}
           {keys.length === 0 ? (
             <p className="mt-4 text-sm text-base-content/55">No key history is available.</p>
           ) : (
@@ -619,7 +649,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
         </section>
       ) : null}
 
-      {canManage ? (
+      {canManage && showEvidenceSettings ? (
         <section className="surface-card rounded-2xl p-6" aria-labelledby="enterprise-delivery-heading">
           <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Delivery</p>
           <h2 id="enterprise-delivery-heading" className="mt-2 text-xl font-semibold">
