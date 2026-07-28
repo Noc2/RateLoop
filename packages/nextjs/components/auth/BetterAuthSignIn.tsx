@@ -3,7 +3,16 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { normalizeSignInReturnPath } from "./signInReturnPath";
 import { Field } from "~~/components/tokenless/forms/Field";
-import { betterAuthClient, exchangeBetterAuthSession, readBrowserAuthConfiguration } from "~~/lib/auth/client";
+import {
+  type BrowserSessionResponse,
+  betterAuthClient,
+  exchangeBetterAuthSession,
+  logoutBrowserSession,
+  readBrowserAuthConfiguration,
+  readBrowserSession,
+} from "~~/lib/auth/client";
+
+const RESEND_COOLDOWN_SECONDS = 30;
 
 export async function runBetterAuthAction({
   action,
@@ -20,11 +29,20 @@ export async function runBetterAuthAction({
   setError(null);
   try {
     await action();
-  } catch (cause) {
-    setError(cause instanceof Error ? cause.message : fallbackMessage);
+  } catch {
+    setError(fallbackMessage);
   } finally {
     setBusy(false);
   }
+}
+
+export function maskedEmailDestination(value: string) {
+  const separator = value.lastIndexOf("@");
+  if (separator <= 0 || separator === value.length - 1) return "your email address";
+  const local = value.slice(0, separator);
+  const domain = value.slice(separator + 1);
+  const visible = local.length === 1 ? "•" : `${local[0]}${"•".repeat(Math.min(4, local.length - 1))}`;
+  return `${visible}@${domain}`;
 }
 
 function GoogleIcon() {
@@ -67,11 +85,14 @@ export function BetterAuthSignIn() {
   const [configuration, setConfiguration] = useState<Awaited<ReturnType<typeof readBrowserAuthConfiguration>> | null>(
     null,
   );
+  const [session, setSession] = useState<BrowserSessionResponse | null | undefined>(undefined);
   const [configurationError, setConfigurationError] = useState(false);
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [verified, setVerified] = useState(false);
+  const [completingExchange, setCompletingExchange] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -91,6 +112,14 @@ export function BetterAuthSignIn() {
     [],
   );
 
+  const loadSession = useCallback(async () => {
+    try {
+      setSession(await readBrowserSession());
+    } catch {
+      setSession(null);
+    }
+  }, []);
+
   const finishSignIn = useCallback(async () => {
     await perform(async () => {
       await exchangeBetterAuthSession();
@@ -100,68 +129,146 @@ export function BetterAuthSignIn() {
   }, [perform]);
 
   useEffect(() => {
-    void loadConfiguration();
     if (new URL(window.location.href).searchParams.get("exchange") === "1") {
-      void finishSignIn();
+      setCompletingExchange(true);
+      void finishSignIn().then(() => {
+        setCompletingExchange(false);
+        void loadConfiguration();
+        void loadSession();
+      });
+      return;
     }
-  }, [finishSignIn, loadConfiguration]);
+    void loadConfiguration();
+    void loadSession();
+  }, [finishSignIn, loadConfiguration, loadSession]);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timeout = window.setTimeout(() => setResendCooldown(value => Math.max(0, value - 1)), 1_000);
+    return () => window.clearTimeout(timeout);
+  }, [resendCooldown]);
+
+  async function requestCode() {
+    await perform(async () => {
+      const result = await betterAuthClient.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+      if (result.error) throw new Error("send failed");
+      setOtp("");
+      setOtpSent(true);
+      setResendCooldown(RESEND_COOLDOWN_SECONDS);
+    }, "We couldn't send a code. Check the email address and try again.");
+  }
 
   async function sendCode(event: FormEvent) {
     event.preventDefault();
-    await perform(async () => {
-      const result = await betterAuthClient.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
-      if (result.error) setError(result.error.message || "Unable to send the sign-in code.");
-      else setOtpSent(true);
-    }, "Unable to send the sign-in code.");
+    await requestCode();
   }
 
   async function verifyCode(event: FormEvent) {
     event.preventDefault();
     await perform(async () => {
       const result = await betterAuthClient.signIn.emailOtp({ email, otp });
-      if (result.error) setError(result.error.message || "The sign-in code is invalid or expired.");
+      if (result.error) throw new Error("verification failed");
       else setVerified(true);
-    }, "Unable to verify the sign-in code.");
+    }, "That code is invalid or expired. Request a new code and try again.");
   }
 
   async function signInWithPasskey() {
     await perform(async () => {
       const result = await betterAuthClient.signIn.passkey();
-      if (result.error) setError(result.error.message || "Passkey sign-in failed.");
+      if (result.error) throw new Error("passkey failed");
       else {
         await exchangeBetterAuthSession();
         await betterAuthClient.signOut().catch(() => undefined);
         window.location.assign(safeReturnPath());
       }
-    }, "Passkey sign-in failed.");
+    }, "We couldn't sign you in with a passkey. Try again or use an email code.");
   }
 
   async function signInWithSso() {
     const callbackURL = `${window.location.origin}/sign-in?exchange=1&returnTo=${encodeURIComponent(safeReturnPath())}`;
     await perform(async () => {
       const result = await betterAuthClient.signIn.sso({ email, callbackURL });
-      if (result.error) setError(result.error.message || "Company SSO is not available for this email domain.");
-    }, "Company SSO sign-in failed.");
+      if (result.error) throw new Error("SSO failed");
+    }, "Company SSO isn't available for this email address. Try another sign-in method.");
   }
 
   async function addPasskey() {
     await perform(async () => {
       const result = await betterAuthClient.passkey.addPasskey({ name: "RateLoop passkey" });
-      if (result.error) setError(result.error.message || "Unable to add this passkey.");
+      if (result.error) throw new Error("passkey registration failed");
       else {
         await exchangeBetterAuthSession();
         await betterAuthClient.signOut().catch(() => undefined);
         window.location.assign(safeReturnPath());
       }
-    }, "Unable to add this passkey.");
+    }, "We couldn't add this passkey. Finish sign-in now and add one later in Settings.");
   }
 
   async function social(provider: "apple" | "google") {
     const callbackURL = `${window.location.origin}/sign-in?exchange=1&returnTo=${encodeURIComponent(safeReturnPath())}`;
+    await perform(
+      async () => {
+        const result = await betterAuthClient.signIn.social({ provider, callbackURL });
+        if (result.error) throw new Error(`${provider} failed`);
+      },
+      `We couldn't continue with ${provider === "google" ? "Google" : "Apple"}. Try again or use an email code.`,
+    );
+  }
+
+  async function useAnotherAccount() {
     await perform(async () => {
-      const result = await betterAuthClient.signIn.social({ provider, callbackURL });
-      if (result.error) setError(result.error.message || `Unable to sign in with ${provider}.`);
-    }, `Unable to sign in with ${provider}.`);
+      await logoutBrowserSession();
+      setSession(null);
+      setEmail("");
+      setOtp("");
+      setOtpSent(false);
+      setVerified(false);
+      setResendCooldown(0);
+    }, "We couldn't sign out this account. Try again.");
+  }
+
+  if (completingExchange || session === undefined) {
+    return (
+      <p className="text-sm text-base-content/60" role="status">
+        Checking your account…
+      </p>
+    );
+  }
+  if (session) {
+    const accountLabel = session.displayName?.trim() || "your RateLoop account";
+    return (
+      <section className="space-y-4" aria-labelledby="active-account-heading">
+        <div>
+          <h2 id="active-account-heading" className="text-lg font-semibold text-base-content">
+            You&apos;re already signed in
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-base-content/65">
+            Continue with this account, or sign out before using another one.
+          </p>
+        </div>
+        <button
+          className="rateloop-gradient-action min-h-11 w-full px-4"
+          disabled={busy}
+          onClick={() => window.location.assign(safeReturnPath())}
+          type="button"
+        >
+          Continue as {accountLabel}
+        </button>
+        <button
+          className="btn btn-outline min-h-11 w-full"
+          disabled={busy}
+          onClick={() => void useAnotherAccount()}
+          type="button"
+        >
+          Use another account
+        </button>
+        {error ? (
+          <p className="text-sm leading-6 text-error" role="alert">
+            {error}
+          </p>
+        ) : null}
+      </section>
+    );
   }
 
   if (configurationError) {
@@ -206,30 +313,59 @@ export function BetterAuthSignIn() {
           </button>
         </div>
       ) : otpSent ? (
-        <form className="space-y-4" onSubmit={verifyCode}>
-          <Field
-            id="rateloop-otp"
-            label="Six-digit code"
-            className="font-mono tracking-[0.25em]"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            maxLength={6}
-            required
-            value={otp}
-            onChange={event => {
-              setError(null);
-              setOtp(event.target.value.replace(/\D/g, ""));
-            }}
-          />
-          <button className="rateloop-gradient-action min-h-11 w-full px-4" disabled={busy || otp.length !== 6}>
-            Verify code
-          </button>
-        </form>
+        <div className="space-y-4">
+          <p className="text-sm leading-6 text-base-content/65" role="status">
+            We sent a code to <strong className="font-medium text-base-content">{maskedEmailDestination(email)}</strong>
+            .
+          </p>
+          <form className="space-y-4" onSubmit={verifyCode}>
+            <Field
+              id="rateloop-otp"
+              label="Six-digit code"
+              className="font-mono tracking-[0.25em]"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              required
+              value={otp}
+              onChange={event => {
+                setError(null);
+                setOtp(event.target.value.replace(/\D/g, ""));
+              }}
+            />
+            <button className="rateloop-gradient-action min-h-11 w-full px-4" disabled={busy || otp.length !== 6}>
+              Verify code
+            </button>
+          </form>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <button
+              className="btn btn-outline min-h-11 w-full"
+              disabled={busy}
+              onClick={() => {
+                setError(null);
+                setOtp("");
+                setOtpSent(false);
+                setResendCooldown(0);
+              }}
+              type="button"
+            >
+              Change email
+            </button>
+            <button
+              className="btn btn-outline min-h-11 w-full"
+              disabled={busy || resendCooldown > 0}
+              onClick={() => void requestCode()}
+              type="button"
+            >
+              {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : "Resend code"}
+            </button>
+          </div>
+        </div>
       ) : (
         <form className="space-y-4" onSubmit={sendCode}>
           <Field
             id="rateloop-email"
-            label="Work email"
+            label="Email address"
             type="email"
             autoComplete="email"
             required
@@ -279,7 +415,7 @@ export function BetterAuthSignIn() {
               onClick={() => void social("google")}
             >
               <GoogleIcon />
-              Google
+              Continue with Google
             </button>
             <button
               className="btn rateloop-secondary-action gap-3"
@@ -287,7 +423,7 @@ export function BetterAuthSignIn() {
               onClick={() => void social("apple")}
             >
               <AppleIcon />
-              Apple
+              Continue with Apple
             </button>
           </div>
         </>
