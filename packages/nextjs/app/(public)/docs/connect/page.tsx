@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { HOST_CATEGORY_LABELS, HostTierBadge } from "./hostGuide";
 import { DocsTitle } from "~~/components/docs/DocsTitle";
+import { Card } from "~~/components/tokenless/ui/Card";
 import {
   TOKENLESS_HOST_CAPABILITIES,
   type TokenlessHostCapability,
@@ -27,14 +28,16 @@ function HostList({ hosts }: { hosts: readonly TokenlessHostCapability[] }) {
     <ul className="not-prose m-0 grid list-none gap-2 p-0 sm:grid-cols-2">
       {hosts.map(host => (
         <li key={host.id}>
-          <Link
+          <Card
+            as={Link}
+            variant="marketing"
             href={`/docs/connect/${host.id}`}
             prefetch={false}
-            className="rateloop-surface-card flex items-center justify-between gap-3 rounded-xl p-4 no-underline"
+            className="flex items-center justify-between gap-3 rounded-xl p-4 no-underline"
           >
             <span className="text-sm font-semibold text-base-content">{host.displayName}</span>
             <HostTierBadge tier={host.supportTier} />
-          </Link>
+          </Card>
         </li>
       ))}
     </ul>

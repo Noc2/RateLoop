@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChoiceInput, Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
+import { Card } from "~~/components/tokenless/ui/Card";
 import { HttpJsonError, readJson } from "~~/lib/tokenless/http";
 
 const notificationOptions = [
@@ -280,7 +281,7 @@ export function NotificationSettingsPanel() {
 
   return (
     <section id="notifications" className="scroll-mt-24 space-y-5">
-      <section className="surface-card rounded-2xl p-6">
+      <Card as="section" className="rounded-2xl p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="text-xl font-semibold">Choose your notifications</h2>
@@ -339,9 +340,9 @@ export function NotificationSettingsPanel() {
             </button>
           ) : null}
         </AsyncSection>
-      </section>
+      </Card>
 
-      <section className="surface-card rounded-2xl p-6">
+      <Card as="section" className="rounded-2xl p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="text-xl font-semibold">Notification email</h2>
@@ -395,7 +396,7 @@ export function NotificationSettingsPanel() {
             Email notifications are unavailable right now. Browser notifications still use the choices above.
           </p>
         )}
-      </section>
+      </Card>
 
       {status ? (
         <p className="rounded-lg bg-emerald-300/10 p-3 text-sm text-emerald-100" role="status">

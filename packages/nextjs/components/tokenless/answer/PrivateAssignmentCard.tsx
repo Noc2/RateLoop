@@ -1,3 +1,5 @@
+import { Card } from "~~/components/tokenless/ui/Card";
+
 export type PrivateAnswerAssignment = {
   assignmentId: string;
   projectName: string | null;
@@ -43,7 +45,7 @@ export function PrivateAssignmentCard({ assignment }: { assignment: PrivateAnswe
   const status = displayStatus(assignment);
   return (
     <li>
-      <details className="surface-card group rounded-lg">
+      <Card as="details" className="group rounded-lg">
         <summary className="cursor-pointer list-none p-4 marker:hidden sm:p-5 [&::-webkit-details-marker]:hidden">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
@@ -114,7 +116,7 @@ export function PrivateAssignmentCard({ assignment }: { assignment: PrivateAnswe
           </dl>
           <p className="mt-4 text-sm text-base-content/55">{historyNote(status)}</p>
         </div>
-      </details>
+      </Card>
     </li>
   );
 }

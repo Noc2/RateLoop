@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
+import { Card } from "~~/components/tokenless/ui/Card";
 import { PageHeading } from "~~/components/tokenless/ui/PageHeading";
 import { AUTH_SESSION_COOKIE, findAuthSession } from "~~/lib/auth/session";
 import { AgentOAuthError } from "~~/lib/tokenless/agentOAuth";
@@ -22,7 +23,7 @@ const scopeLabels: Record<string, string> = {
 
 function CodeEntry({ message }: { message?: string }) {
   return (
-    <section className="surface-card w-full max-w-lg rounded-2xl p-6 sm:p-9" aria-labelledby="device-code-title">
+    <Card as="section" className="w-full max-w-lg rounded-2xl p-6 sm:p-9" aria-labelledby="device-code-title">
       <PageHeading
         accent="blue"
         heading="Enter your connection code"
@@ -55,7 +56,7 @@ function CodeEntry({ message }: { message?: string }) {
           Continue
         </button>
       </form>
-    </section>
+    </Card>
   );
 }
 
@@ -113,7 +114,7 @@ export default async function AgentOAuthDevicePage({ searchParams }: { searchPar
 
   return (
     <div className="flex grow items-start justify-center px-4 py-16 sm:py-24">
-      <section className="surface-card w-full max-w-xl rounded-2xl p-6 sm:p-9" aria-labelledby="device-approval-title">
+      <Card as="section" className="w-full max-w-xl rounded-2xl p-6 sm:p-9" aria-labelledby="device-approval-title">
         <PageHeading
           accent="blue"
           heading={terminal?.title ?? `Allow ${approval.clientName}?`}
@@ -158,7 +159,7 @@ export default async function AgentOAuthDevicePage({ searchParams }: { searchPar
             </form>
           </>
         ) : null}
-      </section>
+      </Card>
     </div>
   );
 }

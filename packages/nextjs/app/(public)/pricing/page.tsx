@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { WorkspacePlanCards } from "~~/components/pricing/WorkspacePlanCards";
+import { Card } from "~~/components/tokenless/ui/Card";
 import { TOKENLESS_BILLING_PLANS, formatUsdPrice } from "~~/lib/billing/plans";
 import { resolveDemoBookingUrl } from "~~/lib/marketing/demoBooking";
 
@@ -53,7 +54,7 @@ export default async function PricingPage({
           />
         </section>
 
-        <section className="surface-card mt-16 grid gap-8 rounded-2xl p-7 sm:p-9 lg:grid-cols-2">
+        <Card as="section" className="mt-16 grid gap-8 rounded-2xl p-7 sm:p-9 lg:grid-cols-2">
           <article>
             <h2 className="text-2xl font-semibold">What counts as a decision?</h2>
             <p className="mt-3 text-base leading-7 text-base-content/60">
@@ -68,7 +69,7 @@ export default async function PricingPage({
               unpaid and use the decision allowance included in your plan.
             </p>
           </article>
-        </section>
+        </Card>
       </div>
     </div>
   );

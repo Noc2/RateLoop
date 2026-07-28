@@ -5,6 +5,7 @@ import { eth_getTransactionByHash, getRpcClient, prepareTransaction, sendTransac
 import { baseSepolia } from "thirdweb/chains";
 import { ConnectButton, ThirdwebProvider, useActiveAccount } from "thirdweb/react";
 import { Field, SelectField } from "~~/components/tokenless/forms/Field";
+import { Card } from "~~/components/tokenless/ui/Card";
 import { readBrowserSession } from "~~/lib/auth/client";
 import { rateLoopThirdwebWallets, thirdwebBrowserClient } from "~~/lib/thirdweb/client";
 import { listDeviceRecoveries, parseDeviceRecoveryBackup } from "~~/lib/tokenless/rater/deviceRecovery";
@@ -245,7 +246,7 @@ function SettlementRecoveryControls() {
     : "0";
 
   return (
-    <section className="surface-card rounded-2xl p-5" aria-labelledby="settlement-recovery-title">
+    <Card as="section" className="rounded-2xl p-5" aria-labelledby="settlement-recovery-title">
       <h2 id="settlement-recovery-title" className="text-xl font-semibold">
         Reveal and claim paid reviews
       </h2>
@@ -309,7 +310,7 @@ function SettlementRecoveryControls() {
       </button>
 
       {snapshot ? (
-        <div className="surface-card-nested mt-5 rounded-xl p-4">
+        <Card as="div" variant="nested" className="mt-5 rounded-xl p-4">
           <dl className="grid gap-3 text-sm sm:grid-cols-2">
             <div>
               <dt className="text-base-content/55">Round status</dt>
@@ -363,7 +364,7 @@ function SettlementRecoveryControls() {
               />
             </div>
           ) : null}
-        </div>
+        </Card>
       ) : null}
       {transactionHash ? (
         <a
@@ -385,7 +386,7 @@ function SettlementRecoveryControls() {
           {error}
         </p>
       ) : null}
-    </section>
+    </Card>
   );
 }
 

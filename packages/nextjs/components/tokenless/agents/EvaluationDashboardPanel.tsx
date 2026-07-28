@@ -15,6 +15,7 @@ import { updateEvidenceUrlSearch } from "~~/components/tokenless/agents/evidence
 import { Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
+import { Card } from "~~/components/tokenless/ui/Card";
 import { formatHumanDurationFromSeconds } from "~~/lib/humanDuration";
 import type { AssuranceMetricsSnapshot } from "~~/lib/tokenless/assuranceMetrics";
 import type { DeciderDecisionTrend, EvaluationDashboard, EvaluationRun } from "~~/lib/tokenless/evaluationDashboard";
@@ -103,7 +104,7 @@ function AssuranceMetricsSummary({ snapshot }: { snapshot: AssuranceMetricsSnaps
       ? "No data"
       : `${(snapshot.overrideDecisions.overrideRateBps / 100).toFixed(1)}% of ${snapshot.overrideDecisions.decided}`;
   return (
-    <section className="surface-card rounded-2xl p-6" aria-labelledby="assurance-metrics-heading">
+    <Card as="section" className="rounded-2xl p-6" aria-labelledby="assurance-metrics-heading">
       <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Last 30 days</p>
       <h2 id="assurance-metrics-heading" className="mt-2 text-xl font-semibold">
         Assurance operations
@@ -116,17 +117,17 @@ function AssuranceMetricsSummary({ snapshot }: { snapshot: AssuranceMetricsSnaps
           ["Override rate", overrideRate],
           ["Latest evidence anchor", anchor],
         ].map(([label, value]) => (
-          <div key={label} className="surface-card-nested rounded-xl p-4">
+          <Card as="div" variant="nested" key={label} className="rounded-xl p-4">
             <dt className="text-xs text-base-content/55">{label}</dt>
             <dd className="mt-2 font-mono text-sm">{value}</dd>
-          </div>
+          </Card>
         ))}
       </dl>
       <p className="mt-3 text-xs text-base-content/55">
         {snapshot.reviewsRequested} requested · {snapshot.reviewsCompleted} completed · {snapshot.blocked} blocked ·{" "}
         {snapshot.approvalRequired} awaiting approval
       </p>
-    </section>
+    </Card>
   );
 }
 
@@ -568,7 +569,7 @@ function RunCard({
         : "Waiting for responses"
       : `${percent(share)} chose the candidate`;
   return (
-    <article className="surface-card rounded-2xl p-5" aria-labelledby={`evaluation-${run.runId}`}>
+    <Card as="article" className="rounded-2xl p-5" aria-labelledby={`evaluation-${run.runId}`}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="font-mono text-xs uppercase tracking-wider text-[var(--rateloop-blue)]">{run.projectName}</p>
@@ -712,7 +713,7 @@ function RunCard({
           ) : null}
         </div>
       ) : null}
-    </article>
+    </Card>
   );
 }
 
@@ -910,9 +911,9 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
 
   return (
     <div className="space-y-5">
-      <section className="surface-card rounded-2xl p-6">
+      <Card as="section" className="rounded-2xl p-6">
         <h2 className="text-2xl font-semibold">Human review results</h2>
-      </section>
+      </Card>
 
       {error ? (
         <div className="rounded-xl border border-red-300/20 bg-red-300/[0.06] p-4 text-sm text-red-100" role="alert">
@@ -923,19 +924,19 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
         {null}
       </AsyncSection>
       {!loading && workspaces.length === 0 ? (
-        <div className="surface-card rounded-2xl p-6">
+        <Card as="div" className="rounded-2xl p-6">
           <h3 className="font-semibold">Create a workspace first</h3>
           <p className="mt-2 text-sm text-base-content/55">Evaluations belong to a workspace.</p>
-        </div>
+        </Card>
       ) : null}
 
       {!loading && dashboard?.runs.length === 0 ? (
-        <section className="surface-card rounded-2xl p-6" aria-labelledby="evaluations-empty-heading">
+        <Card as="section" className="rounded-2xl p-6" aria-labelledby="evaluations-empty-heading">
           <h3 id="evaluations-empty-heading" className="font-semibold">
             No evaluations yet
           </h3>
           <p className="mt-2 text-sm text-base-content/55">Results appear after your agent requests human review.</p>
-        </section>
+        </Card>
       ) : null}
 
       {dashboard && dashboard.runs.length > 0 ? (
@@ -944,7 +945,7 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
             <h2 id="evaluation-runs-heading" className="text-xl font-semibold">
               Results
             </h2>
-            <div className="surface-card rounded-2xl p-4">
+            <Card as="div" className="rounded-2xl p-4">
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
                 <Field
                   label="Search results"
@@ -1011,7 +1012,7 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
                   </button>
                 ) : null}
               </div>
-            </div>
+            </Card>
             {orderedRuns.length > 0 ? (
               orderedRuns.map(run => (
                 <RunCard
@@ -1025,14 +1026,14 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
                 />
               ))
             ) : (
-              <div className="surface-card rounded-2xl p-6">
+              <Card as="div" className="rounded-2xl p-6">
                 <h3 className="font-semibold">No results match these filters</h3>
                 <p className="mt-2 text-sm text-base-content/55">Clear one or more filters to see other runs.</p>
-              </div>
+              </Card>
             )}
           </section>
 
-          <details className="surface-card rounded-2xl p-6">
+          <Card as="details" className="rounded-2xl p-6">
             <summary className="cursor-pointer text-sm font-semibold">Operations and policy details</summary>
             <div className="mt-5 space-y-6">
               {assuranceMetrics ? <AssuranceMetricsSummary snapshot={assuranceMetrics} /> : null}
@@ -1054,10 +1055,10 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
                     ["Evidence-backed", dashboard.summary.evidenceBackedRuns],
                     ["Valid responses", dashboard.summary.validResponses],
                   ].map(([label, value]) => (
-                    <div key={label} className="surface-card-nested rounded-xl p-4">
+                    <Card as="div" variant="nested" key={label} className="rounded-xl p-4">
                       <dt className="text-xs text-base-content/55">{label}</dt>
                       <dd className="mt-2 font-mono text-xl">{value}</dd>
-                    </div>
+                    </Card>
                   ))}
                 </dl>
               </section>
@@ -1072,7 +1073,7 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
                 ) : (
                   <div className="mt-3 space-y-3">
                     {dashboard.publishingPolicies?.map(policy => (
-                      <article key={policy.policyId} className="surface-card-nested rounded-xl p-4">
+                      <Card as="article" variant="nested" key={policy.policyId} className="rounded-xl p-4">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <h3 className="font-medium">
                             {policy.name} · v{policy.version}
@@ -1099,13 +1100,13 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
                             <dd className="mt-1 font-mono">{policy.maxPanelSize}</dd>
                           </div>
                         </dl>
-                      </article>
+                      </Card>
                     ))}
                   </div>
                 )}
               </section>
             </div>
-          </details>
+          </Card>
         </>
       ) : null}
     </div>

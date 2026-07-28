@@ -204,8 +204,10 @@ export function AgentRegistryPanel({
                 ) : null}
 
                 {editingAgent?.agentId === agent.agentId && registry?.canManage ? (
-                  <section
-                    className="surface-card-nested rounded-xl p-4"
+                  <Card
+                    as="section"
+                    variant="nested"
+                    className="rounded-xl p-4"
                     aria-labelledby={`new-version-${agent.agentId}`}
                   >
                     <h3 id={`new-version-${agent.agentId}`} className="font-semibold">
@@ -220,7 +222,7 @@ export function AgentRegistryPanel({
                         onSubmit={createVersion}
                       />
                     </div>
-                  </section>
+                  </Card>
                 ) : null}
 
                 <details>
@@ -274,7 +276,7 @@ export function AgentRegistryPanel({
             </summary>
             <ol className="mt-4 space-y-3">
               {auditEntries.map(entry => (
-                <li key={entry.eventId} className="surface-card-nested rounded-lg p-4 text-sm">
+                <Card as="li" variant="nested" key={entry.eventId} className="rounded-lg p-4 text-sm">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <strong>
                       {entry.kind === "connection"
@@ -301,7 +303,7 @@ export function AgentRegistryPanel({
                       </code>
                     </>
                   )}
-                </li>
+                </Card>
               ))}
             </ol>
           </details>

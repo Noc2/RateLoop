@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
+import { Card } from "~~/components/tokenless/ui/Card";
 import type { ReviewerEarning } from "~~/lib/tokenless/raterSettlementService";
 
 type EarningsResponse = {
@@ -72,7 +73,7 @@ export function ReviewerEarningsClient() {
   }, [refresh]);
 
   return (
-    <section className="surface-card rounded-2xl p-5" aria-labelledby="reviewer-earnings-title">
+    <Card as="section" className="rounded-2xl p-5" aria-labelledby="reviewer-earnings-title">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 id="reviewer-earnings-title" className="text-xl font-semibold">
@@ -99,10 +100,10 @@ export function ReviewerEarningsClient() {
             ["Paid", ledger.totals.claimedAtomic],
             ["Ready to claim", ledger.totals.claimableAtomic],
           ].map(([label, amount]) => (
-            <div key={label} className="surface-card-nested rounded-xl p-4">
+            <Card as="div" variant="nested" key={label} className="rounded-xl p-4">
               <dt className="text-xs text-base-content/55">{label}</dt>
               <dd className="mt-1 text-lg font-semibold">{usdc(amount)}</dd>
-            </div>
+            </Card>
           ))}
         </dl>
       ) : null}
@@ -117,7 +118,7 @@ export function ReviewerEarningsClient() {
         {ledger?.items.length ? (
           <div className="mt-5 space-y-3">
             {ledger.items.map(item => (
-              <article key={item.commitId} className="surface-card-nested rounded-xl p-4">
+              <Card as="article" variant="nested" key={item.commitId} className="rounded-xl p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <h3 className="truncate text-sm font-medium">{item.question}</h3>
@@ -182,11 +183,11 @@ export function ReviewerEarningsClient() {
                     </a>
                   ) : null}
                 </div>
-              </article>
+              </Card>
             ))}
           </div>
         ) : null}
       </AsyncSection>
-    </section>
+    </Card>
   );
 }

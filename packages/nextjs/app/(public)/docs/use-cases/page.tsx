@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { DocsTitle } from "~~/components/docs/DocsTitle";
 import { UseCaseExampleCard, UseCaseIcon } from "~~/components/docs/UseCaseVisuals";
 import type { UseCaseExample, UseCaseIconKind } from "~~/components/docs/UseCaseVisuals";
+import { Card } from "~~/components/tokenless/ui/Card";
 
 export const metadata = {
   title: "Human Assurance Use Cases",
@@ -125,11 +126,13 @@ export default function UseCasesPage() {
 
       <div className="not-prose my-8 grid gap-5">
         {useCases.map(useCase => (
-          <section
+          <Card
+            as="section"
+            variant="marketing"
             key={useCase.id}
             id={useCase.id}
             data-use-case={useCase.id}
-            className="rateloop-surface-card scroll-mt-24 rounded-2xl border-l-2 p-5 sm:p-6"
+            className="scroll-mt-24 rounded-2xl border-l-2 p-5 sm:p-6"
             style={{ borderColor: useCase.color }}
           >
             <div className="flex items-center gap-3">
@@ -164,7 +167,7 @@ export default function UseCasesPage() {
                 <UseCaseDetail label="What you get back">{useCase.decision}</UseCaseDetail>
               </dl>
             </div>
-          </section>
+          </Card>
         ))}
       </div>
 

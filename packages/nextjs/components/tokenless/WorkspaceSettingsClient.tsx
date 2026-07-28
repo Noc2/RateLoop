@@ -8,6 +8,7 @@ import { WorkspaceDangerZone } from "~~/components/tokenless/WorkspaceDangerZone
 import { WorkspaceMembersPanel } from "~~/components/tokenless/WorkspaceMembersPanel";
 import { ChoiceInput, Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import { Card } from "~~/components/tokenless/ui/Card";
 import { ConfirmDialog } from "~~/components/tokenless/ui/ConfirmDialog";
 import { TOKENLESS_BILLING_PLANS, formatUsdPrice } from "~~/lib/billing/plans";
 import type { WorkspaceBillingSummary } from "~~/lib/billing/workspaceBillingTypes";
@@ -805,27 +806,27 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
 
   if (workspacesLoading) {
     return (
-      <div className="surface-card rounded-2xl p-6 text-sm text-base-content/55" role="status">
+      <Card as="div" className="rounded-2xl p-6 text-sm text-base-content/55" role="status">
         <span className="loading loading-spinner loading-sm mr-2" /> Loading workspace…
-      </div>
+      </Card>
     );
   }
 
   if (workspaces.length === 0) {
     return (
-      <section className="surface-card mx-auto max-w-xl rounded-2xl p-6" aria-labelledby="create-workspace-heading">
+      <Card as="section" className="mx-auto max-w-xl rounded-2xl p-6" aria-labelledby="create-workspace-heading">
         <h1 id="create-workspace-heading" className="text-2xl font-semibold">
           Create your workspace
         </h1>
         <p className="mt-2 text-sm text-base-content/55">Name it, then connect your agent.</p>
         {workspaceForm}
-      </section>
+      </Card>
     );
   }
 
   return (
     <div className="space-y-5">
-      <div className="surface-card rounded-2xl p-6">
+      <Card as="div" className="rounded-2xl p-6">
         {workspaces.length ? (
           <>
             {selected && canManageWorkspace ? (
@@ -1747,9 +1748,9 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
             workspaceName={selected.name}
           />
         ) : null}
-      </div>
+      </Card>
 
-      <section className="surface-card rounded-2xl p-6" aria-labelledby="create-another-workspace-heading">
+      <Card as="section" className="rounded-2xl p-6" aria-labelledby="create-another-workspace-heading">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 id="create-another-workspace-heading" className="text-lg font-semibold">
             Workspaces
@@ -1765,7 +1766,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
           </button>
         </div>
         {showWorkspaceCreation ? <div id="create-workspace-form">{workspaceForm}</div> : null}
-      </section>
+      </Card>
       <ConfirmDialog
         open={identityConfirmation !== null}
         title={

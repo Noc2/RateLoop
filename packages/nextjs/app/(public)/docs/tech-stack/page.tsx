@@ -4,6 +4,7 @@ import { DocsTitle } from "~~/components/docs/DocsTitle";
 import { RbtsPayoutDiagram } from "~~/components/docs/RbtsPayoutDiagram";
 import { SurprisinglyPopularBonusChart } from "~~/components/docs/SurprisinglyPopularBonusChart";
 import { TokenlessArchitectureDiagram } from "~~/components/docs/TokenlessArchitectureDiagram";
+import { Card } from "~~/components/tokenless/ui/Card";
 
 export const metadata = {
   title: "Tech Stack",
@@ -151,12 +152,12 @@ export default function TokenlessTechStackPage() {
 
 function FormulaPanel({ label, formula, description }: { label: string; formula: string; description: string }) {
   return (
-    <section className="rateloop-surface-card rounded-2xl p-5 sm:p-6">
+    <Card as="section" variant="marketing" className="rounded-2xl p-5 sm:p-6">
       <p className="font-mono text-xs font-semibold uppercase tracking-[0.16em] text-[var(--rateloop-blue)]">{label}</p>
       <p className="mt-3 overflow-x-auto font-mono text-sm font-semibold leading-7 text-base-content sm:text-base">
         {formula}
       </p>
       <p className="mt-3 text-sm leading-6 text-base-content/60">{description}</p>
-    </section>
+    </Card>
   );
 }

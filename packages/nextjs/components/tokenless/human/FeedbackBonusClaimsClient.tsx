@@ -5,6 +5,7 @@ import { eth_getTransactionByHash, getRpcClient, prepareTransaction, sendTransac
 import { baseSepolia } from "thirdweb/chains";
 import { ConnectButton, ThirdwebProvider, useActiveAccount } from "thirdweb/react";
 import { Field, SelectField } from "~~/components/tokenless/forms/Field";
+import { Card } from "~~/components/tokenless/ui/Card";
 import { readBrowserSession } from "~~/lib/auth/client";
 import { rateLoopThirdwebWallets, thirdwebBrowserClient } from "~~/lib/thirdweb/client";
 import type { PublicFeedbackBonusEntitlement } from "~~/lib/tokenless/feedbackBonusRecipientClaims";
@@ -242,7 +243,7 @@ function FeedbackBonusClaimsControls() {
   const claimable = items.some(item => item.awarded && !item.claimed);
 
   return (
-    <section className="surface-card rounded-2xl p-5" aria-labelledby="feedback-bonus-claims-title">
+    <Card as="section" className="rounded-2xl p-5" aria-labelledby="feedback-bonus-claims-title">
       <h2 id="feedback-bonus-claims-title" className="text-xl font-semibold">
         Claim a Feedback Bonus
       </h2>
@@ -312,7 +313,7 @@ function FeedbackBonusClaimsControls() {
       {items.length ? (
         <div className="mt-5 space-y-3">
           {items.map(item => (
-            <article key={`${item.poolId}:${item.feedbackId}`} className="surface-card-nested rounded-xl p-4">
+            <Card as="article" variant="nested" key={`${item.poolId}:${item.feedbackId}`} className="rounded-xl p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium">
@@ -335,7 +336,7 @@ function FeedbackBonusClaimsControls() {
                   </button>
                 ) : null}
               </div>
-            </article>
+            </Card>
           ))}
         </div>
       ) : null}
@@ -364,7 +365,7 @@ function FeedbackBonusClaimsControls() {
           {error}
         </p>
       ) : null}
-    </section>
+    </Card>
   );
 }
 

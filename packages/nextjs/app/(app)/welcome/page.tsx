@@ -4,6 +4,7 @@ import { completeWelcomeAction } from "./actions";
 import type { Metadata } from "next";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { Button } from "~~/components/tokenless/ui/Button";
+import { Card } from "~~/components/tokenless/ui/Card";
 import { PageHeading } from "~~/components/tokenless/ui/PageHeading";
 import { getPrincipalWelcomeState } from "~~/lib/auth/principal";
 import { AUTH_SESSION_COOKIE, findAuthSession } from "~~/lib/auth/session";
@@ -45,7 +46,7 @@ export default async function WelcomePage() {
       <PageHeading accent="blue" className="max-w-3xl" heading="What would you like to do first?" />
 
       <div className="mt-9 grid gap-5 md:grid-cols-2">
-        <section className="surface-card flex flex-col rounded-2xl border-l-2 border-l-[var(--rateloop-green)] p-6 sm:p-7">
+        <Card as="section" className="flex flex-col rounded-2xl border-l-2 border-l-[var(--rateloop-green)] p-6 sm:p-7">
           <h2 className="text-2xl font-semibold">Review AI work</h2>
           <p className="mt-3 text-base leading-7 text-base-content/65">
             Find available reviews or use an invitation from a workspace.
@@ -56,9 +57,9 @@ export default async function WelcomePage() {
               I have an invitation
             </ChoiceForm>
           </div>
-        </section>
+        </Card>
 
-        <section className="surface-card flex flex-col rounded-2xl border-l-2 border-l-[var(--rateloop-blue)] p-6 sm:p-7">
+        <Card as="section" className="flex flex-col rounded-2xl border-l-2 border-l-[var(--rateloop-blue)] p-6 sm:p-7">
           <h2 className="text-2xl font-semibold">Connect an agent</h2>
           <p className="mt-3 text-base leading-7 text-base-content/65">
             Create a workspace and choose when your agent asks for human review.
@@ -66,7 +67,7 @@ export default async function WelcomePage() {
           <div className="mt-8 md:mt-auto md:pt-8">
             <ChoiceForm choice="agent">Set up an agent</ChoiceForm>
           </div>
-        </section>
+        </Card>
       </div>
     </AppPageShell>
   );

@@ -3,6 +3,7 @@
 import { type FormEvent, useState } from "react";
 import { Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import { Card } from "~~/components/tokenless/ui/Card";
 import { betterAuthClient, issueAccountDeletionProof, readBrowserAuthConfiguration } from "~~/lib/auth/client";
 import { readJson } from "~~/lib/tokenless/http";
 
@@ -161,7 +162,7 @@ export function AccountDeletionPanel() {
   const blocked = !preview || preview.blockers.length > 0;
 
   return (
-    <section className="surface-card rounded-2xl p-6" aria-labelledby="account-deletion-heading">
+    <Card as="section" className="rounded-2xl p-6" aria-labelledby="account-deletion-heading">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h2 id="account-deletion-heading" className="text-lg font-semibold text-error">
@@ -362,6 +363,6 @@ export function AccountDeletionPanel() {
           ) : null}
         </div>
       ) : null}
-    </section>
+    </Card>
   );
 }

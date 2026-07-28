@@ -5,6 +5,7 @@ import { OneTimeSecretNotice } from "~~/components/tokenless/agents/OneTimeSecre
 import { ChoiceInput, Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { Button } from "~~/components/tokenless/ui/Button";
+import { Card } from "~~/components/tokenless/ui/Card";
 import { readJson } from "~~/lib/tokenless/http";
 
 export function ReviewerInvitationStart({ workspaceId }: { workspaceId: string }) {
@@ -69,7 +70,7 @@ export function ReviewerInvitationStart({ workspaceId }: { workspaceId: string }
   }
 
   return (
-    <section className="surface-card rounded-2xl p-5" aria-label="Reviewer invitations">
+    <Card as="section" className="rounded-2xl p-5" aria-label="Reviewer invitations">
       {!started ? (
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="max-w-2xl text-sm leading-6 text-base-content/60">
@@ -159,6 +160,6 @@ export function ReviewerInvitationStart({ workspaceId }: { workspaceId: string }
           {formError}
         </p>
       ) : null}
-    </section>
+    </Card>
   );
 }

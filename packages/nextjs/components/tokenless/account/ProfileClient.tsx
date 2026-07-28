@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import { Card } from "~~/components/tokenless/ui/Card";
 import { notifyBrowserAuthSessionChanged } from "~~/lib/auth/client";
 import { readJson } from "~~/lib/tokenless/http";
 
@@ -65,7 +66,7 @@ export function ProfileClient() {
 
   return (
     <div className="space-y-5">
-      <section className="surface-card rounded-2xl p-6">
+      <Card as="section" className="rounded-2xl p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 id="profile-display-name-heading" className="text-xl font-semibold">
@@ -102,7 +103,7 @@ export function ProfileClient() {
             {formError}
           </p>
         ) : null}
-      </section>
+      </Card>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { Card } from "~~/components/tokenless/ui/Card";
 
 type PreviewValue =
   | { kind: "image"; contentType: string; objectUrl: string }
@@ -208,10 +209,7 @@ export function PrivateArtifactPreview({
           aria-labelledby={`${titleId}-dialog`}
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-4"
         >
-          <div
-            ref={dialogRef}
-            className="surface-card flex max-h-[90vh] w-full max-w-4xl flex-col rounded-2xl p-5 sm:p-6"
-          >
+          <Card as="div" ref={dialogRef} className="flex max-h-[90vh] w-full max-w-4xl flex-col rounded-2xl p-5 sm:p-6">
             <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-4">
               <h2 id={`${titleId}-dialog`} className="text-xl font-semibold">
                 {label}
@@ -241,7 +239,7 @@ export function PrivateArtifactPreview({
                 />
               )}
             </div>
-          </div>
+          </Card>
         </div>
       ) : null}
     </section>

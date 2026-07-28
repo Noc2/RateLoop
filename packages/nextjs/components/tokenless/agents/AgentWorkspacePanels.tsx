@@ -22,6 +22,7 @@ import type { AgentConnectionHistoryEntry } from "./agentAuditHistory";
 import { agentTabHref, connectedAgentTabs, resolveAvailableAgentTab } from "./agentWorkspaceState";
 import { AgentSetupFlow } from "./setup/AgentSetupFlow";
 import { WorkspaceSetupStart } from "./setup/WorkspaceSetupStart";
+import { Card } from "~~/components/tokenless/ui/Card";
 import type { WorkspaceAgentSetupView } from "~~/lib/tokenless/workspaceAgentSetup";
 
 type Workspace = { workspaceId: string; name: string; role: string };
@@ -68,7 +69,7 @@ export function AgentWorkspacePanels({
   const workspace = workspaces.find(entry => entry.workspaceId === workspaceId);
   if (!workspace) {
     return (
-      <section className="surface-card rounded-2xl p-6 sm:p-8" aria-labelledby="choose-workspace-heading">
+      <Card as="section" className="rounded-2xl p-6 sm:p-8" aria-labelledby="choose-workspace-heading">
         <h1 id="choose-workspace-heading" className="text-3xl font-semibold">
           Choose a workspace
         </h1>
@@ -86,7 +87,7 @@ export function AgentWorkspacePanels({
             </Link>
           ))}
         </div>
-      </section>
+      </Card>
     );
   }
   const canManage = workspace.role === "owner" || workspace.role === "admin";
@@ -133,7 +134,7 @@ export function AgentWorkspacePanels({
           />
         ) : null}
         {hasConnectedAgent && resolvedTab === "connect" ? (
-          <section className="surface-card rounded-2xl p-5" aria-labelledby="agent-version-management-heading">
+          <Card as="section" className="rounded-2xl p-5" aria-labelledby="agent-version-management-heading">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 id="agent-version-management-heading" className="font-semibold">
@@ -166,7 +167,7 @@ export function AgentWorkspacePanels({
                 />
               </div>
             ) : null}
-          </section>
+          </Card>
         ) : null}
         {hasConnectedAgent && resolvedTab === "inbox" && canManage ? (
           <HumanReviewApprovalInbox workspaceId={workspaceId} />

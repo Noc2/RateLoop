@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
+import { Card } from "~~/components/tokenless/ui/Card";
 
 const destinations = [
   { href: "/search", label: "Search" },
@@ -22,8 +23,9 @@ export function RootRecoverySurface({
 }) {
   return (
     <AppPageShell outerClassName="justify-center py-10 sm:py-16">
-      <section
-        className="surface-card mx-auto w-full max-w-2xl rounded-2xl p-6 sm:p-9"
+      <Card
+        as="section"
+        className="mx-auto w-full max-w-2xl rounded-2xl p-6 sm:p-9"
         aria-labelledby="root-recovery-heading"
       >
         <p className="font-mono text-xs uppercase tracking-[0.2em] text-[var(--rateloop-pink)]">{eyebrow}</p>
@@ -48,7 +50,7 @@ export function RootRecoverySurface({
             ))}
           </ul>
         </nav>
-      </section>
+      </Card>
     </AppPageShell>
   );
 }

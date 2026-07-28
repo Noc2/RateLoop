@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { DocsTitle } from "~~/components/docs/DocsTitle";
+import { Card } from "~~/components/tokenless/ui/Card";
 
 export const metadata: Metadata = { title: "Evidence reference" };
 
@@ -237,11 +238,11 @@ export default function EvidencePage() {
       <h2 id="packet">What an evidence packet contains</h2>
       <div className="not-prose my-8 grid gap-4 sm:grid-cols-2">
         {PACKET_FIELDS.map((field, index) => (
-          <section key={field.title} className="rateloop-surface-card rounded-2xl border-l-2 p-5 sm:p-6">
+          <Card as="section" variant="marketing" key={field.title} className="rounded-2xl border-l-2 p-5 sm:p-6">
             <p className="font-mono text-xs text-base-content/55">{String(index + 1).padStart(2, "0")}</p>
             <h3 className="mt-2 text-lg font-bold text-base-content">{field.title}</h3>
             <p className="mt-3 text-sm leading-7 text-base-content/65">{field.body}</p>
-          </section>
+          </Card>
         ))}
       </div>
       <p>

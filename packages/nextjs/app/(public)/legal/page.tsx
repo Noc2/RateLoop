@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { Card } from "~~/components/tokenless/ui/Card";
 import { PageHeading } from "~~/components/tokenless/ui/PageHeading";
 
 export const metadata: Metadata = { title: "Legal" };
@@ -32,16 +33,18 @@ export default function LegalPage() {
       />
       <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {documents.map(([title, href, description], index) => (
-          <Link
+          <Card
+            as={Link}
+            variant="marketing"
             key={href}
             href={href}
-            className="rateloop-surface-card group border-l-2 p-6"
+            className="group border-l-2 p-6"
             style={{ borderLeftColor: ["#359EEE", "#03CEA4", "#EF476F"][index % 3] }}
           >
             <h2 className="text-lg font-semibold transition-colors group-hover:text-white">{title}</h2>
             <p className="mt-3 text-sm leading-6 text-base-content/50">{description}</p>
             <span className="mt-5 inline-block text-sm text-base-content/70">Read document →</span>
-          </Link>
+          </Card>
         ))}
       </div>
     </div>

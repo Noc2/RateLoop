@@ -7,6 +7,7 @@ import { SetupStageHeader } from "./SetupStageHeader";
 import { Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { Button } from "~~/components/tokenless/ui/Button";
+import { Card } from "~~/components/tokenless/ui/Card";
 import { readJson } from "~~/lib/tokenless/http";
 
 const INITIAL_STAGES = [
@@ -44,7 +45,7 @@ export function WorkspaceSetupStart() {
   }
 
   return (
-    <section className="surface-card rounded-2xl p-5 sm:p-7">
+    <Card as="section" className="rounded-2xl p-5 sm:p-7">
       <AgentSetupProgress
         currentStep="workspace"
         stages={INITIAL_STAGES}
@@ -84,6 +85,6 @@ export function WorkspaceSetupStart() {
           </p>
         ) : null}
       </form>
-    </section>
+    </Card>
   );
 }

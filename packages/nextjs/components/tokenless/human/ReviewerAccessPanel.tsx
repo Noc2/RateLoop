@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
+import { Card } from "~~/components/tokenless/ui/Card";
 import { ConfirmDialog } from "~~/components/tokenless/ui/ConfirmDialog";
 
 type ReviewerAccess = {
@@ -91,7 +92,7 @@ export function ReviewerAccessPanel() {
 
   const activeAccess = access.filter(item => item.status === "active");
   return (
-    <section className="surface-card scroll-mt-24 rounded-2xl p-6" aria-labelledby="reviewer-access-heading">
+    <Card as="section" className="scroll-mt-24 rounded-2xl p-6" aria-labelledby="reviewer-access-heading">
       <div className="border-b border-white/10 pb-4">
         <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-pink)]">Reviewer access</p>
         <h2 id="reviewer-access-heading" className="mt-2 text-xl font-semibold">
@@ -108,7 +109,7 @@ export function ReviewerAccessPanel() {
         >
           <ul className="space-y-3">
             {activeAccess.map(item => (
-              <li className="surface-card-nested rounded-lg p-4" key={item.workspaceId}>
+              <Card as="li" variant="nested" className="rounded-lg p-4" key={item.workspaceId}>
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
                     <h3 className="font-semibold">{item.workspaceName}</h3>
@@ -129,7 +130,7 @@ export function ReviewerAccessPanel() {
                     {busyWorkspaceId === item.workspaceId ? "Leaving…" : "Stop reviewing"}
                   </button>
                 </div>
-              </li>
+              </Card>
             ))}
           </ul>
         </AsyncSection>
@@ -160,6 +161,6 @@ export function ReviewerAccessPanel() {
           if (pendingLeave) void leave(pendingLeave);
         }}
       />
-    </section>
+    </Card>
   );
 }

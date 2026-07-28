@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { DocsTitle } from "~~/components/docs/DocsTitle";
+import { Card } from "~~/components/tokenless/ui/Card";
 
 export const metadata: Metadata = { title: "Human oversight" };
 
@@ -72,14 +73,20 @@ export default function HumanOversightPage() {
       <h2 id="article-14-4">The five Article 14(4) measures</h2>
       <div className="not-prose my-8 grid gap-4">
         {OVERSIGHT_SECTIONS.map((section, index) => (
-          <section key={section.id} id={section.id} className="rateloop-surface-card rounded-2xl border-l-2 p-5 sm:p-6">
+          <Card
+            as="section"
+            variant="marketing"
+            key={section.id}
+            id={section.id}
+            className="rounded-2xl border-l-2 p-5 sm:p-6"
+          >
             <p className="font-mono text-xs text-base-content/55">
               {String(index + 1).padStart(2, "0")} · {section.requirement}
             </p>
             <h3 className="mt-2 text-lg font-bold text-base-content">{section.title}</h3>
             <p className="mt-3 text-sm leading-7 text-base-content/65">{section.body}</p>
             <p className="mt-3 text-sm font-semibold leading-7 text-base-content/75">{section.responsibility}</p>
-          </section>
+          </Card>
         ))}
       </div>
 

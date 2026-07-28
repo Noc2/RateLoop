@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { SelectField } from "~~/components/tokenless/forms/Field";
+import { Card } from "~~/components/tokenless/ui/Card";
 
 type Finding = {
   findingId: string;
@@ -131,7 +132,7 @@ export function ForecastIntegrityClient() {
 
   if (!data && !error) return null;
   return (
-    <section className="surface-card rounded-2xl p-5" aria-labelledby="forecast-integrity-title">
+    <Card as="section" className="rounded-2xl p-5" aria-labelledby="forecast-integrity-title">
       <h2 id="forecast-integrity-title" className="text-xl font-semibold">
         Crowd forecast record
       </h2>
@@ -143,8 +144,10 @@ export function ForecastIntegrityClient() {
       {data?.items.length ? (
         <div className="mt-5 space-y-4">
           {data.items.map((item, itemIndex) => (
-            <article
-              className="surface-card-nested rounded-xl p-4"
+            <Card
+              as="article"
+              variant="nested"
+              className="rounded-xl p-4"
               key={`${item.subjectSpace}:${item.workspaceId ?? "network"}:${itemIndex}`}
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -235,7 +238,7 @@ export function ForecastIntegrityClient() {
               ) : (
                 <p className="mt-4 text-sm text-base-content/55">No forecast integrity findings.</p>
               )}
-            </article>
+            </Card>
           ))}
         </div>
       ) : data ? (
@@ -243,6 +246,6 @@ export function ForecastIntegrityClient() {
           Counters appear after a terminal review includes a forecast.
         </p>
       ) : null}
-    </section>
+    </Card>
   );
 }

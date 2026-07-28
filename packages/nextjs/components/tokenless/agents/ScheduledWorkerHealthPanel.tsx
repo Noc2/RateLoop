@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Card } from "~~/components/tokenless/ui/Card";
 
 type Health = {
   state: "degraded" | "healthy" | "stale" | "unavailable";
@@ -63,7 +64,7 @@ export function ScheduledWorkerHealthPanel({ workspaceId }: { workspaceId: strin
   if (!health) return null;
   const content = CONTENT[health.state];
   return (
-    <section aria-live="polite" className="surface-card p-5">
+    <Card as="section" aria-live="polite" className="p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className={`text-base font-semibold ${content.tone}`}>{content.label}</h2>
@@ -83,6 +84,6 @@ export function ScheduledWorkerHealthPanel({ workspaceId }: { workspaceId: strin
           ))}
         </ul>
       ) : null}
-    </section>
+    </Card>
   );
 }

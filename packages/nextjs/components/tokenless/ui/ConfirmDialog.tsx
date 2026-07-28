@@ -2,6 +2,7 @@
 
 import { type ReactNode, useEffect, useId, useRef } from "react";
 import { Button } from "./Button";
+import { Card } from "~~/components/tokenless/ui/Card";
 
 export function ConfirmDialog({
   open,
@@ -67,14 +68,15 @@ export function ConfirmDialog({
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 p-4">
-      <div
+      <Card
+        as="div"
         ref={dialogRef}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
         tabIndex={-1}
-        className="surface-card w-full max-w-lg rounded-2xl p-6 shadow-2xl"
+        className="w-full max-w-lg rounded-2xl p-6 shadow-2xl"
       >
         <h2 id={titleId} className="text-xl font-semibold">
           {title}
@@ -90,7 +92,7 @@ export function ConfirmDialog({
             {busy ? "Working…" : confirmLabel}
           </Button>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

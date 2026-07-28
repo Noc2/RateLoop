@@ -3,6 +3,7 @@ import { HumanAssuranceLoop } from "~~/components/assurance/HumanAssuranceLoop";
 import { UseCaseIcon } from "~~/components/docs/UseCaseVisuals";
 import { SupportedAgentsSection } from "~~/components/home/SupportedAgentsSection";
 import { TokenlessOrb } from "~~/components/home/TokenlessOrb";
+import { Card } from "~~/components/tokenless/ui/Card";
 import { TOKENLESS_BILLING_PLANS, formatUsdPrice } from "~~/lib/billing/plans";
 import type { LandingSocialProofItem } from "~~/lib/home/socialProof";
 import { getLandingPageSocialProofItems } from "~~/lib/home/socialProofServer";
@@ -159,9 +160,11 @@ export function TokenlessLandingPage({ socialProofItems }: { socialProofItems: L
           </SectionTitle>
           <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
             {useCases.map(useCase => (
-              <article
+              <Card
+                as="article"
+                variant="marketing"
                 key={useCase.title}
-                className="rateloop-surface-card rounded-2xl border-l-2 p-5 sm:p-6"
+                className="rounded-2xl border-l-2 p-5 sm:p-6"
                 style={{ borderColor: useCase.color }}
               >
                 <div className="flex items-center gap-3">
@@ -173,7 +176,7 @@ export function TokenlessLandingPage({ socialProofItems }: { socialProofItems: L
                   </h3>
                 </div>
                 <p className="mt-3 text-base leading-7 text-base-content/65">{useCase.body}</p>
-              </article>
+              </Card>
             ))}
           </div>
           <div className="mt-8 text-center">
@@ -236,7 +239,10 @@ export function TokenlessLandingPage({ socialProofItems }: { socialProofItems: L
           <SectionTitle number="04" gradient="Simple" className="mb-6">
             Pricing, Kept
           </SectionTitle>
-          <div className="surface-card flex flex-col gap-6 rounded-2xl p-7 sm:flex-row sm:items-center sm:justify-between sm:p-9">
+          <Card
+            as="div"
+            className="flex flex-col gap-6 rounded-2xl p-7 sm:flex-row sm:items-center sm:justify-between sm:p-9"
+          >
             <div>
               <p className="font-mono text-sm uppercase tracking-[0.18em] text-[var(--rateloop-green)]">Start free</p>
               <p className="mt-3 text-3xl font-semibold text-base-content">
@@ -250,7 +256,7 @@ export function TokenlessLandingPage({ socialProofItems }: { socialProofItems: L
             <Link href="/pricing" className="btn rateloop-secondary-action min-h-11 shrink-0 px-5">
               See pricing
             </Link>
-          </div>
+          </Card>
         </section>
 
         <div aria-hidden="true" className="my-16 h-px w-full max-w-5xl bg-base-content/10 sm:my-20 lg:my-24" />

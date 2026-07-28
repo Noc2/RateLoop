@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { DocsTitle } from "~~/components/docs/DocsTitle";
+import { Card } from "~~/components/tokenless/ui/Card";
 
 export const metadata: Metadata = { title: "Agent integration guide" };
 
@@ -117,10 +118,10 @@ codex plugin add rateloop@rateloop`}</CodeBlock>
       </p>
       <div className="not-prose grid gap-3 sm:grid-cols-2">
         {tools.map(([name, description]) => (
-          <div key={name} className="rateloop-surface-card rounded-xl p-4">
+          <Card as="div" variant="marketing" key={name} className="rounded-xl p-4">
             <code className="break-words text-sm font-semibold text-base-content">{name}</code>
             <p className="mt-2 text-sm leading-6 text-base-content/65">{description}</p>
-          </div>
+          </Card>
         ))}
       </div>
       <p>

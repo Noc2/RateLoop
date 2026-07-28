@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { DocsTitle } from "~~/components/docs/DocsTitle";
+import { Card } from "~~/components/tokenless/ui/Card";
 
 export const metadata: Metadata = { title: "Smart contracts" };
 
@@ -42,10 +43,12 @@ export default function TokenlessContractsPage() {
 
       <div className="not-prose my-8 grid gap-5">
         {CONTRACTS.map(contract => (
-          <section
+          <Card
+            as="section"
+            variant="marketing"
             key={contract.id}
             id={contract.id}
-            className="rateloop-surface-card scroll-mt-24 rounded-2xl border-l-2 p-5 sm:p-6"
+            className="scroll-mt-24 rounded-2xl border-l-2 p-5 sm:p-6"
             style={{ borderLeftColor: contract.color }}
           >
             <p
@@ -58,7 +61,7 @@ export default function TokenlessContractsPage() {
               <code>{contract.name}</code>
             </h2>
             <p className="mt-3 max-w-3xl text-sm leading-7 text-base-content/65">{contract.description}</p>
-          </section>
+          </Card>
         ))}
       </div>
 

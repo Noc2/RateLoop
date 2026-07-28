@@ -5,6 +5,7 @@ import { OneTimeSecretNotice } from "./OneTimeSecretNotice";
 import { formatEvidenceDeliveryDate, readEvidenceDeliveryJson } from "./evidenceDeliveryClient";
 import { ChoiceInput, Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import { Card } from "~~/components/tokenless/ui/Card";
 
 const EVENT_TYPES = [
   ["ai.rateloop.review.completed", "Review completed"],
@@ -74,7 +75,7 @@ export function SiemEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
   };
 
   return (
-    <section className="surface-card-nested rounded-xl p-5" aria-labelledby="siem-event-streams-heading">
+    <Card as="section" variant="nested" className="rounded-xl p-5" aria-labelledby="siem-event-streams-heading">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 id="siem-event-streams-heading" className="font-semibold">
@@ -234,6 +235,6 @@ export function SiemEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
           {formError}
         </p>
       ) : null}
-    </section>
+    </Card>
   );
 }

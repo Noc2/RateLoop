@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { SelectField } from "~~/components/tokenless/forms/Field";
+import { Card } from "~~/components/tokenless/ui/Card";
 import type {
   EvaluationModelDailyPoint,
   EvaluationModelExecution,
@@ -224,12 +225,12 @@ function ModelScopeList({ scopes }: { scopes: EvaluationModelScope[] }) {
   if (visible.length === 0) return null;
   const cards = (items: EvaluationModelScope[]) =>
     items.map(scope => (
-      <div key={scope.scopeId} className="surface-card-nested rounded-xl p-3 text-sm">
+      <Card as="div" variant="nested" key={scope.scopeId} className="rounded-xl p-3 text-sm">
         <p className="font-medium">{scope.workflowKey}</p>
         <p className="mt-1 text-xs text-base-content/55">
           <span className="capitalize">{scope.riskTier} risk</span> · {stageLabel(scope.stage)}
         </p>
-      </div>
+      </Card>
     ));
   return (
     <section aria-labelledby="model-coverage-heading">
@@ -312,7 +313,7 @@ export function ModelEvidencePanel({ profiles }: { profiles: EvaluationModelProf
   if (!selected) return null;
 
   return (
-    <section className="surface-card rounded-2xl p-6" aria-labelledby="model-evidence-heading">
+    <Card as="section" className="rounded-2xl p-6" aria-labelledby="model-evidence-heading">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h2 id="model-evidence-heading" className="text-xl font-semibold">
@@ -361,20 +362,20 @@ export function ModelEvidencePanel({ profiles }: { profiles: EvaluationModelProf
           ["Human agreement", percent(selected.humanAgreementBps)],
           ["Mean execution time", duration(selected.averageDurationMs)],
         ].map(([label, value]) => (
-          <div key={label} className="surface-card-nested rounded-xl p-4">
+          <Card as="div" variant="nested" key={label} className="rounded-xl p-4">
             <dt className="text-xs text-base-content/55">{label}</dt>
             <dd className="mt-2 font-mono text-lg">{value}</dd>
-          </div>
+          </Card>
         ))}
       </dl>
 
       <div className="mt-5 grid gap-5 lg:grid-cols-2">
-        <div className="surface-card-nested rounded-xl p-4">
+        <Card as="div" variant="nested" className="rounded-xl p-4">
           <EvaluationVolumeChart profile={selected} />
-        </div>
-        <div className="surface-card-nested rounded-xl p-4">
+        </Card>
+        <Card as="div" variant="nested" className="rounded-xl p-4">
           <AgreementChart profile={selected} />
-        </div>
+        </Card>
       </div>
 
       <div className="mt-6 space-y-6">
@@ -385,6 +386,6 @@ export function ModelEvidencePanel({ profiles }: { profiles: EvaluationModelProf
       <p className="mt-5 border-t border-white/10 pt-4 text-xs text-base-content/55">
         Model and execution metadata is reported by the connected host, not independently verified.
       </p>
-    </section>
+    </Card>
   );
 }

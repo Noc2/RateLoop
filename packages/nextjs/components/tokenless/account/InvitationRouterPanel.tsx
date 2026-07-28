@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import { Card } from "~~/components/tokenless/ui/Card";
 import { readJson } from "~~/lib/tokenless/http";
 
 type ReviewerInvitationPreview = {
@@ -129,7 +130,7 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
   }
 
   return (
-    <section className="surface-card rounded-2xl p-6">
+    <Card as="section" className="rounded-2xl p-6">
       <h2 className="text-2xl font-semibold">Add invitation</h2>
       <form className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end" onSubmit={checkInvitation}>
         <div className="grow">
@@ -157,7 +158,7 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
       </form>
 
       {preview ? (
-        <div className="surface-card-nested mt-5 rounded-xl p-5">
+        <Card as="div" variant="nested" className="mt-5 rounded-xl p-5">
           <p className="text-sm text-base-content/55">{preview.workspaceName}</p>
           <h3 className="mt-1 text-lg font-semibold">Reviewer invitation</h3>
           <p className="mt-2 text-sm text-base-content/60">
@@ -190,7 +191,7 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
               Cancel
             </button>
           </div>
-        </div>
+        </Card>
       ) : null}
 
       {status ? (
@@ -203,6 +204,6 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
           {formError}
         </p>
       ) : null}
-    </section>
+    </Card>
   );
 }

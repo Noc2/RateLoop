@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { PublicAgentConnectionStatus } from "~~/components/tokenless/agents/PublicAgentConnectionStatus";
+import { Card } from "~~/components/tokenless/ui/Card";
 import { PageHeading } from "~~/components/tokenless/ui/PageHeading";
 import { getOptionalAppUrl } from "~~/lib/env/server";
 import { getPublicAgentConnectionIntent } from "~~/lib/tokenless/agentConnectionIntents";
@@ -84,7 +85,7 @@ export default async function AgentConnectionPage({ params }: { params: Promise<
         data-rateloop-agent-connection="2026-07-17"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(machineHandoff).replaceAll("<", "\\u003c") }}
       />
-      <section className="surface-card rounded-2xl p-6 sm:p-8" aria-labelledby="agent-connection-heading">
+      <Card as="section" className="rounded-2xl p-6 sm:p-8" aria-labelledby="agent-connection-heading">
         <PageHeading
           accent="blue"
           heading={status.label}
@@ -112,7 +113,7 @@ export default async function AgentConnectionPage({ params }: { params: Promise<
             Complete by <time dateTime={intent.hardExpiresAt}>{new Date(intent.hardExpiresAt).toLocaleString()}</time>
           </p>
         ) : null}
-      </section>
+      </Card>
     </div>
   );
 }

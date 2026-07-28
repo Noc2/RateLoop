@@ -1,4 +1,4 @@
-import { type ComponentPropsWithoutRef, type ElementType, type ReactNode } from "react";
+import { type ComponentPropsWithRef, type ElementType, type ReactNode } from "react";
 import { classNames } from "./classNames";
 
 export type CardVariant = "surface" | "nested" | "marketing";
@@ -8,7 +8,7 @@ type CardProps<T extends ElementType> = {
   children: ReactNode;
   className?: string;
   variant?: CardVariant;
-} & Omit<ComponentPropsWithoutRef<T>, "as" | "children" | "className">;
+} & Omit<ComponentPropsWithRef<T>, "as" | "children" | "className">;
 
 const VARIANT_CLASSES: Record<CardVariant, string> = {
   surface: "surface-card",

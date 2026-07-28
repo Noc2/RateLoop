@@ -1,4 +1,5 @@
 import React, { type ReactNode } from "react";
+import { Card } from "~~/components/tokenless/ui/Card";
 
 export type UseCaseIconKind = "reply" | "research" | "hiring";
 
@@ -58,7 +59,7 @@ export type UseCaseExample = {
 
 export function UseCaseExampleCard({ example }: { example: UseCaseExample }) {
   return (
-    <section className="surface-card-nested rounded-xl p-4 text-left">
+    <Card as="section" variant="nested" className="rounded-xl p-4 text-left">
       <p className="font-mono text-xs uppercase tracking-widest" style={{ color: example.color }}>
         Illustrative example
       </p>
@@ -88,6 +89,6 @@ export function UseCaseExampleCard({ example }: { example: UseCaseExample }) {
         </div>
       </dl>
       <p className="mt-3 border-t border-white/10 pt-3 text-sm text-base-content/70">{example.outcome}</p>
-    </section>
+    </Card>
   );
 }

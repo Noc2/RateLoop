@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { ChoiceInput, Field, SelectField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import { Card } from "~~/components/tokenless/ui/Card";
 import { readBrowserSession } from "~~/lib/auth/client";
 import {
   type Dac7FormPolicy,
@@ -211,7 +212,7 @@ export function PaidEligibilityClient() {
 
   return (
     <div className="space-y-5">
-      <section className="surface-card rounded-2xl p-6">
+      <Card as="section" className="rounded-2xl p-6">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
           <div>
             <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-green)]">Paid-task access</p>
@@ -531,10 +532,10 @@ export function PaidEligibilityClient() {
           </p>
         ) : null}
         {error ? <p className="mt-5 rounded-lg bg-red-400/10 p-3 text-sm text-red-100">{error}</p> : null}
-      </section>
+      </Card>
 
       {state?.status !== "declined" ? (
-        <aside className="surface-card rounded-2xl p-6">
+        <Card as="aside" className="rounded-2xl p-6">
           <p className="font-mono text-xs uppercase tracking-widest text-base-content/55">Why this happens now</p>
           <h2 className="mt-2 text-xl font-semibold">No blocked earnings later</h2>
           <p className="mt-4 text-sm leading-6 text-base-content/60">
@@ -545,7 +546,7 @@ export function PaidEligibilityClient() {
             Normal claims publicly link a one-time vote key to its per-round payout destination. Recovery stays
             client-controlled.
           </p>
-        </aside>
+        </Card>
       ) : null}
     </div>
   );

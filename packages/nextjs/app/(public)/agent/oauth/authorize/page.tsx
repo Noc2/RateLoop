@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { AgentOAuthConsentForm } from "~~/components/tokenless/agents/AgentOAuthConsentForm";
+import { Card } from "~~/components/tokenless/ui/Card";
 import { PageHeading } from "~~/components/tokenless/ui/PageHeading";
 import { AUTH_SESSION_COOKIE, findAuthSession } from "~~/lib/auth/session";
 import { validateAgentOAuthAuthorizationRequest } from "~~/lib/tokenless/agentOAuth";
@@ -28,7 +29,7 @@ export default async function AgentOAuthAuthorizePage({ searchParams }: { search
   } catch {
     return (
       <div className="flex grow items-start justify-center px-4 py-16 sm:py-24">
-        <section className="surface-card w-full max-w-lg rounded-2xl p-6 sm:p-9" aria-labelledby="oauth-error-title">
+        <Card as="section" className="w-full max-w-lg rounded-2xl p-6 sm:p-9" aria-labelledby="oauth-error-title">
           <PageHeading
             accent="error"
             heading="This connection request is invalid"
@@ -42,7 +43,7 @@ export default async function AgentOAuthAuthorizePage({ searchParams }: { search
           <p className="mt-6 text-sm leading-6 text-base-content/55">
             Return to the agent that opened this page and start the connection again.
           </p>
-        </section>
+        </Card>
       </div>
     );
   }
@@ -70,7 +71,7 @@ export default async function AgentOAuthAuthorizePage({ searchParams }: { search
 
   return (
     <div className="flex grow items-start justify-center px-4 py-16 sm:py-24">
-      <section className="surface-card w-full max-w-xl rounded-2xl p-6 sm:p-9" aria-labelledby="oauth-consent-title">
+      <Card as="section" className="w-full max-w-xl rounded-2xl p-6 sm:p-9" aria-labelledby="oauth-consent-title">
         <PageHeading
           accent="blue"
           heading={
@@ -99,7 +100,7 @@ export default async function AgentOAuthAuthorizePage({ searchParams }: { search
           </ul>
         </section>
         <AgentOAuthConsentForm autoAuthorize={authorization.autoAuthorize} values={values} />
-      </section>
+      </Card>
     </div>
   );
 }

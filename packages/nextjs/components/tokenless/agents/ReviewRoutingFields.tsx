@@ -3,6 +3,7 @@
 import { useId } from "react";
 import { InfoPopover } from "~~/components/tokenless/InfoPopover";
 import { ChoiceInput, SelectField } from "~~/components/tokenless/forms/Field";
+import { Card } from "~~/components/tokenless/ui/Card";
 
 export type ReviewRoutingMode = "adaptive" | "always" | "manual" | "rules" | "fixed";
 export type ReviewRoutingAuthority = "check_only" | "prepare_for_approval" | "ask_automatically";
@@ -199,7 +200,7 @@ export function ReviewRoutingFields({
   onAuthorityChange: (authority: ReviewRoutingAuthority) => void;
 }) {
   return (
-    <fieldset className={`surface-card-nested p-4 sm:p-5 ${className ?? ""}`}>
+    <Card as="fieldset" variant="nested" className={`p-4 sm:p-5 ${className ?? ""}`}>
       <legend className="px-1 text-xl font-semibold">Review routing</legend>
       <div className="grid gap-5 sm:grid-cols-2">
         <ReviewFrequencyFields
@@ -218,6 +219,6 @@ export function ReviewRoutingFields({
           />
         ) : null}
       </div>
-    </fieldset>
+    </Card>
   );
 }

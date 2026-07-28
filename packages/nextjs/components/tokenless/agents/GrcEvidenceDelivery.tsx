@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { formatEvidenceDeliveryDate, readEvidenceDeliveryJson } from "./evidenceDeliveryClient";
 import { ChoiceInput, Field, SelectField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import { Card } from "~~/components/tokenless/ui/Card";
 
 type Provider = "drata" | "vanta";
 type ControlMapping = {
@@ -97,7 +98,7 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
   };
 
   return (
-    <section className="surface-card-nested rounded-xl p-5" aria-labelledby="grc-connectors-heading">
+    <Card as="section" variant="nested" className="rounded-xl p-5" aria-labelledby="grc-connectors-heading">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 id="grc-connectors-heading" className="font-semibold">
@@ -370,6 +371,6 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
           {formError}
         </p>
       ) : null}
-    </section>
+    </Card>
   );
 }

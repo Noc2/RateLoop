@@ -1387,7 +1387,7 @@ export function AgentConnectionPanel({
       </AsyncSection>
 
       {!loading && workspaceId && activeConnectionIntents.length > 0 ? (
-        <section className="surface-card rounded-2xl p-6" aria-labelledby="pending-agent-connections-heading">
+        <Card as="section" className="rounded-2xl p-6" aria-labelledby="pending-agent-connections-heading">
           <div className="space-y-4">
             {connectionIntents
               .filter(intent => isActiveAgentConnectionIntent(intent, connectionClock))
@@ -1481,12 +1481,13 @@ export function AgentConnectionPanel({
                 );
               })}
           </div>
-        </section>
+        </Card>
       ) : null}
 
       {!loading && workspaceId && activePairings.length > 0 ? (
-        <section
-          className="surface-card rounded-2xl border border-warning/25 p-6"
+        <Card
+          as="section"
+          className="rounded-2xl border border-warning/25 p-6"
           aria-labelledby="legacy-pairing-actions-heading"
         >
           <div className="flex flex-wrap items-center gap-2">
@@ -1527,7 +1528,7 @@ export function AgentConnectionPanel({
                     />
                   </div>
                 ) : (
-                  <article key={pairing.pairingId} className="surface-card-nested rounded-xl p-4">
+                  <Card as="article" variant="nested" key={pairing.pairingId} className="rounded-xl p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <h3 className="font-semibold">
@@ -1546,10 +1547,10 @@ export function AgentConnectionPanel({
                         Review legacy approval
                       </Button>
                     </div>
-                  </article>
+                  </Card>
                 )
               ) : (
-                <article key={pairing.pairingId} className="surface-card-nested rounded-xl p-4">
+                <Card as="article" variant="nested" key={pairing.pairingId} className="rounded-xl p-4">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <h4 className="font-semibold">Waiting for legacy agent metadata</h4>
@@ -1564,15 +1565,15 @@ export function AgentConnectionPanel({
                       Cancel legacy request
                     </button>
                   </div>
-                </article>
+                </Card>
               ),
             )}
           </div>
-        </section>
+        </Card>
       ) : null}
 
       {!loading && workspaceId && activeIntegrations.length > 0 ? (
-        <section className="surface-card rounded-2xl p-6" aria-labelledby="connected-agents-heading">
+        <Card as="section" className="rounded-2xl p-6" aria-labelledby="connected-agents-heading">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <h2 id="connected-agents-heading" className="text-xl font-semibold">
@@ -1745,7 +1746,7 @@ export function AgentConnectionPanel({
               })}
             </div>
           ) : null}
-        </section>
+        </Card>
       ) : null}
       <ConfirmDialog
         open={pendingConfirmation !== null}

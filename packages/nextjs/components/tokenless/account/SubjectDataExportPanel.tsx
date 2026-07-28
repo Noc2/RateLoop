@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "~~/components/tokenless/ui/Button";
+import { Card } from "~~/components/tokenless/ui/Card";
 import { readJson } from "~~/lib/tokenless/http";
 
 type SubjectRequest = {
@@ -76,7 +77,7 @@ export function SubjectDataExportPanel() {
   const pending = exports.some(request => !["completed", "denied", "cancelled"].includes(request.status));
 
   return (
-    <section className="surface-card rounded-2xl p-6" aria-labelledby="subject-data-export-heading">
+    <Card as="section" className="rounded-2xl p-6" aria-labelledby="subject-data-export-heading">
       <h2 id="subject-data-export-heading" className="text-xl font-semibold">
         Download your data
       </h2>
@@ -130,6 +131,6 @@ export function SubjectDataExportPanel() {
           ))}
         </ul>
       ) : null}
-    </section>
+    </Card>
   );
 }

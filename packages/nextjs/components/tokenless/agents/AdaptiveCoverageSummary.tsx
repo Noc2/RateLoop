@@ -1,4 +1,5 @@
 import React from "react";
+import { Card } from "~~/components/tokenless/ui/Card";
 import type {
   AdaptiveCoverageReasonCode,
   AdaptiveCoverageTile,
@@ -101,7 +102,7 @@ export function AdaptiveCoverageSummary({ agents }: { agents: EvaluationDashboar
   if (tiles.length === 0) return null;
 
   return (
-    <section className="surface-card rounded-2xl p-6" aria-labelledby="adaptive-coverage-heading">
+    <Card as="section" className="rounded-2xl p-6" aria-labelledby="adaptive-coverage-heading">
       <h2 id="adaptive-coverage-heading" className="text-xl font-semibold">
         Adaptive coverage
       </h2>
@@ -110,7 +111,7 @@ export function AdaptiveCoverageSummary({ agents }: { agents: EvaluationDashboar
         {tiles.map(({ agent, coverage }) => {
           const latest = coverage.changes[0];
           return (
-            <article key={`${agent.agentId}:${coverage.scopeId}`} className="surface-card-nested rounded-xl p-4">
+            <Card as="article" variant="nested" key={`${agent.agentId}:${coverage.scopeId}`} className="rounded-xl p-4">
               <p className="font-mono text-xs uppercase tracking-wider text-[var(--rateloop-blue)]">
                 {agent.displayName}
               </p>
@@ -158,10 +159,10 @@ export function AdaptiveCoverageSummary({ agents }: { agents: EvaluationDashboar
                   </ol>
                 </details>
               ) : null}
-            </article>
+            </Card>
           );
         })}
       </div>
-    </section>
+    </Card>
   );
 }

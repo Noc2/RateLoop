@@ -17,6 +17,7 @@ import {
 } from "~~/components/tokenless/answer/PublicQuestionCard";
 import { HumanTabs } from "~~/components/tokenless/human/HumanTabs";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
+import { Card } from "~~/components/tokenless/ui/Card";
 import { readBrowserSession, subscribeToBrowserAuthSessionChanges } from "~~/lib/auth/client";
 import { AnswerRequestError, loadAnswerQueues, readAccountBoundAssignments } from "~~/lib/tokenless/answerQueue";
 
@@ -218,9 +219,9 @@ export function AnswerPageClient({
             </div>
           ) : null}
           {query ? (
-            <span className="surface-card-nested ml-auto rounded-lg px-3 py-2 text-sm text-base-content/65">
+            <Card as="span" variant="nested" className="ml-auto rounded-lg px-3 py-2 text-sm text-base-content/65">
               Results for <strong className="font-medium text-base-content">&quot;{query}&quot;</strong>
-            </span>
+            </Card>
           ) : null}
         </div>
       ) : null}
@@ -230,7 +231,7 @@ export function AnswerPageClient({
           {null}
         </AsyncSection>
         {!loading && !signedOut && visibleScope !== "public" && view === "active" && assignments.length > 1 ? (
-          <nav className="surface-card flex flex-wrap gap-2 rounded-lg p-3" aria-label="Private assignments">
+          <Card as="nav" className="flex flex-wrap gap-2 rounded-lg p-3" aria-label="Private assignments">
             {assignments.map((assignment, index) => (
               <button
                 key={assignment.assignmentId}
@@ -248,7 +249,7 @@ export function AnswerPageClient({
                   : (assignment.projectName ?? "Private review")}
               </button>
             ))}
-          </nav>
+          </Card>
         ) : null}
         {!loading && !signedOut && visibleScope !== "public" ? (
           view === "active" ? (
@@ -297,7 +298,10 @@ export function AnswerPageClient({
           />
         ) : null}
         {!loading && !signedOut && !error && tasks.length === 0 && assignments.length === 0 ? (
-          <div className="surface-card flex min-h-36 flex-col items-center justify-center gap-3 rounded-lg p-6 text-center">
+          <Card
+            as="div"
+            className="flex min-h-36 flex-col items-center justify-center gap-3 rounded-lg p-6 text-center"
+          >
             <p className="text-base text-base-content/60">
               {query
                 ? "No review work matches this search."
@@ -315,7 +319,7 @@ export function AnswerPageClient({
                 Use an invitation
               </button>
             ) : null}
-          </div>
+          </Card>
         ) : null}
         {error ? (
           <p role="alert" className="rounded-lg bg-red-400/10 p-4 text-sm text-red-100">

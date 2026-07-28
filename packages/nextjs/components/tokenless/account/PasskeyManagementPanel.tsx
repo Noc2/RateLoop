@@ -4,6 +4,7 @@ import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
+import { Card } from "~~/components/tokenless/ui/Card";
 import { betterAuthClient, readBrowserAuthConfiguration } from "~~/lib/auth/client";
 import { readJson } from "~~/lib/tokenless/http";
 
@@ -160,7 +161,7 @@ export function PasskeyManagementPanel() {
   const removingOnlyPasskey = pending?.kind === "remove" && passkeys.length === 1;
 
   return (
-    <section className="surface-card rounded-2xl p-6" aria-labelledby="passkeys-heading">
+    <Card as="section" className="rounded-2xl p-6" aria-labelledby="passkeys-heading">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h2 id="passkeys-heading" className="text-lg font-semibold">
@@ -325,6 +326,6 @@ export function PasskeyManagementPanel() {
           {formError}
         </p>
       ) : null}
-    </section>
+    </Card>
   );
 }

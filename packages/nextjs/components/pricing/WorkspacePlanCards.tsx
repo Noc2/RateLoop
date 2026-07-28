@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { Card } from "~~/components/tokenless/ui/Card";
 import { TOKENLESS_BILLING_PLANS, formatUsdPrice } from "~~/lib/billing/plans";
 
 type WorkspacePlanCardsProps = {
@@ -140,7 +141,7 @@ function PlanCard({
   footer: ReactNode;
 }) {
   return (
-    <article className="surface-card relative flex min-h-[28rem] flex-col overflow-hidden rounded-2xl p-7 sm:p-9">
+    <Card as="article" className="relative flex min-h-[28rem] flex-col overflow-hidden rounded-2xl p-7 sm:p-9">
       <div className="absolute inset-x-0 top-0 h-1" style={{ background: accent }} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-2xl font-semibold">{name}</h3>
@@ -160,6 +161,6 @@ function PlanCard({
         ))}
       </ul>
       <div className="mt-auto pt-8">{footer}</div>
-    </article>
+    </Card>
   );
 }
