@@ -242,7 +242,8 @@ test("agent and human-review mutations still refresh dependent panels", () => {
 });
 
 test("agent versions open from a direct secondary action on the connection view", () => {
-  assert.match(panelsSource, /Manage agent versions/);
+  assert.match(panelsSource, /Update agent version/);
+  assert.doesNotMatch(panelsSource, /Manage agent versions/);
   assert.match(panelsSource, /aria-controls="agent-version-management"/);
   assert.match(panelsSource, /aria-expanded=\{showAgentManagement\}/);
   assert.match(panelsSource, /showAgentManagement \? \(/);

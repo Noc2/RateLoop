@@ -99,7 +99,8 @@ test("enterprise identity settings cover provider lifecycle and workspace-local 
 
 test("workspace managers can create one-time scoped API keys without result webhooks", () => {
   assert.match(source, /<WorkspaceApiKeysPanel workspaceId=\{selected\.workspaceId\} \/>/);
-  assert.match(source, /Manage API keys/);
+  assert.match(source, /Create or revoke API key/);
+  assert.doesNotMatch(source, /Manage API keys/);
   assert.match(source, /aria-expanded=\{showApiAccess\}/);
   assert.match(source, /showApiAccess \? \(/);
   assert.match(apiKeySource, /<OneTimeSecretNotice label="this API key"/);

@@ -126,7 +126,7 @@ export function AgentWorkspacePanels({
                 aria-expanded={showAgentManagement}
                 onClick={() => setAgentManagementWorkspaceId(current => (current === workspaceId ? null : workspaceId))}
               >
-                {showAgentManagement ? "Done" : "Manage agent versions"}
+                {showAgentManagement ? "Done" : "Update agent version"}
               </Button>
             </div>
             {showAgentManagement ? (

@@ -807,7 +807,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                       aria-expanded={showApiAccess}
                       onClick={() => setShowApiAccess(current => !current)}
                     >
-                      {showApiAccess ? "Done" : "Manage API keys"}
+                      {showApiAccess ? "Done" : "Create or revoke API key"}
                     </button>
                   </div>
                   {showApiAccess ? (
