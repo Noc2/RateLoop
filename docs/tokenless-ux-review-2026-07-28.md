@@ -761,6 +761,36 @@ low-risk navigation. See
 
 ## Recommended implementation sequence
 
+### Implementation decision after the second check
+
+The direction above was checked again against the current route inventory,
+source, and additional W3C, GOV.UK, USWDS, FIDO, and Next.js guidance before
+implementation. The five phases remain valid, with these execution constraints:
+
+1. **Remove misleading and unavailable paths before reorganizing them.** A
+   disabled future option is not a useful destination. Capability checks must
+   prevent the surface from rendering; CSS-disabled controls are not enough.
+2. **Change a label only with its content ownership.** For example, rename
+   **Evaluations** to **Results** only when the default view becomes results and
+   owner decisions rather than alerts, publishing policy, and diagnostics.
+3. **Preserve stable URLs while changing the visible model.** Existing `tab`
+   values and legacy redirects can remain compatible while navigation, document
+   titles, search, and headings use the tested user-facing terms.
+4. **Keep protocol state separate from presentation state.** The four
+   user-facing states—Waiting, Needs action, Completed, and Failed—must map from,
+   not replace, the more detailed persisted workflow states.
+5. **Build accessibility into each concern.** Every route change includes its
+   heading, title, landmark, focus, error, responsive, and status-announcement
+   behavior instead of leaving accessibility for a final cleanup commit.
+6. **Commit and verify by concern.** Each independent change receives focused
+   tests and a separate commit. Full build, browser regression, tokenless
+   deployment isolation, and hosted smoke tests remain final release gates.
+
+This sequence follows the GOV.UK recommendation to simplify a transaction
+before adding task-list or status complexity, the WCAG requirements for
+descriptive titles and bypassing repeated blocks, and the Next.js requirement
+that route metadata be resolved by Server Components.
+
 ### Phase 1 — Establish the UX contract
 
 1. Approve the navigation ownership and terminology tables above.
