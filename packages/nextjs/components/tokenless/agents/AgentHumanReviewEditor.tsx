@@ -12,6 +12,7 @@ import { Field, SelectField, TextareaField } from "~~/components/tokenless/forms
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
+import { DurationInput } from "~~/components/ui/DurationInput";
 import { readJson } from "~~/lib/tokenless/http";
 import { configuredHumanReviewLaneForSelection, configuredHumanReviewLanes } from "~~/lib/tokenless/reviewCapabilities";
 import { formatUsdcAtomic, parseUsdcDecimal } from "~~/lib/tokenless/usdc";
@@ -496,6 +497,16 @@ export function AgentHumanReviewEditor({
   const creating = view.configuration === null;
   const advisoryConnectionLabel =
     view.connection?.reportedLane === "plugin-with-hooks" ? "Plugin connection" : "Connection";
+  const canChooseQuestionAuthority =
+    CONFIGURED_HUMAN_REVIEW_LANES.publicPaidNetwork.available || draft.questionAuthority === "agent_per_request";
+  const canChooseAudience =
+    CONFIGURED_HUMAN_REVIEW_LANES.publicPaidNetwork.available ||
+    CONFIGURED_HUMAN_REVIEW_LANES.hybridPublicSafe.available ||
+    draft.audience !== "private_invited";
+  const paidConfigurationRelevant =
+    CONFIGURED_HUMAN_REVIEW_LANES.privateInvitedPaid.available ||
+    draft.compensationMode === "usdc" ||
+    draft.feedbackBonusEnabled;
 
   return (
     <Card as="section" id="agent-human-review-editor" className="rounded-2xl p-6">
@@ -518,66 +529,85 @@ export function AgentHumanReviewEditor({
           {view.blockingReason.message}
         </p>
       ) : null}
-      <form className="mt-6 space-y-5" onSubmit={submit}>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <SelectField
-            containerClassName="sm:col-span-2"
-            label="Who writes the question?"
-            labelClassName="text-sm"
-            value={draft.questionAuthority}
-            onChange={event => changeQuestionAuthority(event.target.value as QuestionAuthority)}
-          >
-            <option value="owner_fixed">Use one question</option>
-            <option value="agent_per_request" disabled={!CONFIGURED_HUMAN_REVIEW_LANES.publicPaidNetwork.available}>
-              Let the agent ask each time (unavailable)
-            </option>
-          </SelectField>
-          {draft.questionAuthority === "owner_fixed" ? (
-            <>
-              <div className="sm:col-span-2">
-                <TextareaField
-                  label="Review question"
-                  className="w-full"
-                  rows={3}
-                  value={draft.criterion}
-                  error={fieldErrors.criterion}
-                  onChange={event => update("criterion", event.target.value)}
+      <form className="mt-6 space-y-6" onSubmit={submit}>
+        <section className="space-y-4" aria-labelledby={`review-question-${agentId}`}>
+          <div>
+            <p className="font-mono text-xs text-base-content/55">01</p>
+            <h3 id={`review-question-${agentId}`} className="mt-1 font-semibold">
+              Review question
+            </h3>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {canChooseQuestionAuthority ? (
+              <SelectField
+                containerClassName="sm:col-span-2"
+                label="Who writes the question?"
+                labelClassName="text-sm"
+                value={draft.questionAuthority}
+                onChange={event => changeQuestionAuthority(event.target.value as QuestionAuthority)}
+              >
+                <option value="owner_fixed">Use one question</option>
+                {CONFIGURED_HUMAN_REVIEW_LANES.publicPaidNetwork.available ||
+                draft.questionAuthority === "agent_per_request" ? (
+                  <option value="agent_per_request">Let the agent ask each time</option>
+                ) : null}
+              </SelectField>
+            ) : null}
+            {draft.questionAuthority === "owner_fixed" ? (
+              <>
+                <div className="sm:col-span-2">
+                  <TextareaField
+                    label="Question shown to reviewers"
+                    className="w-full"
+                    rows={3}
+                    value={draft.criterion}
+                    error={fieldErrors.criterion}
+                    onChange={event => update("criterion", event.target.value)}
+                    required
+                  />
+                </div>
+                <Field
+                  label="Positive answer"
+                  value={draft.positiveLabel}
+                  error={fieldErrors.positiveLabel}
+                  onChange={event => update("positiveLabel", event.target.value)}
                   required
                 />
-              </div>
-              <Field
-                label="Positive label"
-                value={draft.positiveLabel}
-                error={fieldErrors.positiveLabel}
-                onChange={event => update("positiveLabel", event.target.value)}
-                required
-              />
-              <Field
-                label="Negative label"
-                value={draft.negativeLabel}
-                error={fieldErrors.negativeLabel}
-                onChange={event => update("negativeLabel", event.target.value)}
-                required
-              />
-            </>
-          ) : (
-            <p className="text-sm leading-6 text-base-content/60 sm:col-span-2">
-              Agent-written questions collect feedback only. They use RateLoop network reviewers and never change
-              adaptive review coverage.
-            </p>
-          )}
-          <SelectField
-            label="Rationale"
-            labelClassName="text-sm"
-            value={draft.rationaleMode}
-            onChange={event => update("rationaleMode", event.target.value as Draft["rationaleMode"])}
-          >
-            <option value="off">Off</option>
-            <option value="optional">Optional</option>
-            <option value="required">Required</option>
-          </SelectField>
+                <Field
+                  label="Negative answer"
+                  value={draft.negativeLabel}
+                  error={fieldErrors.negativeLabel}
+                  onChange={event => update("negativeLabel", event.target.value)}
+                  required
+                />
+              </>
+            ) : (
+              <p className="text-sm leading-6 text-base-content/60 sm:col-span-2">
+                Agent-written questions collect feedback only. They use RateLoop network reviewers and never change
+                adaptive review coverage.
+              </p>
+            )}
+            <SelectField
+              label="Reviewer explanation"
+              labelClassName="text-sm"
+              value={draft.rationaleMode}
+              onChange={event => update("rationaleMode", event.target.value as Draft["rationaleMode"])}
+            >
+              <option value="off">Off</option>
+              <option value="optional">Optional</option>
+              <option value="required">Required</option>
+            </SelectField>
+          </div>
+        </section>
+
+        <section className="space-y-4 border-t border-white/10 pt-6" aria-labelledby={`review-routing-${agentId}`}>
+          <div>
+            <p className="font-mono text-xs text-base-content/55">02</p>
+            <h3 id={`review-routing-${agentId}`} className="mt-1 font-semibold">
+              When to review
+            </h3>
+          </div>
           <ReviewRoutingFields
-            className="sm:col-span-2"
             mode={draft.mode}
             authority={draft.authority}
             automaticAvailable={automaticAvailable}
@@ -591,201 +621,216 @@ export function AgentHumanReviewEditor({
             onModeChange={changeReviewMode}
             onAuthorityChange={authority => update("authority", authority)}
           />
-          {draft.mode === "adaptive" || draft.mode === "fixed" ? (
-            <Field
-              label={draft.mode === "adaptive" ? "Minimum review rate (%)" : "Outputs reviewed (%)"}
-              type="number"
-              min={draft.mode === "adaptive" ? 25 : 0.01}
-              max={100}
-              step="0.01"
-              value={draft.ratePercent}
-              error={fieldErrors.ratePercent}
-              onChange={event => update("ratePercent", event.target.value)}
-              required
-              disabled={draft.mode === "adaptive"}
-            />
-          ) : null}
           {draft.mode !== "manual" ? (
-            <Field
-              label="Maximum outputs between reviews"
-              type="number"
-              min={1}
-              max={10000}
-              value={draft.maximumUnreviewedGap}
-              error={fieldErrors.maximumUnreviewedGap}
-              onChange={event => update("maximumUnreviewedGap", event.target.value)}
-              required
-            />
-          ) : null}
-          {draft.mode === "rules" ? (
-            <>
-              <Field
-                label="Risk levels"
-                value={draft.requiredRiskTiers}
-                error={fieldErrors.requiredRiskTiers}
-                onChange={event => update("requiredRiskTiers", event.target.value)}
-              />
-              <Field
-                label="Review below confidence (%)"
-                type="number"
-                min={0}
-                max={100}
-                value={draft.minimumConfidencePercent}
-                error={fieldErrors.minimumConfidencePercent}
-                onChange={event => update("minimumConfidencePercent", event.target.value)}
-              />
-            </>
-          ) : null}
-          <SelectField
-            label="Reviewers"
-            labelClassName="text-sm"
-            hint="This deployment currently supports invited reviewers without a guaranteed bounty."
-            value={draft.audience}
-            onChange={event => {
-              const audience = event.target.value as Audience;
-              setDraft(current =>
-                current
-                  ? {
-                      ...current,
-                      audience,
-                      compensationMode: audience === "private_invited" ? current.compensationMode : "usdc",
-                    }
-                  : current,
-              );
-            }}
-          >
-            <option value="private_invited" disabled={draft.questionAuthority === "agent_per_request"}>
-              Invited reviewers
-            </option>
-            <option value="public_network" disabled={!CONFIGURED_HUMAN_REVIEW_LANES.publicPaidNetwork.available}>
-              RateLoop network (unavailable)
-            </option>
-            <option
-              value="hybrid"
-              disabled={
-                draft.questionAuthority === "agent_per_request" ||
-                !CONFIGURED_HUMAN_REVIEW_LANES.hybridPublicSafe.available
-              }
-            >
-              Invited and RateLoop network (unavailable)
-            </option>
-          </SelectField>
-          <Field
-            label="Response window (seconds)"
-            type="number"
-            min={1200}
-            max={86400}
-            value={draft.responseWindowSeconds}
-            error={fieldErrors.responseWindowSeconds}
-            onChange={event => update("responseWindowSeconds", event.target.value)}
-            required
-          />
-          <Field
-            label="Reviewers per request"
-            type="number"
-            min={draft.audience === "private_invited" ? 2 : 3}
-            max={100}
-            value={draft.panelSize}
-            error={fieldErrors.panelSize}
-            onChange={event => update("panelSize", event.target.value)}
-            required
-          />
-          <SelectField
-            label="Guaranteed bounty"
-            labelClassName="text-sm"
-            hint={
-              draft.audience !== "private_invited" ? "Network assignments currently require a guaranteed bounty." : null
-            }
-            value={draft.compensationMode}
-            onChange={event => update("compensationMode", event.target.value as Draft["compensationMode"])}
-          >
-            <option value="unpaid" disabled={draft.audience !== "private_invited"}>
-              No bounty
-            </option>
-            <option
-              value="usdc"
-              disabled={
-                draft.audience === "private_invited"
-                  ? !CONFIGURED_HUMAN_REVIEW_LANES.privateInvitedPaid.available
-                  : true
-              }
-            >
-              Add USDC bounty (unavailable)
-            </option>
-          </SelectField>
-          {draft.compensationMode === "usdc" ? (
-            <Field
-              label="USDC per accepted reviewer"
-              inputMode="decimal"
-              value={draft.bountyUsdc}
-              error={fieldErrors.bountyUsdc}
-              onChange={event => update("bountyUsdc", event.target.value)}
-              required
-            />
-          ) : null}
-          <fieldset className="rounded-xl border border-white/10 p-4 sm:col-span-2">
-            <legend className="px-1 text-sm font-medium">Feedback Bonus</legend>
-            <p className="text-sm text-base-content/60">
-              Optional, separately funded, and awarded only by the saved human.
-            </p>
-            <div className="mt-3 grid grid-cols-2 gap-2 sm:max-w-md">
-              <button
-                type="button"
-                aria-pressed={!draft.feedbackBonusEnabled}
-                className={`btn btn-sm ${!draft.feedbackBonusEnabled ? "btn-primary" : "btn-outline"}`}
-                onClick={() => update("feedbackBonusEnabled", false)}
-              >
-                No bonus
-              </button>
-              <button
-                type="button"
-                aria-pressed={draft.feedbackBonusEnabled}
-                className={`btn btn-sm ${draft.feedbackBonusEnabled ? "btn-primary" : "btn-outline"}`}
-                onClick={() => update("feedbackBonusEnabled", true)}
-              >
-                Add bonus
-              </button>
-            </div>
-            {draft.feedbackBonusEnabled ? (
+            <details className="rounded-xl border border-white/10 p-4">
+              <summary className="cursor-pointer text-sm font-medium">Advanced review limits</summary>
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                {draft.mode === "adaptive" || draft.mode === "fixed" ? (
+                  <Field
+                    label={draft.mode === "adaptive" ? "Minimum review rate (%)" : "Outputs reviewed (%)"}
+                    type="number"
+                    min={draft.mode === "adaptive" ? 25 : 0.01}
+                    max={100}
+                    step="0.01"
+                    value={draft.ratePercent}
+                    error={fieldErrors.ratePercent}
+                    onChange={event => update("ratePercent", event.target.value)}
+                    required
+                    disabled={draft.mode === "adaptive"}
+                  />
+                ) : null}
                 <Field
-                  label="Bonus pool (USDC)"
-                  inputMode="decimal"
-                  value={draft.feedbackBonusUsdc}
-                  error={fieldErrors.feedbackBonusUsdc}
-                  onChange={event => update("feedbackBonusUsdc", event.target.value)}
+                  label="Maximum outputs between reviews"
+                  type="number"
+                  min={1}
+                  max={10000}
+                  value={draft.maximumUnreviewedGap}
+                  error={fieldErrors.maximumUnreviewedGap}
+                  onChange={event => update("maximumUnreviewedGap", event.target.value)}
                   required
                 />
-                <SelectField
-                  label="Human awarder"
-                  labelClassName="text-sm"
-                  value={draft.feedbackBonusAwarderKind}
-                  onChange={event =>
-                    update("feedbackBonusAwarderKind", event.target.value as Draft["feedbackBonusAwarderKind"])
-                  }
-                >
-                  <option value="requester">Requester</option>
-                  <option value="designated">Designated authenticated human</option>
-                </SelectField>
-                {draft.feedbackBonusAwarderKind === "designated" ? (
-                  <div className="sm:col-span-2">
+                {draft.mode === "rules" ? (
+                  <>
                     <Field
-                      label="Awarder account"
-                      value={draft.feedbackBonusAwarderAccount}
-                      error={fieldErrors.feedbackBonusAwarderAccount}
-                      onChange={event => update("feedbackBonusAwarderAccount", event.target.value)}
-                      maxLength={320}
+                      label="Risk levels"
+                      value={draft.requiredRiskTiers}
+                      error={fieldErrors.requiredRiskTiers}
+                      onChange={event => update("requiredRiskTiers", event.target.value)}
+                    />
+                    <Field
+                      label="Review below confidence (%)"
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={draft.minimumConfidencePercent}
+                      error={fieldErrors.minimumConfidencePercent}
+                      onChange={event => update("minimumConfidencePercent", event.target.value)}
+                    />
+                  </>
+                ) : null}
+              </div>
+            </details>
+          ) : null}
+        </section>
+
+        <section className="space-y-4 border-t border-white/10 pt-6" aria-labelledby={`review-panel-${agentId}`}>
+          <div>
+            <p className="font-mono text-xs text-base-content/55">03</p>
+            <h3 id={`review-panel-${agentId}`} className="mt-1 font-semibold">
+              Reviewers and timing
+            </h3>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {canChooseAudience ? (
+              <SelectField
+                label="Reviewers"
+                labelClassName="text-sm"
+                value={draft.audience}
+                onChange={event => {
+                  const audience = event.target.value as Audience;
+                  setDraft(current =>
+                    current
+                      ? {
+                          ...current,
+                          audience,
+                          compensationMode: audience === "private_invited" ? current.compensationMode : "usdc",
+                        }
+                      : current,
+                  );
+                }}
+              >
+                {draft.questionAuthority !== "agent_per_request" ? (
+                  <option value="private_invited">Invited reviewers</option>
+                ) : null}
+                {CONFIGURED_HUMAN_REVIEW_LANES.publicPaidNetwork.available || draft.audience === "public_network" ? (
+                  <option value="public_network">RateLoop network</option>
+                ) : null}
+                {draft.questionAuthority !== "agent_per_request" &&
+                (CONFIGURED_HUMAN_REVIEW_LANES.hybridPublicSafe.available || draft.audience === "hybrid") ? (
+                  <option value="hybrid">Invited and RateLoop network</option>
+                ) : null}
+              </SelectField>
+            ) : (
+              <div>
+                <p className="text-sm font-medium">Reviewers</p>
+                <p className="mt-2 text-sm text-base-content/70">Invited reviewers</p>
+              </div>
+            )}
+            <div>
+              <label className="text-sm font-medium" htmlFor={`response-window-${agentId}`}>
+                Response deadline
+              </label>
+              <DurationInput
+                id={`response-window-${agentId}`}
+                valueSeconds={draft.responseWindowSeconds}
+                minSeconds={1_200}
+                maxSeconds={86_400}
+                invalid={Boolean(fieldErrors.responseWindowSeconds)}
+                ariaDescribedBy={fieldErrors.responseWindowSeconds ? `response-window-${agentId}-error` : undefined}
+                onChangeSeconds={value => update("responseWindowSeconds", value)}
+              />
+              {fieldErrors.responseWindowSeconds ? (
+                <p id={`response-window-${agentId}-error`} className="mt-1 text-sm text-error" role="alert">
+                  {fieldErrors.responseWindowSeconds}
+                </p>
+              ) : null}
+            </div>
+            <Field
+              label="Panel size"
+              type="number"
+              min={draft.audience === "private_invited" ? 2 : 3}
+              max={100}
+              value={draft.panelSize}
+              error={fieldErrors.panelSize}
+              onChange={event => update("panelSize", event.target.value)}
+              required
+            />
+            {paidConfigurationRelevant ? (
+              <SelectField
+                label="Guaranteed bounty"
+                labelClassName="text-sm"
+                value={draft.compensationMode}
+                onChange={event => update("compensationMode", event.target.value as Draft["compensationMode"])}
+              >
+                {draft.audience === "private_invited" ? <option value="unpaid">No bounty</option> : null}
+                {CONFIGURED_HUMAN_REVIEW_LANES.privateInvitedPaid.available || draft.compensationMode === "usdc" ? (
+                  <option value="usdc">Add USDC bounty</option>
+                ) : null}
+              </SelectField>
+            ) : null}
+            {draft.compensationMode === "usdc" ? (
+              <Field
+                label="USDC per accepted reviewer"
+                inputMode="decimal"
+                value={draft.bountyUsdc}
+                error={fieldErrors.bountyUsdc}
+                onChange={event => update("bountyUsdc", event.target.value)}
+                required
+              />
+            ) : null}
+            {paidConfigurationRelevant ? (
+              <fieldset className="rounded-xl border border-white/10 p-4 sm:col-span-2">
+                <legend className="px-1 text-sm font-medium">Feedback bonus</legend>
+                <div className="grid grid-cols-2 gap-2 sm:max-w-md">
+                  <button
+                    type="button"
+                    aria-pressed={!draft.feedbackBonusEnabled}
+                    className={`btn btn-sm ${!draft.feedbackBonusEnabled ? "btn-primary" : "btn-outline"}`}
+                    onClick={() => update("feedbackBonusEnabled", false)}
+                  >
+                    No bonus
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={draft.feedbackBonusEnabled}
+                    className={`btn btn-sm ${draft.feedbackBonusEnabled ? "btn-primary" : "btn-outline"}`}
+                    onClick={() => update("feedbackBonusEnabled", true)}
+                  >
+                    Add bonus
+                  </button>
+                </div>
+                {draft.feedbackBonusEnabled ? (
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    <Field
+                      label="Bonus pool (USDC)"
+                      inputMode="decimal"
+                      value={draft.feedbackBonusUsdc}
+                      error={fieldErrors.feedbackBonusUsdc}
+                      onChange={event => update("feedbackBonusUsdc", event.target.value)}
                       required
                     />
+                    <SelectField
+                      label="Human awarder"
+                      labelClassName="text-sm"
+                      value={draft.feedbackBonusAwarderKind}
+                      onChange={event =>
+                        update("feedbackBonusAwarderKind", event.target.value as Draft["feedbackBonusAwarderKind"])
+                      }
+                    >
+                      <option value="requester">Requester</option>
+                      <option value="designated">Designated authenticated human</option>
+                    </SelectField>
+                    {draft.feedbackBonusAwarderKind === "designated" ? (
+                      <div className="sm:col-span-2">
+                        <Field
+                          label="Awarder account"
+                          value={draft.feedbackBonusAwarderAccount}
+                          error={fieldErrors.feedbackBonusAwarderAccount}
+                          onChange={event => update("feedbackBonusAwarderAccount", event.target.value)}
+                          maxLength={320}
+                          required
+                        />
+                      </div>
+                    ) : null}
+                    <p className="text-xs text-base-content/55 sm:col-span-2">
+                      The agent can never select or execute a Feedback Bonus award.
+                    </p>
                   </div>
                 ) : null}
-                <p className="text-xs text-base-content/55 sm:col-span-2">
-                  The agent can never select or execute a Feedback Bonus award.
-                </p>
-              </div>
+              </fieldset>
             ) : null}
-          </fieldset>
-        </div>
+          </div>
+        </section>
         {formError ? (
           <p className="alert alert-error text-sm" role="alert">
             {formError}

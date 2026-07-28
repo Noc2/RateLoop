@@ -10,22 +10,22 @@ test("the contextual editor owns every human-review dimension through one canoni
   assert.match(source, /method: "PUT"/);
   assert.match(source, /expectedBindingVersion: view\.bindingRevision/);
   for (const label of [
-    "Who writes the question?",
-    "Use one question",
-    "Let the agent ask each time",
     "Review question",
-    "Positive label",
-    "Negative label",
-    "Rationale",
+    "Question shown to reviewers",
+    "Positive answer",
+    "Negative answer",
+    "Reviewer explanation",
+    "When to review",
+    "Advanced review limits",
     "Minimum review rate",
     "Outputs reviewed",
     "Maximum outputs between reviews",
     "Reviewers",
-    "Response window",
-    "Reviewers per request",
+    "Response deadline",
+    "Panel size",
     "Guaranteed bounty",
     "USDC per accepted reviewer",
-    "Feedback Bonus",
+    "Feedback bonus",
     "No bonus",
     "Add bonus",
     "Bonus pool",
@@ -33,6 +33,11 @@ test("the contextual editor owns every human-review dimension through one canoni
   ]) {
     assert.match(source, new RegExp(label));
   }
+  assert.match(source, /canChooseQuestionAuthority/);
+  assert.match(source, /canChooseAudience/);
+  assert.match(source, /paidConfigurationRelevant/);
+  assert.match(source, /<DurationInput/);
+  assert.doesNotMatch(source, /\(unavailable\)/);
   assert.match(source, /<ReviewRoutingFields/);
   assert.match(routingSource, /When should RateLoop require human review\?/);
   assert.match(routingSource, /If review is required, what may the agent do\?/);

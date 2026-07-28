@@ -22,6 +22,7 @@ type DurationInputProps = {
   disabled?: boolean;
   invalid?: boolean;
   ariaLabel?: string;
+  ariaDescribedBy?: string;
   className?: string;
   inputClassName?: string;
   selectClassName?: string;
@@ -57,6 +58,7 @@ export function DurationInput({
   disabled = false,
   invalid = false,
   ariaLabel,
+  ariaDescribedBy,
   className = "",
   inputClassName = "",
   selectClassName = "",
@@ -91,6 +93,8 @@ export function DurationInput({
           disabled={disabled}
           value={visibleParts.amount}
           aria-label={ariaLabel}
+          aria-describedby={ariaDescribedBy}
+          aria-invalid={invalid || undefined}
           onChange={event => {
             const normalizedValue = normalizeDurationAmountInput(event.target.value);
             if (normalizedValue === null) {
@@ -111,6 +115,8 @@ export function DurationInput({
           value={visibleParts.unit}
           disabled={disabled}
           aria-label={`${ariaLabel ?? "Duration"} unit`}
+          aria-describedby={ariaDescribedBy}
+          aria-invalid={invalid || undefined}
           onChange={event => {
             const nextUnit = event.target.value as HumanDurationUnit;
             setUnit(nextUnit);
