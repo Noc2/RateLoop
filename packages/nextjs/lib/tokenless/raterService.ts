@@ -12,7 +12,7 @@ import {
   getTokenlessChainRuntime,
 } from "./chain/runtime";
 import { tokenlessCommitTypedData } from "./rater/signing";
-import { TOKENLESS_MAX_TLOCK_CIPHERTEXT_BYTES } from "./rater/tlock";
+import { TOKENLESS_MAX_TLOCK_CIPHERTEXT_BYTES, assertTokenlessTlockRecipient } from "./rater/tlock";
 import { TokenlessPanelAbi } from "@rateloop/contracts/tokenless";
 import { createHash, randomUUID } from "node:crypto";
 import "server-only";
@@ -725,6 +725,23 @@ export async function relayPaidRaterCommit(input: { principalId: string; request
       "Commit does not match its live voucher and round.",
       409,
       "commit_voucher_mismatch",
+    );
+  }
+  // The declared round above is only what the client said. The round the ciphertext actually
+  // unlocks at is inside the ciphertext, and this is the last place it can be checked: once the
+  // commit is on chain the payload is permanent and public. A past round would publish the vote,
+  // prediction and payout address immediately; a far-future one could never be revealed in time.
+  try {
+    assertTokenlessTlockRecipient({
+      sealedPayload: input.request.authorization.sealedPayload,
+      beaconRound: Number(terms.beaconRound),
+      chainHash: String(terms.beaconNetworkHash),
+    });
+  } catch (cause) {
+    throw new TokenlessServiceError(
+      cause instanceof Error ? cause.message : "sealedPayload does not match its round terms.",
+      409,
+      "commit_sealed_payload_mismatch",
     );
   }
   const recovered = await recoverTypedDataAddress({

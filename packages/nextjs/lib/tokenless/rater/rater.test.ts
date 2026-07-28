@@ -6,11 +6,13 @@ import {
   TOKENLESS_REVEAL_PAYLOAD_VERSION,
   TOKENLESS_REVEAL_TYPEHASH,
   type TokenlessRaterRoundSecrets,
+  assertTokenlessTlockRecipient,
   createTokenlessRaterRoundSecrets,
   encodeTokenlessRevealPayload,
   exportTokenlessRecoveryPackage,
   importTokenlessRecoveryPackage,
   parseTokenlessRecoveryPackage,
+  readTokenlessTlockRecipient,
   sealTokenlessRevealWithClient,
   signTokenlessCommit,
   tokenlessCommitTypedData,
@@ -288,4 +290,46 @@ test("recovery import rejects tampering, wrong secrets, downgrades, and weak sec
     /unsupported cryptography or versioning/,
   );
   await assert.rejects(() => exportTokenlessRecoveryPackage(fixedSecrets(), "too short"), /between 12 and 1024/);
+});
+
+test("a tlock ciphertext is accepted only for the exact round and chain its terms froze", () => {
+  const chainHash = "cc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5";
+  const armor = (round: number, hash: string) => {
+    const file = Buffer.concat([
+      Buffer.from(`age-encryption.org/v1\n-> tlock ${round} ${hash}\n`, "latin1"),
+      Buffer.from("dGVzdC1zdGFuemEtYm9keQ\n--- header-mac\n", "latin1"),
+      Buffer.alloc(64, 7),
+    ]);
+    const body = file.toString("base64").replace(/(.{64})/gu, "$1\n");
+    const armored = `-----BEGIN AGE ENCRYPTED FILE-----\n${body}\n-----END AGE ENCRYPTED FILE-----\n`;
+    return `0x${Buffer.from(armored, "utf8").toString("hex")}`;
+  };
+
+  assert.deepEqual(readTokenlessTlockRecipient(armor(9_000_123, chainHash)), {
+    beaconRound: 9_000_123,
+    chainHash,
+  });
+  assert.doesNotThrow(() =>
+    assertTokenlessTlockRecipient({ sealedPayload: armor(9_000_123, chainHash), beaconRound: 9_000_123, chainHash }),
+  );
+
+  // Sealing to an already-past round would publish the vote the moment the commit lands.
+  assert.throws(
+    () => assertTokenlessTlockRecipient({ sealedPayload: armor(1_000, chainHash), beaconRound: 9_000_123, chainHash }),
+    /different drand round or chain/u,
+  );
+  // A foreign chain would unlock under a beacon the round never agreed to.
+  assert.throws(
+    () =>
+      assertTokenlessTlockRecipient({
+        sealedPayload: armor(9_000_123, "52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971"),
+        beaconRound: 9_000_123,
+        chainHash,
+      }),
+    /different drand round or chain/u,
+  );
+  assert.throws(
+    () => readTokenlessTlockRecipient(`0x${Buffer.from("not armored", "utf8").toString("hex")}`),
+    /armored tlock ciphertext|tlock recipient stanza/u,
+  );
 });
