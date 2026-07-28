@@ -188,8 +188,8 @@ export async function listDirectPrivateReviewAssignments(input: {
   }
   const result = await dbClient.execute({
     sql: `SELECT a.assignment_id,a.status,a.reservation_expires_at,a.assignment_expires_at,
-                 a.response_deadline,a.created_at,d.private_group_policy_hash,
-                 p.name AS project_name,p.data_classification,rp.compensation_mode
+                 a.response_deadline,a.created_at,a.updated_at,d.private_group_policy_hash,
+                 p.name AS project_name,p.data_classification,rp.compensation_mode,rp.criterion
           FROM tokenless_private_unpaid_review_assignments a
           JOIN tokenless_private_unpaid_review_deliveries d ON d.delivery_id=a.delivery_id
           JOIN tokenless_assurance_projects p ON p.project_id=a.project_id
@@ -296,7 +296,9 @@ export async function listDirectPrivateReviewAssignments(input: {
           ? date(row, "response_deadline").toISOString()
           : date(row, "assignment_expires_at").toISOString(),
       createdAt: date(row, "created_at").toISOString(),
+      updatedAt: date(row, "updated_at").toISOString(),
       caseCount: 1,
+      reviewQuestion: text(row, "criterion"),
     };
   });
 }

@@ -65,8 +65,8 @@ export async function listReviewerAssignments(input: {
     sql: `SELECT a.assignment_id, a.project_id, p.name AS project_name, p.data_classification,
                  a.source, a.status, a.paid_assignment, a.confidentiality_terms_hash,
                  a.private_group_id, a.private_group_policy_version, a.private_group_policy_hash,
-                 a.reservation_expires_at, a.assignment_expires_at, a.created_at,
-                 COUNT(c.case_id) AS case_count
+                 a.reservation_expires_at, a.assignment_expires_at, a.created_at, a.updated_at,
+                 COUNT(c.case_id) AS case_count, MIN(c.title) AS review_question
           FROM tokenless_assurance_assignments a
           JOIN tokenless_assurance_projects p ON p.project_id = a.project_id
           LEFT JOIN tokenless_rater_profiles owner_profile ON owner_profile.rater_id = a.rater_id
@@ -84,7 +84,7 @@ export async function listReviewerAssignments(input: {
             AND (? = '' OR a.assignment_id ILIKE ? OR p.name ILIKE ?)
           GROUP BY a.assignment_id, a.project_id, p.name, p.data_classification, a.source, a.status,
                    a.paid_assignment, a.confidentiality_terms_hash, a.reservation_expires_at,
-                   a.assignment_expires_at, a.created_at, a.private_group_id,
+                   a.assignment_expires_at, a.created_at, a.updated_at, a.private_group_id,
                    a.private_group_policy_version, a.private_group_policy_hash
           ORDER BY a.created_at DESC, a.assignment_id DESC LIMIT ?`,
     args: [now, principalId, principalId, state, state, ...viewFilter.args, query, `%${query}%`, `%${query}%`, limit],
@@ -111,7 +111,9 @@ export async function listReviewerAssignments(input: {
       reservationExpiresAt: dateValue(value, "reservation_expires_at"),
       assignmentExpiresAt: dateValue(value, "assignment_expires_at"),
       createdAt: dateValue(value, "created_at"),
+      updatedAt: dateValue(value, "updated_at"),
       caseCount: Number(value.case_count ?? 0),
+      reviewQuestion: stringValue(value, "review_question"),
     };
   });
   const directAssignments = await listDirectPrivateReviewAssignments(input);

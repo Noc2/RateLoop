@@ -293,6 +293,9 @@ test("direct private assignments surface in reviewer work and produce a terminal
   assert.equal(queue.length, 1);
   assert.equal(queue[0]?.assignmentId, delivered.assignments[0]?.assignmentId);
   assert.equal(queue[0]?.confidentialityTermsHash, termsHash);
+  assert.equal(queue[0]?.reviewQuestion, setup.requestProfile.criterion);
+  assert.ok(queue[0]?.createdAt);
+  assert.ok(queue[0]?.updatedAt);
   const pendingWait = await waitForAdaptiveHumanReview({
     principal: setup.integrationPrincipal,
     opportunityId: setup.opportunityId,

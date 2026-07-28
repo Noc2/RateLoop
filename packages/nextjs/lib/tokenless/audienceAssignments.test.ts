@@ -1516,6 +1516,9 @@ test("durable private-group membership gates reservation discovery and acceptanc
   const visible = await listReviewerAssignments({ accountAddress: REVIEWER });
   assert.equal(visible[0]?.assignmentId, reserved.assignmentId);
   assert.equal(visible[0]?.privateGroup?.groupId, group.groupId);
+  assert.equal(visible[0]?.reviewQuestion, "Support response");
+  assert.ok(visible[0]?.createdAt);
+  assert.ok(visible[0]?.updatedAt);
   assert.equal(
     (await listReviewerAssignments({ accountAddress: REVIEWER, view: "active" }))[0]?.assignmentId,
     reserved.assignmentId,
