@@ -31,7 +31,7 @@ export function SiteSearchResults({ query }: { query: string }) {
                 >
                   {group.title}
                 </h3>
-                <span className="font-mono text-[0.7rem] text-base-content/50">{group.results.length}</span>
+                <span className="font-mono text-[0.7rem] text-base-content/60">{group.results.length}</span>
               </div>
               <div className="mt-2 space-y-2">
                 {group.results.map(result => (
