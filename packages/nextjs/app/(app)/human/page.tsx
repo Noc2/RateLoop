@@ -11,12 +11,13 @@ import { HumanAccountSignInPrompt } from "~~/components/tokenless/human/HumanAcc
 import { HumanProfileContent } from "~~/components/tokenless/human/HumanProfileContent";
 import { type HumanTab, HumanTabs } from "~~/components/tokenless/human/HumanTabs";
 import { ProfileSectionFocus } from "~~/components/tokenless/human/ProfileSectionFocus";
+import { ReviewerNotificationInbox } from "~~/components/tokenless/human/ReviewerNotificationInbox";
 import { humanAccountReturnTo, resolveHumanProfileSection } from "~~/components/tokenless/human/humanProfileNavigation";
 import { AUTH_SESSION_COOKIE, findAuthSession } from "~~/lib/auth/session";
 import { humanPageTitle } from "~~/lib/tokenless/pageTitles";
 import { isWorldIdAssuranceEnabled } from "~~/lib/tokenless/worldIdAssurance";
 
-const HUMAN_TABS = new Set<HumanTab>(["discover", "profile", "settings"]);
+const HUMAN_TABS = new Set<HumanTab>(["discover", "inbox", "profile", "settings"]);
 
 type HumanSearchParams = Promise<{
   assignment?: string | string[];
@@ -86,9 +87,13 @@ export default async function HumanPage({ searchParams }: { searchParams: HumanS
 
   return (
     <AppPageShell outerClassName="pb-8" contentClassName="space-y-5">
-      <h1 className="sr-only">{tab === "profile" ? "Your profile" : "Your settings"}</h1>
+      <h1 className="sr-only">
+        {tab === "inbox" ? "Your inbox" : tab === "profile" ? "Your profile" : "Your settings"}
+      </h1>
       <HumanTabs active={tab} />
-      {tab === "profile" ? (
+      {tab === "inbox" ? (
+        <ReviewerNotificationInbox />
+      ) : tab === "profile" ? (
         <>
           <ProfileSectionFocus section={section} />
           <HumanProfileContent worldIdEnabled={isWorldIdAssuranceEnabled()} />

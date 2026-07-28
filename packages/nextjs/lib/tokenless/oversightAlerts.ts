@@ -445,7 +445,11 @@ export type OversightInboxNotification = {
 };
 
 /** Per-person in-app notification inbox with an unread count. */
-export async function listNotificationInbox(input: { accountAddress: string; limit?: number }) {
+export async function listNotificationInbox(input: {
+  accountAddress: string;
+  limit?: number;
+  sourceTypes?: readonly string[];
+}) {
   let principal: string;
   try {
     principal = normalizeAccountSubject(input.accountAddress);
@@ -453,16 +457,21 @@ export async function listNotificationInbox(input: { accountAddress: string; lim
     throw new TokenlessServiceError("Account address is invalid.", 400, "invalid_account");
   }
   const limit = Math.min(Math.max(input.limit ?? 50, 1), 100);
+  const sourceFilter = input.sourceTypes?.length
+    ? ` AND source_type IN (${input.sourceTypes.map(() => "?").join(",")})`
+    : "";
+  const sourceArgs = input.sourceTypes?.length ? [...input.sourceTypes] : [];
   const [list, unread] = await Promise.all([
     dbClient.execute({
       sql: `SELECT notification_id, kind, title, body, href, source_type, created_at, read_at
-            FROM tokenless_notifications WHERE principal_address = ?
+            FROM tokenless_notifications WHERE principal_address = ?${sourceFilter}
             ORDER BY created_at DESC, notification_id DESC LIMIT ?`,
-      args: [principal, limit],
+      args: [principal, ...sourceArgs, limit],
     }),
     dbClient.execute({
-      sql: "SELECT COUNT(*) AS unread FROM tokenless_notifications WHERE principal_address = ? AND read_at IS NULL",
-      args: [principal],
+      sql: `SELECT COUNT(*) AS unread FROM tokenless_notifications
+            WHERE principal_address = ? AND read_at IS NULL${sourceFilter}`,
+      args: [principal, ...sourceArgs],
     }),
   ]);
   return {

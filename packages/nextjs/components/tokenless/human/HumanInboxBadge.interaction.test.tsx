@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { HumanInboxBadge } from "~~/components/tokenless/human/HumanInboxBadge";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
-test("Human inbox badge counts only unread assignment notifications", async () => {
+test("Human inbox badge counts only unread reviewer notifications", async () => {
   const restoreDom = installTestDom();
   const { cleanup, render, waitFor } = await import("@testing-library/react");
   const previousFetch = globalThis.fetch;
@@ -24,8 +24,10 @@ test("Human inbox badge counts only unread assignment notifications", async () =
   };
   try {
     const view = render(<HumanInboxBadge />);
-    await waitFor(() => assert.equal(view.getByText("2").getAttribute("aria-label"), "2 unread review assignments"));
-    assert.deepEqual(requests, ["/api/auth/session", "/api/notifications/inbox?limit=100"]);
+    await waitFor(() =>
+      assert.equal(view.getByText("2").getAttribute("aria-label"), "2 unread reviewer notifications"),
+    );
+    assert.deepEqual(requests, ["/api/auth/session", "/api/notifications/inbox?scope=reviewer&limit=100"]);
   } finally {
     globalThis.fetch = previousFetch;
     cleanup();
@@ -53,7 +55,7 @@ test("Human inbox badge fails quietly for signed-out visitors", async () => {
   }
 });
 
-test("opening the review inbox marks assignment notifications read and clears the badge", async () => {
+test("opening Human navigation never marks reviewer notifications read", async () => {
   const restoreDom = installTestDom();
   const { cleanup, render, waitFor } = await import("@testing-library/react");
   const previousFetch = globalThis.fetch;
@@ -65,7 +67,6 @@ test("opening the review inbox marks assignment notifications read and clears th
       url: String(input),
     });
     if (String(input) === "/api/auth/session") return Response.json({ authenticated: true });
-    if (init?.method === "POST") return Response.json({ marked: 2 });
     return Response.json({
       notifications: [
         { notificationId: "tn_assignment_1", sourceType: "assignment.available", readAt: null },
@@ -75,18 +76,18 @@ test("opening the review inbox marks assignment notifications read and clears th
     });
   };
   try {
-    const view = render(<HumanInboxBadge markAssignmentsRead />);
-    await waitFor(() => assert.equal(requests.length, 3));
+    const view = render(<HumanInboxBadge />);
+    await waitFor(() =>
+      assert.equal(view.getByText("2").getAttribute("aria-label"), "2 unread reviewer notifications"),
+    );
     assert.deepEqual(requests, [
       { body: undefined, method: "GET", url: "/api/auth/session" },
-      { body: undefined, method: "GET", url: "/api/notifications/inbox?limit=100" },
-      {
-        body: JSON.stringify({ notificationIds: ["tn_assignment_1", "tn_assignment_2"] }),
-        method: "POST",
-        url: "/api/notifications/inbox",
-      },
+      { body: undefined, method: "GET", url: "/api/notifications/inbox?scope=reviewer&limit=100" },
     ]);
-    assert.equal(view.container.textContent, "");
+    assert.equal(
+      requests.some(request => request.method === "POST"),
+      false,
+    );
   } finally {
     globalThis.fetch = previousFetch;
     cleanup();

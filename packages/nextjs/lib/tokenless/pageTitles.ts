@@ -26,6 +26,7 @@ export function humanPageTitle(params: {
 }) {
   if (firstQueryValue(params.assignment)) return "Complete review";
   if (firstQueryValue(params.invite) === "1") return "Reviewer invitation";
+  if (firstQueryValue(params.tab) === "inbox") return "Reviewer notifications";
   if (firstQueryValue(params.tab) === "profile") return "Reviewer profile";
   if (firstQueryValue(params.tab) === "settings") return "Account settings";
   if (firstQueryValue(params.view) === "history") return "Review history";

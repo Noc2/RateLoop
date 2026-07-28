@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { REVIEWER_LIFECYCLE_NOTIFICATION_SOURCE_TYPES } from "~~/lib/notifications/reviewerInbox";
 import { listNotificationInbox, markNotificationInboxRead } from "~~/lib/tokenless/oversightAlerts";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
@@ -12,13 +13,24 @@ export async function GET(request: NextRequest) {
   try {
     const session = await requireBrowserSession(request);
     const rawLimit = request.nextUrl.searchParams.get("limit");
+    const scope = request.nextUrl.searchParams.get("scope");
     const limit = rawLimit === null ? undefined : Number(rawLimit);
     if (limit !== undefined && (!Number.isSafeInteger(limit) || limit < 1 || limit > 100)) {
       throw new TokenlessServiceError("limit must be an integer between 1 and 100.", 400, "invalid_notification_read");
     }
-    return NextResponse.json(await listNotificationInbox({ accountAddress: session.principalId, limit }), {
-      headers: noStore,
-    });
+    if (scope !== null && scope !== "reviewer") {
+      throw new TokenlessServiceError("scope must be reviewer when provided.", 400, "invalid_notification_read");
+    }
+    return NextResponse.json(
+      await listNotificationInbox({
+        accountAddress: session.principalId,
+        limit,
+        sourceTypes: scope === "reviewer" ? REVIEWER_LIFECYCLE_NOTIFICATION_SOURCE_TYPES : undefined,
+      }),
+      {
+        headers: noStore,
+      },
+    );
   } catch (error) {
     const response = tokenlessErrorResponse(error);
     return NextResponse.json(response.body, { status: response.status, headers: noStore });

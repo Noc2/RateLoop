@@ -15,7 +15,7 @@ export function resolveHumanProfileSection(value?: string): HumanProfileSection 
 export function humanAccountReturnTo(input: {
   eligibility?: string;
   section?: HumanProfileSection;
-  tab: "profile" | "settings";
+  tab: "inbox" | "profile" | "settings";
 }) {
   const params = new URLSearchParams({ tab: input.tab });
   if (input.section) params.set("section", input.section);

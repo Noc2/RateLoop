@@ -13,6 +13,7 @@ test("profile deep links resolve only visible account sections", () => {
 });
 
 test("account sign-in preserves an allowed profile destination", () => {
+  assert.equal(humanAccountReturnTo({ tab: "inbox" }), "/human?tab=inbox");
   assert.equal(humanAccountReturnTo({ tab: "settings" }), "/human?tab=settings");
   assert.equal(
     humanAccountReturnTo({

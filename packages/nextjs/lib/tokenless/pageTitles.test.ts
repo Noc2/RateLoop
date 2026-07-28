@@ -19,6 +19,7 @@ test("agent titles describe the selected workspace destination", () => {
 test("reviewer titles prioritize the active task over a generic account label", () => {
   assert.equal(humanPageTitle({}), "To review");
   assert.equal(humanPageTitle({ view: "history" }), "Review history");
+  assert.equal(humanPageTitle({ tab: "inbox" }), "Reviewer notifications");
   assert.equal(humanPageTitle({ tab: "profile" }), "Reviewer profile");
   assert.equal(humanPageTitle({ tab: "settings" }), "Account settings");
   assert.equal(humanPageTitle({ invite: "1", tab: "discover" }), "Reviewer invitation");

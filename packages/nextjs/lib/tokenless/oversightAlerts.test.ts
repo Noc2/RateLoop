@@ -468,6 +468,30 @@ test("the inbox lists notifications with an unread count and marks them read", a
   );
 });
 
+test("the reviewer inbox scope excludes workspace oversight notifications", async () => {
+  const setup = await fixture("reviewer-inbox");
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_notifications
+          (notification_id, principal_address, kind, title, body, href, preference_key, source_type, source_key, created_at)
+          VALUES
+            ('tn_reviewer_assignment', ?, 'assignmentAvailable', 'Assignment available', 'Body', '/human',
+             'assignmentAvailable', 'assignment.available', 'assignment-1', ?),
+            ('tn_workspace_alert', ?, 'oversightAlerts', 'Workspace stop engaged', 'Body', '/agents',
+             'oversightAlerts', 'oversight.stop_engaged', 'stop-1', ?)`,
+    args: [setup.owner.principalId, NOW, setup.owner.principalId, NOW],
+  });
+
+  const reviewerInbox = await listNotificationInbox({
+    accountAddress: setup.owner.principalId,
+    sourceTypes: ["assignment.available", "assignment.completed"],
+  });
+  assert.equal(reviewerInbox.unreadCount, 1);
+  assert.deepEqual(
+    reviewerInbox.notifications.map(notification => notification.sourceType),
+    ["assignment.available"],
+  );
+});
+
 test("alert-preference and inbox routes require a session and stay no-store", async () => {
   const setup = await fixture("routes");
   const preferencesContext = { params: Promise.resolve({ workspaceId: setup.workspaceId }) };
@@ -512,6 +536,7 @@ test("alert-preference and inbox routes require a session and stay no-store", as
   assert.equal(inboxResponse.headers.get("cache-control"), "private, no-store");
   const inboxBody = (await inboxResponse.json()) as { unreadCount: number; notifications: unknown[] };
   assert.equal(inboxBody.unreadCount, 0);
+  assert.equal((await getInbox(request("/api/notifications/inbox?scope=workspace"))).status, 400);
 
   const markResponse = await postInbox(
     request("/api/notifications/inbox", {

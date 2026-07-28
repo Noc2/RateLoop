@@ -93,6 +93,8 @@ test("Human profile and settings render their controls directly", () => {
   assert.match(page, /<HumanProfileContent worldIdEnabled=\{isWorldIdAssuranceEnabled\(\)\} \/>/);
   assert.match(page, /<ProfileSectionFocus section=\{section\} \/>/);
   assert.match(page, /<NotificationSettingsPanel \/>/);
+  assert.match(page, /<ReviewerNotificationInbox \/>/);
+  assert.match(page, /tab === "inbox"/);
   assert.match(page, /<HumanAccountSignInPrompt/);
   assert.match(page, /returnTo=\{humanAccountReturnTo/);
   assert.ok(page.indexOf("if (!session)") < page.lastIndexOf("<HumanTabs active={tab} />"));

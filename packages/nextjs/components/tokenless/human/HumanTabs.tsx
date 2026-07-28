@@ -2,12 +2,13 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { HumanInboxBadge } from "~~/components/tokenless/human/HumanInboxBadge";
 
-export type HumanTab = "discover" | "profile" | "settings";
+export type HumanTab = "discover" | "inbox" | "profile" | "settings";
 type HumanNavigation = HumanTab | "history";
 
 const tabs: Array<{ value: HumanNavigation; label: string; href: string }> = [
   { value: "discover", label: "To review", href: "/human?tab=discover" },
   { value: "history", label: "History", href: "/human?tab=discover&view=history&scope=private" },
+  { value: "inbox", label: "Inbox", href: "/human?tab=inbox" },
   { value: "profile", label: "Profile", href: "/human?tab=profile" },
   { value: "settings", label: "Settings", href: "/human?tab=settings" },
 ];
@@ -27,7 +28,7 @@ export function HumanTabs({ active, endAction }: { active: HumanNavigation; endA
           >
             <span className="inline-flex items-center gap-2">
               {tab.label}
-              {tab.value === "discover" ? <HumanInboxBadge markAssignmentsRead={active === "discover"} /> : null}
+              {tab.value === "inbox" ? <HumanInboxBadge /> : null}
             </span>
           </Link>
         ))}

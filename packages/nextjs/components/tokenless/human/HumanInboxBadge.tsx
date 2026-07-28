@@ -1,23 +1,24 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { isReviewerLifecycleNotification } from "~~/lib/notifications/reviewerInbox";
 
 type InboxResponse = {
-  notifications?: Array<{ notificationId?: string; readAt?: string | null; sourceType?: string | null }>;
+  notifications?: Array<{ readAt?: string | null; sourceType?: string | null }>;
 };
 
 type SessionResponse = {
   authenticated?: boolean;
 };
 
-function unreadAssignmentNotifications(value: InboxResponse) {
+function unreadReviewerNotifications(value: InboxResponse) {
   if (!Array.isArray(value.notifications)) return [];
   return value.notifications.filter(
-    notification => notification.sourceType === "assignment.available" && !notification.readAt,
+    notification => !notification.readAt && isReviewerLifecycleNotification(notification),
   );
 }
 
-export function HumanInboxBadge({ markAssignmentsRead = false }: { markAssignmentsRead?: boolean }) {
+export function HumanInboxBadge() {
   const [unread, setUnread] = useState(0);
   const refresh = useCallback(async () => {
     try {
@@ -26,32 +27,16 @@ export function HumanInboxBadge({ markAssignmentsRead = false }: { markAssignmen
         credentials: "same-origin",
       });
       if (!sessionResponse.ok || !((await sessionResponse.json()) as SessionResponse).authenticated) return;
-      const response = await fetch("/api/notifications/inbox?limit=100", {
+      const response = await fetch("/api/notifications/inbox?scope=reviewer&limit=100", {
         cache: "no-store",
         credentials: "same-origin",
       });
       if (!response.ok) return;
-      const assignments = unreadAssignmentNotifications((await response.json()) as InboxResponse);
-      const notificationIds = assignments.flatMap(notification =>
-        typeof notification.notificationId === "string" ? [notification.notificationId] : [],
-      );
-      if (markAssignmentsRead && notificationIds.length > 0) {
-        const marked = await fetch("/api/notifications/inbox", {
-          method: "POST",
-          credentials: "same-origin",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ notificationIds }),
-        });
-        if (marked.ok) {
-          setUnread(0);
-          return;
-        }
-      }
-      setUnread(assignments.length);
+      setUnread(unreadReviewerNotifications((await response.json()) as InboxResponse).length);
     } catch {
       // Navigation remains usable when the optional inbox request is unavailable.
     }
-  }, [markAssignmentsRead]);
+  }, []);
 
   useEffect(() => {
     void refresh();
@@ -64,7 +49,7 @@ export function HumanInboxBadge({ markAssignmentsRead = false }: { markAssignmen
   const label = unread > 99 ? "99+" : String(unread);
   return (
     <span
-      aria-label={`${unread} unread review ${unread === 1 ? "assignment" : "assignments"}`}
+      aria-label={`${unread} unread reviewer ${unread === 1 ? "notification" : "notifications"}`}
       className="inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-xs font-semibold text-primary-content"
     >
       {label}
