@@ -673,6 +673,20 @@ export function AgentConnectionPanel({
   const [showConnectionManagement, setShowConnectionManagement] = useState(false);
   const manualMessageRef = useRef<HTMLTextAreaElement>(null);
 
+  // Every poll used to re-announce the same connection state, and the parent treats each
+  // announcement as a change: an expanded "Audit history" panel collapsed every five seconds while
+  // a connection was pending. Announce only real transitions, per workspace.
+  const reportedConnectionState = useRef<{ workspaceId: string; connected: boolean } | null>(null);
+  const reportConnectionState = useCallback(
+    (selectedWorkspaceId: string, connected: boolean) => {
+      const reported = reportedConnectionState.current;
+      if (reported && reported.workspaceId === selectedWorkspaceId && reported.connected === connected) return;
+      reportedConnectionState.current = { workspaceId: selectedWorkspaceId, connected };
+      onConnectionStateChange?.(connected);
+    },
+    [onConnectionStateChange],
+  );
+
   const loadConnectionState = useCallback(
     async (selectedWorkspaceId: string, signal?: AbortSignal) => {
       if (!selectedWorkspaceId) {
@@ -680,7 +694,7 @@ export function AgentConnectionPanel({
         setPairings([]);
         setIntegrations([]);
         setPublishingPolicies([]);
-        onConnectionStateChange?.(false);
+        reportConnectionState(selectedWorkspaceId, false);
         return;
       }
       const base = `/api/account/workspaces/${encodeURIComponent(selectedWorkspaceId)}`;
@@ -696,7 +710,8 @@ export function AgentConnectionPanel({
       setPairings(responseList(pairingBody, "pairings", "sessions").map(normalizeAgentPairing));
       const nextIntegrations = responseList(integrationBody, "integrations").map(normalizeAgentIntegration);
       setIntegrations(nextIntegrations);
-      onConnectionStateChange?.(
+      reportConnectionState(
+        selectedWorkspaceId,
         nextIntegrations.some(integration =>
           isUsableAgentConnection({
             status: integration.status,
@@ -711,7 +726,7 @@ export function AgentConnectionPanel({
           .filter(policy => policy.enabled && !policy.revokedAt),
       );
     },
-    [onConnectionStateChange],
+    [reportConnectionState],
   );
 
   useEffect(() => {
@@ -763,6 +778,9 @@ export function AgentConnectionPanel({
       try {
         await loadConnectionState(workspaceId);
         failures = 0;
+        // A recovered blip must clear its own banner, or a red "could not refresh" sits beside the
+        // green "Connected" state until the page is reloaded.
+        setError(null);
         setConnectionClock(Date.now());
       } catch {
         failures += 1;
@@ -851,6 +869,7 @@ export function AgentConnectionPanel({
     if (!manualConnectionMessage) return;
     try {
       await navigator.clipboard.writeText(manualConnectionMessage);
+      setError(null);
       setStatus("Connection message copied. Paste it once into the agent chat you want to connect.");
       notifications.success("Connection message copied to clipboard.");
       void fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/agent-connections/onboarding-events`, {
