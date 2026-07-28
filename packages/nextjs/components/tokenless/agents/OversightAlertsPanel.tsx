@@ -310,6 +310,10 @@ export function OversightAlertsPanel({ workspaceId }: { workspaceId: string }) {
   }, [browserEnabled, loadInbox]);
 
   async function markAllRead() {
+    const notificationIds = inbox?.notifications
+      .filter(notification => !notification.readAt)
+      .map(notification => notification.notificationId);
+    if (!notificationIds?.length) return;
     setMarking(true);
     try {
       await readJson(
@@ -317,7 +321,7 @@ export function OversightAlertsPanel({ workspaceId }: { workspaceId: string }) {
           method: "POST",
           credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
+          body: JSON.stringify({ notificationIds }),
         }),
       );
       await loadInbox();

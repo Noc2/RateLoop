@@ -14,6 +14,9 @@ test("the oversight alerts panel lists notifications with an unread count and re
   assert.match(source, /unreadCount/);
   assert.match(source, /unread\b/);
   assert.match(source, /Mark all read/);
+  assert.match(source, /filter\(notification => !notification\.readAt\)/);
+  assert.match(source, /JSON\.stringify\(\{ notificationIds \}\)/);
+  assert.doesNotMatch(source, /body: JSON\.stringify\(\{\}\)/);
   assert.match(source, /No alerts need attention/);
   assert.match(source, /Alerts needing attention/);
   assert.match(source, /notification\.title/);
