@@ -104,3 +104,31 @@ test("versioned World ID HMAC references remain valid opaque integrity evidence"
   assert.equal(evaluation.aggregates.uniqueReviewerCount, 5);
   assert.equal(evaluation.aggregates.independentClusterCount, 5);
 });
+
+test("a maximally diversified small panel is not delisted by a cap that rounds below a seat", () => {
+  // Three reports in three distinct clusters is the strictest diversification a three-seat panel
+  // can achieve, and selection is required to admit it. Measuring the reported share against the
+  // raw basis points would delist it after the round was reviewed and paid for.
+  const smallPanelPolicy = { ...policy, minimumReports: 3, maximumClusterShareBps: 2_000 };
+  const diverse = evaluatePostRoundIntegrity({
+    policy: smallPanelPolicy,
+    reports: [1, 2, 3].map(index => report(index)),
+    inputsComplete: true,
+  });
+  assert.equal(diverse.aggregates.independentClusterCount, 3);
+  assert.equal(diverse.reasonCodes.includes("identity_cluster_dominance"), false);
+  assert.equal(diverse.status, "publishable");
+
+  // A cluster genuinely holding more than its share is still delisted.
+  const dominated = evaluatePostRoundIntegrity({
+    policy: smallPanelPolicy,
+    reports: [
+      report(1, { clusterPseudonym: "cluster_shared" }),
+      report(2, { clusterPseudonym: "cluster_shared" }),
+      report(3),
+    ],
+    inputsComplete: true,
+  });
+  assert.equal(dominated.reasonCodes.includes("identity_cluster_dominance"), true);
+  assert.equal(dominated.status, "delisted");
+});

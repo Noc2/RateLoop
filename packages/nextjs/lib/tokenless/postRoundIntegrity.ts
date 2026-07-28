@@ -87,9 +87,11 @@ function shareBps(count: number, total: number) {
 function largestGroupShare(values: string[], total: number) {
   const counts = new Map<string, number>();
   for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
+  const largestCount = Math.max(0, ...counts.values());
   return {
     groupCount: counts.size,
-    shareBps: shareBps(Math.max(0, ...counts.values()), total),
+    largestCount,
+    shareBps: shareBps(largestCount, total),
   };
 }
 
@@ -179,7 +181,12 @@ export function evaluatePostRoundIntegrity(input: {
   const reasonCodes: string[] = [];
   if (reviewers.groupCount !== reportCount) reasonCodes.push("reviewer_lookup_reuse");
   if (duplicateProviderSubjectCount > 0) reasonCodes.push("provider_subject_reuse");
-  if (clusterGroups.shareBps > policy.maximumClusterShareBps) reasonCodes.push("identity_cluster_dominance");
+  // Measured against the same effective cap the assignment applied. A share that rounds below a
+  // single reviewer means one per cluster — the strictest diversification available — so comparing
+  // the reported share against the raw basis points would delist exactly the small panels that
+  // selection is required to admit, after the round has been reviewed and paid for.
+  const maximumClusterMembers = Math.max(1, Math.floor((reportCount * policy.maximumClusterShareBps) / BPS));
+  if (clusterGroups.largestCount > maximumClusterMembers) reasonCodes.push("identity_cluster_dominance");
   if (fingerprintsGroups.shareBps > policy.maximumAnswerFingerprintShareBps) {
     reasonCodes.push("answer_fingerprint_concentration");
   }
