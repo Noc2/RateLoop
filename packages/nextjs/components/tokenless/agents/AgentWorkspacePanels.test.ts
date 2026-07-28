@@ -197,6 +197,17 @@ test("workspace managers see the human-only Feedback Bonus award inbox", () => {
   assert.match(panelsSource, /<FeedbackBonusAwardInbox workspaceId=\{workspaceId\} \/>/);
 });
 
+test("actionable oversight alerts live with approvals instead of obscuring results", () => {
+  const inboxStart = panelsSource.indexOf('resolvedTab === "inbox"');
+  const alerts = panelsSource.indexOf("<OversightAlertsPanel");
+  const resultsStart = panelsSource.indexOf('resolvedTab === "evaluations"');
+
+  assert.ok(inboxStart >= 0);
+  assert.ok(alerts > inboxStart);
+  assert.ok(resultsStart > alerts);
+  assert.equal(panelsSource.slice(resultsStart).includes("<OversightAlertsPanel"), false);
+});
+
 test("the overview starts with workspace settings instead of an evidence summary strip", () => {
   assert.doesNotMatch(panelsSource, /WorkspaceEvidenceSummaryStrip/);
   assert.doesNotMatch(panelsSource, /Last decision packet|Most conservative coverage stage|Latest packet anchor/);

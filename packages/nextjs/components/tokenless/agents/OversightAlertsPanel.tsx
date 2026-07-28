@@ -27,6 +27,17 @@ const ALERT_EVENT_OPTIONS = [
   },
 ] as const;
 
+function belongsToWorkspace(notification: OversightInboxNotification, workspaceId: string) {
+  if (notification.kind !== "oversightAlerts") return false;
+  if (!notification.href) return true;
+  try {
+    const targetWorkspace = new URL(notification.href, "https://rateloop.local").searchParams.get("workspace");
+    return !targetWorkspace || targetWorkspace === workspaceId;
+  } catch {
+    return true;
+  }
+}
+
 /**
  * Fires a browser notification for oversight alerts that arrive while the
  * dashboard is open. Permission is requested only from the explicit button in
@@ -231,22 +242,30 @@ export function OversightAlertsPanel({ workspaceId }: { workspaceId: string }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const seenIds = useRef<Set<string> | null>(null);
 
-  const loadInbox = useCallback(async (signal?: AbortSignal) => {
-    const body = await readJson<Inbox>(
-      await fetch("/api/notifications/inbox?limit=50", {
-        cache: "no-store",
-        credentials: "same-origin",
-        signal,
-      }),
-    );
-    const fresh =
-      seenIds.current === null
-        ? []
-        : body.notifications.filter(notification => !seenIds.current!.has(notification.notificationId));
-    seenIds.current = new Set(body.notifications.map(notification => notification.notificationId));
-    setInbox(body);
-    return fresh;
-  }, []);
+  const loadInbox = useCallback(
+    async (signal?: AbortSignal) => {
+      const body = await readJson<Inbox>(
+        await fetch("/api/notifications/inbox?limit=50", {
+          cache: "no-store",
+          credentials: "same-origin",
+          signal,
+        }),
+      );
+      const notifications = body.notifications.filter(notification => belongsToWorkspace(notification, workspaceId));
+      const nextInbox = {
+        notifications,
+        unreadCount: notifications.filter(notification => !notification.readAt).length,
+      };
+      const fresh =
+        seenIds.current === null
+          ? []
+          : notifications.filter(notification => !seenIds.current!.has(notification.notificationId));
+      seenIds.current = new Set(notifications.map(notification => notification.notificationId));
+      setInbox(nextInbox);
+      return fresh;
+    },
+    [workspaceId],
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -313,9 +332,9 @@ export function OversightAlertsPanel({ workspaceId }: { workspaceId: string }) {
     <Card as="section" className="rounded-2xl p-6" aria-labelledby="oversight-alerts-heading">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Monitoring</p>
+          <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Approvals</p>
           <h2 id="oversight-alerts-heading" className="mt-2 text-xl font-semibold">
-            Oversight alerts
+            Alerts needing attention
             {inbox && inbox.unreadCount > 0 ? (
               <span role="status" className="ml-2 align-middle">
                 <Badge variant="info" className="text-xs">
@@ -351,7 +370,7 @@ export function OversightAlertsPanel({ workspaceId }: { workspaceId: string }) {
       ) : null}
 
       {inbox && inbox.notifications.length === 0 ? (
-        <p className="mt-3 text-sm text-base-content/55">No alerts yet. Events appear here as they happen.</p>
+        <p className="mt-3 text-sm text-base-content/55">No alerts need attention.</p>
       ) : null}
 
       {inbox && inbox.notifications.length > 0 ? (

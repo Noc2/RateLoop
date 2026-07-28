@@ -118,11 +118,11 @@ export function AgentWorkspacePanels({
         {hasConnectedAgent && resolvedTab === "inbox" && canManage ? (
           <FeedbackBonusAwardInbox workspaceId={workspaceId} />
         ) : null}
+        {hasConnectedAgent && resolvedTab === "inbox" && canManage ? (
+          <OversightAlertsPanel workspaceId={workspaceId} />
+        ) : null}
         {hasConnectedAgent && resolvedTab === "registry" && canManage ? (
           <AgentReviewsPanel workspaceId={workspaceId} canManage={canManage} />
-        ) : null}
-        {hasConnectedAgent && resolvedTab === "evaluations" && canManage ? (
-          <OversightAlertsPanel workspaceId={workspaceId} />
         ) : null}
         {hasConnectedAgent && resolvedTab === "evaluations" ? (
           <EvaluationDashboardPanel initialWorkspaceId={workspaceId} />
