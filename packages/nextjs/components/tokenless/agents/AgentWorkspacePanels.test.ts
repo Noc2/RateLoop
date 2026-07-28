@@ -19,15 +19,18 @@ const tabsSource = readFileSync(new URL("./AgentTabs.tsx", import.meta.url), "ut
 const editorSource = readFileSync(new URL("./AgentHumanReviewEditor.tsx", import.meta.url), "utf8");
 const pageSource = readFileSync(new URL("../../../app/(app)/agents/page.tsx", import.meta.url), "utf8");
 
-test("the requested accessible workspace wins and invalid requests fail closed to the first workspace", () => {
+test("the requested accessible workspace wins and invalid returning links require a choice", () => {
   const workspaces = [
     { workspaceId: "workspace-a", name: "A" },
     { workspaceId: "workspace-b", name: "B" },
   ];
 
   assert.equal(selectRequestedWorkspace(workspaces, "workspace-b")?.workspaceId, "workspace-b");
-  assert.equal(selectRequestedWorkspace(workspaces, "unknown")?.workspaceId, "workspace-a");
+  assert.equal(selectRequestedWorkspace(workspaces, "unknown"), null);
+  assert.equal(selectRequestedWorkspace(workspaces)?.workspaceId, "workspace-a");
   assert.equal(selectRequestedWorkspace([], "workspace-b"), null);
+  assert.match(panelsSource, /The workspace in this link is unavailable/);
+  assert.doesNotMatch(panelsSource, /find\(entry => entry\.workspaceId === workspaceId\) \?\? workspaces\[0\]/);
 });
 
 test("only active, connected, unexpired integrations complete onboarding", () => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useReducer, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { WorkspaceSettingsClient } from "../WorkspaceSettingsClient";
 import { WorkspaceStopBanner } from "../WorkspaceStopControl";
@@ -16,7 +17,7 @@ import { HumanReviewApprovalInbox } from "./HumanReviewApprovalInbox";
 import { OversightAlertsPanel } from "./OversightAlertsPanel";
 import { ScheduledWorkerHealthPanel } from "./ScheduledWorkerHealthPanel";
 import type { AgentConnectionHistoryEntry } from "./agentAuditHistory";
-import { connectedAgentTabs, resolveAvailableAgentTab } from "./agentWorkspaceState";
+import { agentTabHref, connectedAgentTabs, resolveAvailableAgentTab } from "./agentWorkspaceState";
 import { AgentSetupFlow } from "./setup/AgentSetupFlow";
 import { WorkspaceSetupStart } from "./setup/WorkspaceSetupStart";
 import type { WorkspaceAgentSetupView } from "~~/lib/tokenless/workspaceAgentSetup";
@@ -59,7 +60,30 @@ export function AgentWorkspacePanels({
     return <WorkspaceSetupStart />;
   }
 
-  const workspace = workspaces.find(entry => entry.workspaceId === workspaceId) ?? workspaces[0];
+  const workspace = workspaces.find(entry => entry.workspaceId === workspaceId);
+  if (!workspace) {
+    return (
+      <section className="surface-card rounded-2xl p-6 sm:p-8" aria-labelledby="choose-workspace-heading">
+        <h1 id="choose-workspace-heading" className="text-3xl font-semibold">
+          Choose a workspace
+        </h1>
+        <p className="mt-3 max-w-2xl text-sm leading-6 text-base-content/65">
+          The workspace in this link is unavailable. Choose one you can access.
+        </p>
+        <div className="mt-6 flex flex-wrap gap-3">
+          {workspaces.map(option => (
+            <Link
+              key={option.workspaceId}
+              href={agentTabHref(activeTab, option.workspaceId)}
+              className="btn rateloop-secondary-action min-h-11"
+            >
+              {option.name}
+            </Link>
+          ))}
+        </div>
+      </section>
+    );
+  }
   const canManage = workspace.role === "owner" || workspace.role === "admin";
   const setupIncomplete = Boolean(initialSetup && !initialSetup.complete);
   const visibleTabs = hasConnectedAgent

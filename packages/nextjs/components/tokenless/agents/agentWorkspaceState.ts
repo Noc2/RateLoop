@@ -13,7 +13,8 @@ type OAuthConnectionOption = ConnectionOption & {
 };
 
 export function selectRequestedWorkspace<T extends WorkspaceOption>(workspaces: T[], requestedWorkspaceId?: string) {
-  return workspaces.find(workspace => workspace.workspaceId === requestedWorkspaceId) ?? workspaces[0] ?? null;
+  if (!requestedWorkspaceId) return workspaces[0] ?? null;
+  return workspaces.find(workspace => workspace.workspaceId === requestedWorkspaceId) ?? null;
 }
 
 export function isUsableAgentConnection(connection: ConnectionOption, now = Date.now()) {
