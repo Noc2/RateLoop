@@ -3,53 +3,30 @@ import { HumanAssuranceLoop } from "~~/components/assurance/HumanAssuranceLoop";
 import { UseCaseIcon } from "~~/components/docs/UseCaseVisuals";
 import { SupportedAgentsSection } from "~~/components/home/SupportedAgentsSection";
 import { TokenlessOrb } from "~~/components/home/TokenlessOrb";
-import { WorkspacePlanCards } from "~~/components/pricing/WorkspacePlanCards";
+import { TOKENLESS_BILLING_PLANS, formatUsdPrice } from "~~/lib/billing/plans";
 import type { LandingSocialProofItem } from "~~/lib/home/socialProof";
 import { getLandingPageSocialProofItems } from "~~/lib/home/socialProofServer";
-import { resolveDemoBookingUrl } from "~~/lib/marketing/demoBooking";
-import { configuredHumanReviewLanes } from "~~/lib/tokenless/reviewCapabilities";
 
 export const revalidate = 300;
 
 const whyItWorksFeatures = [
   {
     title: "Agent-native",
-    body: "Agent handoffs and funding route requests to a human panel.",
+    body: "Connect an agent once, then request review through its normal tool workflow.",
     color: "#359EEE",
-    links: [
-      ["Agent handoffs", "/docs/tech-stack#mcp-adapter"],
-      ["Scoped funding", "/docs/tech-stack#x402-usdc"],
-    ],
+    links: [["Agent guide", "/docs/ai"]],
   },
   {
-    title: "Verified and blind",
-    body: "Audience policies and sealed answers keep admission explicit and early judgments private.",
+    title: "Private by default",
+    body: "Invited reviewers see only assigned material and submit their answers independently.",
     color: "#03CEA4",
-    links: [
-      ["Human eligibility", "/docs/tech-stack#proof-of-human"],
-      ["Reviewer rules", "/docs/tech-stack#audience-policies"],
-      ["Sealed answers", "/docs/tech-stack#commit-reveal"],
-    ],
+    links: [["Review flow", "/docs/how-it-works#reviewer-flow"]],
   },
   {
-    title: "Useful signal, auditable evidence",
-    body: "Published scoring and settlement rules make review results recomputable.",
+    title: "Evidence you can inspect",
+    body: "Results keep the question, verdict, reasons, disagreement, and review context together.",
     color: "#EF476F",
-    links: [
-      ["Quality bonus", "/docs/tech-stack#robust-bayesian-truth-serum"],
-      ["Insight bonus", "/docs/tech-stack#surprisingly-popular"],
-      ["USDC settlement", "/docs/tech-stack#base-usdc"],
-      ["Fund safeguards", "/docs/smart-contracts#tokenless-panel"],
-    ],
-  },
-  {
-    title: "Human oversight, supported",
-    body: "Your people provide oversight. RateLoop supports configured review and records the resulting evidence.",
-    color: "var(--rateloop-yellow)",
-    links: [
-      ["Human Oversight", "/docs/human-oversight"],
-      ["Evidence guide", "/docs/evidence"],
-    ],
+    links: [["Evidence reference", "/docs/evidence"]],
   },
 ] as const;
 
@@ -77,19 +54,8 @@ const useCases = [
   },
 ] as const;
 
-const configuredReviewLanes = configuredHumanReviewLanes();
-const reviewerSources = [
-  "your invited reviewers",
-  ...(configuredReviewLanes.publicPaidNetwork.available ? ["RateLoop network reviewers"] : []),
-  ...(configuredReviewLanes.hybridPublicSafe.available ? ["separate hybrid panels"] : []),
-];
-const reviewerSourcesAnswer =
-  (reviewerSources.length === 1
-    ? "Your invited reviewers."
-    : `${reviewerSources.slice(0, -1).join(", ")}, or ${reviewerSources.at(-1)}.`) + " Hybrid is unavailable.";
-
 const questions = [
-  ["Who Reviews the Work?", reviewerSourcesAnswer],
+  ["Who Reviews the Work?", "Your invited workspace reviewers."],
   [
     "Can an Agent Run Reviews Automatically?",
     "Connection alone does not intercept outputs. An active agent can call RateLoop for each eligible output; only a verified host adapter that controls delivery can enforce waiting before release. Ordinary Codex integrations are advisory.",
@@ -99,8 +65,8 @@ const questions = [
     "Only submit material you are authorized to share. Minimize it, redact sensitive data, and remember assigned reviewers and RateLoop may read it.",
   ],
   [
-    "What Does the Blockchain Record?",
-    "Funding terms, accepted commitments, scoring inputs, and settlement evidence. Private context stays off-chain, and the chain record does not replace your final judgment.",
+    "What Does RateLoop Record?",
+    "The review question, policy, responses, result, and available evidence. Private context stays in workspace-scoped storage, and the record supports—but does not replace—your final judgment.",
   ],
   [
     "How can RateLoop support EU AI Act human oversight?",
@@ -129,15 +95,7 @@ function SectionTitle({
   );
 }
 
-export function TokenlessLandingPage({
-  socialProofItems,
-  subscriptionsEnabled,
-  demoBookingUrl = null,
-}: {
-  socialProofItems: LandingSocialProofItem[];
-  subscriptionsEnabled: boolean;
-  demoBookingUrl?: string | null;
-}) {
+export function TokenlessLandingPage({ socialProofItems }: { socialProofItems: LandingSocialProofItem[] }) {
   return (
     <div className="flex grow flex-col items-center px-4 pb-16 pt-4 sm:pt-12 lg:pt-16">
       <div className="relative flex w-full max-w-6xl flex-col items-center">
@@ -163,7 +121,7 @@ export function TokenlessLandingPage({
                 </span>
               </Link>
               <Link
-                href="/agents?tab=overview"
+                href="/agents?tab=connect"
                 className="group btn min-h-11 gap-2 rounded-lg border-0 bg-base-content/[0.11] px-5 text-base hover:bg-base-content/[0.18]"
               >
                 <span>Connect Agent</span>
@@ -243,7 +201,7 @@ export function TokenlessLandingPage({
           <SectionTitle number="03" gradient="Works">
             Why It
           </SectionTitle>
-          <div className="grid grid-cols-1 gap-x-10 gap-y-12 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-x-10 gap-y-12 md:grid-cols-3">
             {whyItWorksFeatures.map((feature, index) => (
               <article
                 key={feature.title}
@@ -278,10 +236,21 @@ export function TokenlessLandingPage({
           <SectionTitle number="04" gradient="Simple" className="mb-6">
             Pricing, Kept
           </SectionTitle>
-          <p className="mb-8 max-w-3xl text-lg leading-8 text-base-content/65 sm:mb-10 sm:text-xl">
-            Plans cover RateLoop decisions. Reviewer compensation is separate where an activated paid lane applies.
-          </p>
-          <WorkspacePlanCards subscriptionsEnabled={subscriptionsEnabled} demoBookingUrl={demoBookingUrl} />
+          <div className="surface-card flex flex-col gap-6 rounded-2xl p-7 sm:flex-row sm:items-center sm:justify-between sm:p-9">
+            <div>
+              <p className="font-mono text-sm uppercase tracking-[0.18em] text-[var(--rateloop-green)]">Start free</p>
+              <p className="mt-3 text-3xl font-semibold text-base-content">
+                {formatUsdPrice(TOKENLESS_BILLING_PLANS.free.monthlyPriceCents)}
+              </p>
+              <p className="mt-3 max-w-2xl text-base leading-7 text-base-content/65">
+                {TOKENLESS_BILLING_PLANS.free.decisionsPerPeriod} completed decisions each month,{" "}
+                {TOKENLESS_BILLING_PLANS.free.activeAgents} active agent, and invited unpaid reviews.
+              </p>
+            </div>
+            <Link href="/pricing" className="btn rateloop-secondary-action min-h-11 shrink-0 px-5">
+              See pricing
+            </Link>
+          </div>
         </section>
 
         <div aria-hidden="true" className="my-16 h-px w-full max-w-5xl bg-base-content/10 sm:my-20 lg:my-24" />
@@ -324,11 +293,5 @@ export function TokenlessLandingPage({
 }
 
 export default async function LandingPage() {
-  return (
-    <TokenlessLandingPage
-      socialProofItems={await getLandingPageSocialProofItems()}
-      subscriptionsEnabled={process.env.TOKENLESS_SUBSCRIPTIONS_ENABLED === "true"}
-      demoBookingUrl={resolveDemoBookingUrl()}
-    />
-  );
+  return <TokenlessLandingPage socialProofItems={await getLandingPageSocialProofItems()} />;
 }

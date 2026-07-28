@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { WorkspacePlanCards } from "~~/components/pricing/WorkspacePlanCards";
-import { InfoPopover } from "~~/components/tokenless/InfoPopover";
 import { TOKENLESS_BILLING_PLANS, formatUsdPrice } from "~~/lib/billing/plans";
 import { resolveDemoBookingUrl } from "~~/lib/marketing/demoBooking";
 
@@ -25,7 +24,7 @@ export default function PricingPage() {
             Start free. <span className="rateloop-text-gradient">Scale when you need it.</span>
           </h1>
           <p className="mt-7 max-w-3xl text-lg leading-8 text-base-content/65 sm:text-xl">
-            Workspace plans cover RateLoop decisions. Paid reviewer costs are separate.
+            Workspace plans cover completed review decisions with invited, unpaid reviewers.
           </p>
         </header>
 
@@ -50,20 +49,10 @@ export default function PricingPage() {
             </p>
           </article>
           <article>
-            <div className="flex items-center gap-2">
-              <h2 className="text-2xl font-semibold">Paid panels</h2>
-              <InfoPopover label="Explain paid panel costs">
-                The bounty pays accepted reviewer work. The attempt reserve covers valid assigned attempts, including
-                rounds that do not reach quorum. RateLoop&apos;s execution fee is capped at 10%.
-              </InfoPopover>
-            </div>
+            <h2 className="text-2xl font-semibold">Available reviews</h2>
             <p className="mt-3 text-base leading-7 text-base-content/60">
-              Paying reviewers costs extra and is not included in the {earlyAccessPrice} subscription. Every cost is
-              itemized before funding — nothing is charged without your confirmation.
-            </p>
-            <p className="mt-3 text-base leading-7 text-base-content/60">
-              Reviewers keep 90% of every bounty. RateLoop&apos;s execution fee is capped at 10%, and stablecoin
-              settlement that costs cents — not card fees — is what keeps it that low.
+              The hosted service currently routes work only to reviewers you invite to the workspace. These reviews are
+              unpaid and use the decision allowance included in your plan.
             </p>
           </article>
         </section>

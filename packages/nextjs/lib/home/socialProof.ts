@@ -37,7 +37,7 @@ export function formatUsdcPaidOut(rawAmount: unknown) {
 }
 
 export function buildLandingPageSocialProofItems(stats: LandingSocialProofStats): LandingSocialProofItem[] {
-  return [
+  const items: LandingSocialProofItem[] = [
     {
       value: nonNegativeInteger(stats.totalVerifiedHumans).toLocaleString("en-US"),
       label: "Verified Humans",
@@ -51,4 +51,5 @@ export function buildLandingPageSocialProofItems(stats: LandingSocialProofStats)
       label: "USDC Paid",
     },
   ];
+  return items.filter(item => item.value !== "0" && item.value !== "$0");
 }

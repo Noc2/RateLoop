@@ -2,8 +2,8 @@ const stages = [
   {
     number: "01",
     title: "Owner sets policy",
-    body: "Sets review rules, risk thresholds, audience, data boundaries, and spending limits.",
-    conciseBody: "Sets review rules, risk thresholds, audience, data boundaries, and spending limits.",
+    body: "Sets review rules, risk thresholds, reviewer audience, data boundaries, and response windows.",
+    conciseBody: "Sets review rules, risk thresholds, reviewer audience, data boundaries, and response windows.",
     color: "#359EEE",
   },
   {

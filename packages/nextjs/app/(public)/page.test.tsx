@@ -13,7 +13,6 @@ test("landing page presents the tokenless human-assurance story", async () => {
   const { TokenlessLandingPage } = await import("./page");
   const html = renderToStaticMarkup(
     <TokenlessLandingPage
-      subscriptionsEnabled
       socialProofItems={[
         { value: "10", label: "Verified Humans" },
         { value: "21", label: "Ratings" },
@@ -32,7 +31,7 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.doesNotMatch(html, /For Humans|For Agents/);
   assert.equal(html.match(/aria-hidden="true" class="text-lg leading-none/g)?.length, 2);
   assert.ok(
-    html.indexOf('href="/human?tab=discover"') < html.indexOf('href="/agents?tab=overview"'),
+    html.indexOf('href="/human?tab=discover"') < html.indexOf('href="/agents?tab=connect"'),
     "the Humans CTA should appear before the Agents CTA",
   );
   assert.ok(
@@ -47,7 +46,7 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /Agent submits work/);
   assert.match(html, /Humans judge/);
   assert.match(html, /Evaluation/);
-  assert.match(html, /risk thresholds, audience, data boundaries, and spending limits/i);
+  assert.match(html, /risk thresholds, reviewer audience, data boundaries, and response windows/i);
   assert.match(html, /within the owner-approved policy/i);
   assert.match(html, /feedback and actionable human performance metrics for AI workflows/i);
   assert.doesNotMatch(html, /Agent prepares|RateLoop decides|Evidence adapts/);
@@ -62,62 +61,30 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.doesNotMatch(html, /rateloop-promo/);
   assert.match(html, /Why It/);
   assert.match(html, /Agent-native/);
-  assert.match(html, /Verified and blind/);
-  assert.match(html, /Useful signal, auditable evidence/);
-  assert.match(html, /Human oversight, supported/);
+  assert.match(html, /Private by default/);
+  assert.match(html, /Evidence you can inspect/);
+  assert.doesNotMatch(html, /Human oversight, supported/);
   assert.doesNotMatch(html, /Evidence your auditors can check|Trace review policy/i);
-  assert.match(
-    html,
-    /Your people provide oversight\. RateLoop supports configured review and records the resulting evidence\./,
-  );
   assert.match(html, /Who Reviews the Work\?/);
-  assert.match(html, /Your invited reviewers\./);
+  assert.match(html, /Your invited workspace reviewers\./);
   assert.doesNotMatch(html, /World ID-backed network|hybrid panels/);
   assert.doesNotMatch(html, /RateLoop provides the instrument — and the proof/i);
-  assert.match(html, /href="\/docs\/human-oversight"[^>]*>Human Oversight<\/a>/i);
-  assert.match(html, /href="\/docs\/evidence"[^>]*>Evidence guide<\/a>/i);
-  for (const term of [
-    "Agent handoffs",
-    "Scoped funding",
-    "Human eligibility",
-    "Reviewer rules",
-    "Sealed answers",
-    "Quality bonus",
-    "Insight bonus",
-    "USDC settlement",
-    "Fund safeguards",
-  ]) {
+  for (const term of ["Agent guide", "Review flow", "Evidence reference"]) {
     assert.match(html, new RegExp(term.replace(/[+]/g, "\\+")));
   }
   assert.doesNotMatch(html, /Independent opening/);
   const visibleText = html.replace(/<[^>]+>/g, " ");
   assert.doesNotMatch(visibleText, /\bx402\b|Commit-Reveal|drand\/tlock|\bRBTS\b|Fund Core/);
-  for (const href of [
-    "/docs/tech-stack#mcp-adapter",
-    "/docs/tech-stack#x402-usdc",
-    "/docs/tech-stack#proof-of-human",
-    "/docs/tech-stack#audience-policies",
-    "/docs/tech-stack#commit-reveal",
-    "/docs/tech-stack#robust-bayesian-truth-serum",
-    "/docs/tech-stack#surprisingly-popular",
-    "/docs/tech-stack#base-usdc",
-    "/docs/smart-contracts#tokenless-panel",
-    "/docs/human-oversight",
-    "/docs/evidence",
-  ]) {
+  for (const href of ["/docs/ai", "/docs/how-it-works#reviewer-flow", "/docs/evidence"]) {
     assert.match(html, new RegExp(`href="${href}"`));
   }
   assert.doesNotMatch(html, /See evidence/);
   assert.doesNotMatch(html, /Privacy and Security with Clear Limits/i);
   assert.match(html, /Pricing, Kept/);
-  assert.match(html, /Plans cover RateLoop decisions/);
-  assert.match(html, /\$29/);
-  assert.match(html, /25 completed review decisions/);
-  assert.match(html, /250 completed review decisions/);
-  assert.match(html, /href="\/agents\?tab=overview"/);
-  assert.match(html, /href="\/agents\?tab=overview&amp;billing=upgrade"/);
-  assert.match(html, /Book demo/);
-  assert.doesNotMatch(html, /See pricing|href="\/pricing"/);
+  assert.match(html, /25 completed decisions each month/);
+  assert.match(html, /invited unpaid reviews/);
+  assert.match(html, /See pricing|href="\/pricing"/);
+  assert.doesNotMatch(html, /\$29|250 completed review decisions|Book demo/);
   assert.match(html, /Works with the agents your team already uses/);
   assert.match(html, /Claude Code/);
   assert.match(html, /OpenAI Codex/);
@@ -128,7 +95,7 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /text-base leading-7 text-base-content\/70 sm:mb-5 sm:text-lg/);
   assert.match(html, /px-3 py-2\.5 text-base-content\/70 sm:px-3\.5 lg:px-4/);
   assert.match(html, /whitespace-nowrap text-sm font-semibold sm:text-base/);
-  assert.doesNotMatch(html, /See supported agents|href="\/docs\/ai"/);
+  assert.doesNotMatch(html, /See supported agents/);
   assert.doesNotMatch(html, /Agent setup|Copy setup|role="dialog"/);
   assert.match(html, /id="use-cases"/);
   assert.match(html, /Where Humans/);
@@ -162,7 +129,7 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /Connection alone does not intercept outputs/i);
   assert.match(html, /only a verified host adapter that controls delivery can enforce waiting before release/i);
   assert.match(html, /Ordinary Codex integrations are advisory/i);
-  assert.match(html, /What Does the Blockchain Record\?/);
+  assert.match(html, /What Does RateLoop Record\?/);
   assert.match(html, /How can RateLoop support EU AI Act human oversight\?/);
   assert.match(html, /support configured human-review controls and export evidence relevant to Article 14/i);
   assert.match(html, /does not determine whether the Act applies or establish compliance/i);

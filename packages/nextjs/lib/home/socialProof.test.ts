@@ -17,18 +17,22 @@ test("landing social proof formats live identity, rating, and USDC totals", () =
   );
 });
 
-test("landing social proof clamps invalid values and keeps cent rounding stable", () => {
+test("landing social proof hides zero-value claims and keeps cent rounding stable", () => {
   assert.deepEqual(
     buildLandingPageSocialProofItems({
       totalVerifiedHumans: "not-a-number",
       totalRatings: -2,
       totalPaidAtomic: "-1",
     }),
-    [
-      { value: "0", label: "Verified Humans" },
-      { value: "0", label: "Ratings" },
-      { value: "$0", label: "USDC Paid" },
-    ],
+    [],
+  );
+  assert.deepEqual(
+    buildLandingPageSocialProofItems({
+      totalVerifiedHumans: 0,
+      totalRatings: 21,
+      totalPaidAtomic: 0,
+    }),
+    [{ value: "21", label: "Ratings" }],
   );
   assert.equal(formatUsdcPaidOut(5_000n), "$0.01");
   assert.equal(formatUsdcPaidOut(12_345_600n), "$12.35");

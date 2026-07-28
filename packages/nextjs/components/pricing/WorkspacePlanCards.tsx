@@ -82,7 +82,7 @@ export function WorkspacePlanCards({ subscriptionsEnabled, demoBookingUrl = null
           "Everything in Early Access",
           "Custom volumes and terms",
           "Custom integrations",
-          "Compliance solutions",
+          "Evidence export support",
         ]}
         footer={
           demoBookingUrl ? (

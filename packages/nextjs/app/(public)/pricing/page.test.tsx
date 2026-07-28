@@ -23,13 +23,13 @@ test("pricing page shows three tiers and discloses costs progressively", async (
   assert.match(html, /href="\/agents\?tab=overview"/);
   assert.match(html, /href="\/agents\?tab=overview&amp;billing=upgrade"/);
   assert.doesNotMatch(html, /subject=RateLoop%20Demo/);
-  assert.match(html, /Paid panels/);
-  assert.match(html, /Explain paid panel costs/);
-  assert.match(html, /not included in the \$29 subscription/);
+  assert.match(html, /Available reviews/);
+  assert.match(html, /reviewers you invite to the workspace/i);
+  assert.match(html, /These reviews are unpaid/i);
   assert.match(html, /Enterprise/);
   assert.match(html, /Custom/);
   assert.match(html, /Custom integrations/);
-  assert.match(html, /Compliance solutions/);
+  assert.match(html, /Evidence export support/);
   assert.match(
     html,
     /class="rateloop-gradient-action min-h-12 w-full justify-center px-5" href="mailto:hawigxyz@proton\.me\?subject=RateLoop%20Enterprise">Book demo<\/a>/,
@@ -37,8 +37,7 @@ test("pricing page shows three tiers and discloses costs progressively", async (
   assert.doesNotMatch(html, /target="_blank"/);
   assert.match(html, /<s[^>]*>\$99/);
   assert.match(html, /Then \$99\/month after 12 months/);
-  assert.match(html, /Reviewers keep 90% of every bounty/);
-  assert.match(html, /execution fee is capped at 10%/);
+  assert.doesNotMatch(html, /reviewer costs|bounty|execution fee|USDC|stablecoin/i);
   assert.doesNotMatch(html, /7\.5%/);
   assert.doesNotMatch(html, /\$149/);
   assert.match(html, /no automatic overage charge/i);
