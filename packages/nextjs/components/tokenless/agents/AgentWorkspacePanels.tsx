@@ -7,6 +7,7 @@ import { WorkspaceSettingsClient } from "../WorkspaceSettingsClient";
 import { WorkspaceStopBanner } from "../WorkspaceStopControl";
 import { Button } from "../ui/Button";
 import { AgentConnectionPanel } from "./AgentConnectionPanel";
+import { AgentOverviewMonitor } from "./AgentOverviewMonitor";
 import { AgentRegistryPanel } from "./AgentRegistryPanel";
 import { AgentReviewsPanel } from "./AgentReviewsPanel";
 import { type AgentTab, AgentTabs } from "./AgentTabs";
@@ -117,7 +118,10 @@ export function AgentWorkspacePanels({
         className="space-y-5 outline-none focus-visible:ring-2 focus-visible:ring-[var(--rateloop-blue)]"
       >
         {resolvedTab === "overview" ? (
-          <>{canManage ? <ScheduledWorkerHealthPanel workspaceId={workspaceId} /> : null}</>
+          <>
+            <AgentOverviewMonitor workspaceId={workspaceId} />
+            {canManage ? <ScheduledWorkerHealthPanel workspaceId={workspaceId} /> : null}
+          </>
         ) : null}
         {resolvedTab === "billing" ? <WorkspaceSettingsClient initialWorkspaceId={workspaceId} /> : null}
         {resolvedTab === "connect" && canManage ? (
