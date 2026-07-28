@@ -639,6 +639,14 @@ export function verifyIntegrityEpochSnapshot(
       errors.push("duplicate_reviewer_lookup");
     }
     for (const leaf of snapshot.privateLeaves) {
+      // The leaf hash commits to the leaf's own epoch ID and vault key version, never to the
+      // manifest's. Without these two checks a snapshot assembled from another epoch's leaves —
+      // self-consistent leaves under a foreign manifest — verified as valid, and the keyless
+      // persistence path had nothing at all binding the members it writes to the epoch row.
+      if (leaf.epochId !== snapshot.manifest.epochId) errors.push("leaf_epoch_mismatch");
+      if (leaf.vaultKeyVersion !== snapshot.manifest.privateKeyVersions.vault) {
+        errors.push("leaf_vault_key_version_mismatch");
+      }
       if (leaf.privateLeafHash !== hashIntegrityValue(metadataFromPrivateLeaf(leaf))) {
         errors.push("private_leaf_hash_mismatch");
       }

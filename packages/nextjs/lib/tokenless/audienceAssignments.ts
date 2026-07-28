@@ -1362,6 +1362,16 @@ export async function reserveDiversifiedNetworkSubpanel(input: {
     });
     const fundedReservationTtl =
       Math.min(...exactRounds.map(round => round.voucherDeadline?.getTime() ?? now.getTime())) - now.getTime();
+    // Blaming `reservationTtlMs` pointed integrators at a field they never sent. The real condition
+    // is a funded voucher deadline too close to hold a reservation against, which is a state
+    // conflict rather than a malformed request.
+    if (input.reservationTtlMs === undefined && fundedReservationTtl < 60_000) {
+      throw new TokenlessServiceError(
+        "The earliest funded voucher deadline is less than 60 seconds away, so no reservation can be held.",
+        409,
+        "integrity_funded_reservation_window_exhausted",
+      );
+    }
     const ttl = integer(
       input.reservationTtlMs ?? Math.min(fundedReservationTtl, MAX_RESERVATION_TTL_MS),
       "reservationTtlMs",
@@ -1420,7 +1430,10 @@ export async function reserveDiversifiedNetworkSubpanel(input: {
         }
         riskBandCounts[riskBand] += 1;
       }
-      const largestCluster = Math.max(...clusterCounts.values());
+      // `Math.max()` over an empty map is -Infinity, which serialises the reported share as null.
+      // Guarded the way the equivalent expression in the selection path is, so a zero-row replay
+      // reports an honest zero instead.
+      const largestCluster = Math.max(0, ...clusterCounts.values());
       await client.query("COMMIT");
       return {
         subpanelId: input.subpanelId,
@@ -1431,7 +1444,7 @@ export async function reserveDiversifiedNetworkSubpanel(input: {
           epochId: policy.integrity.epochId,
           manifestHash: policy.integrity.epochManifestHash,
           independentClusterCount: clusterCounts.size,
-          largestClusterShareBps: Math.ceil((largestCluster * 10_000) / rows.length),
+          largestClusterShareBps: rows.length ? Math.ceil((largestCluster * 10_000) / rows.length) : 0,
           riskBandCounts,
         },
       };
@@ -1534,6 +1547,10 @@ export async function reserveDiversifiedNetworkSubpanel(input: {
       const reviewer = value as QueryRow;
       const address = rowString(reviewer, "reviewer_account_address")!;
       const reviewerLookup = integrityReviewerLookup({ key: lookup.key, reviewerId: address });
+      // The pairwise history above is the only source for this constraint. Passing a literal 0 left
+      // `maxRecentCoassignments` inert in the frozen admission policy, so the cap held only as a
+      // side effect of the greedy panel selection and never as an admission decision of its own.
+      const recentCoassignments = Math.max(0, ...(recentPairs.get(reviewerLookup)?.values() ?? []));
       const memberResult = await client.query(
         `SELECT cluster_pseudonym, risk_band FROM tokenless_integrity_epoch_members
          WHERE epoch_id = $1 AND reviewer_lookup = $2 AND eligibility_status = 'eligible' LIMIT 1`,
@@ -1603,7 +1620,7 @@ export async function reserveDiversifiedNetworkSubpanel(input: {
             clusterPseudonym: rowString(member, "cluster_pseudonym")!,
             riskBand,
             providerSubjectHashes: allProviderSubjects,
-            recentCoassignments: 0,
+            recentCoassignments,
             activeCustomerAssignments: customerCounts.get(reviewerLookup) ?? 0,
           },
         },

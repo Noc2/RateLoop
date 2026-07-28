@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
-import { generateKeyPairSync } from "node:crypto";
+import { generateKeyPairSync, sign } from "node:crypto";
 import { test } from "node:test";
+import type { PoolClient } from "pg";
 import seededRings from "~~/lib/tokenless/fixtures/integrity-epoch-seeded-rings.json";
+import { persistIntegrityEpochSnapshotWithClient } from "~~/lib/tokenless/integrityEpochPersistence";
 import {
   type IntegrityEpochObservation,
   type IntegrityHardLinkKind,
   buildIntegrityEpoch,
+  canonicalizeIntegrityValue,
   hashIntegrityValue,
   integrityValueCommitment,
   verifyIntegrityEpochSnapshot,
@@ -207,4 +210,43 @@ test("epoch verification detects private metadata and encrypted feature tamperin
   });
   assert.equal(ciphertextVerification.valid, false);
   assert.ok(ciphertextVerification.errors.includes("feature_decryption_failed"));
+});
+
+// A snapshot whose leaves belong to a different epoch is internally self-consistent: leaf hashes,
+// merkle root, eligibility counts and cluster counts all agree, so re-signing a manifest that names
+// another epoch (or another vault key version) produced a snapshot that verified as fully valid.
+function resign(snapshot: ReturnType<typeof build>) {
+  snapshot.manifestHash = hashIntegrityValue(snapshot.manifest);
+  snapshot.signature = sign(null, Buffer.from(canonicalizeIntegrityValue(snapshot.manifest)), SIGNING_KEY).toString(
+    "base64url",
+  );
+  return snapshot;
+}
+
+test("snapshot verification binds every private leaf to the manifest that publishes it", async () => {
+  const foreignLeaves = resign(structuredClone(build()));
+  foreignLeaves.manifest.epochId = "integrity:2026-07-14:002";
+  resign(foreignLeaves);
+  const foreignVerification = verifyIntegrityEpochSnapshot(foreignLeaves);
+  assert.equal(foreignVerification.valid, false);
+  assert.deepEqual(foreignVerification.errors, ["leaf_epoch_mismatch"]);
+
+  const rotatedVault = structuredClone(build());
+  rotatedVault.manifest.privateKeyVersions.vault = "vault-2026-08";
+  resign(rotatedVault);
+  const rotatedVerification = verifyIntegrityEpochSnapshot(rotatedVault);
+  assert.equal(rotatedVerification.valid, false);
+  assert.deepEqual(rotatedVerification.errors, ["leaf_vault_key_version_mismatch"]);
+
+  // The persistence path holds no vault or pseudonym key, so leaf binding is the only cross-check
+  // it can make; it must refuse to write members that belong to another epoch.
+  const queries: string[] = [];
+  const client = {
+    async query(sql: string) {
+      queries.push(sql);
+      return { rowCount: 1, rows: [] };
+    },
+  } as unknown as PoolClient;
+  await assert.rejects(() => persistIntegrityEpochSnapshotWithClient(client, foreignLeaves), /leaf_epoch_mismatch/u);
+  assert.deepEqual(queries, []);
 });

@@ -22,6 +22,7 @@ import {
   reserveAudienceAssignment,
   reserveDiversifiedNetworkSubpanel,
 } from "~~/lib/tokenless/audienceAssignments";
+import { integrityReviewerLookup } from "~~/lib/tokenless/integrityEpochs";
 import { requirePaidReviewEligibilityInTransaction } from "~~/lib/tokenless/paidReviewEligibilityPreflight";
 import {
   createPrivateGroup,
@@ -715,10 +716,28 @@ test("network selection rejects manual collisions and invited-only supply before
     qualification_rules_json: "[]",
   };
 
+  const zeroTargetRound = {
+    ...exactRound,
+    round_terms_json: JSON.stringify({ ...roundTerms, maximumCommits: 0 }),
+    maximum_commits: 0,
+    terms_json: JSON.stringify({
+      ...JSON.parse(exactRound.terms_json),
+      panel: { requestedSize: 0 },
+    }),
+  };
+  const reviewerLookup = (address: string) =>
+    integrityReviewerLookup({
+      key: Buffer.from(process.env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY!, "base64url"),
+      reviewerId: address,
+    });
+
   async function run(
     mode:
+      | "coassignment_cap"
       | "collision"
+      | "empty_replay"
       | "excluded"
+      | "funded_window"
       | "integrity_conflict"
       | "locked_conflict"
       | "no_capacity"
@@ -770,12 +789,27 @@ test("network selection rejects manual collisions and invited-only supply before
                     selection_batch_id: "hasb_replay",
                     selection_commitment: POLICY_HASH,
                   }
-                : subpanel,
+                : mode === "empty_replay"
+                  ? {
+                      ...subpanel,
+                      target_count: 0,
+                      selection_status: "reserved",
+                      selection_batch_id: "hasb_empty",
+                      selection_commitment: POLICY_HASH,
+                    }
+                  : subpanel,
             ],
           };
         }
-        if (sql.includes("FROM tokenless_assurance_run_cases rc")) return { rowCount: 1, rows: [exactRound] };
+        if (sql.includes("FROM tokenless_assurance_run_cases rc")) {
+          if (mode === "empty_replay") return { rowCount: 1, rows: [zeroTargetRound] };
+          if (mode === "funded_window") {
+            return { rowCount: 1, rows: [{ ...exactRound, voucher_deadline: new Date(now.getTime() + 30_000) }] };
+          }
+          return { rowCount: 1, rows: [exactRound] };
+        }
         if (sql.includes("FROM tokenless_assurance_assignments a") && sql.includes("settlement_count")) {
+          if (mode === "empty_replay") return { rowCount: 0, rows: [] };
           return {
             rowCount: 2,
             rows: [
@@ -813,7 +847,7 @@ test("network selection rejects manual collisions and invited-only supply before
           assert.match(sql, /NOT EXISTS \([\s\S]*FROM tokenless_assurance_assignments active/u);
           assert.match(sql, /NOT EXISTS \([\s\S]*tokenless_hybrid_network_reviewer_exclusions exclusion/u);
           assert.equal(values?.[4], "pnrb_network");
-          return mode === "locked_conflict" || mode === "integrity_conflict" || mode === "qualification_conflict"
+          return ["coassignment_cap", "integrity_conflict", "locked_conflict", "qualification_conflict"].includes(mode)
             ? {
                 rowCount: 2,
                 rows: [
@@ -823,7 +857,19 @@ test("network selection rejects manual collisions and invited-only supply before
               }
             : { rowCount: 0, rows: [] };
         }
-        if (sql.includes("FROM tokenless_integrity_assignment_history")) return { rowCount: 0, rows: [] };
+        if (sql.includes("FROM tokenless_integrity_assignment_history")) {
+          // A real prior run that paired the first reviewer with somebody outside this candidate
+          // pool: the greedy panel check never sees it, only the admission policy can.
+          return mode === "coassignment_cap"
+            ? {
+                rowCount: 2,
+                rows: [
+                  { reviewer_lookup: reviewerLookup(REVIEWER), run_id: "run_prior" },
+                  { reviewer_lookup: reviewerLookup(OTHER_OWNER), run_id: "run_prior" },
+                ],
+              }
+            : { rowCount: 0, rows: [] };
+        }
         if (sql.includes("FROM tokenless_integrity_epoch_members") && sql.includes("reviewer_lookup=ANY")) {
           const reviewerLookups = (values?.[1] as string[] | undefined) ?? [];
           return {
@@ -1002,25 +1048,38 @@ test("network selection rejects manual collisions and invited-only supply before
       confidentialityTermsHash: TERMS_HASH,
       now,
     };
-    if (mode !== "replay") {
+    if (mode !== "replay" && mode !== "empty_replay") {
       await assert.rejects(
         () => reserveDiversifiedNetworkSubpanel(request),
         (error: unknown) =>
           mode === "collision"
             ? error instanceof TokenlessServiceError && error.code === "network_cohort_membership_conflict"
-            : mode === "integrity_conflict"
-              ? error instanceof TokenlessServiceError && error.code === "network_reviewer_integrity_conflict"
-              : mode === "locked_conflict"
-                ? error instanceof TokenlessServiceError && error.code === "network_reviewer_eligibility_conflict"
-                : mode === "qualification_conflict"
-                  ? error instanceof TokenlessServiceError && error.code === "network_reviewer_qualification_conflict"
-                  : error instanceof Error && /eligible supply/iu.test(error.message),
+            : mode === "funded_window"
+              ? error instanceof TokenlessServiceError &&
+                error.code === "integrity_funded_reservation_window_exhausted" &&
+                error.status === 409 &&
+                !/reservationTtlMs/u.test(error.message)
+              : mode === "integrity_conflict"
+                ? error instanceof TokenlessServiceError && error.code === "network_reviewer_integrity_conflict"
+                : mode === "locked_conflict"
+                  ? error instanceof TokenlessServiceError && error.code === "network_reviewer_eligibility_conflict"
+                  : mode === "qualification_conflict"
+                    ? error instanceof TokenlessServiceError && error.code === "network_reviewer_qualification_conflict"
+                    : error instanceof Error && /eligible supply/iu.test(error.message),
       );
       assert.deepEqual(writes, []);
       if (mode === "locked_conflict") assert.equal(eligibilityReads, 3);
       return;
     }
     const replay = await reserveDiversifiedNetworkSubpanel(request);
+    if (mode === "empty_replay") {
+      assert.equal(replay.selectedCount, 0);
+      assert.equal(replay.integrity.independentClusterCount, 0);
+      assert.equal(replay.integrity.largestClusterShareBps, 0);
+      assert.equal(JSON.parse(JSON.stringify(replay)).integrity.largestClusterShareBps, 0);
+      assert.deepEqual(writes, []);
+      return;
+    }
     assert.equal(replay.selectedCount, 2);
     assert.equal(replay.selectionCommitment, POLICY_HASH);
     assert.deepEqual(writes, []);
@@ -1032,6 +1091,9 @@ test("network selection rejects manual collisions and invited-only supply before
   await run("integrity_conflict");
   await run("locked_conflict");
   await run("qualification_conflict");
+  await run("coassignment_cap");
+  await run("funded_window");
+  await run("empty_replay");
   await run("replay");
 });
 
