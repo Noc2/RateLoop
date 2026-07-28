@@ -63,6 +63,15 @@ export const TOKENLESS_DATA_CLASSIFICATIONS = [
 export type TokenlessDataClassification =
   (typeof TOKENLESS_DATA_CLASSIFICATIONS)[number];
 
+/** The only classifications a public question may carry. */
+export const TOKENLESS_PUBLIC_DATA_CLASSIFICATIONS = [
+  "public",
+  "synthetic",
+  "redacted",
+] as const;
+export type TokenlessPublicDataClassification =
+  (typeof TOKENLESS_PUBLIC_DATA_CLASSIFICATIONS)[number];
+
 export interface TokenlessFundAccounting {
   fundedAtomic: TokenlessAtomicAmount;
   paidAtomic: TokenlessAtomicAmount;
@@ -162,10 +171,15 @@ export type TokenlessRationaleRequirement =
   | { mode: "required"; maxLength: number; minLength?: number };
 
 export interface TokenlessQuoteRequest {
-  /** Public questions must explicitly select public visibility and a safe classification. */
-  visibility?: TokenlessVisibility;
-  dataClassification?: TokenlessDataClassification;
+  /**
+   * Privacy terms are never inferred. A public quote must select public visibility, a
+   * classification that is safe to publish, and `confirmedNoSensitiveData: true`; anything else is
+   * a private quote, which only the internal encrypted-review workflow may create.
+   */
+  visibility: TokenlessVisibility;
+  dataClassification: TokenlessDataClassification;
   redactionSummary?: string;
+  /** Required to be true for a public quote, and unused by private commitment-only quotes. */
   confirmedNoSensitiveData?: boolean;
   audience: {
     admissionPolicyHash: `0x${string}`;

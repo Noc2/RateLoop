@@ -77,6 +77,7 @@ test("package root exposes only the tokenless client, schema, types, and generic
       "TOKENLESS_MAX_QUESTION_IMAGES",
       "TOKENLESS_MINIMUM_BEACON_FAILURE_GRACE_SECONDS",
       "TOKENLESS_PAYMENT_AUTHORIZATION_SCHEMA_VERSION",
+      "TOKENLESS_PUBLIC_DATA_CLASSIFICATIONS",
       "TOKENLESS_QUICKNET_T_CHAIN_HASH",
       "TOKENLESS_QUICKNET_T_GENESIS_SECONDS",
       "TOKENLESS_QUICKNET_T_PERIOD_SECONDS",
@@ -195,6 +196,7 @@ test("private quote schema and parser bind an exact canonical audience policy an
   };
   const normalized = normalizeTokenlessQuoteRequest({
     visibility: "private",
+    dataClassification: "confidential",
     audience: {
       admissionPolicyHash: TEST_ADMISSION_POLICY_HASH,
       source: "customer_invited",
@@ -265,6 +267,8 @@ test("private quote schema and parser bind an exact canonical audience policy an
 
 test("canonical quote intent binds the exact question and frozen product terms", () => {
   const request = {
+    visibility: "private" as const,
+    dataClassification: "internal" as const,
     audience: {
       admissionPolicyHash: TEST_ADMISSION_POLICY_HASH,
       source: "customer_invited" as const,
@@ -787,6 +791,8 @@ test("tokenless client performs quote and ask with a required idempotency header
       source: "customer_invited",
     },
     audiencePolicy: TEST_AUDIENCE_POLICY,
+    visibility: "private",
+    dataClassification: "internal",
     budget: {
       attemptReserveAtomic: "5000000",
       bountyAtomic: "25000000",
@@ -857,6 +863,8 @@ test("tokenless client performs quote and ask with a required idempotency header
           source: "customer_invited",
         },
         audiencePolicy: TEST_AUDIENCE_POLICY,
+        visibility: "private",
+        dataClassification: "internal",
         budget: {
           attemptReserveAtomic: "5000000",
           bountyAtomic: "25000000",
@@ -880,6 +888,8 @@ test("tokenless client performs quote and ask with a required idempotency header
           source: "customer_invited",
         },
         audiencePolicy: TEST_AUDIENCE_POLICY,
+        visibility: "private",
+        dataClassification: "internal",
         budget: {
           attemptReserveAtomic: "5000000",
           bountyAtomic: "25000000",
@@ -903,6 +913,8 @@ test("tokenless client performs quote and ask with a required idempotency header
           source: "customer_invited",
         },
         audiencePolicy: TEST_AUDIENCE_POLICY,
+        visibility: "private",
+        dataClassification: "internal",
         budget: {
           attemptReserveAtomic: "5000000",
           bountyAtomic: "25000000",
@@ -959,6 +971,8 @@ test("tokenless quote validation rejects ambiguous mechanisms before HTTP", () =
           source: "customer_invited",
         },
         audiencePolicy: TEST_AUDIENCE_POLICY,
+        visibility: "private",
+        dataClassification: "internal",
         budget: {
           attemptReserveAtomic: "5000000",
           bountyAtomic: "25000000",
@@ -985,6 +999,8 @@ test("tokenless quote validation rejects ambiguous mechanisms before HTTP", () =
           source: "customer_invited",
         },
         audiencePolicy: TEST_AUDIENCE_POLICY,
+        visibility: "private",
+        dataClassification: "internal",
         budget: {
           attemptReserveAtomic: "5000000",
           bountyAtomic: "25000000",
@@ -1205,5 +1221,71 @@ test("tokenless result uses the versioned result route and reports structured AP
       error.status === 409 &&
       error.code === "result_not_ready" &&
       error.retryable === true,
+  );
+});
+
+test("quote requests must state privacy terms instead of defaulting to a server-rejected private quote", () => {
+  const terms = {
+    audience: {
+      admissionPolicyHash: TEST_ADMISSION_POLICY_HASH,
+      source: "customer_invited" as const,
+    },
+    audiencePolicy: TEST_AUDIENCE_POLICY,
+    budget: {
+      attemptReserveAtomic: "5000000",
+      bountyAtomic: "25000000",
+      feeBps: 750,
+    },
+    question: {
+      kind: "binary" as const,
+      prompt: "Ship it?",
+      rationale: { mode: "optional" as const },
+    },
+    requestedPanelSize: 15,
+    responseWindowSeconds: 3_600,
+  };
+  const normalize = (value: unknown) =>
+    normalizeTokenlessQuoteRequest(
+      value as Parameters<typeof normalizeTokenlessQuoteRequest>[0],
+    );
+
+  assert.throws(() => normalize(terms), /visibility must be public or private/);
+  assert.throws(
+    () => normalize({ ...terms, visibility: "public" }),
+    /dataClassification is required/,
+  );
+  assert.throws(
+    () =>
+      normalize({
+        ...terms,
+        visibility: "public",
+        dataClassification: "internal",
+        confirmedNoSensitiveData: true,
+      }),
+    /public, synthetic, or redacted classification/,
+  );
+  assert.throws(
+    () =>
+      normalize({
+        ...terms,
+        visibility: "public",
+        dataClassification: "synthetic",
+      }),
+    /no-sensitive-data confirmation/,
+  );
+
+  const normalized = normalize({
+    ...terms,
+    visibility: "public",
+    dataClassification: "synthetic",
+    confirmedNoSensitiveData: true,
+  });
+  assert.equal(normalized.visibility, "public");
+  assert.equal(normalized.dataClassification, "synthetic");
+  assert.ok(
+    TOKENLESS_QUOTE_REQUEST_JSON_SCHEMA.required.includes("visibility"),
+  );
+  assert.ok(
+    TOKENLESS_QUOTE_REQUEST_JSON_SCHEMA.required.includes("dataClassification"),
   );
 });

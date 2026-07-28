@@ -900,6 +900,8 @@ export const TOKENLESS_QUOTE_REQUEST_JSON_SCHEMA = {
     reviewEconomics: { anyOf: frozenReviewEconomicsSchema.anyOf.slice(1) },
   },
   required: [
+    "visibility",
+    "dataClassification",
     "audience",
     "audiencePolicy",
     "budget",

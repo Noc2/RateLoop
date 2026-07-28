@@ -39,8 +39,11 @@ import type {
   TokenlessSubmitPaymentRequest,
 } from "./tokenlessTypes";
 import {
+  TOKENLESS_DATA_CLASSIFICATIONS,
+  TOKENLESS_PUBLIC_DATA_CLASSIFICATIONS,
   TOKENLESS_REVIEWER_SOURCES,
   TOKENLESS_SCHEMA_VERSION,
+  TOKENLESS_VISIBILITIES,
 } from "./tokenlessTypes";
 import { normalizeTokenlessQuestion } from "./tokenlessMedia";
 import { sha256, stringToHex } from "viem";
@@ -223,6 +226,27 @@ export function normalizeTokenlessQuoteRequest(
   );
   assertExactObjectKeys(request.audience, ["admissionPolicyHash", "source"], "audience");
   assertExactObjectKeys(request.budget, ["attemptReserveAtomic", "bountyAtomic", "feeBps"], "budget");
+  if (!(TOKENLESS_VISIBILITIES as readonly string[]).includes(request.visibility)) {
+    throw new RateLoopSdkError("visibility must be public or private.");
+  }
+  if (
+    !(TOKENLESS_DATA_CLASSIFICATIONS as readonly string[]).includes(
+      request.dataClassification,
+    )
+  ) {
+    throw new RateLoopSdkError("dataClassification is required and must be a supported classification.");
+  }
+  if (
+    request.visibility === "public" &&
+    (!(TOKENLESS_PUBLIC_DATA_CLASSIFICATIONS as readonly string[]).includes(
+      request.dataClassification,
+    ) ||
+      request.confirmedNoSensitiveData !== true)
+  ) {
+    throw new RateLoopSdkError(
+      "Public quotes require a public, synthetic, or redacted classification and an explicit no-sensitive-data confirmation.",
+    );
+  }
   if (!BYTES32_PATTERN.test(request.audience.admissionPolicyHash)) {
     throw new RateLoopSdkError(
       "audience.admissionPolicyHash must be a bytes32 hex value.",
@@ -360,7 +384,7 @@ export function normalizeTokenlessQuoteRequest(
       ["privateReviewId", "source", "suggestion", "preparedRequestHash", "economicsHash", "reviewerSetHash"],
       "privateReview.artifactCommitments",
     );
-    if ((request.visibility ?? "private") !== "private" || request.audience.source !== "customer_invited") {
+    if (request.visibility !== "private" || request.audience.source !== "customer_invited") {
       throw new RateLoopSdkError("privateReview requires private customer-invited visibility.");
     }
     if (!audiencePolicy) {
@@ -400,8 +424,6 @@ export function normalizeTokenlessQuoteRequest(
   }
   return {
     ...request,
-    visibility: request.visibility ?? "private",
-    dataClassification: request.dataClassification ?? "internal",
     question: normalizeTokenlessQuestion(request.question),
     ...(request.redactionSummary === undefined
       ? {}
