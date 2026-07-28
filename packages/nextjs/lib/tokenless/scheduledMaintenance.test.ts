@@ -1402,3 +1402,39 @@ test("work dead-lettered for a terminal reason is never revived by reseeding", a
   });
   assert.equal(item.rows[0]?.state, "dead");
 });
+
+test("work dead-lettered for chain integrity on its final attempt is never revived", async () => {
+  await seedRecoverableExecution("operation_terminal_on_last_attempt", {
+    claimExpiresAt: new Date(NOW.getTime() - 1),
+    state: "signed",
+  });
+  await seedTokenlessScheduledWork(NOW);
+  // The terminal failure lands on the attempt that would also have exhausted the retry budget, so
+  // the attempt count alone cannot tell it apart from an ordinary outage.
+  await dbClient.execute({
+    sql: `UPDATE tokenless_scheduled_work_items SET attempt_count = 19
+          WHERE kind = 'recover_chain_execution' AND subject_key = 'operation_terminal_on_last_attempt'`,
+  });
+  const died = await runTokenlessScheduledMaintenance({
+    appOrigin: "https://tokenless.example.test",
+    now: NOW,
+    processors: {
+      ...processors(async () => undefined),
+      async recoverChainExecution() {
+        throw new TokenlessServiceError("signed transaction mismatch", 409, "signed_transaction_mismatch");
+      },
+    },
+  });
+  if (died.status === "duplicate") assert.fail("first invocation cannot be duplicate");
+  assert.equal(died.status, "degraded");
+  assert.equal(died.summary.work.dead, 1);
+
+  await seedTokenlessScheduledWork(new Date(NOW.getTime() + 7 * 60 * 60_000));
+  const item = await dbClient.execute({
+    sql: `SELECT state, last_error FROM tokenless_scheduled_work_items
+          WHERE kind = 'recover_chain_execution' AND subject_key = 'operation_terminal_on_last_attempt'`,
+  });
+  assert.equal(item.rows[0]?.state, "dead");
+  // The reason has to survive, because the nonce sweep reads it to keep the intent parked.
+  assert.match(String(item.rows[0]?.last_error), /nonce_integrity:/u);
+});
