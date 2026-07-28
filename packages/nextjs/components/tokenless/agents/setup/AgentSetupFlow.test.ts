@@ -261,7 +261,10 @@ test("review setup saves directly and confirms only spending or automatic sendin
   assert.match(flowSource, /bountyPerSeatAtomic:/);
   assert.match(flowSource, /feedbackBonusPoolAtomic:/);
   assert.match(flowSource, /panelSize: requestProfile\.panelSize/);
-  assert.match(flowSource, /confirmation && !window\.confirm\(confirmation\)/);
+  assert.match(flowSource, /title: "Confirm paid review policy"/);
+  assert.match(flowSource, /description: confirmation/);
+  assert.match(flowSource, /confirmLabel: "Save review policy"/);
+  assert.doesNotMatch(flowSource, /window\.confirm/);
   assert.match(flowSource, /Save and continue/);
   assert.doesNotMatch(flowSource, /Confirm these exact terms/);
   assert.doesNotMatch(flowSource, /I confirm this exact human-review configuration/);

@@ -78,7 +78,10 @@ test("the contextual editor owns every human-review dimension through one canoni
   assert.match(source, /Array\.isArray\(currentRequestProfile\.expertiseRequirements\)/);
   assert.match(source, /humanReviewConfirmationMessage\(\{/);
   assert.match(source, /authority,/);
-  assert.match(source, /next\.confirmation && !window\.confirm\(next\.confirmation\)/);
+  assert.match(source, /title: "Confirm paid review policy"/);
+  assert.match(source, /description: next\.confirmation/);
+  assert.match(source, /confirmLabel: "Save review policy"/);
+  assert.doesNotMatch(source, /window\.confirm/);
   assert.match(source, /Save changes/);
   assert.doesNotMatch(source, /Confirm exact changes/);
   assert.doesNotMatch(source, /I confirm this exact human-review configuration/);

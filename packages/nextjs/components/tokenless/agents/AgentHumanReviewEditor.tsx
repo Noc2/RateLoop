@@ -12,6 +12,7 @@ import { Field, SelectField, TextareaField } from "~~/components/tokenless/forms
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
+import { useConfirmDialog } from "~~/components/tokenless/ui/useConfirmDialog";
 import { DurationInput } from "~~/components/ui/DurationInput";
 import { readJson } from "~~/lib/tokenless/http";
 import { configuredHumanReviewLaneForSelection, configuredHumanReviewLanes } from "~~/lib/tokenless/reviewCapabilities";
@@ -381,6 +382,7 @@ export function AgentHumanReviewEditor({
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [advancedLimitsOpen, setAdvancedLimitsOpen] = useState(false);
+  const { confirm, confirmationDialog } = useConfirmDialog();
   const { capture, clear, fieldErrors, formError } = useFormErrors();
 
   const load = useCallback(
@@ -454,7 +456,16 @@ export function AgentHumanReviewEditor({
     clear();
     try {
       const next = buildMutation(view, draft);
-      if (next.confirmation && !window.confirm(next.confirmation)) return;
+      if (
+        next.confirmation &&
+        !(await confirm({
+          title: "Confirm paid review policy",
+          description: next.confirmation,
+          confirmLabel: "Save review policy",
+          destructive: false,
+        }))
+      )
+        return;
       setBusy(true);
       const saved = (await readJson(
         await fetch(
@@ -517,6 +528,7 @@ export function AgentHumanReviewEditor({
 
   return (
     <Card as="section" id="agent-human-review-editor" className="rounded-2xl p-6">
+      {confirmationDialog}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold">{creating ? "Finish human-review setup" : "Human review"}</h2>

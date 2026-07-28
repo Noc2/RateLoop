@@ -66,6 +66,7 @@ import { humanReviewConfirmationMessage } from "~~/components/tokenless/agents/h
 import { ChoiceInput, Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { Button } from "~~/components/tokenless/ui/Button";
+import { useConfirmDialog } from "~~/components/tokenless/ui/useConfirmDialog";
 import { DurationInput } from "~~/components/ui/DurationInput";
 import { type AgentSetupScreenStep, agentSetupUrl } from "~~/lib/tokenless/agentSetupNavigation";
 import { configuredHumanReviewLaneForSelection, configuredHumanReviewLanes } from "~~/lib/tokenless/reviewCapabilities";
@@ -297,6 +298,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   const [expertiseCoverageError, setExpertiseCoverageError] = useState<string | null>(null);
   const [confirmedReviewerCount, setConfirmedReviewerCount] = useState<number | null>(null);
   const [confirmedReviewerCountError, setConfirmedReviewerCountError] = useState<string | null>(null);
+  const { confirm, confirmationDialog } = useConfirmDialog();
   const [confirmedReviewerCountRevision, retryConfirmedReviewerCount] = useReducer(value => value + 1, 0);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const connectionMessageRef = useRef<HTMLTextAreaElement>(null);
@@ -1073,7 +1075,16 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
           : null,
         panelSize: requestProfile.panelSize,
       });
-      if (confirmation && !window.confirm(confirmation)) return;
+      if (
+        confirmation &&
+        !(await confirm({
+          title: "Confirm paid review policy",
+          description: confirmation,
+          confirmLabel: "Save review policy",
+          destructive: false,
+        }))
+      )
+        return;
       setBusy(true);
       const audience = requestProfile.audience;
       let privateGroupId =
@@ -1268,6 +1279,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   ) : null;
   return (
     <section className="surface-card rounded-2xl p-5 sm:p-7">
+      {confirmationDialog}
       <AgentSetupProgress
         currentStep={currentStep}
         stages={setup.stages}
