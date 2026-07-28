@@ -44,6 +44,7 @@ export function QuestionMedia({
   const [loadedImages, setLoadedImages] = useState<Set<string>>(() => new Set());
   const imageButtonsRef = useRef<Array<HTMLButtonElement | null>>([]);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const reviewStateListenerRef = useRef(onReviewStateChange);
   // The exact attached context, independent of object identity. A queue reload hands this component
   // an equal but freshly parsed `media` object, which must not discard a loaded video or images.
@@ -79,12 +80,32 @@ export function QuestionMedia({
 
   useEffect(() => {
     if (selectedImage === null) return;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") closePreview();
+    // The overlay covers the page but the thumbnails behind it stay in the tab order, so a modal
+    // preview has to keep Tab and Shift+Tab inside itself. Listening on the window rather than on
+    // the dialog also recovers focus that has already escaped the overlay.
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closePreview();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = [
+        ...(dialogRef.current?.querySelectorAll<HTMLElement>("button:not([disabled]), a[href]") ?? []),
+      ];
+      if (focusable.length === 0) return;
+      const current = focusable.indexOf(document.activeElement as HTMLElement);
+      const next =
+        current < 0
+          ? event.shiftKey
+            ? focusable.at(-1)
+            : focusable[0]
+          : focusable[(current + (event.shiftKey ? -1 : 1) + focusable.length) % focusable.length];
+      event.preventDefault();
+      next?.focus();
     };
     closeButtonRef.current?.focus();
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
   }, [closePreview, selectedImage]);
 
   if (media.kind === "youtube") {
@@ -168,6 +189,7 @@ export function QuestionMedia({
       </div>
       {selectedImage !== null ? (
         <div
+          ref={dialogRef}
           role="dialog"
           aria-modal="true"
           aria-label="Question image preview"

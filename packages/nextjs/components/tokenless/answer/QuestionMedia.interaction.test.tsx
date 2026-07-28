@@ -32,6 +32,47 @@ test("image preview focuses its close action and returns focus to the trigger", 
   }
 });
 
+test("image preview keeps Tab and Shift+Tab inside the modal", async () => {
+  const restoreDom = installTestDom();
+  const { cleanup, render, waitFor } = await import("@testing-library/react");
+  const userEvent = (await import("@testing-library/user-event")).default;
+  const { QuestionMedia } = await import("./QuestionMedia");
+
+  try {
+    const view = render(
+      <QuestionMedia
+        media={{
+          kind: "images",
+          items: [
+            { alt: "First image", assetId: "asset_01", digest: `sha256:${"a".repeat(64)}` },
+            { alt: "Second image", assetId: "asset_02", digest: `sha256:${"b".repeat(64)}` },
+          ],
+        }}
+      />,
+    );
+    const user = userEvent.setup({ document });
+    await user.click(view.getByRole("button", { name: "Open image 1: First image" }));
+    const dialog = view.getByRole("dialog", { name: "Question image preview" });
+    await waitFor(() => assert.equal(document.activeElement?.textContent, "Close"));
+
+    for (let press = 0; press < 3; press += 1) {
+      await user.tab();
+      assert.ok(
+        dialog.contains(document.activeElement),
+        `Tab ${press + 1} left the modal for ${document.activeElement?.getAttribute("aria-label") ?? "an unknown element"}`,
+      );
+    }
+    await user.tab({ shift: true });
+    assert.ok(
+      dialog.contains(document.activeElement),
+      `Shift+Tab left the modal for ${document.activeElement?.getAttribute("aria-label") ?? "an unknown element"}`,
+    );
+  } finally {
+    cleanup();
+    restoreDom();
+  }
+});
+
 test("approval state stays blocked until every image is visible and fails closed on preview errors", async () => {
   const restoreDom = installTestDom();
   const { cleanup, fireEvent, render } = await import("@testing-library/react");
