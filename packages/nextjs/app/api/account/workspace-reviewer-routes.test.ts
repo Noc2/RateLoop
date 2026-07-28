@@ -5,6 +5,7 @@ import { POST as previewReviewerInvitation } from "./reviewer-invitations/previe
 import { POST as redeemReviewerInvitation } from "./reviewer-invitations/redeem/route";
 import { PUT as replaceReviewerExpertise } from "./workspaces/[workspaceId]/private-groups/[groupId]/members/[principalAddress]/expertise/route";
 import { DELETE as revokeReviewerInvitation } from "./workspaces/[workspaceId]/reviewer-invitations/[invitationId]/route";
+import { POST as prepareReviewerInvitation } from "./workspaces/[workspaceId]/reviewer-invitations/prepare/route";
 import {
   POST as createReviewerInvitation,
   GET as listReviewerInvitations,
@@ -83,6 +84,7 @@ test("workspace reviewer reads are manager-scoped and never cached", () => {
 
 test("reviewer invitation creation is same-origin, strict, and preserves the material limit", () => {
   const invitations = source("./workspaces/[workspaceId]/reviewer-invitations/route.ts");
+  const preparation = source("./workspaces/[workspaceId]/reviewer-invitations/prepare/route.ts");
 
   assert.match(invitations, /requireBrowserSession\(request, \{ mutation: true \}\)/);
   assert.match(invitations, /Object\.keys\(body\)\.some\(key => !invitationKeys\.has\(key\)\)/);
@@ -92,6 +94,104 @@ test("reviewer invitation creation is same-origin, strict, and preserves the mat
   assert.match(invitations, /privateGroupId/);
   assert.match(invitations, /maxPrivateSensitivity: body\.maxPrivateSensitivity/);
   assert.match(invitations, /status: 201/);
+  assert.match(preparation, /requireBrowserSession\(request, \{ mutation: true \}\)/);
+  assert.match(preparation, /ensureWorkspaceReviewerInvitationGroup/);
+  assert.match(preparation, /\{ ready: true \}/);
+  assert.doesNotMatch(preparation, /groupId/);
+});
+
+test("a zero-agent workspace can prepare reviewer invitations once, but members cannot", async () => {
+  const owner = await browser("early-owner");
+  const member = await browser("early-member");
+  const { workspaceId } = await createWorkspace({ name: "Early reviewers", ownerAddress: owner.principalId });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_workspace_members (workspace_id,account_address,role,created_at)
+          VALUES (?,?,?,?)`,
+    args: [workspaceId, member.principalId, "member", new Date()],
+  });
+  const preparationPath = `/api/account/workspaces/${workspaceId}/reviewer-invitations/prepare`;
+  const invitationsPath = `/api/account/workspaces/${workspaceId}/reviewer-invitations`;
+  const context = { params: Promise.resolve({ workspaceId }) };
+
+  const zeroAgents = await dbClient.execute({
+    sql: "SELECT COUNT(*) AS count FROM tokenless_agents WHERE workspace_id=?",
+    args: [workspaceId],
+  });
+  assert.equal(Number(zeroAgents.rows[0]?.count), 0);
+
+  const unauthenticated = await prepareReviewerInvitation(
+    request(preparationPath, { method: "POST", origin: APP_ORIGIN }),
+    context,
+  );
+  assert.equal(unauthenticated.status, 401);
+
+  const forbidden = await prepareReviewerInvitation(
+    request(preparationPath, {
+      method: "POST",
+      origin: APP_ORIGIN,
+      token: member.token,
+    }),
+    context,
+  );
+  assert.equal(forbidden.status, 404);
+  const groupsBeforeOwnerAction = await dbClient.execute({
+    sql: "SELECT COUNT(*) AS count FROM tokenless_private_groups WHERE workspace_id=?",
+    args: [workspaceId],
+  });
+  assert.equal(Number(groupsBeforeOwnerAction.rows[0]?.count), 0);
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const prepared = await prepareReviewerInvitation(
+      request(preparationPath, {
+        method: "POST",
+        origin: APP_ORIGIN,
+        token: owner.token,
+      }),
+      context,
+    );
+    assert.equal(prepared.status, 200);
+    assert.deepEqual(await prepared.json(), { ready: true });
+  }
+
+  const groups = await dbClient.execute({
+    sql: "SELECT group_id,name FROM tokenless_private_groups WHERE workspace_id=? AND status='active'",
+    args: [workspaceId],
+  });
+  assert.equal(groups.rowCount, 1);
+  assert.equal(groups.rows[0]?.name, "Reviewers");
+  const groupId = String(groups.rows[0]?.group_id);
+  const setup = await dbClient.execute({
+    sql: "SELECT private_group_id FROM tokenless_workspace_agent_setups WHERE workspace_id=?",
+    args: [workspaceId],
+  });
+  assert.equal(setup.rows[0]?.private_group_id, groupId);
+
+  const created = await createReviewerInvitation(
+    request(invitationsPath, {
+      body: {
+        maxPrivateSensitivity: "confidential",
+        useDefaultReviewerGroup: true,
+      },
+      method: "POST",
+      origin: APP_ORIGIN,
+      token: owner.token,
+    }),
+    context,
+  );
+  assert.equal(created.status, 201);
+  const groupAfterInvitation = await dbClient.execute({
+    sql: "SELECT COUNT(*) AS count FROM tokenless_private_groups WHERE workspace_id=?",
+    args: [workspaceId],
+  });
+  assert.equal(Number(groupAfterInvitation.rows[0]?.count), 1);
+  const boundInvitation = await dbClient.execute({
+    sql: `SELECT p.group_id
+          FROM tokenless_private_group_invitations p
+          JOIN tokenless_workspace_reviewer_invitations w ON w.invitation_id=p.invitation_id
+          WHERE w.workspace_id=?`,
+    args: [workspaceId],
+  });
+  assert.equal(boundInvitation.rows[0]?.group_id, groupId);
 });
 
 test("reviewer removal and invitation revocation require mutation authorization", () => {

@@ -5,7 +5,10 @@ import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient, dbPool } from "~~/lib/db";
 import { getOptionalAppUrl } from "~~/lib/env/server";
 import { enqueueWorkspaceReviewerInvitationEmailInTransaction } from "~~/lib/notifications/workspaceReviewerInvitations";
-import { createPrivateGroupInvitationInTransaction } from "~~/lib/tokenless/privateGroups";
+import {
+  createPrivateGroupInvitationInTransaction,
+  ensureDefaultPrivateReviewerGroup,
+} from "~~/lib/tokenless/privateGroups";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const INVITATION_PATTERN = /^rlri_([a-f0-9]{16})_([A-Za-z0-9_-]{43})$/u;
@@ -140,6 +143,43 @@ export function buildWorkspaceReviewerInvitationUrl(token: string, appUrl = getO
   }
   const relative = `/human/review?invite=1#invite=${encodeURIComponent(token)}`;
   return appUrl ? new URL(relative, appUrl).toString() : relative;
+}
+
+export async function ensureWorkspaceReviewerInvitationGroup(input: { accountAddress: string; workspaceId: string }) {
+  await requireManager(input.accountAddress, input.workspaceId);
+  const saved = await dbClient.execute({
+    sql: `SELECT s.private_group_id,g.status AS private_group_status
+          FROM tokenless_workspace_agent_setups s
+          LEFT JOIN tokenless_private_groups g
+            ON g.workspace_id=s.workspace_id AND g.group_id=s.private_group_id
+          WHERE s.workspace_id=? LIMIT 1`,
+    args: [input.workspaceId],
+  });
+  const savedGroupId = text(saved.rows[0] as Row | undefined, "private_group_id");
+  const savedGroupStatus = text(saved.rows[0] as Row | undefined, "private_group_status");
+  if (savedGroupId && savedGroupStatus === "active") return { groupId: savedGroupId, created: false };
+
+  const ensured = await ensureDefaultPrivateReviewerGroup(input);
+  const now = new Date();
+  await dbClient.execute({
+    sql: `UPDATE tokenless_workspace_agent_setups
+          SET private_group_id=?,updated_at=?
+          WHERE workspace_id=? AND status='in_progress'
+            AND (private_group_id IS NULL OR private_group_id=?)`,
+    args: [ensured.groupId, now, input.workspaceId, savedGroupId],
+  });
+  const authoritative = await dbClient.execute({
+    sql: `SELECT s.private_group_id
+          FROM tokenless_workspace_agent_setups s
+          JOIN tokenless_private_groups g
+            ON g.workspace_id=s.workspace_id AND g.group_id=s.private_group_id AND g.status='active'
+          WHERE s.workspace_id=? LIMIT 1`,
+    args: [input.workspaceId],
+  });
+  return {
+    groupId: text(authoritative.rows[0] as Row | undefined, "private_group_id") ?? ensured.groupId,
+    created: ensured.created,
+  };
 }
 
 async function requireManager(accountAddress: string, workspaceId: string) {

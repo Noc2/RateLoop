@@ -16,6 +16,7 @@ import { EvidenceWorkspacePanel } from "./EvidenceWorkspacePanel";
 import { FeedbackBonusAwardInbox } from "./FeedbackBonusAwardInbox";
 import { HumanReviewApprovalInbox } from "./HumanReviewApprovalInbox";
 import { OversightAlertsPanel } from "./OversightAlertsPanel";
+import { ReviewerInvitationStart } from "./ReviewerInvitationStart";
 import { ScheduledWorkerHealthPanel } from "./ScheduledWorkerHealthPanel";
 import type { AgentConnectionHistoryEntry } from "./agentAuditHistory";
 import { agentTabHref, connectedAgentTabs, resolveAvailableAgentTab } from "./agentWorkspaceState";
@@ -88,6 +89,7 @@ export function AgentWorkspacePanels({
   }
   const canManage = workspace.role === "owner" || workspace.role === "admin";
   const setupIncomplete = Boolean(initialSetup && !initialSetup.complete);
+  const noConnectedAgent = initialSetup ? initialSetup.agent === null : !initialHasConnectedAgent;
   const visibleTabs = hasConnectedAgent
     ? connectedAgentTabs({ canManage })
     : canManage
@@ -100,6 +102,7 @@ export function AgentWorkspacePanels({
       {/* Persistent across every agents tab while the workspace stop is engaged. */}
       <WorkspaceStopBanner workspaceId={workspaceId} />
       {setupIncomplete && initialSetup ? <AgentSetupFlow initialSetup={initialSetup} /> : null}
+      {noConnectedAgent && canManage ? <ReviewerInvitationStart workspaceId={workspaceId} /> : null}
       <AgentTabs
         active={resolvedTab}
         visibleTabs={visibleTabs}

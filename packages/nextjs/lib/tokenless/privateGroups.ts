@@ -539,6 +539,55 @@ export async function listPrivateGroups(input: { accountAddress: string; workspa
   return result.rows.map(value => groupFromRow(value as Row));
 }
 
+const DEFAULT_REVIEWER_GROUP_NAME = "Reviewers";
+const DEFAULT_REVIEWER_GROUP_PURPOSE = "People invited to review this workspace's private material.";
+
+function reusableDefaultReviewerGroup(
+  groups: Array<{ groupId: string | null; name: string | null; status: string | null }>,
+) {
+  const active = groups.filter(group => group.status === "active" && typeof group.groupId === "string");
+  return active.find(group => group.name === DEFAULT_REVIEWER_GROUP_NAME) ?? (active.length === 1 ? active[0] : null);
+}
+
+async function findReusableDefaultReviewerGroup(input: { accountAddress: string; workspaceId: string }) {
+  await requirePrivateGroupManager(input);
+  const result = await dbClient.execute({
+    sql: `SELECT group_id,name,status FROM tokenless_private_groups
+          WHERE workspace_id=? ORDER BY created_at ASC`,
+    args: [input.workspaceId],
+  });
+  return reusableDefaultReviewerGroup(
+    result.rows.map(value => {
+      const row = value as Row;
+      return {
+        groupId: rowString(row, "group_id"),
+        name: rowString(row, "name"),
+        status: rowString(row, "status"),
+      };
+    }),
+  );
+}
+
+export async function ensureDefaultPrivateReviewerGroup(input: { accountAddress: string; workspaceId: string }) {
+  const existing = await findReusableDefaultReviewerGroup(input);
+  if (existing?.groupId) return { groupId: existing.groupId, created: false };
+
+  try {
+    const created = await createPrivateGroup({
+      ...input,
+      name: DEFAULT_REVIEWER_GROUP_NAME,
+      purpose: DEFAULT_REVIEWER_GROUP_PURPOSE,
+    });
+    return { groupId: created.groupId, created: true };
+  } catch (error) {
+    // A concurrent request may have created the same name or consumed the
+    // workspace's final group entitlement before this transaction began.
+    const raced = await findReusableDefaultReviewerGroup(input);
+    if (raced?.groupId) return { groupId: raced.groupId, created: false };
+    throw error;
+  }
+}
+
 export async function getPrivateGroup(input: { accountAddress: string; workspaceId: string; groupId: string }) {
   await requirePrivateGroupManager(input);
   const result = await dbClient.execute({

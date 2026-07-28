@@ -18,6 +18,7 @@ import test from "node:test";
 const panelsSource = readFileSync(new URL("./AgentWorkspacePanels.tsx", import.meta.url), "utf8");
 const tabsSource = readFileSync(new URL("./AgentTabs.tsx", import.meta.url), "utf8");
 const editorSource = readFileSync(new URL("./AgentHumanReviewEditor.tsx", import.meta.url), "utf8");
+const reviewerInvitationSource = readFileSync(new URL("./ReviewerInvitationStart.tsx", import.meta.url), "utf8");
 const pageSource = readFileSync(new URL("../../../app/(app)/agents/AgentsSectionPage.tsx", import.meta.url), "utf8");
 const legacyPageSource = readFileSync(new URL("../../../app/(app)/agents/page.tsx", import.meta.url), "utf8");
 const sectionPageSource = readFileSync(
@@ -285,6 +286,18 @@ test("incomplete setup keeps workspace management reachable beside guided setup"
   assert.match(panelsSource, /setupIncomplete && initialSetup \? <AgentSetupFlow/);
   assert.match(panelsSource, /resolvedTab === "billing"/);
   assert.match(panelsSource, /<WorkspaceSettingsClient initialWorkspaceId=\{workspaceId\} \/>/);
+});
+
+test("zero-agent managers can invite reviewers without exposing downstream management", () => {
+  assert.match(panelsSource, /const noConnectedAgent = initialSetup \? initialSetup\.agent === null/);
+  assert.match(
+    panelsSource,
+    /noConnectedAgent && canManage \? <ReviewerInvitationStart workspaceId=\{workspaceId\} \/>/,
+  );
+  assert.ok(panelsSource.indexOf("<AgentSetupFlow") < panelsSource.indexOf("<ReviewerInvitationStart"));
+  assert.match(reviewerInvitationSource, /variant="secondary"/);
+  assert.match(reviewerInvitationSource, /"Invite reviewers"/);
+  assert.doesNotMatch(reviewerInvitationSource, /Invite member|Active reviewers|Pending invitations|private group/i);
 });
 
 test("the Reviews tab opens the canonical human-review editor directly", () => {

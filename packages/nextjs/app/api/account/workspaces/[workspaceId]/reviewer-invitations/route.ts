@@ -4,6 +4,7 @@ import { getHumanReviewConfigurationForOwner } from "~~/lib/tokenless/humanRevie
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 import {
   createWorkspaceReviewerInvitation,
+  ensureWorkspaceReviewerInvitationGroup,
   listWorkspaceReviewerInvitations,
 } from "~~/lib/tokenless/workspaceReviewers";
 
@@ -24,6 +25,7 @@ const invitationKeys = new Set([
   "paidAdulthoodAttested",
   "privateGroupId",
   "projectIds",
+  "useDefaultReviewerGroup",
 ]);
 
 function optionalDate(value: unknown, field: string) {
@@ -75,9 +77,11 @@ export async function POST(request: NextRequest, context: Context) {
     const session = await requireBrowserSession(request, { mutation: true });
     const { workspaceId } = await context.params;
     const body = await invitationBody(request);
+    const useDefaultReviewerGroup = body.useDefaultReviewerGroup === true;
     if (
       (typeof body.agentId !== "string" || !body.agentId.trim()) &&
-      (typeof body.privateGroupId !== "string" || !body.privateGroupId.trim())
+      (typeof body.privateGroupId !== "string" || !body.privateGroupId.trim()) &&
+      !useDefaultReviewerGroup
     ) {
       throw new TokenlessServiceError(
         "Choose the agent whose reviewer group should receive this invitation.",
@@ -101,7 +105,16 @@ export async function POST(request: NextRequest, context: Context) {
       ? audience === "private_invited" || audience === "hybrid"
         ? requestProfile?.privateGroupId
         : null
-      : body.privateGroupId;
+      : typeof body.privateGroupId === "string" && body.privateGroupId.trim()
+        ? body.privateGroupId
+        : useDefaultReviewerGroup
+          ? (
+              await ensureWorkspaceReviewerInvitationGroup({
+                accountAddress: session.principalId,
+                workspaceId,
+              })
+            ).groupId
+          : null;
     if (typeof privateGroupId !== "string" || !privateGroupId) {
       throw new TokenlessServiceError(
         "This agent does not have an active invited-reviewer group.",
