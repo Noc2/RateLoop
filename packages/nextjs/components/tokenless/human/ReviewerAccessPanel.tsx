@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { ConfirmDialog } from "~~/components/tokenless/ui/ConfirmDialog";
 
 type ReviewerAccess = {
   workspaceId: string;
@@ -35,6 +36,7 @@ export function ReviewerAccessPanel() {
   const [access, setAccess] = useState<ReviewerAccess[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyWorkspaceId, setBusyWorkspaceId] = useState<string | null>(null);
+  const [pendingLeave, setPendingLeave] = useState<ReviewerAccess | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 
@@ -65,7 +67,6 @@ export function ReviewerAccessPanel() {
   }, [load]);
 
   async function leave(item: ReviewerAccess) {
-    if (!window.confirm(`Stop reviewing private work for ${item.workspaceName}?`)) return;
     setBusyWorkspaceId(item.workspaceId);
     setError(null);
     setStatus(null);
@@ -77,6 +78,7 @@ export function ReviewerAccessPanel() {
         }),
       );
       await load();
+      setPendingLeave(null);
       setStatus(`You will not receive new private work from ${item.workspaceName}.`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to leave the reviewer roster.");
@@ -118,7 +120,7 @@ export function ReviewerAccessPanel() {
                     type="button"
                     className="btn btn-sm border border-red-300/20 bg-red-300/[0.06] text-red-100"
                     disabled={busyWorkspaceId === item.workspaceId}
-                    onClick={() => void leave(item)}
+                    onClick={() => setPendingLeave(item)}
                   >
                     {busyWorkspaceId === item.workspaceId ? "Leaving…" : "Stop reviewing"}
                   </button>
@@ -145,6 +147,17 @@ export function ReviewerAccessPanel() {
           {error}
         </p>
       ) : null}
+      <ConfirmDialog
+        open={pendingLeave !== null}
+        title={`Stop reviewing for ${pendingLeave?.workspaceName ?? "this workspace"}?`}
+        description="You will stop receiving new private work from this workspace."
+        confirmLabel="Stop reviewing"
+        busy={busyWorkspaceId !== null}
+        onCancel={() => setPendingLeave(null)}
+        onConfirm={() => {
+          if (pendingLeave) void leave(pendingLeave);
+        }}
+      />
     </section>
   );
 }

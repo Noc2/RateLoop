@@ -7,6 +7,7 @@ import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import { Badge } from "~~/components/tokenless/ui/Badge";
 import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
+import { ConfirmDialog } from "~~/components/tokenless/ui/ConfirmDialog";
 import type { AgentRegistry, AgentVersionInput, WorkspaceAgent } from "~~/lib/tokenless/agentRegistry";
 import { readJson } from "~~/lib/tokenless/http";
 
@@ -28,6 +29,7 @@ export function AgentRegistryPanel({
   const [registry, setRegistry] = useState<AgentRegistry | null>(null);
   const [editingAgent, setEditingAgent] = useState<WorkspaceAgent | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [pendingDeactivation, setPendingDeactivation] = useState<WorkspaceAgent | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -95,8 +97,6 @@ export function AgentRegistryPanel({
   }
 
   async function deactivate(agent: WorkspaceAgent) {
-    if (!window.confirm(`Deactivate ${agent.currentVersion.displayName}? Existing records will stay available.`))
-      return;
     setBusy(true);
     setError(null);
     setStatus(null);
@@ -110,6 +110,7 @@ export function AgentRegistryPanel({
       await loadRegistry(workspaceId);
       onAgentsChanged?.();
       setEditingAgent(null);
+      setPendingDeactivation(null);
       setStatus("Agent deactivated. Existing records remain available.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to deactivate the agent.");
@@ -158,7 +159,7 @@ export function AgentRegistryPanel({
                     variant="ghost"
                     className="text-error"
                     disabled={busy}
-                    onClick={() => void deactivate(agent)}
+                    onClick={() => setPendingDeactivation(agent)}
                   >
                     Deactivate
                   </Button>
@@ -277,6 +278,17 @@ export function AgentRegistryPanel({
           {error}
         </p>
       ) : null}
+      <ConfirmDialog
+        open={pendingDeactivation !== null}
+        title={`Deactivate ${pendingDeactivation?.currentVersion.displayName ?? "this agent"}?`}
+        description="The agent will stop receiving new work. Existing records will stay available."
+        confirmLabel="Deactivate agent"
+        busy={busy}
+        onCancel={() => setPendingDeactivation(null)}
+        onConfirm={() => {
+          if (pendingDeactivation) void deactivate(pendingDeactivation);
+        }}
+      />
     </div>
   );
 }

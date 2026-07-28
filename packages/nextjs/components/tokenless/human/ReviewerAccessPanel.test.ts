@@ -14,6 +14,8 @@ test("reviewers can see and leave workspace reviewer access without group concep
   assert.match(panel, /method: "DELETE"/);
   assert.match(panel, /Workspaces you review/);
   assert.match(panel, /Stop reviewing/);
+  assert.match(panel, /<ConfirmDialog/);
+  assert.doesNotMatch(panel, /window\.confirm/);
   assert.doesNotMatch(panel, /private.?group|membership/iu);
   assert.match(profile, /<ReviewerAccessPanel \/>/);
   assert.doesNotMatch(profile, /reviewerAccessRevision|InvitationRouterPanel/);

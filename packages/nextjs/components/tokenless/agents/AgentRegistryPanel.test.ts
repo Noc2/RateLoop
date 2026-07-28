@@ -40,6 +40,8 @@ test("agent details render in the connection-focused registry", () => {
   assert.doesNotMatch(source, /Register agent|Register a durable agent|createAgent/);
   assert.doesNotMatch(source, /method: "POST"[\s\S]{0,200}\/agents/);
   assert.doesNotMatch(source, /verified model|model accuracy|truth score/i);
+  assert.match(source, /<ConfirmDialog/);
+  assert.doesNotMatch(source, /window\.confirm/);
 });
 
 test("agent management actions stay visible while technical records remain optional", () => {
