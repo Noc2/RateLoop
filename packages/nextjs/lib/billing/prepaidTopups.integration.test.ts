@@ -1,4 +1,4 @@
-import { drainPrepaidTopupAuditOutbox, projectPrepaidInvoice } from "./prepaidTopups";
+import { drainPrepaidTopupAuditOutbox, projectPrepaidInvoice, projectPrepaidReversal } from "./prepaidTopups";
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import type Stripe from "stripe";
@@ -50,6 +50,24 @@ async function seedTopup(topupId: string, invoiceId: string) {
       args: [`outbox:${topupId}:${eventType}`, topupId, eventType, sequence, now, now, now, now],
     });
   }
+}
+
+async function seedDraftTopup(topupId: string) {
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_prepaid_topup_intents
+          (topup_id,workspace_id,requested_by,idempotency_key,amount_atomic,invoice_currency,invoice_amount_minor,
+           provider,state,reconciliation_attempts,next_reconcile_at,requested_at,updated_at)
+          VALUES (?, 'ws_topup','rlp_requester',?,100000000,'usd',10000,'stripe','draft',0,?,?,?)`,
+    args: [topupId, `idem:${topupId}`, now, now, now],
+  });
+}
+
+async function settledBalance() {
+  const result = await dbClient.execute({
+    sql: `SELECT COALESCE(SUM(delta_atomic),0) AS balance FROM tokenless_prepaid_ledger_entries
+          WHERE workspace_id='ws_topup' AND settlement_status='settled'`,
+  });
+  return String(result.rows[0]?.balance);
 }
 
 function invoice(id: string, overrides: Partial<Stripe.Invoice> = {}) {
@@ -130,6 +148,118 @@ test("valid paid invoice credits the net amount exactly once and delivers ordere
       "billing.prepaid_topup.credited",
     ],
   );
+});
+
+test("an invoice issued before its intent row was updated is adopted and still credits", async () => {
+  await seedDraftTopup("topup_in_orphan");
+  assert.deepEqual(await project({ eventId: "evt_orphan_paid", invoice: invoice("in_orphan") }), {
+    matched: true,
+    credited: true,
+  });
+  const topup = await dbClient.execute({
+    sql: `SELECT state,provider_invoice_id,provider_customer_id,provider_amount_due_minor,provider_tax_amount_minor,
+                 issued_at,credited_at FROM tokenless_prepaid_topup_intents WHERE topup_id='topup_in_orphan'`,
+  });
+  assert.equal(topup.rows[0]?.state, "credited");
+  assert.equal(topup.rows[0]?.provider_invoice_id, "in_orphan");
+  assert.equal(topup.rows[0]?.provider_customer_id, "cus_topup");
+  assert.equal(Number(topup.rows[0]?.provider_amount_due_minor), 11_900);
+  assert.equal(Number(topup.rows[0]?.provider_tax_amount_minor), 1_900);
+  assert.ok(topup.rows[0]?.issued_at);
+  assert.equal(await settledBalance(), "100000000");
+  assert.deepEqual(await drainPrepaidTopupAuditOutbox({ topupId: "topup_in_orphan" }), {
+    attempted: 3,
+    delivered: 3,
+  });
+});
+
+test("an invoice that matches no intent is reported for attention rather than as success", async () => {
+  assert.deepEqual(await project({ eventId: "evt_unknown", invoice: invoice("in_unknown") }), {
+    attention: "unmatched_prepaid_invoice",
+    credited: false,
+    matched: false,
+  });
+});
+
+test("a payment that lands after a terminal failure is recorded without crediting or throwing", async () => {
+  await seedTopup("topup_in_drift", "in_drift");
+  await project({ eventId: "evt_drift", invoice: invoice("in_drift", { total_excluding_tax: 9_999 }) });
+  assert.deepEqual(await project({ eventId: "evt_late_payment", invoice: invoice("in_drift") }), {
+    attention: "paid_invoice_for_failed_topup",
+    credited: false,
+    matched: true,
+  });
+  const topup = await dbClient.execute({
+    sql: "SELECT state,failure_code,paid_at FROM tokenless_prepaid_topup_intents WHERE topup_id='topup_in_drift'",
+  });
+  assert.equal(topup.rows[0]?.state, "failed");
+  assert.equal(topup.rows[0]?.failure_code, "invoice_net_amount_mismatch");
+  assert.ok(topup.rows[0]?.paid_at, "the payment that arrived after the failure is recorded on the row");
+  assert.equal((await dbClient.execute({ sql: "SELECT 1 FROM tokenless_prepaid_ledger_entries" })).rowCount, 0);
+});
+
+test("a voided invoice for a credited top-up is reported instead of failing the endpoint", async () => {
+  await seedTopup("topup_in_late_void", "in_late_void");
+  await project({ eventId: "evt_credited", invoice: invoice("in_late_void") });
+  assert.deepEqual(await project({ eventId: "evt_late_void", invoice: invoice("in_late_void", { status: "void" }) }), {
+    attention: "credited_invoice_voided",
+    credited: true,
+    matched: true,
+  });
+});
+
+test("reversals debit the credited net amount once per invoice, even from two Stripe signals", async () => {
+  await seedTopup("topup_in_refunded", "in_refunded");
+  await project({ eventId: "evt_refund_credit", invoice: invoice("in_refunded") });
+  assert.equal(await settledBalance(), "100000000");
+
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    assert.deepEqual(
+      await projectPrepaidReversal(client, { grossMinor: 11_900, invoiceId: "in_refunded", reversalId: "cn_1" }),
+      { matched: true, reversedAtomic: "100000000" },
+    );
+    // The same money reported a second time, under the refund's own key, must not debit again.
+    assert.deepEqual(
+      await projectPrepaidReversal(client, { grossMinor: 11_900, invoiceId: "in_refunded", reversalId: "re_1" }),
+      { matched: true, reversedAtomic: "0" },
+    );
+    await client.query("COMMIT");
+  } finally {
+    client.release();
+  }
+  assert.equal(await settledBalance(), "0");
+  const entries = await dbClient.execute({
+    sql: `SELECT delta_atomic,source FROM tokenless_prepaid_ledger_entries
+          WHERE external_reference='stripe_reversal:in_refunded:cn_1'`,
+  });
+  assert.equal(entries.rowCount, 1);
+  assert.equal(String(entries.rows[0]?.delta_atomic), "-100000000");
+  assert.equal(entries.rows[0]?.source, "fiat_topup_reversal");
+});
+
+test("a reversal of already spent funds goes negative and says so instead of clamping", async () => {
+  await seedTopup("topup_in_spent", "in_spent");
+  await project({ eventId: "evt_spent_credit", invoice: invoice("in_spent") });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_prepaid_ledger_entries
+          (entry_id,workspace_id,delta_atomic,settlement_status,source,external_reference,created_at,settled_at)
+          VALUES ('led_spend','ws_topup','-60000000','settled','round_consumption','round:1',?,?)`,
+    args: [now, now],
+  });
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    assert.deepEqual(
+      await projectPrepaidReversal(client, { grossMinor: 11_900, invoiceId: "in_spent", reversalId: "cn_spent" }),
+      { attention: "prepaid_balance_negative_after_reversal", matched: true, reversedAtomic: "100000000" },
+    );
+    await client.query("COMMIT");
+  } finally {
+    client.release();
+  }
+  assert.equal(await settledBalance(), "-60000000");
 });
 
 test("partial payment stays retryable and cannot create ledger credit", async () => {

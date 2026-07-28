@@ -20,6 +20,15 @@ export async function POST(request: NextRequest) {
 
   try {
     const result = await processStripeWebhook({ event, rawBody });
+    if ("attention" in result && result.attention) {
+      // Retrying will not resolve these, so the event is answered with a 200 and reported here as
+      // well as being left un-processed in tokenless_billing_webhook_events for an operator.
+      console.error("[stripe-webhook] event needs operator attention", {
+        attention: result.attention,
+        eventId: event.id,
+        eventType: event.type,
+      });
+    }
     return NextResponse.json({ received: true, ...result });
   } catch (error) {
     console.error("[stripe-webhook] processing failed", {

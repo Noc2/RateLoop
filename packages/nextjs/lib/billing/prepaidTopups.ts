@@ -372,21 +372,101 @@ async function failTopup(
   });
 }
 
+/**
+ * Bind an invoice that Stripe already issued to the `draft` intent it was created for.
+ *
+ * `createPrepaidTopup` cannot record `provider_invoice_id` before Stripe makes the invoice
+ * payable: `tokenless_prepaid_topup_issue_check` forbids a `draft` row from carrying an invoice
+ * id, and `tokenless_prepaid_topup_provider_amount_check` needs the finalized gross amount, which
+ * only exists once Stripe has computed tax. Widening those constraints needs a migration, so the
+ * orphan window is closed from the other end instead: an invoice that names a draft intent in its
+ * metadata is adopted when its first event arrives, which lets the payment credit normally.
+ */
+async function adoptOrphanedInvoice(client: PoolClient, invoice: Stripe.Invoice) {
+  const topupId = invoice.metadata?.rateloop_topup_id;
+  const workspaceId = invoice.metadata?.rateloop_workspace_id;
+  const customerId = invoiceCustomerId(invoice);
+  if (
+    invoice.metadata?.rateloop_purpose !== "prepaid_topup" ||
+    !topupId ||
+    !workspaceId ||
+    !customerId ||
+    !invoice.id ||
+    invoice.livemode !== stripeLivemode() ||
+    invoice.currency !== "usd" ||
+    invoice.collection_method !== "send_invoice"
+  ) {
+    return null;
+  }
+  const candidate = await client.query(
+    `SELECT * FROM tokenless_prepaid_topup_intents
+     WHERE topup_id=$1 AND workspace_id=$2 AND provider='stripe' AND state='draft' AND provider_invoice_id IS NULL
+     FOR UPDATE`,
+    [topupId, workspaceId],
+  );
+  const row = candidate.rows[0] as QueryRow;
+  if (!row) return null;
+  const netMinor = integer(row, "invoice_amount_minor");
+  const grossMinor = invoice.amount_due;
+  if (invoice.total_excluding_tax !== netMinor || !Number.isSafeInteger(grossMinor) || grossMinor < netMinor) {
+    return null;
+  }
+  const now = new Date();
+  const adopted = await client.query(
+    `UPDATE tokenless_prepaid_topup_intents SET
+       provider_customer_id=$1,provider_invoice_id=$2,provider_invoice_number=$3,
+       hosted_invoice_url=$4,invoice_pdf_url=$5,provider_amount_due_minor=$6,provider_tax_amount_minor=$7,
+       state='sent',failure_code=NULL,issued_at=$8,next_reconcile_at=$9,updated_at=$8
+     WHERE topup_id=$10 AND state='draft'
+     RETURNING *`,
+    [
+      customerId,
+      invoice.id,
+      invoice.number ?? null,
+      invoice.hosted_invoice_url ?? null,
+      invoice.invoice_pdf ?? null,
+      grossMinor,
+      grossMinor - netMinor,
+      now,
+      new Date(now.getTime() + RECONCILE_DELAY_MS),
+      topupId,
+    ],
+  );
+  const stored = adopted.rows[0] as QueryRow;
+  if (!stored) return null;
+  await enqueueAudit(client, {
+    actorReference: "system:stripe",
+    eventType: "issued",
+    occurredAt: now,
+    topupId,
+    workspaceId,
+  });
+  return stored;
+}
+
+export type PrepaidInvoiceProjection = { matched: boolean; credited: boolean; attention?: string };
+
+function projection(matched: boolean, credited: boolean, attention?: string): PrepaidInvoiceProjection {
+  return attention ? { attention, credited, matched } : { credited, matched };
+}
+
 export async function projectPrepaidInvoice(
   client: PoolClient,
   input: { eventCreatedAt: Date; eventId: string; invoice: Stripe.Invoice },
-) {
+): Promise<PrepaidInvoiceProjection> {
   const invoice = input.invoice;
   const result = await client.query(
     `SELECT * FROM tokenless_prepaid_topup_intents
      WHERE provider='stripe' AND provider_invoice_id=$1 FOR UPDATE`,
     [invoice.id],
   );
-  const row = result.rows[0] as QueryRow;
-  if (!row) return { matched: false, credited: false };
+  const row = (result.rows[0] as QueryRow) ?? (await adoptOrphanedInvoice(client, invoice));
+  if (!row) return projection(false, false, "unmatched_prepaid_invoice");
   const state = text(row, "state") as TopupState;
   if (invoice.status === "void") {
-    if (state === "credited") throw new Error("credited_invoice_voided");
+    // A credited invoice cannot be unpaid by voiding it. Record it for an operator instead of
+    // throwing: this is the shared endpoint for every billing event.
+    if (state === "credited") return projection(true, true, "credited_invoice_voided");
     if (state !== "failed") {
       const now = new Date();
       await client.query(
@@ -403,10 +483,43 @@ export async function projectPrepaidInvoice(
         workspaceId: text(row, "workspace_id")!,
       });
     }
-    return { matched: true, credited: false };
+    return projection(true, false);
   }
-  if (state === "failed") throw new Error("paid_invoice_for_failed_topup");
-  if (state === "credited") return { matched: true, credited: true };
+  if (invoice.status === "uncollectible") {
+    if (state === "credited") {
+      const reversed = await debitPrepaidReversal(client, {
+        grossMinor: integer(row, "provider_amount_due_minor"),
+        invoiceId: invoice.id!,
+        reversalId: `uncollectible:${input.eventId}`,
+        row,
+      });
+      return projection(true, true, reversed.attention ?? "credited_invoice_uncollectible");
+    }
+    if (state !== "failed") {
+      await failTopup(client, {
+        code: "invoice_uncollectible",
+        eventCreatedAt: input.eventCreatedAt,
+        eventId: input.eventId,
+        now: new Date(),
+        row,
+      });
+    }
+    return projection(true, false);
+  }
+  if (state === "failed") {
+    // The top-up already failed a terminal validation check. Never credit it, but do not throw
+    // either: Stripe would retry the shared billing endpoint for days. Money that arrived after
+    // the failure is recorded on the row and raised for an operator.
+    if (invoice.status !== "paid") return projection(true, false);
+    const now = new Date();
+    await client.query(
+      `UPDATE tokenless_prepaid_topup_intents SET paid_at=COALESCE(paid_at,$1),updated_at=$1
+       WHERE topup_id=$2 AND state='failed'`,
+      [now, text(row, "topup_id")],
+    );
+    return projection(true, false, "paid_invoice_for_failed_topup");
+  }
+  if (state === "credited") return projection(true, true);
   const validationError = invoiceValidationError(invoice, row);
   if (validationError && TERMINAL_INVOICE_ERRORS.has(validationError)) {
     await failTopup(client, {
@@ -416,7 +529,7 @@ export async function projectPrepaidInvoice(
       now: new Date(),
       row,
     });
-    return { matched: true, credited: false };
+    return projection(true, false);
   }
   if (invoice.status !== "paid" || validationError) {
     const code = validationError ?? `invoice_status_${invoice.status ?? "unknown"}`;
@@ -426,7 +539,7 @@ export async function projectPrepaidInvoice(
          next_reconcile_at=$3,updated_at=$2 WHERE topup_id=$4 AND state IN ('sent','paid')`,
       [code, new Date(), new Date(Date.now() + RECONCILE_DELAY_MS), text(row, "topup_id")],
     );
-    return { matched: true, credited: false };
+    return projection(true, false);
   }
 
   const now = new Date();
@@ -483,7 +596,161 @@ export async function projectPrepaidInvoice(
     topupId: text(row, "topup_id")!,
     workspaceId: text(row, "workspace_id")!,
   });
-  return { matched: true, credited: true };
+  return projection(true, true);
+}
+
+export type PrepaidReversalResult = { matched: boolean; reversedAtomic: string; attention?: string };
+
+function reversalReference(invoiceId: string, reversalId: string) {
+  return `stripe_reversal:${invoiceId}:${reversalId}`;
+}
+
+/** Net effect of every reversal already written for one invoice, as a non-negative magnitude. */
+async function reversedAtomicForInvoice(client: PoolClient, workspaceId: string, invoiceId: string) {
+  const result = await client.query(
+    `SELECT delta_atomic,external_reference FROM tokenless_prepaid_ledger_entries
+     WHERE workspace_id=$1 AND source IN ('fiat_topup_reversal','fiat_topup_reversal_reinstated')`,
+    [workspaceId],
+  );
+  const prefix = reversalReference(invoiceId, "");
+  const reversed = (result.rows as Record<string, unknown>[])
+    .filter(row => (text(row, "external_reference") ?? "").startsWith(prefix))
+    .reduce((total, row) => total + BigInt(text(row, "delta_atomic") ?? "0"), 0n);
+  return reversed < 0n ? -reversed : 0n;
+}
+
+async function settledPrepaidBalance(client: PoolClient, workspaceId: string) {
+  const result = await client.query(
+    `SELECT COALESCE(SUM(delta_atomic),0) AS balance FROM tokenless_prepaid_ledger_entries
+     WHERE workspace_id=$1 AND settlement_status='settled'`,
+    [workspaceId],
+  );
+  return BigInt(text(result.rows[0] as QueryRow, "balance") ?? "0");
+}
+
+/**
+ * Write the debiting ledger entry for a reversal of an already credited top-up.
+ *
+ * Exactly-once mirrors the credit path: the webhook event table refuses to reprocess a processed
+ * event, and `external_reference` is unique, so a replay of the same credit note, refund, dispute
+ * or uncollectible invoice cannot debit twice. A dashboard refund additionally emits both
+ * `credit_note.created` and `charge.refunded` for the same money; those carry different reference
+ * keys, so the per-invoice cap below — never reverse more than was credited for that invoice — is
+ * what stops the second one from double-debiting.
+ *
+ * The debit is never trimmed to keep the balance non-negative: if the workspace already spent the
+ * money, the balance goes negative, `reservePrepaid` then refuses all further paid work, and the
+ * caller is told to raise it for an operator.
+ */
+async function debitPrepaidReversal(
+  client: PoolClient,
+  input: { grossMinor: number; invoiceId: string; reversalId: string; row: QueryRow },
+): Promise<PrepaidReversalResult> {
+  const workspaceId = text(input.row, "workspace_id")!;
+  const creditedAtomic = BigInt(text(input.row, "amount_atomic")!);
+  const netMinor = integer(input.row, "invoice_amount_minor");
+  const grossTotalMinor = integer(input.row, "provider_amount_due_minor");
+  if (!Number.isSafeInteger(input.grossMinor) || input.grossMinor <= 0 || grossTotalMinor <= 0) {
+    return { attention: "prepaid_reversal_amount_invalid", matched: true, reversedAtomic: "0" };
+  }
+  // Only the net amount was ever credited, so only the net share of a reversal is debited.
+  const reversedGrossMinor = Math.min(input.grossMinor, grossTotalMinor);
+  const requestedAtomic = BigInt(Math.floor((reversedGrossMinor * netMinor) / grossTotalMinor)) * USD_CENT_ATOMIC;
+  const remainingAtomic = creditedAtomic - (await reversedAtomicForInvoice(client, workspaceId, input.invoiceId));
+  const debitAtomic = requestedAtomic > remainingAtomic ? remainingAtomic : requestedAtomic;
+  if (debitAtomic <= 0n) return { matched: true, reversedAtomic: "0" };
+  const now = new Date();
+  const externalReference = reversalReference(input.invoiceId, input.reversalId);
+  await client.query(
+    `INSERT INTO tokenless_prepaid_ledger_entries
+       (entry_id,workspace_id,delta_atomic,settlement_status,source,external_reference,created_at,settled_at)
+     VALUES ($1,$2,$3,'settled','fiat_topup_reversal',$4,$5,$5)
+     ON CONFLICT (external_reference) DO NOTHING`,
+    [
+      deterministicId("ledger_reversal", input.invoiceId, input.reversalId),
+      workspaceId,
+      (-debitAtomic).toString(),
+      externalReference,
+      now,
+    ],
+  );
+  const ledger = await client.query(
+    `SELECT workspace_id,delta_atomic,settlement_status,source FROM tokenless_prepaid_ledger_entries
+     WHERE external_reference=$1`,
+    [externalReference],
+  );
+  const ledgerRow = ledger.rows[0] as QueryRow;
+  const storedDelta = BigInt(text(ledgerRow, "delta_atomic") ?? "0");
+  if (
+    text(ledgerRow, "workspace_id") !== workspaceId ||
+    text(ledgerRow, "settlement_status") !== "settled" ||
+    text(ledgerRow, "source") !== "fiat_topup_reversal" ||
+    storedDelta >= 0n
+  ) {
+    throw new Error("topup_reversal_binding_conflict");
+  }
+  const balance = await settledPrepaidBalance(client, workspaceId);
+  return {
+    matched: true,
+    reversedAtomic: (-storedDelta).toString(),
+    ...(balance < 0n ? { attention: "prepaid_balance_negative_after_reversal" } : {}),
+  };
+}
+
+/** Debit a credited top-up because Stripe reversed the money behind it. */
+export async function projectPrepaidReversal(
+  client: PoolClient,
+  input: { grossMinor: number; invoiceId: string; reversalId: string },
+): Promise<PrepaidReversalResult> {
+  const result = await client.query(
+    `SELECT * FROM tokenless_prepaid_topup_intents
+     WHERE provider='stripe' AND provider_invoice_id=$1 FOR UPDATE`,
+    [input.invoiceId],
+  );
+  const row = result.rows[0] as QueryRow;
+  if (!row) return { matched: false, reversedAtomic: "0" };
+  if (text(row, "state") !== "credited") {
+    // Nothing was credited for this invoice, so there is no balance to debit. Stripe and the
+    // ledger still disagree about the invoice, which an operator should see.
+    return { attention: "prepaid_reversal_without_credit", matched: true, reversedAtomic: "0" };
+  }
+  return debitPrepaidReversal(client, { ...input, row });
+}
+
+/** Put back a reversal that Stripe itself undid, such as a dispute closed in our favour. */
+export async function reinstatePrepaidReversal(
+  client: PoolClient,
+  input: { invoiceId: string; reversalId: string },
+): Promise<PrepaidReversalResult> {
+  const result = await client.query(
+    `SELECT * FROM tokenless_prepaid_topup_intents
+     WHERE provider='stripe' AND provider_invoice_id=$1 FOR UPDATE`,
+    [input.invoiceId],
+  );
+  const row = result.rows[0] as QueryRow;
+  if (!row) return { matched: false, reversedAtomic: "0" };
+  const externalReference = reversalReference(input.invoiceId, input.reversalId);
+  const original = await client.query(
+    "SELECT delta_atomic FROM tokenless_prepaid_ledger_entries WHERE external_reference=$1 AND source='fiat_topup_reversal'",
+    [externalReference],
+  );
+  const debited = BigInt(text(original.rows[0] as QueryRow, "delta_atomic") ?? "0");
+  if (debited >= 0n) return { matched: true, reversedAtomic: "0" };
+  const now = new Date();
+  await client.query(
+    `INSERT INTO tokenless_prepaid_ledger_entries
+       (entry_id,workspace_id,delta_atomic,settlement_status,source,external_reference,created_at,settled_at)
+     VALUES ($1,$2,$3,'settled','fiat_topup_reversal_reinstated',$4,$5,$5)
+     ON CONFLICT (external_reference) DO NOTHING`,
+    [
+      deterministicId("ledger_reinstated", input.invoiceId, input.reversalId),
+      text(row, "workspace_id"),
+      (-debited).toString(),
+      `${externalReference}:reinstated`,
+      now,
+    ],
+  );
+  return { matched: true, reversedAtomic: "0" };
 }
 
 export async function reconcilePrepaidTopups(input: { limit?: number; now?: Date } = {}) {
