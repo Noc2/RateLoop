@@ -200,7 +200,7 @@ test("authorization codes are single-use and opaque tokens remain hash-only", as
   assert.equal(serialized.includes(tokens.refresh_token), false);
 });
 
-test("public-client refresh tokens stay stable while issuing bounded access tokens", async () => {
+test("public-client refresh tokens rotate on use and a replayed generation revokes the family", async () => {
   const fixture = await authorizationFixture();
   const first = await exchangeAgentOAuthToken({
     grantType: "authorization_code",
@@ -217,18 +217,63 @@ test("public-client refresh tokens stay stable while issuing bounded access toke
     resource: getCanonicalAgentMcpResource(),
     scope: "connection:claim context:read",
   });
-  assert.equal(refreshed.refresh_token, first.refresh_token);
+  assert.notEqual(refreshed.refresh_token, first.refresh_token);
   assert.notEqual(refreshed.access_token, first.access_token);
   await authenticateAgentOAuthAccessToken(`Bearer ${refreshed.access_token}`);
+
+  const consumed = await dbClient.execute({
+    sql: `SELECT generation, used_at, replaced_at FROM tokenless_agent_oauth_refresh_tokens
+          WHERE token_hash = ?`,
+    args: [createHash("sha256").update(first.refresh_token).digest("hex")],
+  });
+  assert.equal(Number(consumed.rows[0]?.generation), 1);
+  assert.ok(consumed.rows[0]?.used_at);
+  assert.ok(consumed.rows[0]?.replaced_at);
+
   const next = await exchangeAgentOAuthToken({
     grantType: "refresh_token",
     clientId: fixture.clientId,
-    refreshToken: first.refresh_token,
+    refreshToken: refreshed.refresh_token,
     resource: getCanonicalAgentMcpResource(),
   });
-  assert.equal(next.refresh_token, first.refresh_token);
-  assert.notEqual(next.access_token, refreshed.access_token);
+  assert.notEqual(next.refresh_token, refreshed.refresh_token);
   await authenticateAgentOAuthAccessToken(`Bearer ${next.access_token}`);
+  const generations = await dbClient.execute(
+    "SELECT generation FROM tokenless_agent_oauth_refresh_tokens ORDER BY generation ASC",
+  );
+  assert.deepEqual(
+    generations.rows.map(row => Number(row.generation)),
+    [1, 2, 3],
+  );
+
+  // A leaked copy of an already-rotated generation revokes the whole family.
+  await assert.rejects(
+    () =>
+      exchangeAgentOAuthToken({
+        grantType: "refresh_token",
+        clientId: fixture.clientId,
+        refreshToken: first.refresh_token,
+        resource: getCanonicalAgentMcpResource(),
+      }),
+    /replay revoked this token family/u,
+  );
+  const family = await dbClient.execute("SELECT status, revocation_reason FROM tokenless_agent_oauth_token_families");
+  assert.equal(family.rows[0]?.status, "revoked");
+  assert.equal(family.rows[0]?.revocation_reason, "refresh_token_replay");
+  await assert.rejects(
+    () => authenticateAgentOAuthAccessToken(`Bearer ${next.access_token}`),
+    /invalid|expired|revoked/iu,
+  );
+  await assert.rejects(
+    () =>
+      exchangeAgentOAuthToken({
+        grantType: "refresh_token",
+        clientId: fixture.clientId,
+        refreshToken: next.refresh_token,
+        resource: getCanonicalAgentMcpResource(),
+      }),
+    /inactive or expired/u,
+  );
 });
 
 test("revocation is idempotent, client-bound, and invalidates the next access-token use", async () => {

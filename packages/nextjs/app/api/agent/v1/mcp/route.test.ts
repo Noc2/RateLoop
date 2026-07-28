@@ -998,7 +998,8 @@ test("an owner can recover only a replay-revoked public OAuth integration", asyn
     refreshToken: tokens.refresh_token,
     resource: getCanonicalAgentMcpResource(),
   });
-  assert.equal(refreshed.refresh_token, tokens.refresh_token);
+  // Recovery restores the presented generation; using it rotates it forward again.
+  assert.notEqual(refreshed.refresh_token, tokens.refresh_token);
   const obsoleteRefresh = await dbClient.execute({
     sql: `SELECT revoked_at FROM tokenless_agent_oauth_refresh_tokens WHERE token_hash=?`,
     args: [retainedRefreshHash],

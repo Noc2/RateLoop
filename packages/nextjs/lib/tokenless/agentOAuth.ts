@@ -755,26 +755,42 @@ export async function exchangeAgentOAuthToken(
     if (requestedScopes.some(scope => !existingScopes.includes(scope))) {
       throw new AgentOAuthError("invalid_scope", "A refresh cannot widen its original scope.");
     }
-    const issued = await issueAccessToken({
+    // Public clients cannot authenticate, so the refresh token is the whole credential: it is
+    // rotated on every use. The presented generation is consumed here, which is what makes a later
+    // presentation of the same token detectable as a replay above.
+    const generations = await client.query(
+      `SELECT COALESCE(MAX(generation), 0) + 1 AS next_generation
+       FROM tokenless_agent_oauth_refresh_tokens WHERE token_family_id = $1`,
+      [tokenFamilyId],
+    );
+    const generation = Number((generations.rows[0] as Row | undefined)?.next_generation);
+    if (!Number.isSafeInteger(generation) || generation < 2) {
+      throw new AgentOAuthError("invalid_grant", "The refresh-token family generation is invalid.");
+    }
+    const consumed = await client.query(
+      `UPDATE tokenless_agent_oauth_refresh_tokens SET used_at = $2, replaced_at = $2
+       WHERE refresh_token_id = $1 AND used_at IS NULL AND replaced_at IS NULL
+       RETURNING refresh_token_id`,
+      [text(row, "refresh_token_id"), now],
+    );
+    if (consumed.rowCount !== 1) throw new AgentOAuthError("invalid_grant", "The refresh token was replayed.");
+    const issued = await issueTokenPair({
       client,
       tokenFamilyId,
-      refreshTokenId: text(row, "refresh_token_id")!,
       clientId: input.clientId,
       subjectPrincipalId: text(row, "subject_principal_id")!,
       resource: input.resource,
       scopes: requestedScopes,
+      generation,
       familyExpiresAt: date(row, "absolute_expires_at")!,
       now,
     });
+    await client.query(
+      `UPDATE tokenless_agent_oauth_token_families SET last_rotated_at = $2 WHERE token_family_id = $1`,
+      [tokenFamilyId, now],
+    );
     await client.query("COMMIT");
-    return {
-      access_token: issued.accessToken,
-      token_type: "Bearer",
-      expires_in: Math.max(1, Math.floor((issued.accessExpiresAt.getTime() - now.getTime()) / 1_000)),
-      refresh_token: input.refreshToken,
-      scope: requestedScopes.join(" "),
-      resource: input.resource,
-    };
+    return issued.response;
   } catch (error) {
     try {
       await client.query("ROLLBACK");
