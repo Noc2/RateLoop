@@ -336,6 +336,31 @@ test("workspace SQL aggregation preserves tenant isolation and metric semantics"
   assert.doesNotMatch(output, new RegExp(second.scopeId, "u"));
 });
 
+test("the 30-day metrics window excludes old blocked and approval-required states", async () => {
+  const setup = await metricsFixture("windowed_states");
+  const outsideWindow = new Date(NOW.getTime() - 31 * 24 * 60 * 60 * 1_000);
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_review_opportunity_lifecycles
+          SET created_at=?,state_entered_at=?
+          WHERE workspace_id=? AND opportunity_id IN (?,?)`,
+    args: [
+      new Date(outsideWindow.getTime() - 60_000),
+      outsideWindow,
+      setup.workspaceId,
+      "aeop_metrics_windowed_states_blocked",
+      "aeop_metrics_windowed_states_approval",
+    ],
+  });
+
+  const snapshot = await collectWorkspaceAssuranceMetrics({ workspaceId: setup.workspaceId, now: NOW });
+  assert.equal(snapshot.reviewsRequested, 2);
+  assert.equal(snapshot.reviewsCompleted, 1);
+  assert.equal(snapshot.blocked, 0);
+  assert.equal(snapshot.approvalRequired, 0);
+  assert.equal(snapshot.scopes[0]?.blocked, 0);
+  assert.equal(snapshot.scopes[0]?.approvalRequired, 0);
+});
+
 test("feedback profiles contribute no assurance metrics", async () => {
   const setup = await metricsFixture("feedback");
   await dbClient.execute({

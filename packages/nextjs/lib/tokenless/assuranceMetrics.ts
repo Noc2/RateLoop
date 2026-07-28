@@ -303,7 +303,7 @@ export async function collectWorkspaceAssuranceMetrics(input: { workspaceId: str
                JOIN tokenless_agent_review_request_profiles rp
                  ON rp.workspace_id=o.workspace_id AND rp.profile_id=o.request_profile_id
                 AND rp.version=o.request_profile_version AND rp.profile_hash=o.request_profile_hash
-               WHERE l.workspace_id = ? AND l.state = 'blocked'
+               WHERE l.workspace_id = ? AND l.state = 'blocked' AND l.state_entered_at >= ?
                  AND rp.result_semantics = 'assurance') AS blocked,
               (SELECT COUNT(*) FROM tokenless_agent_review_opportunity_lifecycles l
                JOIN tokenless_agent_review_opportunities o
@@ -311,9 +311,18 @@ export async function collectWorkspaceAssuranceMetrics(input: { workspaceId: str
                JOIN tokenless_agent_review_request_profiles rp
                  ON rp.workspace_id=o.workspace_id AND rp.profile_id=o.request_profile_id
                 AND rp.version=o.request_profile_version AND rp.profile_hash=o.request_profile_hash
-               WHERE l.workspace_id = ? AND l.state = 'approval_required'
+               WHERE l.workspace_id = ? AND l.state = 'approval_required' AND l.state_entered_at >= ?
                  AND rp.result_semantics = 'assurance') AS approval_required`,
-      args: [input.workspaceId, windowStart, input.workspaceId, windowStart, input.workspaceId, input.workspaceId],
+      args: [
+        input.workspaceId,
+        windowStart,
+        input.workspaceId,
+        windowStart,
+        input.workspaceId,
+        windowStart,
+        input.workspaceId,
+        windowStart,
+      ],
     }),
     dbClient.execute({
       sql: `WITH opportunity_counts AS (
@@ -360,7 +369,8 @@ export async function collectWorkspaceAssuranceMetrics(input: { workspaceId: str
               JOIN tokenless_agent_review_request_profiles rp
                 ON rp.workspace_id=o.workspace_id AND rp.profile_id=o.request_profile_id
                AND rp.version=o.request_profile_version AND rp.profile_hash=o.request_profile_hash
-              WHERE l.workspace_id = ? AND rp.result_semantics = 'assurance' GROUP BY o.scope_id
+              WHERE l.workspace_id = ? AND l.state_entered_at >= ? AND rp.result_semantics = 'assurance'
+              GROUP BY o.scope_id
             )
             SELECT s.scope_id,s.stage,
                    COALESCE(oc.eligible,0) AS eligible,
@@ -391,6 +401,7 @@ export async function collectWorkspaceAssuranceMetrics(input: { workspaceId: str
         input.workspaceId,
         windowStart,
         input.workspaceId,
+        windowStart,
         input.workspaceId,
         MAX_ASSURANCE_METRIC_SCOPES + 1,
       ],
