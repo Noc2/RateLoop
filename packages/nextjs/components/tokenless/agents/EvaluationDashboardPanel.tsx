@@ -514,6 +514,19 @@ function RunCard({
   const [clientDecision, setClientDecision] = useState(run.clientDecision);
   const decision = decisionLabel(clientDecision);
   const decidable = run.status === "completed" && run.evidencePacketAvailable && !clientDecision;
+  const presentationStatus = decidable
+    ? { label: "Needs action", className: "bg-amber-300/10 text-amber-100" }
+    : run.status === "completed"
+      ? { label: "Completed", className: "bg-emerald-300/10 text-emerald-100" }
+      : ["failed", "dead", "cancelled"].includes(run.status)
+        ? { label: "Failed", className: "bg-red-300/10 text-red-100" }
+        : { label: "Waiting", className: "bg-white/[0.06] text-base-content/65" };
+  const currentResult =
+    share === null
+      ? run.status === "completed"
+        ? "Insufficient responses"
+        : "Waiting for responses"
+      : `${percent(share)} chose the candidate`;
   return (
     <article className="surface-card rounded-2xl p-5" aria-labelledby={`evaluation-${run.runId}`}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -523,15 +536,15 @@ function RunCard({
             {run.suiteName}
           </h3>
         </div>
-        <span className="self-start rounded-md bg-white/[0.06] px-2 py-1 text-xs capitalize">{run.status}</span>
+        <span className={`self-start rounded-md px-2 py-1 text-xs ${presentationStatus.className}`}>
+          {presentationStatus.label}
+        </span>
       </div>
 
       <div className="mt-5 grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(14rem,0.7fr)]">
         <div>
           <p className="text-xs text-base-content/55">{decision ? "Decision" : "Current result"}</p>
-          <p className="mt-1 text-2xl font-semibold">
-            {decision ?? (share === null ? "Waiting for responses" : `${percent(share)} chose the candidate`)}
-          </p>
+          <p className="mt-1 text-2xl font-semibold">{decision ?? currentResult}</p>
           <SampleNote run={run} />
           {decidable ? (
             <>

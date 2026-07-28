@@ -12,6 +12,12 @@ test("evaluation dashboard leads with results and progressively discloses detail
   assert.match(source, /Results appear after your agent requests human review\./);
   assert.match(source, /dashboard && dashboard\.runs\.length > 0/);
   assert.match(source, /decisionLabel\(clientDecision\)/);
+  assert.match(source, /label: "Needs action"/);
+  assert.match(source, /label: "Completed"/);
+  assert.match(source, /label: "Failed"/);
+  assert.match(source, /label: "Waiting"/);
+  assert.match(source, /Insufficient responses/);
+  assert.match(source, /run\.status === "completed".*"Insufficient responses"/s);
   assert.match(source, /Evidence and run details/);
   assert.match(source, /Calibration items/);
   assert.match(source, /Quorum-case unanimity/);
