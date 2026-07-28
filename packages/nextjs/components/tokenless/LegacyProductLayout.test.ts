@@ -102,10 +102,18 @@ test("Human profile and settings render their controls directly", () => {
   assert.match(profileContent, /ReviewerAccessPanel/);
   assert.match(profileContent, /worldIdEnabled \? <WorldIdProfilePanel \/>/);
   assert.ok(profileContent.indexOf("<ProfileClient />") < profileContent.indexOf("<ReviewerAccessPanel"));
-  assert.doesNotMatch(
-    profileContent,
-    /InvitationRouterPanel|PaidEligibilityClient|ReviewerEarningsClient|ForecastIntegrityClient|RaterSettlementRecoveryClient|FeedbackBonusClaimsClient/,
-  );
+  assert.doesNotMatch(profileContent, /InvitationRouterPanel/);
+  assert.match(profileContent, /configuredHumanReviewLanes/);
+  assert.match(profileContent, /paidReviewAvailable \? \(/);
+  for (const surface of [
+    "PaidEligibilityClient",
+    "ReviewerEarningsClient",
+    "ForecastIntegrityClient",
+    "RaterSettlementRecoveryClient",
+    "FeedbackBonusClaimsClient",
+  ]) {
+    assert.match(profileContent, new RegExp(surface));
+  }
   assert.doesNotMatch(page, /ProfileOverview|SettingsOverview|Customize|SectionBackLink/);
   assert.doesNotMatch(page, /section ===/);
   assert.doesNotMatch(profile, /<details|<summary/);
