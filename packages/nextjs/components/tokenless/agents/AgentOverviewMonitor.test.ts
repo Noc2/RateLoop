@@ -4,6 +4,11 @@ import test from "node:test";
 
 const source = readFileSync(new URL("./AgentOverviewMonitor.tsx", import.meta.url), "utf8");
 const workspaceSource = readFileSync(new URL("./AgentWorkspacePanels.tsx", import.meta.url), "utf8");
+const routeSource = readFileSync(
+  new URL("../../../app/api/account/workspaces/[workspaceId]/agents/overview/route.ts", import.meta.url),
+  "utf8",
+);
+const projectionSource = readFileSync(new URL("../../../lib/tokenless/agentOverview.ts", import.meta.url), "utf8");
 
 test("the connected-agent overview mounts the fixed monitor", () => {
   assert.match(workspaceSource, /<AgentOverviewMonitor workspaceId=\{workspaceId\} \/>/);
@@ -17,6 +22,20 @@ test("the connected-agent overview mounts the fixed monitor", () => {
   assert.match(source, /overview\.attention\.periodLabel/);
   assert.match(source, /Low confidence/);
   assert.match(source, /Insufficient evidence/);
+  assert.match(source, /overviewPage/);
+  assert.match(source, /hasPreviousPage/);
+  assert.match(source, /hasNextPage/);
+  assert.match(routeSource, /searchParams\.get\("page"\)/);
+  assert.match(routeSource, /workspaceId, page/);
+});
+
+test("overview parent and child records are bounded at the data source", () => {
+  assert.match(projectionSource, /LIMIT \? OFFSET \?/);
+  assert.match(projectionSource, /scope\.scope_rank<=\?/);
+  assert.match(projectionSource, /MAX_AGENT_OVERVIEW_SCOPES_PER_PARENT/);
+  assert.match(projectionSource, /SELECT candidates\.\*,COUNT\(\*\) OVER\(\) AS total_item_count/);
+  assert.match(projectionSource, /LIMIT 6/);
+  assert.doesNotMatch(projectionSource, /listWorkspaceAgents/);
 });
 
 test("agent-version parents disclose bounded scope evidence without reviewer axes or a scope average", () => {

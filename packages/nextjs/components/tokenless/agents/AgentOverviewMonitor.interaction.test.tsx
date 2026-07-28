@@ -64,8 +64,12 @@ const overview = {
   },
   agentVersions: {
     periodLabel: "Lifetime by scope",
-    totalParentCount: 1,
-    parentsTruncated: false,
+    totalParentCount: 21,
+    page: 1,
+    pageSize: 20,
+    totalPages: 2,
+    hasPreviousPage: false,
+    hasNextPage: true,
     parents: [
       {
         agentId: "agent-support",
@@ -139,12 +143,36 @@ const overview = {
   },
 };
 
+const secondPageOverview = {
+  ...overview,
+  agentVersions: {
+    ...overview.agentVersions,
+    page: 2,
+    hasPreviousPage: true,
+    hasNextPage: false,
+    parents: [
+      {
+        ...overview.agentVersions.parents[0],
+        agentId: "agent-billing",
+        versionId: "version-billing-1",
+        displayName: "Billing agent",
+        scopeCount: 0,
+        scopes: [],
+        stageCounts: { calibrating: 0, high_coverage: 0, medium_coverage: 0, monitoring: 0 },
+        lowestEndorsement: null,
+      },
+    ],
+  },
+};
+
 test("the overview renders four fixed answers and expands lifetime scope evidence without a global score", async () => {
   const restoreDom = installTestDom();
   const previousFetch = globalThis.fetch;
   globalThis.fetch = async input => {
-    assert.match(String(input), /\/agents\/overview$/u);
-    return Response.json(overview);
+    assert.match(String(input), /\/agents\/overview\?page=\d+$/u);
+    return Response.json(
+      new URL(String(input), "https://rateloop.test").searchParams.get("page") === "2" ? secondPageOverview : overview,
+    );
   };
   const { act, cleanup, render } = await import("@testing-library/react");
   const userEvent = (await import("@testing-library/user-event")).default;
@@ -175,15 +203,27 @@ test("the overview renders four fixed answers and expands lifetime scope evidenc
     assert.ok(view.getByText("2 blocked reviews cannot settle."));
     assert.ok(view.getByText(/95% lower bound 65\.0% is below the 75\.0% policy threshold/));
     assert.ok(view.getByText(/account-change · normal · n = 12 of 30 comparable decisions/));
-    assert.match(view.getByRole("link", { name: "Open approvals" }).getAttribute("href") ?? "", /tab=inbox/);
-    assert.match(view.getByRole("link", { name: "Open results" }).getAttribute("href") ?? "", /tab=evaluations/);
-    assert.match(view.getByRole("link", { name: "Review setup" }).getAttribute("href") ?? "", /tab=registry/);
+    assert.match(view.getByRole("link", { name: "Open approvals" }).getAttribute("href") ?? "", /\/agents\/approvals/);
+    assert.match(view.getByRole("link", { name: "Open results" }).getAttribute("href") ?? "", /\/agents\/results/);
+    assert.match(view.getByRole("link", { name: "Review setup" }).getAttribute("href") ?? "", /\/agents\/review-setup/);
     assert.equal(view.queryByText("scope-refunds-v3"), null);
 
     await userEvent.setup({ document }).click(view.getByRole("button", { name: "View scopes" }));
     assert.ok(view.getByText("scope-refunds-v3"));
     assert.ok(view.getByText("80.0% · 65.0% · n=40"));
     assert.equal(view.queryByText(/global score/i), null);
+
+    await userEvent.setup({ document }).click(view.getByRole("button", { name: "Next" }));
+    assert.ok(await view.findByText("Billing agent"));
+    assert.ok(view.getByText("Page 2 of 2"));
+    assert.equal(new URL(window.location.href).searchParams.get("overviewPage"), "2");
+    assert.equal((view.getByRole("button", { name: "Next" }) as HTMLButtonElement).disabled, true);
+    assert.equal((view.getByRole("button", { name: "Previous" }) as HTMLButtonElement).disabled, false);
+
+    await userEvent.setup({ document }).click(view.getByRole("button", { name: "Previous" }));
+    assert.ok(await view.findByText("Page 1 of 2"));
+    assert.ok(view.getAllByText("Support agent").length > 0);
+    assert.equal(new URL(window.location.href).searchParams.has("overviewPage"), false);
   } finally {
     await act(async () => cleanup());
     globalThis.fetch = previousFetch;

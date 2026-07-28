@@ -1,24 +1,58 @@
 import "server-only";
+import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient } from "~~/lib/db";
-import {
-  type AgentAssuranceScopeSummary,
-  type AgentRegistry,
-  type WorkspaceAgent,
-  listWorkspaceAgents,
-} from "~~/lib/tokenless/agentRegistry";
+import { type AgentAssuranceScopeSummary, type WorkspaceAgent } from "~~/lib/tokenless/agentRegistry";
 import { type AssuranceMetricsSnapshot, collectWorkspaceAssuranceMetrics } from "~~/lib/tokenless/assuranceMetrics";
+import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import { wilsonIntervalBps } from "~~/lib/tokenless/transparency";
 
 type QueryRow = Record<string, unknown>;
 
 const OVERVIEW_WINDOW_DAYS = 30;
 const OVERVIEW_WINDOW_MS = OVERVIEW_WINDOW_DAYS * 24 * 60 * 60_000;
-export const MAX_AGENT_OVERVIEW_PARENTS = 20;
+export const AGENT_OVERVIEW_PARENT_PAGE_SIZE = 20;
 export const MAX_AGENT_OVERVIEW_SCOPES_PER_PARENT = 8;
 export const MAX_AGENT_OVERVIEW_OBSERVATIONS = 10_000;
 
+function rowText(row: QueryRow | undefined, key: string) {
+  const value = row?.[key];
+  return value === null || value === undefined ? null : String(value);
+}
+
+function rowInteger(row: QueryRow | undefined, key: string) {
+  const value = Number(row?.[key] ?? 0);
+  if (!Number.isSafeInteger(value) || value < 0) throw new Error(`Database returned invalid ${key}.`);
+  return value;
+}
+
+function rowNullableNumber(row: QueryRow | undefined, key: string) {
+  const raw = row?.[key];
+  if (raw === null || raw === undefined) return null;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0) throw new Error(`Database returned invalid ${key}.`);
+  return value;
+}
+
+function rowIso(row: QueryRow, key: string) {
+  const value = row[key] instanceof Date ? row[key] : new Date(String(row[key] ?? ""));
+  if (!(value instanceof Date) || !Number.isFinite(value.getTime())) {
+    throw new Error(`Database returned invalid ${key}.`);
+  }
+  return value.toISOString();
+}
+
+function wilsonLowerSql(agreementExpression: string, comparableExpression: string) {
+  const z = "1.959963984540054";
+  const zSquared = "3.8414588206941254";
+  const p = `((${agreementExpression})::double precision / (${comparableExpression}))`;
+  const denominator = `(1 + ${zSquared} / (${comparableExpression}))`;
+  const center = `((${p} + ${zSquared} / (2 * (${comparableExpression}))) / ${denominator})`;
+  const margin = `((${z} * SQRT((${p} * (1 - ${p})) / (${comparableExpression}) + ${zSquared} / (4 * (${comparableExpression}) * (${comparableExpression})))) / ${denominator})`;
+  return `FLOOR(GREATEST(0, (${center} - ${margin}) * 10000))`;
+}
+
 type OverviewObservation = {
-  agreement: "agree" | "disagree" | "inconclusive";
+  agreement: "agree" | "disagree" | "abstain" | "inconclusive";
   comparable: boolean;
   latencyMs: number | null;
   costAtomic: string | null;
@@ -153,7 +187,11 @@ export type AgentOverview = {
     periodLabel: "Lifetime by scope";
     parents: AgentOverviewParent[];
     totalParentCount: number;
-    parentsTruncated: boolean;
+    page: number;
+    pageSize: 20;
+    totalPages: number;
+    hasPreviousPage: boolean;
+    hasNextPage: boolean;
   };
   attention: {
     periodLabel: "Current evidence state";
@@ -424,11 +462,531 @@ function overviewParents(agents: OverviewAgentSource[]) {
   });
 }
 
+function agentVersionPage(input: {
+  parents: AgentOverviewParent[];
+  requestedPage: number;
+  totalParentCount?: number;
+  alreadyPaged?: boolean;
+}): AgentOverview["agentVersions"] {
+  const totalParentCount = input.totalParentCount ?? input.parents.length;
+  const totalPages = Math.max(1, Math.ceil(totalParentCount / AGENT_OVERVIEW_PARENT_PAGE_SIZE));
+  const page = Math.min(Math.max(1, input.requestedPage), totalPages);
+  const parents = input.alreadyPaged
+    ? input.parents
+    : input.parents.slice((page - 1) * AGENT_OVERVIEW_PARENT_PAGE_SIZE, page * AGENT_OVERVIEW_PARENT_PAGE_SIZE);
+  return {
+    periodLabel: "Lifetime by scope",
+    parents,
+    totalParentCount,
+    page,
+    pageSize: AGENT_OVERVIEW_PARENT_PAGE_SIZE,
+    totalPages,
+    hasPreviousPage: page > 1,
+    hasNextPage: page < totalPages,
+  };
+}
+
+const OVERVIEW_STAGE_RATES: Record<AgentAssuranceScopeSummary["stage"], number> = {
+  calibrating: 10_000,
+  high_coverage: 5_000,
+  medium_coverage: 2_500,
+  monitoring: 1_000,
+};
+
+async function requireAgentOverviewAccess(accountAddress: string, workspaceId: string) {
+  let actor: string;
+  try {
+    actor = normalizeAccountSubject(accountAddress);
+  } catch {
+    throw new TokenlessServiceError("Account address is invalid.", 400, "invalid_account");
+  }
+  const result = await dbClient.execute({
+    sql: `SELECT m.role
+          FROM tokenless_workspace_members m
+          JOIN tokenless_workspaces w ON w.workspace_id=m.workspace_id
+          WHERE m.workspace_id=? AND m.account_address=? AND w.status='active'
+          LIMIT 1`,
+    args: [workspaceId, actor],
+  });
+  const role = rowText(result.rows[0] as QueryRow | undefined, "role");
+  if (!role) throw new TokenlessServiceError("Workspace not found.", 404, "workspace_not_found");
+  return { canManage: role === "owner" || role === "admin" };
+}
+
+async function countAgentOverviewParents(workspaceId: string) {
+  const result = await dbClient.execute({
+    sql: `SELECT COUNT(DISTINCT agent.agent_id) AS total
+          FROM tokenless_agents agent
+          JOIN tokenless_agent_versions version
+            ON version.workspace_id=agent.workspace_id AND version.agent_id=agent.agent_id
+          WHERE agent.workspace_id=?`,
+    args: [workspaceId],
+  });
+  return rowInteger(result.rows[0] as QueryRow | undefined, "total");
+}
+
+function overviewStage(value: unknown): AgentAssuranceScopeSummary["stage"] {
+  const stage = String(value ?? "");
+  if (!["calibrating", "high_coverage", "medium_coverage", "monitoring"].includes(stage)) {
+    throw new Error("Database returned an invalid overview stage.");
+  }
+  return stage as AgentAssuranceScopeSummary["stage"];
+}
+
+function reasonCodes(value: unknown) {
+  if (value === null || value === undefined) return [];
+  let parsed: unknown;
+  try {
+    parsed = typeof value === "string" ? JSON.parse(value) : value;
+  } catch {
+    throw new Error("Database returned invalid overview transition reasons.");
+  }
+  if (!Array.isArray(parsed) || parsed.some(reason => typeof reason !== "string")) {
+    throw new Error("Database returned invalid overview transition reasons.");
+  }
+  return parsed as string[];
+}
+
+function scopeReviewRate(row: QueryRow, stage: AgentAssuranceScopeSummary["stage"]) {
+  const mode = rowText(row, "mode");
+  const productionFloorBps = rowInteger(row, "production_floor_bps");
+  if (mode === "always") return 10_000;
+  if (mode === "adaptive") return Math.max(OVERVIEW_STAGE_RATES[stage], productionFloorBps);
+  if (mode === "fixed") return rowInteger(row, "fixed_rate_bps");
+  if (["manual", "rules"].includes(mode ?? "")) return 0;
+  throw new Error("Database returned an invalid overview review mode.");
+}
+
+async function loadAgentOverviewParentPage(input: {
+  workspaceId: string;
+  page: number;
+  totalParentCount: number;
+}): Promise<AgentOverview["agentVersions"]> {
+  const offset = (input.page - 1) * AGENT_OVERVIEW_PARENT_PAGE_SIZE;
+  const parentResult = await dbClient.execute({
+    sql: `WITH ranked_versions AS (
+            SELECT agent.agent_id,agent.status,agent.created_at,
+                   version.version_id,version.version_number,version.display_name,version.environment,
+                   ROW_NUMBER() OVER (
+                     PARTITION BY agent.agent_id
+                     ORDER BY version.version_number DESC,version.version_id ASC
+                   ) AS version_rank
+            FROM tokenless_agents agent
+            JOIN tokenless_agent_versions version
+              ON version.workspace_id=agent.workspace_id AND version.agent_id=agent.agent_id
+            WHERE agent.workspace_id=?
+          )
+          SELECT agent_id,status,version_id,version_number,display_name,environment
+          FROM ranked_versions
+          WHERE version_rank=1
+          ORDER BY created_at DESC,agent_id ASC
+          LIMIT ? OFFSET ?`,
+    args: [input.workspaceId, AGENT_OVERVIEW_PARENT_PAGE_SIZE, offset],
+  });
+  const parents: AgentOverviewParent[] = (parentResult.rows as QueryRow[]).map(row => {
+    const agentId = rowText(row, "agent_id");
+    const status = rowText(row, "status");
+    const versionId = rowText(row, "version_id");
+    const displayName = rowText(row, "display_name");
+    const environment = rowText(row, "environment");
+    if (!agentId || !["active", "inactive"].includes(status ?? "") || !versionId || !displayName || !environment) {
+      throw new Error("Database returned an invalid overview agent version.");
+    }
+    const parent: AgentOverviewParent = {
+      agentId,
+      agentStatus: status as AgentOverviewParent["agentStatus"],
+      versionId,
+      versionNumber: rowInteger(row, "version_number"),
+      displayName,
+      environment,
+      scopeCount: 0,
+      scopesTruncated: false,
+      stageCounts: { calibrating: 0, high_coverage: 0, medium_coverage: 0, monitoring: 0 },
+      lowestEndorsement: null,
+      scopes: [],
+    };
+    return parent;
+  });
+  const versionIds = parents.map(parent => parent.versionId);
+  if (versionIds.length === 0) {
+    return agentVersionPage({
+      parents,
+      requestedPage: input.page,
+      totalParentCount: input.totalParentCount,
+      alreadyPaged: true,
+    });
+  }
+
+  const lowerSql = wilsonLowerSql("e.agreements", "e.comparable");
+  const [statsResult, scopesResult] = await Promise.all([
+    dbClient.execute({
+      sql: `WITH requested_versions AS (
+              SELECT UNNEST(?::text[]) AS version_id
+            ), scope_counts AS (
+              SELECT scope.agent_version_id,
+                     COUNT(*) AS scope_count,
+                     COUNT(*) FILTER (WHERE scope.stage='calibrating') AS calibrating_count,
+                     COUNT(*) FILTER (WHERE scope.stage='high_coverage') AS high_coverage_count,
+                     COUNT(*) FILTER (WHERE scope.stage='medium_coverage') AS medium_coverage_count,
+                     COUNT(*) FILTER (WHERE scope.stage='monitoring') AS monitoring_count
+              FROM tokenless_agent_evaluation_scopes scope
+              WHERE scope.workspace_id=? AND scope.agent_version_id=ANY(?::text[])
+              GROUP BY scope.agent_version_id
+            ), evidence AS (
+              SELECT scope.agent_version_id,scope.scope_id,scope.workflow_key,scope.risk_tier,
+                     COUNT(*) FILTER (WHERE observation.comparable=true) AS comparable,
+                     COUNT(*) FILTER (WHERE observation.comparable=true AND observation.agreement='agree') AS agreements
+              FROM tokenless_agent_evaluation_scopes scope
+              LEFT JOIN tokenless_agent_evaluation_observations observation
+                ON observation.workspace_id=scope.workspace_id AND observation.scope_id=scope.scope_id
+              WHERE scope.workspace_id=? AND scope.agent_version_id=ANY(?::text[])
+              GROUP BY scope.agent_version_id,scope.scope_id,scope.workflow_key,scope.risk_tier
+            )
+            SELECT requested.version_id,
+                   COALESCE(counts.scope_count,0) AS scope_count,
+                   COALESCE(counts.calibrating_count,0) AS calibrating_count,
+                   COALESCE(counts.high_coverage_count,0) AS high_coverage_count,
+                   COALESCE(counts.medium_coverage_count,0) AS medium_coverage_count,
+                   COALESCE(counts.monitoring_count,0) AS monitoring_count,
+                   lowest.workflow_key AS lowest_workflow_key,
+                   lowest.risk_tier AS lowest_risk_tier,
+                   lowest.agreements AS lowest_agreements,
+                   lowest.comparable AS lowest_comparable
+            FROM requested_versions requested
+            LEFT JOIN scope_counts counts ON counts.agent_version_id=requested.version_id
+            LEFT JOIN LATERAL (
+              SELECT e.workflow_key,e.risk_tier,e.agreements,e.comparable,${lowerSql} AS lower_bps
+              FROM evidence e
+              WHERE e.agent_version_id=requested.version_id AND e.comparable>0
+              ORDER BY lower_bps ASC,e.workflow_key ASC,e.scope_id ASC
+              LIMIT 1
+            ) lowest ON true`,
+      args: [versionIds, input.workspaceId, versionIds, input.workspaceId, versionIds],
+    }),
+    dbClient.execute({
+      sql: `WITH ranked_scopes AS (
+              SELECT scope.scope_id,scope.agent_version_id,scope.workflow_key,scope.risk_tier,scope.stage,
+                     scope.updated_at,policy.mode,policy.production_floor_bps,policy.fixed_rate_bps,
+                     ROW_NUMBER() OVER (
+                       PARTITION BY scope.agent_version_id
+                       ORDER BY scope.updated_at DESC,scope.scope_id ASC
+                     ) AS scope_rank
+              FROM tokenless_agent_evaluation_scopes scope
+              JOIN tokenless_agent_review_policies policy
+                ON policy.workspace_id=scope.workspace_id
+               AND policy.policy_id=scope.policy_id AND policy.version=scope.policy_version
+              WHERE scope.workspace_id=? AND scope.agent_version_id=ANY(?::text[])
+            )
+            SELECT scope.*,
+                   COALESCE(opportunities.reviewed,0) AS reviewed,
+                   COALESCE(opportunities.skipped,0) AS skipped,
+                   COALESCE(observations.comparable,0) AS comparable,
+                   COALESCE(observations.agreements,0) AS agreements,
+                   executions.average_total_duration_ms,
+                   executions.average_input_token_total,
+                   executions.average_output_token_total,
+                   transition.event_type AS transition_event_type,
+                   transition.from_stage AS transition_from_stage,
+                   transition.to_stage AS transition_to_stage,
+                   transition.reason_codes_json AS transition_reason_codes_json,
+                   transition.created_at AS transition_created_at
+            FROM ranked_scopes scope
+            LEFT JOIN LATERAL (
+              SELECT COUNT(*) FILTER (WHERE opportunity.status IN ('review_requested','completed')) AS reviewed,
+                     COUNT(*) FILTER (WHERE opportunity.status='skipped') AS skipped
+              FROM tokenless_agent_review_opportunities opportunity
+              WHERE opportunity.workspace_id=? AND opportunity.scope_id=scope.scope_id
+            ) opportunities ON true
+            LEFT JOIN LATERAL (
+              SELECT COUNT(*) FILTER (WHERE observation.comparable=true) AS comparable,
+                     COUNT(*) FILTER (
+                       WHERE observation.comparable=true AND observation.agreement='agree'
+                     ) AS agreements
+              FROM tokenless_agent_evaluation_observations observation
+              WHERE observation.workspace_id=? AND observation.scope_id=scope.scope_id
+            ) observations ON true
+            LEFT JOIN LATERAL (
+              SELECT AVG(value.total_duration_ms) AS average_total_duration_ms,
+                     AVG(value.input_token_total) AS average_input_token_total,
+                     AVG(value.output_token_total) AS average_output_token_total
+              FROM (
+                SELECT DISTINCT execution.execution_id,execution.total_duration_ms,
+                                execution.input_token_total,execution.output_token_total
+                FROM tokenless_agent_review_opportunities opportunity
+                JOIN tokenless_agent_executions execution
+                  ON execution.workspace_id=opportunity.workspace_id
+                 AND execution.execution_id=opportunity.execution_id
+                WHERE opportunity.workspace_id=? AND opportunity.scope_id=scope.scope_id
+                  AND opportunity.execution_id IS NOT NULL
+              ) value
+            ) executions ON true
+            LEFT JOIN LATERAL (
+              SELECT event.event_type,event.from_stage,event.to_stage,event.reason_codes_json,event.created_at
+              FROM tokenless_agent_review_policy_events event
+              WHERE event.workspace_id=? AND event.scope_id=scope.scope_id
+                AND event.event_type IN ('stage_changed','reset')
+              ORDER BY event.created_at DESC,event.event_id DESC
+              LIMIT 1
+            ) transition ON true
+            WHERE scope.scope_rank<=?
+            ORDER BY scope.agent_version_id ASC,scope.updated_at DESC,scope.scope_id ASC`,
+      args: [
+        input.workspaceId,
+        versionIds,
+        input.workspaceId,
+        input.workspaceId,
+        input.workspaceId,
+        input.workspaceId,
+        MAX_AGENT_OVERVIEW_SCOPES_PER_PARENT,
+      ],
+    }),
+  ]);
+
+  const parentsByVersion = new Map(parents.map(parent => [parent.versionId, parent] as const));
+  for (const row of statsResult.rows as QueryRow[]) {
+    const versionId = rowText(row, "version_id");
+    const parent = versionId ? parentsByVersion.get(versionId) : null;
+    if (!parent) throw new Error("Database returned an invalid overview parent rollup.");
+    const comparable = rowInteger(row, "lowest_comparable");
+    const agreements = rowInteger(row, "lowest_agreements");
+    const lowestWorkflowKey = rowText(row, "lowest_workflow_key");
+    const lowestRiskTier = rowText(row, "lowest_risk_tier");
+    parent.scopeCount = rowInteger(row, "scope_count");
+    parent.scopesTruncated = parent.scopeCount > MAX_AGENT_OVERVIEW_SCOPES_PER_PARENT;
+    parent.stageCounts = {
+      calibrating: rowInteger(row, "calibrating_count"),
+      high_coverage: rowInteger(row, "high_coverage_count"),
+      medium_coverage: rowInteger(row, "medium_coverage_count"),
+      monitoring: rowInteger(row, "monitoring_count"),
+    };
+    parent.lowestEndorsement =
+      comparable > 0 && lowestWorkflowKey && lowestRiskTier
+        ? {
+            lower95Bps: wilsonIntervalBps(agreements, comparable).lower,
+            workflowKey: lowestWorkflowKey,
+            riskTier: lowestRiskTier,
+          }
+        : null;
+  }
+  for (const row of scopesResult.rows as QueryRow[]) {
+    const versionId = rowText(row, "agent_version_id");
+    const parent = versionId ? parentsByVersion.get(versionId) : null;
+    const scopeId = rowText(row, "scope_id");
+    const workflowKey = rowText(row, "workflow_key");
+    const riskTier = rowText(row, "risk_tier");
+    if (!parent || !scopeId || !workflowKey || !riskTier) {
+      throw new Error("Database returned an invalid overview scope.");
+    }
+    const comparableCount = rowInteger(row, "comparable");
+    const agreementCount = rowInteger(row, "agreements");
+    const interval = comparableCount > 0 ? wilsonIntervalBps(agreementCount, comparableCount) : null;
+    const stage = overviewStage(row.stage);
+    const transitionEvent = rowText(row, "transition_event_type");
+    const transitionFrom = rowText(row, "transition_from_stage");
+    const transitionTo = rowText(row, "transition_to_stage");
+    parent.scopes.push({
+      scopeId,
+      workflowKey,
+      riskTier,
+      stage,
+      reviewRateBps: scopeReviewRate(row, stage),
+      comparableCount,
+      agreementCount,
+      humanAgreementBps: comparableCount > 0 ? Math.floor((agreementCount * 10_000) / comparableCount) : null,
+      humanAgreementLower95Bps: interval?.lower ?? null,
+      averageTotalDurationMs: rowNullableNumber(row, "average_total_duration_ms"),
+      averageInputTokenTotal: rowNullableNumber(row, "average_input_token_total"),
+      averageOutputTokenTotal: rowNullableNumber(row, "average_output_token_total"),
+      lastTransition:
+        transitionEvent && row.transition_created_at
+          ? {
+              eventType: transitionEvent as "stage_changed" | "reset",
+              fromStage: transitionFrom ? overviewStage(transitionFrom) : null,
+              toStage: transitionTo ? overviewStage(transitionTo) : null,
+              reasonCodes: reasonCodes(row.transition_reason_codes_json),
+              createdAt: rowIso(row, "transition_created_at"),
+            }
+          : null,
+      updatedAt: rowIso(row, "updated_at"),
+    });
+  }
+  return agentVersionPage({
+    parents,
+    requestedPage: input.page,
+    totalParentCount: input.totalParentCount,
+    alreadyPaged: true,
+  });
+}
+
+async function loadAgentOverviewAttention(input: {
+  workspaceId: string;
+  canManage: boolean;
+}): Promise<AgentOverview["attention"]> {
+  if (!input.canManage) {
+    return {
+      periodLabel: "Current evidence state",
+      items: [],
+      totalItemCount: 0,
+      itemsTruncated: false,
+    };
+  }
+  const lowerSql = wilsonLowerSql("e.agreements", "e.comparable");
+  const result = await dbClient.execute({
+    sql: `WITH current_versions AS (
+            SELECT DISTINCT ON (agent.agent_id)
+                   agent.agent_id,version.version_id,version.display_name
+            FROM tokenless_agents agent
+            JOIN tokenless_agent_versions version
+              ON version.workspace_id=agent.workspace_id AND version.agent_id=agent.agent_id
+            WHERE agent.workspace_id=?
+            ORDER BY agent.agent_id,version.version_number DESC,version.version_id ASC
+          ), active_review AS (
+            SELECT binding.agent_id,binding.agent_version_id,
+                   binding.selection_policy_id AS policy_id,
+                   binding.selection_policy_version AS policy_version,
+                   policy.agreement_threshold_bps
+            FROM tokenless_agent_human_review_bindings binding
+            JOIN tokenless_agent_review_policies policy
+              ON policy.workspace_id=binding.workspace_id
+             AND policy.policy_id=binding.selection_policy_id
+             AND policy.version=binding.selection_policy_version
+            JOIN tokenless_agent_review_request_profiles profile
+              ON profile.workspace_id=binding.workspace_id
+             AND profile.profile_id=binding.request_profile_id
+             AND profile.version=binding.request_profile_version
+             AND profile.profile_hash=binding.request_profile_hash
+            WHERE binding.workspace_id=? AND binding.enabled=true
+              AND binding.superseded_at IS NULL AND profile.result_semantics='assurance'
+          ), blocked AS (
+            SELECT current.agent_id,current.display_name,COUNT(*) AS blocked_count
+            FROM current_versions current
+            JOIN active_review review
+              ON review.agent_id=current.agent_id AND review.agent_version_id=current.version_id
+            JOIN tokenless_agent_review_opportunities opportunity
+              ON opportunity.workspace_id=? AND opportunity.agent_id=current.agent_id
+             AND opportunity.agent_version_id=current.version_id
+             AND opportunity.policy_id=review.policy_id AND opportunity.policy_version=review.policy_version
+            JOIN tokenless_agent_review_opportunity_lifecycles lifecycle
+              ON lifecycle.workspace_id=opportunity.workspace_id
+             AND lifecycle.opportunity_id=opportunity.opportunity_id
+            WHERE lifecycle.state='blocked'
+            GROUP BY current.agent_id,current.display_name
+          ), evidence AS (
+            SELECT current.agent_id,current.display_name,scope.scope_id,scope.workflow_key,scope.risk_tier,
+                   review.agreement_threshold_bps,
+                   COUNT(*) FILTER (WHERE observation.comparable=true) AS comparable,
+                   COUNT(*) FILTER (
+                     WHERE observation.comparable=true AND observation.agreement='agree'
+                   ) AS agreements
+            FROM current_versions current
+            JOIN active_review review
+              ON review.agent_id=current.agent_id AND review.agent_version_id=current.version_id
+            JOIN tokenless_agent_evaluation_scopes scope
+              ON scope.workspace_id=? AND scope.agent_id=current.agent_id
+             AND scope.agent_version_id=current.version_id
+             AND scope.policy_id=review.policy_id AND scope.policy_version=review.policy_version
+            LEFT JOIN tokenless_agent_evaluation_observations observation
+              ON observation.workspace_id=scope.workspace_id AND observation.scope_id=scope.scope_id
+            GROUP BY current.agent_id,current.display_name,scope.scope_id,scope.workflow_key,scope.risk_tier,
+                     review.agreement_threshold_bps
+          ), candidates AS (
+            SELECT 0 AS priority,blocked.blocked_count AS severity,'blocked' AS item_kind,
+                   blocked.agent_id,blocked.display_name,NULL::text AS scope_id,
+                   NULL::text AS workflow_key,NULL::text AS risk_tier,
+                   0::bigint AS comparable,0::bigint AS agreements,0 AS agreement_threshold_bps,
+                   blocked.blocked_count
+            FROM blocked
+            UNION ALL
+            SELECT 1 AS priority,(e.agreement_threshold_bps-${lowerSql}) AS severity,
+                   'low_confidence' AS item_kind,e.agent_id,e.display_name,e.scope_id,e.workflow_key,e.risk_tier,
+                   e.comparable,e.agreements,e.agreement_threshold_bps,0::bigint AS blocked_count
+            FROM evidence e
+            WHERE e.comparable>=30 AND ${lowerSql}<e.agreement_threshold_bps
+            UNION ALL
+            SELECT 2 AS priority,(30-e.comparable) AS severity,'insufficient' AS item_kind,
+                   e.agent_id,e.display_name,e.scope_id,e.workflow_key,e.risk_tier,
+                   e.comparable,e.agreements,e.agreement_threshold_bps,0::bigint AS blocked_count
+            FROM evidence e WHERE e.comparable<30
+          )
+          SELECT candidates.*,COUNT(*) OVER() AS total_item_count FROM candidates
+          ORDER BY priority ASC,severity DESC,display_name ASC,
+                   COALESCE(scope_id,agent_id) ASC
+          LIMIT 6`,
+    args: [input.workspaceId, input.workspaceId, input.workspaceId, input.workspaceId],
+  });
+  const candidates = (result.rows as QueryRow[]).map(row => {
+    const kind = rowText(row, "item_kind");
+    const agentId = rowText(row, "agent_id");
+    const displayName = rowText(row, "display_name");
+    if (!agentId || !displayName) throw new Error("Database returned an invalid overview attention item.");
+    if (kind === "blocked") {
+      return {
+        itemId: `blocked:${agentId}`,
+        kind,
+        agentId,
+        displayName,
+        blockedCount: rowInteger(row, "blocked_count"),
+      } satisfies AgentOverviewAttentionItem;
+    }
+    const scopeId = rowText(row, "scope_id");
+    const workflowKey = rowText(row, "workflow_key");
+    const riskTier = rowText(row, "risk_tier");
+    if (!scopeId || !workflowKey || !riskTier) {
+      throw new Error("Database returned an invalid overview scope attention item.");
+    }
+    const comparableCount = rowInteger(row, "comparable");
+    const agreementCount = rowInteger(row, "agreements");
+    if (kind === "low_confidence") {
+      const lower95Bps = wilsonIntervalBps(agreementCount, comparableCount).lower;
+      return {
+        itemId: `low-confidence:${scopeId}`,
+        kind,
+        agentId,
+        displayName,
+        scopeId,
+        workflowKey,
+        riskTier,
+        comparableCount,
+        rejectedCount: Math.max(0, comparableCount - agreementCount),
+        lower95Bps,
+        policyThresholdBps: rowInteger(row, "agreement_threshold_bps"),
+      } satisfies AgentOverviewAttentionItem;
+    }
+    if (kind === "insufficient") {
+      return {
+        itemId: `insufficient:${scopeId}`,
+        kind,
+        agentId,
+        displayName,
+        scopeId,
+        workflowKey,
+        riskTier,
+        comparableCount,
+        targetComparableCount: 30,
+      } satisfies AgentOverviewAttentionItem;
+    }
+    throw new Error("Database returned an invalid overview attention kind.");
+  });
+  return {
+    periodLabel: "Current evidence state",
+    items: candidates.slice(0, 5),
+    totalItemCount: rowInteger(result.rows[0] as QueryRow | undefined, "total_item_count"),
+    itemsTruncated: rowInteger(result.rows[0] as QueryRow | undefined, "total_item_count") > 5,
+  };
+}
+
 export function projectAgentOverview(input: {
   agents: OverviewAgentSource[];
   metrics: Pick<AssuranceMetricsSnapshot, "reviewsCompleted">;
   observations: OverviewObservation[];
   observationsTruncated?: boolean;
+  parentPage?: number;
+  agentVersionPage?: {
+    parents: AgentOverviewParent[];
+    totalParentCount: number;
+    page: number;
+  };
+  attention?: AgentOverview["attention"];
   now: Date;
 }): AgentOverview {
   const startsAt = new Date(input.now.getTime() - OVERVIEW_WINDOW_MS);
@@ -505,19 +1063,21 @@ export function projectAgentOverview(input: {
       startsAt,
       endsAt: input.now,
     }),
-    agentVersions: {
-      periodLabel: "Lifetime by scope",
-      parents: parents.slice(0, MAX_AGENT_OVERVIEW_PARENTS),
-      totalParentCount: parents.length,
-      parentsTruncated: parents.length > MAX_AGENT_OVERVIEW_PARENTS,
-    },
-    attention: attentionProjection(input.agents),
+    agentVersions: input.agentVersionPage
+      ? agentVersionPage({
+          parents: input.agentVersionPage.parents,
+          requestedPage: input.agentVersionPage.page,
+          totalParentCount: input.agentVersionPage.totalParentCount,
+          alreadyPaged: true,
+        })
+      : agentVersionPage({ parents, requestedPage: input.parentPage ?? 1 }),
+    attention: input.attention ?? attentionProjection(input.agents),
   };
 }
 
 function observationFromRow(row: QueryRow): OverviewObservation {
   const agreement = String(row.agreement ?? "");
-  if (!["agree", "disagree", "inconclusive"].includes(agreement)) {
+  if (!["agree", "disagree", "abstain", "inconclusive"].includes(agreement)) {
     throw new Error("Database returned an invalid overview agreement.");
   }
   const latencyValue = row.latency_ms;
@@ -550,14 +1110,19 @@ function observationFromRow(row: QueryRow): OverviewObservation {
 export async function getAgentOverview(input: {
   accountAddress: string;
   workspaceId: string;
+  page?: number;
   now?: Date;
 }): Promise<AgentOverview> {
   const now = input.now ?? new Date();
-  const registry: AgentRegistry = await listWorkspaceAgents(input);
-  const [metrics, observationResult] = await Promise.all([
-    collectWorkspaceAssuranceMetrics({ workspaceId: input.workspaceId, now }),
-    dbClient.execute({
-      sql: `SELECT ob.agreement,ob.comparable,ob.latency_ms,ob.cost_atomic,ob.finalized_at
+  const requestedPage = input.page ?? 1;
+  if (!Number.isSafeInteger(requestedPage) || requestedPage < 1) {
+    throw new TokenlessServiceError("Overview page is invalid.", 400, "invalid_overview_page", false, "page");
+  }
+  const access = await requireAgentOverviewAccess(input.accountAddress, input.workspaceId);
+  const totalParentCountPromise = countAgentOverviewParents(input.workspaceId);
+  const metricsPromise = collectWorkspaceAssuranceMetrics({ workspaceId: input.workspaceId, now });
+  const observationPromise = dbClient.execute({
+    sql: `SELECT ob.agreement,ob.comparable,ob.latency_ms,ob.cost_atomic,ob.finalized_at
             FROM tokenless_agent_evaluation_observations ob
             JOIN tokenless_agent_review_opportunities opportunity
               ON opportunity.workspace_id=ob.workspace_id AND opportunity.opportunity_id=ob.opportunity_id
@@ -570,16 +1135,34 @@ export async function getAgentOverview(input: {
               AND profile.result_semantics='assurance'
             ORDER BY ob.finalized_at DESC,ob.observation_id DESC
             LIMIT ?`,
-      args: [input.workspaceId, new Date(now.getTime() - OVERVIEW_WINDOW_MS), now, MAX_AGENT_OVERVIEW_OBSERVATIONS + 1],
-    }),
+    args: [input.workspaceId, new Date(now.getTime() - OVERVIEW_WINDOW_MS), now, MAX_AGENT_OVERVIEW_OBSERVATIONS + 1],
+  });
+  const attentionPromise = loadAgentOverviewAttention({
+    workspaceId: input.workspaceId,
+    canManage: access.canManage,
+  });
+  const totalParentCount = await totalParentCountPromise;
+  const totalPages = Math.max(1, Math.ceil(totalParentCount / AGENT_OVERVIEW_PARENT_PAGE_SIZE));
+  const page = Math.min(requestedPage, totalPages);
+  const [metrics, observationResult, parentPage, attention] = await Promise.all([
+    metricsPromise,
+    observationPromise,
+    loadAgentOverviewParentPage({ workspaceId: input.workspaceId, page, totalParentCount }),
+    attentionPromise,
   ]);
   return projectAgentOverview({
-    agents: registry.agents,
+    agents: [],
     metrics,
     observations: observationResult.rows
       .slice(0, MAX_AGENT_OVERVIEW_OBSERVATIONS)
       .map(row => observationFromRow(row as QueryRow)),
     observationsTruncated: observationResult.rows.length > MAX_AGENT_OVERVIEW_OBSERVATIONS,
+    agentVersionPage: {
+      parents: parentPage.parents,
+      totalParentCount: parentPage.totalParentCount,
+      page: parentPage.page,
+    },
+    attention,
     now,
   });
 }

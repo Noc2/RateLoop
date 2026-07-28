@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  MAX_AGENT_OVERVIEW_PARENTS,
+  AGENT_OVERVIEW_PARENT_PAGE_SIZE,
   MAX_AGENT_OVERVIEW_SCOPES_PER_PARENT,
   projectAgentOverview,
 } from "~~/lib/tokenless/agentOverview";
@@ -217,7 +217,7 @@ test("agent-version parents are bounded, retain scope rows, and use the lowest o
   scopes.push(scope("historical-scope", 1_000, { agentVersionId: "version-old" }));
   const agents = [
     agent(0, scopes),
-    ...Array.from({ length: MAX_AGENT_OVERVIEW_PARENTS }, (_, index) => agent(index + 1)),
+    ...Array.from({ length: AGENT_OVERVIEW_PARENT_PAGE_SIZE }, (_, index) => agent(index + 1)),
   ];
   const overview = projectAgentOverview({
     agents,
@@ -235,9 +235,12 @@ test("agent-version parents are bounded, retain scope rows, and use the lowest o
   });
 
   assert.equal(overview.agentVersions.periodLabel, "Lifetime by scope");
-  assert.equal(overview.agentVersions.totalParentCount, MAX_AGENT_OVERVIEW_PARENTS + 1);
-  assert.equal(overview.agentVersions.parents.length, MAX_AGENT_OVERVIEW_PARENTS);
-  assert.equal(overview.agentVersions.parentsTruncated, true);
+  assert.equal(overview.agentVersions.totalParentCount, AGENT_OVERVIEW_PARENT_PAGE_SIZE + 1);
+  assert.equal(overview.agentVersions.parents.length, AGENT_OVERVIEW_PARENT_PAGE_SIZE);
+  assert.equal(overview.agentVersions.page, 1);
+  assert.equal(overview.agentVersions.totalPages, 2);
+  assert.equal(overview.agentVersions.hasPreviousPage, false);
+  assert.equal(overview.agentVersions.hasNextPage, true);
   const first = overview.agentVersions.parents[0]!;
   assert.equal(first.scopeCount, MAX_AGENT_OVERVIEW_SCOPES_PER_PARENT + 2);
   assert.equal(first.scopes.length, MAX_AGENT_OVERVIEW_SCOPES_PER_PARENT);
@@ -254,6 +257,19 @@ test("agent-version parents are bounded, retain scope rows, and use the lowest o
     recordedCount: 0,
     decisionCount: 1,
   });
+
+  const secondPage = projectAgentOverview({
+    agents,
+    metrics: { reviewsCompleted: 0 },
+    observations: [],
+    parentPage: 2,
+    now: new Date("2026-07-28T12:00:00.000Z"),
+  });
+  assert.equal(secondPage.agentVersions.page, 2);
+  assert.equal(secondPage.agentVersions.parents.length, 1);
+  assert.equal(secondPage.agentVersions.parents[0]!.displayName, "Agent 20");
+  assert.equal(secondPage.agentVersions.hasPreviousPage, true);
+  assert.equal(secondPage.agentVersions.hasNextPage, false);
 });
 
 test("attention is limited to current blocked, low-confidence, and insufficient evidence", () => {

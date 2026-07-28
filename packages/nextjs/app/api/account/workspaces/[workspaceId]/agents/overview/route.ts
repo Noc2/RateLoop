@@ -13,7 +13,9 @@ export async function GET(request: NextRequest, { params }: Context) {
   try {
     const session = await requireBrowserSession(request);
     const { workspaceId } = await params;
-    return NextResponse.json(await getAgentOverview({ accountAddress: session.principalId, workspaceId }), {
+    const rawPage = request.nextUrl.searchParams.get("page");
+    const page = rawPage === null ? 1 : Number(rawPage);
+    return NextResponse.json(await getAgentOverview({ accountAddress: session.principalId, workspaceId, page }), {
       headers: NO_STORE,
     });
   } catch (error) {

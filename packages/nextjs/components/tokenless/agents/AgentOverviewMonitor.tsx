@@ -136,6 +136,19 @@ function trendDate(date: string) {
   return trendDateFormatter.format(new Date(`${date}T00:00:00.000Z`));
 }
 
+function overviewPageFromUrl() {
+  if (typeof window === "undefined") return 1;
+  const value = Number(new URL(window.location.href).searchParams.get("overviewPage") ?? "1");
+  return Number.isSafeInteger(value) && value > 0 ? value : 1;
+}
+
+function replaceOverviewPageInUrl(page: number) {
+  const url = new URL(window.location.href);
+  if (page === 1) url.searchParams.delete("overviewPage");
+  else url.searchParams.set("overviewPage", String(page));
+  window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+}
+
 function ReviewOutcomeTrend({ overview }: { overview: AgentOverview }) {
   const trend = overview.trends.outcomes;
   return (
@@ -435,10 +448,27 @@ function ScopeTable({ parent }: { parent: AgentOverviewParent }) {
   );
 }
 
-function AgentVersionTable({ overview }: { overview: AgentOverview }) {
+function AgentVersionTable({
+  loading,
+  onPageChange,
+  overview,
+}: {
+  loading: boolean;
+  onPageChange: (page: number) => void;
+  overview: AgentOverview;
+}) {
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const firstParent =
+    overview.agentVersions.totalParentCount === 0
+      ? 0
+      : (overview.agentVersions.page - 1) * overview.agentVersions.pageSize + 1;
+  const lastParent = firstParent + overview.agentVersions.parents.length - (firstParent === 0 ? 0 : 1);
   return (
-    <section className="surface-card rounded-2xl p-5" aria-labelledby="agent-version-monitor-heading">
+    <section
+      className="surface-card rounded-2xl p-5"
+      aria-busy={loading}
+      aria-labelledby="agent-version-monitor-heading"
+    >
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 id="agent-version-monitor-heading" className="text-xl font-semibold">
@@ -531,12 +561,34 @@ function AgentVersionTable({ overview }: { overview: AgentOverview }) {
           </table>
         </div>
       )}
-      {overview.agentVersions.parentsTruncated ? (
-        <p className="mt-3 text-xs text-base-content/55">
-          Showing {overview.agentVersions.parents.length} of {overview.agentVersions.totalParentCount} current agent
-          versions.
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
+        <p className="text-xs text-base-content/55">
+          {overview.agentVersions.totalParentCount === 0
+            ? "No current agent versions"
+            : `${firstParent}–${lastParent} of ${overview.agentVersions.totalParentCount} current agent versions`}
         </p>
-      ) : null}
+        <nav className="flex items-center gap-2" aria-label="Agent version pages">
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            disabled={loading || !overview.agentVersions.hasPreviousPage}
+            onClick={() => onPageChange(overview.agentVersions.page - 1)}
+          >
+            Previous
+          </button>
+          <span className="min-w-24 text-center text-xs text-base-content/60">
+            Page {overview.agentVersions.page} of {overview.agentVersions.totalPages}
+          </span>
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            disabled={loading || !overview.agentVersions.hasNextPage}
+            onClick={() => onPageChange(overview.agentVersions.page + 1)}
+          >
+            Next
+          </button>
+        </nav>
+      </div>
     </section>
   );
 }
@@ -618,6 +670,7 @@ function AttentionList({ overview, workspaceId }: { overview: AgentOverview; wor
 
 export function AgentOverviewMonitor({ workspaceId }: { workspaceId: string }) {
   const [overview, setOverview] = useState<AgentOverview | null>(null);
+  const [page, setPage] = useState(overviewPageFromUrl);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -625,14 +678,20 @@ export function AgentOverviewMonitor({ workspaceId }: { workspaceId: string }) {
     const controller = new AbortController();
     setLoading(true);
     setError(null);
-    void fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/agents/overview`, {
+    void fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/agents/overview?page=${page}`, {
       cache: "no-store",
       credentials: "same-origin",
       signal: controller.signal,
     })
       .then(response => readJson<AgentOverview>(response))
       .then(body => {
-        if (!controller.signal.aborted) setOverview(body);
+        if (!controller.signal.aborted) {
+          setOverview(body);
+          if (body.agentVersions.page !== page) {
+            setPage(body.agentVersions.page);
+            replaceOverviewPageInUrl(body.agentVersions.page);
+          }
+        }
       })
       .catch(cause => {
         if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "Unable to load overview.");
@@ -641,16 +700,16 @@ export function AgentOverviewMonitor({ workspaceId }: { workspaceId: string }) {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [workspaceId]);
+  }, [page, workspaceId]);
 
-  if (loading) {
+  if (loading && !overview) {
     return (
       <section className="surface-card rounded-2xl p-6" role="status">
         Loading agent monitor…
       </section>
     );
   }
-  if (error || !overview) {
+  if (!overview) {
     return (
       <section className="surface-card rounded-2xl p-6 text-red-100" role="alert">
         {error ?? "Agent monitor is unavailable."}
@@ -674,7 +733,19 @@ export function AgentOverviewMonitor({ workspaceId }: { workspaceId: string }) {
       </section>
       <HeadlineCards overview={overview} />
       <TrendPanels overview={overview} />
-      <AgentVersionTable overview={overview} />
+      {error ? (
+        <p className="rounded-xl border border-red-300/20 bg-red-300/[0.06] p-4 text-sm text-red-100" role="alert">
+          {error}
+        </p>
+      ) : null}
+      <AgentVersionTable
+        loading={loading}
+        overview={overview}
+        onPageChange={nextPage => {
+          replaceOverviewPageInUrl(nextPage);
+          setPage(nextPage);
+        }}
+      />
       <AttentionList overview={overview} workspaceId={workspaceId} />
     </div>
   );
