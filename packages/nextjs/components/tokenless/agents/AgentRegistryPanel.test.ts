@@ -23,7 +23,10 @@ test("agent details render in the connection-focused registry", () => {
   assert.doesNotMatch(form, /Deployment name/i);
   assert.doesNotMatch(source, /declaredDeploymentName|>Deployment</i);
   assert.match(source, /const \[showArchived, setShowArchived\] = useState\(false\)/);
-  assert.match(source, /showArchived \? agents : agents\.filter\(agent => agent\.status === "active"\)/);
+  assert.match(
+    source,
+    /showArchived\s*\?\s*agents\s*:\s*agents\.filter\(agent => agent\.status === "active" \|\| agent\.agentId === selectedAgentId\)/,
+  );
   assert.match(source, /Show archived \(\$\{archivedAgentCount\}\)/);
   assert.match(source, /Hide archived/);
   assert.match(source, /aria-pressed=\{showArchived\}/);

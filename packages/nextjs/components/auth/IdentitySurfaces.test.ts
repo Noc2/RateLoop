@@ -54,7 +54,7 @@ test("wallet setup is explicit, purpose-bound, and keeps managed wallets disable
   assert.match(walletSettings, /findAuthSession/);
   assert.match(walletSettings, /redirect\("\/sign-in\?returnTo=%2Fsettings%2Fwallets"\)/);
   assert.match(profile, /href="\/settings\/wallets"[\s\S]*Wallet settings/);
-  assert.match(walletSettings, /href="\/human\?tab=profile"[\s\S]*Back to Profile/);
+  assert.match(walletSettings, /href="\/human\/profile"[\s\S]*Back to Profile/);
   assert.match(walletSettings, /candidate === "funding" \? candidate : "payout"/);
   assert.match(
     walletSettings,

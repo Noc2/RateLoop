@@ -39,7 +39,7 @@ test("a verified RateLoop session renders independently of optional wallet state
 
   assert.match(html, />Signed in</);
   assert.match(html, />Buyer Example</);
-  assert.match(html, /href="\/human\?tab=profile"/);
+  assert.match(html, /href="\/human\/profile"/);
   assert.match(html, /aria-label="Open profile for Buyer Example"/);
   assert.match(html, /aria-label="Sign out Buyer Example"/);
   assert.doesNotMatch(html, />Sign In</);

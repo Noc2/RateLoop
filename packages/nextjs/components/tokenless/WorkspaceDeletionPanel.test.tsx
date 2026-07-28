@@ -18,7 +18,7 @@ test("the visible workspace deletion action loads a preview before accepting the
   assert.match(source, /requiresFundResolution\(preview\)/);
   assert.match(source, /Request verified refund/);
   assert.match(source, /resolutionQueued/);
-  assert.match(source, /window\.location\.assign\("\/agents"\)/);
+  assert.match(source, /window\.location\.assign\("\/agents\/overview"\)/);
 });
 
 test("workspace deletion reveals only relevant impact, warnings, and blockers", () => {

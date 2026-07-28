@@ -19,9 +19,10 @@ test("evaluation dashboard leads with results and progressively discloses detail
   assert.match(source, /\["completed", "cancelled"\]\.includes\(run\.status\)/);
   assert.match(source, /\["failed", "dead"\]\.includes\(run\.status\)/);
   assert.doesNotMatch(source, /\["failed", "dead", "cancelled"\]/);
+  assert.match(source, /const orderedRuns = useMemo/);
   assert.match(
     source,
-    /\[\.\.\.dashboard\.runs\]\.sort\(\(left, right\) => Number\(runNeedsDecision\(right\)\) - Number\(runNeedsDecision\(left\)\)\)/,
+    /const actionDifference = Number\(runNeedsDecision\(right\)\) - Number\(runNeedsDecision\(left\)\)/,
   );
   assert.match(source, /orderedRuns\.map\(run =>/);
   assert.match(source, /Insufficient responses/);
@@ -72,7 +73,7 @@ test("evaluation dashboard leads with results and progressively discloses detail
 
 test("completed runs expose an oversight case detail that respects lane boundaries", () => {
   const source = readFileSync(new URL("./EvaluationDashboardPanel.tsx", import.meta.url), "utf8");
-  assert.match(source, /Case detail \(oversight\)/);
+  assert.match(source, /Case detail and reviewer reasons/);
   // Lazy fetch through the dedicated access-checked endpoint.
   assert.match(source, /\/cases`/);
   assert.match(source, /onToggle=\{event => event\.currentTarget\.open && void load\(\)\}/);
