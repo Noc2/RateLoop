@@ -18,6 +18,7 @@ const tabs: Array<{ value: HumanNavigation; label: string }> = [
 
 export function HumanTabs({ active, endAction }: { active: HumanNavigation; endAction?: ReactNode }) {
   const searchParams = useSearchParams();
+  const preservedSearch = new URLSearchParams(searchParams?.toString() ?? "");
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -28,7 +29,7 @@ export function HumanTabs({ active, endAction }: { active: HumanNavigation; endA
             href={humanSectionHref(
               tab.value,
               active === tab.value
-                ? new URLSearchParams(searchParams.toString())
+                ? preservedSearch
                 : tab.value === "history"
                   ? new URLSearchParams({ scope: "private" })
                   : undefined,
