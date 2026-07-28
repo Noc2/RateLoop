@@ -8,6 +8,7 @@ import {
   isBlockingSubscriptionStatus,
   subscriptionsEnabled,
 } from "./stripe";
+import type { WorkspaceBillingSummary, WorkspaceCheckoutBlockedReason } from "./workspaceBillingTypes";
 import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient } from "~~/lib/db";
@@ -256,8 +257,8 @@ function paidEntitlementActive(status: string, periodEnd: Date | null, now: Date
 
 async function readSubscription(workspaceId: string) {
   const result = await dbClient.execute({
-    sql: `SELECT plan_key, price_version, provider_status, current_period_start, current_period_end,
-                 cancel_at_period_end
+    sql: `SELECT plan_key, price_version, provider_subscription_id, provider_status,
+                 current_period_start, current_period_end, cancel_at_period_end
           FROM tokenless_workspace_subscriptions WHERE workspace_id = ? LIMIT 1`,
     args: [workspaceId],
   });
@@ -272,7 +273,25 @@ async function hasBillingCustomer(workspaceId: string) {
   return Boolean(rowString(result.rows[0] as QueryRow, "provider_customer_id"));
 }
 
-export async function getWorkspaceBillingSummary(input: { accountAddress: string; workspaceId: string }) {
+function checkoutBlockedReason(input: {
+  enabled: boolean;
+  hasBlockingSubscription: boolean;
+  paid: boolean;
+  status: string;
+}): WorkspaceCheckoutBlockedReason {
+  if (!input.enabled) return "billing_unavailable";
+  if (input.hasBlockingSubscription) {
+    return ["past_due", "unpaid", "incomplete"].includes(input.status)
+      ? "subscription_requires_attention"
+      : "manage_existing_subscription";
+  }
+  return input.paid ? "manage_existing_subscription" : null;
+}
+
+export async function getWorkspaceBillingSummary(input: {
+  accountAddress: string;
+  workspaceId: string;
+}): Promise<WorkspaceBillingSummary> {
   const access = await requireWorkspaceAccess(input.accountAddress, input.workspaceId);
   const subscription = await readSubscription(input.workspaceId);
   const now = new Date();
@@ -313,10 +332,17 @@ export async function getWorkspaceBillingSummary(input: { accountAddress: string
     storedSubscriptionId &&
       isBlockingSubscriptionStatus(storedStatus as Parameters<typeof isBlockingSubscriptionStatus>[0]),
   );
+  const blockedReason = checkoutBlockedReason({
+    enabled,
+    hasBlockingSubscription,
+    paid,
+    status: storedStatus,
+  });
   return {
     canManageBilling: access.canManageBilling,
     cancelAtPeriodEnd: paid && rowBoolean(subscription, "cancel_at_period_end"),
-    checkoutAvailable: enabled && !paid && !hasBlockingSubscription,
+    checkoutAvailable: blockedReason === null,
+    checkoutBlockedReason: blockedReason,
     limits: {
       activeAgents: plan.activeAgents,
       activePrivateGroups: plan.activePrivateGroups,

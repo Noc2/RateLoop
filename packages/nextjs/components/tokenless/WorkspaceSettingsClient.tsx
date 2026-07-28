@@ -8,6 +8,7 @@ import { WorkspaceDangerZone } from "~~/components/tokenless/WorkspaceDangerZone
 import { WorkspaceMembersPanel } from "~~/components/tokenless/WorkspaceMembersPanel";
 import { ChoiceInput, Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import type { WorkspaceBillingSummary } from "~~/lib/billing/workspaceBillingTypes";
 import { WorkspaceRequestScope } from "~~/lib/tokenless/workspaceRequestScope";
 
 type Workspace = {
@@ -15,20 +16,6 @@ type Workspace = {
   name: string;
   role: string;
   prepaid: { settledAtomic: string; reservedAtomic: string; availableAtomic: string };
-};
-
-type BillingSummary = {
-  plan: "free" | "early_access";
-  priceVersion: string;
-  status: string;
-  cancelAtPeriodEnd: boolean;
-  periodStart: string | null;
-  periodEnd: string | null;
-  usage: { completed: number; reserved: number; limit: number };
-  limits: { activeAgents: number; activePrivateGroups: number; paidPanels: boolean };
-  canManageBilling: boolean;
-  checkoutAvailable: boolean;
-  portalAvailable: boolean;
 };
 
 type BillingProfile = {
@@ -134,12 +121,33 @@ function billingStatusLabel(status: string) {
   return status.replaceAll("_", " ");
 }
 
+function billingUpgradeIntentMessage(billing: WorkspaceBillingSummary) {
+  if (billing.plan === "early_access") return "This workspace is already on Early Access.";
+  if (!billing.canManageBilling) {
+    return "Workspace owners and billing members can start the Early Access upgrade for this workspace.";
+  }
+  if (billing.checkoutBlockedReason === "subscription_requires_attention") {
+    return billing.portalAvailable
+      ? "Update the payment method below before upgrading."
+      : "Payment needs attention before this workspace can upgrade.";
+  }
+  if (billing.checkoutBlockedReason === "manage_existing_subscription") {
+    return billing.portalAvailable
+      ? "Manage the existing subscription below before starting another checkout."
+      : "An existing subscription must be resolved before starting another checkout.";
+  }
+  if (billing.checkoutBlockedReason === "billing_unavailable") {
+    return "Online upgrades are temporarily unavailable for this workspace.";
+  }
+  return "Continue your Early Access upgrade for this workspace below.";
+}
+
 export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWorkspaceId?: string }) {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [workspacesLoading, setWorkspacesLoading] = useState(true);
   const [selectedId, setSelectedId] = useState("");
   const [workspaceName, setWorkspaceName] = useState("");
-  const [billing, setBilling] = useState<BillingSummary | null>(null);
+  const [billing, setBilling] = useState<WorkspaceBillingSummary | null>(null);
   const [billingBusy, setBillingBusy] = useState(false);
   const [billingError, setBillingError] = useState<string | null>(null);
   const [billingReturn, setBillingReturn] = useState<"" | "success" | "cancelled" | "upgrade">("");
@@ -267,7 +275,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
             signal: request.signal,
           }),
         );
-        const next = ((body.billing as BillingSummary | undefined) ?? body) as BillingSummary;
+        const next = ((body.billing as WorkspaceBillingSummary | undefined) ?? body) as WorkspaceBillingSummary;
         if (!request.isCurrent()) return null;
         setBilling(next);
         setBillingError(null);
@@ -726,7 +734,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
 
   const usageTotal = billing ? billing.usage.completed + billing.usage.reserved : 0;
   const usagePercent = billing?.usage.limit ? Math.min(100, Math.round((usageTotal / billing.usage.limit) * 100)) : 0;
-  const billingWarning = ["past_due", "unpaid", "incomplete", "incomplete_expired"].includes(billing?.status ?? "");
+  const billingWarning = billing?.checkoutBlockedReason === "subscription_requires_attention";
   const editingIdentityProvider = identity?.providers.find(provider => provider.providerId === identityForm.providerId);
   const identityFormDirty =
     !identityForm.providerId ||
@@ -872,11 +880,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                   className="mt-4 rounded-lg border border-[var(--rateloop-blue)]/30 bg-[var(--rateloop-blue)]/[0.07] p-3 text-sm leading-6 text-base-content/75"
                   role="status"
                 >
-                  {billing?.plan === "early_access"
-                    ? "This workspace is already on Early Access."
-                    : billing && !billing.canManageBilling
-                      ? "Workspace owners and billing members can start the Early Access upgrade for this workspace."
-                      : "Continue your Early Access upgrade for this workspace below."}
+                  {billing ? billingUpgradeIntentMessage(billing) : "Loading this workspace’s billing status…"}
                 </div>
               ) : null}
               {billingReturn === "cancelled" ? (
@@ -934,15 +938,15 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                     </p>
                   ) : null}
                   <div className="mt-5 flex flex-wrap items-center gap-3">
-                    {billing.canManageBilling && billing.plan === "free" ? (
+                    {billing.canManageBilling && billing.plan === "free" && billing.checkoutAvailable ? (
                       <button
                         ref={upgradeActionRef}
                         type="button"
                         className="rateloop-gradient-action min-h-10 px-4"
-                        disabled={billingBusy || !billing.checkoutAvailable}
+                        disabled={billingBusy}
                         onClick={() => void openBillingDestination("checkout")}
                       >
-                        {billing.checkoutAvailable ? "Upgrade to Early Access" : "Billing is not enabled yet"}
+                        Upgrade to Early Access
                       </button>
                     ) : null}
                     {billing.canManageBilling && billing.portalAvailable && !billing.checkoutAvailable ? (
@@ -952,8 +956,33 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                         disabled={billingBusy}
                         onClick={() => void openBillingDestination("portal")}
                       >
-                        Manage billing
+                        {billing.checkoutBlockedReason === "subscription_requires_attention"
+                          ? "Update payment method"
+                          : "Manage billing"}
                       </button>
+                    ) : null}
+                    {billing.canManageBilling &&
+                    billing.plan === "free" &&
+                    billing.checkoutBlockedReason === "billing_unavailable" ? (
+                      <p className="text-sm text-base-content/60" role="status">
+                        Online upgrades are temporarily unavailable.
+                      </p>
+                    ) : null}
+                    {billing.canManageBilling &&
+                    billing.plan === "free" &&
+                    !billing.portalAvailable &&
+                    billing.checkoutBlockedReason === "subscription_requires_attention" ? (
+                      <p className="text-sm text-base-content/60" role="status">
+                        Payment needs attention before this workspace can upgrade.
+                      </p>
+                    ) : null}
+                    {billing.canManageBilling &&
+                    billing.plan === "free" &&
+                    !billing.portalAvailable &&
+                    billing.checkoutBlockedReason === "manage_existing_subscription" ? (
+                      <p className="text-sm text-base-content/60" role="status">
+                        An existing subscription must be resolved before starting another checkout.
+                      </p>
                     ) : null}
                     {billingReturn === "success" ? (
                       <button

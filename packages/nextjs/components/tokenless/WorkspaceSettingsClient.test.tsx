@@ -51,7 +51,10 @@ test("workspace settings communicates entitlement and checkout lifecycle", () =>
   assert.match(source, /reserved/);
   assert.match(source, /Upgrade to Early Access/);
   assert.match(source, /Manage billing/);
-  assert.match(source, /Billing is not enabled yet/);
+  assert.match(source, /Update payment method/);
+  assert.match(source, /Online upgrades are temporarily unavailable/);
+  assert.match(source, /checkoutBlockedReason/);
+  assert.doesNotMatch(source, /Billing is not enabled yet/);
   assert.match(source, /Your plan activates after payment confirmation/);
   assert.match(source, /Checkout was cancelled/);
   assert.match(source, /Existing accepted work can finish/);

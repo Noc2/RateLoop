@@ -28,6 +28,7 @@ function billingResponse(overrides: Record<string, unknown> = {}) {
     limits: { activeAgents: 1, activePrivateGroups: 0, paidPanels: false },
     canManageBilling: true,
     checkoutAvailable: true,
+    checkoutBlockedReason: null,
     portalAvailable: true,
     ...overrides,
   };
@@ -76,6 +77,81 @@ test("arriving from pricing with billing=upgrade acknowledges the intent and lan
   } finally {
     await act(async () => cleanup());
     HTMLElement.prototype.scrollIntoView = previousScrollIntoView;
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});
+
+test("a subscription needing attention offers payment recovery instead of a false disabled upgrade", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup, render } = await import("@testing-library/react");
+  const { WorkspaceSettingsClient } = await import("./WorkspaceSettingsClient");
+  const previousFetch = globalThis.fetch;
+  window.history.replaceState(null, "", "/agents?tab=overview");
+
+  globalThis.fetch = async input => {
+    const url = String(input);
+    if (url === "/api/account/workspaces") return Response.json(workspacesResponse());
+    if (url.endsWith("/billing")) {
+      return Response.json(
+        billingResponse({
+          checkoutAvailable: false,
+          checkoutBlockedReason: "subscription_requires_attention",
+          status: "incomplete",
+        }),
+      );
+    }
+    if (url.endsWith("/billing/topups")) {
+      return Response.json({ enabled: false, topups: [], ledger: [], reservations: [] });
+    }
+    throw new Error(`Unexpected workspace settings request: ${url}`);
+  };
+
+  try {
+    const view = render(<WorkspaceSettingsClient />);
+    assert.ok(await view.findByText(/Payment needs attention/));
+    assert.ok(view.getByRole("button", { name: "Update payment method" }));
+    assert.equal(view.queryByRole("button", { name: "Upgrade to Early Access" }), null);
+    assert.equal(view.queryByText("Billing is not enabled yet"), null);
+  } finally {
+    await act(async () => cleanup());
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});
+
+test("an existing non-attention subscription offers management without payment-warning copy", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup, render } = await import("@testing-library/react");
+  const { WorkspaceSettingsClient } = await import("./WorkspaceSettingsClient");
+  const previousFetch = globalThis.fetch;
+  window.history.replaceState(null, "", "/agents?tab=overview");
+
+  globalThis.fetch = async input => {
+    const url = String(input);
+    if (url === "/api/account/workspaces") return Response.json(workspacesResponse());
+    if (url.endsWith("/billing")) {
+      return Response.json(
+        billingResponse({
+          checkoutAvailable: false,
+          checkoutBlockedReason: "manage_existing_subscription",
+          status: "paused",
+        }),
+      );
+    }
+    if (url.endsWith("/billing/topups")) {
+      return Response.json({ enabled: false, topups: [], ledger: [], reservations: [] });
+    }
+    throw new Error(`Unexpected workspace settings request: ${url}`);
+  };
+
+  try {
+    const view = render(<WorkspaceSettingsClient />);
+    assert.ok(await view.findByRole("button", { name: "Manage billing" }));
+    assert.equal(view.queryByText(/Payment needs attention/), null);
+    assert.equal(view.queryByRole("button", { name: "Upgrade to Early Access" }), null);
+  } finally {
+    await act(async () => cleanup());
     globalThis.fetch = previousFetch;
     restoreDom();
   }

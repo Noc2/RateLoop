@@ -44,6 +44,7 @@ test("billing summary defaults safely to Free without exposing provider identifi
   assert.equal(summary.limits.activeAgents, 1);
   assert.equal(summary.canManageBilling, true);
   assert.equal(summary.checkoutAvailable, false);
+  assert.equal(summary.checkoutBlockedReason, "billing_unavailable");
   assert.equal(summary.portalAvailable, false);
   assert.equal("providerCustomerId" in summary, false);
   assert.equal("providerSubscriptionId" in summary, false);
@@ -57,6 +58,47 @@ test("billing access role can manage while outsiders receive a not-found respons
     (error: unknown) =>
       error instanceof TokenlessServiceError && error.status === 404 && error.code === "workspace_not_found",
   );
+});
+
+test("billing summary distinguishes payment attention, subscription management, and open checkout", async () => {
+  process.env.TOKENLESS_SUBSCRIPTIONS_ENABLED = "true";
+  const now = new Date("2026-07-14T12:00:00.000Z");
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_workspace_billing_customers
+            (workspace_id, provider, provider_customer_id, created_at, updated_at)
+          VALUES ('ws_acme', 'stripe', 'cus_acme', ?, ?)`,
+    args: [now, now],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_workspace_subscriptions
+            (workspace_id, plan_key, price_version, provider_subscription_id, provider_status,
+             cancel_at_period_end, created_at, updated_at)
+          VALUES ('ws_acme', 'free', 'free_2026_07', 'sub_acme', 'incomplete', false, ?, ?)`,
+    args: [now, now],
+  });
+
+  const attention = await getWorkspaceBillingSummary({ accountAddress: OWNER, workspaceId: "ws_acme" });
+  assert.equal(attention.plan, "free");
+  assert.equal(attention.checkoutAvailable, false);
+  assert.equal(attention.checkoutBlockedReason, "subscription_requires_attention");
+  assert.equal(attention.portalAvailable, true);
+
+  await dbClient.execute({
+    sql: "UPDATE tokenless_workspace_subscriptions SET provider_status = 'paused' WHERE workspace_id = 'ws_acme'",
+    args: [],
+  });
+  const manageable = await getWorkspaceBillingSummary({ accountAddress: OWNER, workspaceId: "ws_acme" });
+  assert.equal(manageable.plan, "free");
+  assert.equal(manageable.checkoutAvailable, false);
+  assert.equal(manageable.checkoutBlockedReason, "manage_existing_subscription");
+
+  await dbClient.execute({
+    sql: "UPDATE tokenless_workspace_subscriptions SET provider_status = 'canceled' WHERE workspace_id = 'ws_acme'",
+    args: [],
+  });
+  const open = await getWorkspaceBillingSummary({ accountAddress: OWNER, workspaceId: "ws_acme" });
+  assert.equal(open.checkoutAvailable, true);
+  assert.equal(open.checkoutBlockedReason, null);
 });
 
 test("billing members can self-declare a business profile without changing retention", async () => {
