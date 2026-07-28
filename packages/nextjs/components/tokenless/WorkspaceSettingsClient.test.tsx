@@ -108,6 +108,8 @@ test("enterprise identity settings cover provider lifecycle and workspace-local 
   assert.doesNotMatch(source, /Enterprise identity is not enabled for this deployment/);
   assert.match(source, /Copy this SCIM bearer token now/);
   assert.match(source, /Publish this domain verification token/);
+  assert.match(source, /<ConfirmDialog/);
+  assert.doesNotMatch(source, /window\.confirm/);
 });
 
 test("workspace managers can create one-time scoped API keys without result webhooks", () => {

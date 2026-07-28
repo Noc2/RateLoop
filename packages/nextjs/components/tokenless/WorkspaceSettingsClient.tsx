@@ -8,6 +8,7 @@ import { WorkspaceDangerZone } from "~~/components/tokenless/WorkspaceDangerZone
 import { WorkspaceMembersPanel } from "~~/components/tokenless/WorkspaceMembersPanel";
 import { ChoiceInput, Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import { ConfirmDialog } from "~~/components/tokenless/ui/ConfirmDialog";
 import type { WorkspaceBillingSummary } from "~~/lib/billing/workspaceBillingTypes";
 import { WorkspaceRequestScope } from "~~/lib/tokenless/workspaceRequestScope";
 
@@ -73,6 +74,10 @@ type WorkspaceIdentity = {
   }>;
   limitations: { scimGroups: false };
 };
+
+type IdentityConfirmation =
+  | { kind: "delete-provider"; providerId: string; domain: string }
+  | { kind: "revoke-scim"; providerId: string };
 
 class RequestFailure extends Error {
   code: string | null;
@@ -185,6 +190,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
   const [identityError, setIdentityError] = useState<string | null>(null);
   const [identityToken, setIdentityToken] = useState<string | null>(null);
   const [identityEndpoint, setIdentityEndpoint] = useState<string | null>(null);
+  const [identityConfirmation, setIdentityConfirmation] = useState<IdentityConfirmation | null>(null);
   const [identityForm, setIdentityForm] = useState({
     providerId: "",
     protocol: "oidc" as "oidc" | "saml",
@@ -230,6 +236,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
       setIdentityError(null);
       setIdentityToken(null);
       setIdentityEndpoint(null);
+      setIdentityConfirmation(null);
       setIdentityForm(current => ({
         ...current,
         providerId: "",
@@ -657,7 +664,6 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
     enabled?: boolean,
   ) {
     if (!selectedId) return;
-    if (action === "delete" && !window.confirm("Delete this identity provider and its linked SSO accounts?")) return;
     setIdentityBusy(true);
     setIdentityError(null);
     try {
@@ -689,7 +695,6 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
 
   async function scimAction(providerId?: string) {
     if (!selectedId) return;
-    if (providerId && !window.confirm("Revoke this SCIM token? Provisioning will stop immediately.")) return;
     setIdentityBusy(true);
     setIdentityError(null);
     try {
@@ -709,6 +714,14 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
     } finally {
       setIdentityBusy(false);
     }
+  }
+
+  async function confirmIdentityDestructiveAction() {
+    const pending = identityConfirmation;
+    if (!pending) return;
+    if (pending.kind === "delete-provider") await identityProviderAction(pending.providerId, "delete");
+    else await scimAction(pending.providerId);
+    setIdentityConfirmation(current => (current === pending ? null : current));
   }
 
   async function createWorkspace(event: FormEvent) {
@@ -1485,7 +1498,13 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                               <button
                                 className="text-red-200 underline underline-offset-4"
                                 disabled={identityBusy}
-                                onClick={() => void identityProviderAction(provider.providerId, "delete")}
+                                onClick={() =>
+                                  setIdentityConfirmation({
+                                    kind: "delete-provider",
+                                    providerId: provider.providerId,
+                                    domain: provider.domain,
+                                  })
+                                }
                                 type="button"
                               >
                                 Delete
@@ -1651,7 +1670,12 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                               <button
                                 className="text-red-200 underline underline-offset-4"
                                 disabled={identityBusy}
-                                onClick={() => void scimAction(connection.providerId)}
+                                onClick={() =>
+                                  setIdentityConfirmation({
+                                    kind: "revoke-scim",
+                                    providerId: connection.providerId,
+                                  })
+                                }
                                 type="button"
                               >
                                 Revoke token
@@ -1704,6 +1728,23 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
         </div>
         {showWorkspaceCreation ? <div id="create-workspace-form">{workspaceForm}</div> : null}
       </section>
+      <ConfirmDialog
+        open={identityConfirmation !== null}
+        title={
+          identityConfirmation?.kind === "delete-provider"
+            ? "Delete this identity provider and its linked SSO accounts?"
+            : "Revoke this SCIM token?"
+        }
+        description={
+          identityConfirmation?.kind === "delete-provider"
+            ? `The provider for ${identityConfirmation.domain} and its linked SSO accounts will be deleted.`
+            : "User provisioning will stop immediately."
+        }
+        confirmLabel={identityConfirmation?.kind === "delete-provider" ? "Delete provider" : "Revoke SCIM token"}
+        busy={identityBusy}
+        onCancel={() => setIdentityConfirmation(null)}
+        onConfirm={() => void confirmIdentityDestructiveAction()}
+      />
     </div>
   );
 }

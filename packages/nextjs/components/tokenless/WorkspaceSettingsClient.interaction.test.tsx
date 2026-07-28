@@ -295,3 +295,99 @@ test("a rejected billing detail lands focus on the exact field the server named"
     restoreDom();
   }
 });
+
+test("identity provider deletion and SCIM revocation wait for explicit dialog confirmation", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup, render, waitFor, within } = await import("@testing-library/react");
+  const userEvent = (await import("@testing-library/user-event")).default;
+  const { WorkspaceSettingsClient } = await import("./WorkspaceSettingsClient");
+  const previousFetch = globalThis.fetch;
+  const deletes: string[] = [];
+  let providerDeleted = false;
+  let scimRevoked = false;
+  window.history.replaceState(null, "", "/agents?tab=overview");
+
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (init?.method === "DELETE") {
+      deletes.push(url);
+      if (url.includes("/identity/providers/")) providerDeleted = true;
+      if (url.includes("/identity/scim/")) scimRevoked = true;
+      return Response.json({ ok: true });
+    }
+    if (url === "/api/account/workspaces") return Response.json(workspacesResponse());
+    if (url.endsWith("/billing")) return Response.json(billingResponse());
+    if (url.endsWith("/billing/topups")) {
+      return Response.json({ enabled: false, topups: [], ledger: [], reservations: [] });
+    }
+    if (url.endsWith("/members")) {
+      return Response.json({ viewerPrincipalId: "principal-owner", members: [], invitations: [] });
+    }
+    if (url.endsWith("/identity")) {
+      return Response.json({
+        enabled: true,
+        providers: providerDeleted
+          ? []
+          : [
+              {
+                providerId: "provider-1",
+                protocol: "oidc",
+                domain: "company.example",
+                domainVerified: true,
+                enforceSso: false,
+                lastSsoAt: null,
+              },
+            ],
+        scim: scimRevoked ? [] : [{ providerId: "scim-provider-1", lastSyncAt: null, lastSyncResult: null }],
+        limitations: { scimGroups: false },
+      });
+    }
+    throw new Error(`Unexpected workspace settings request: ${url}`);
+  };
+
+  try {
+    const view = render(<WorkspaceSettingsClient />);
+    const user = userEvent.setup({ document });
+    await user.click(await view.findByRole("button", { name: "Configure SSO and SCIM" }));
+
+    const deleteProvider = await view.findByRole("button", { name: "Delete" });
+    await user.click(deleteProvider);
+    let dialog = view.getByRole("alertdialog");
+    assert.ok(
+      within(dialog).getByRole("heading", {
+        name: "Delete this identity provider and its linked SSO accounts?",
+      }),
+    );
+    assert.ok(
+      within(dialog).getByText("The provider for company.example and its linked SSO accounts will be deleted."),
+    );
+    assert.equal(deletes.length, 0);
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    assert.equal(view.queryByRole("alertdialog"), null);
+    assert.equal(deletes.length, 0);
+
+    await user.click(deleteProvider);
+    dialog = view.getByRole("alertdialog");
+    await user.click(within(dialog).getByRole("button", { name: "Delete provider" }));
+    await waitFor(() =>
+      assert.deepEqual(deletes, ["/api/account/workspaces/workspace-1/identity/providers/provider-1"]),
+    );
+
+    const revokeScim = await view.findByRole("button", { name: "Revoke token" });
+    await user.click(revokeScim);
+    dialog = view.getByRole("alertdialog");
+    assert.ok(within(dialog).getByText("User provisioning will stop immediately."));
+    assert.equal(deletes.length, 1);
+    await user.click(within(dialog).getByRole("button", { name: "Revoke SCIM token" }));
+    await waitFor(() =>
+      assert.deepEqual(deletes, [
+        "/api/account/workspaces/workspace-1/identity/providers/provider-1",
+        "/api/account/workspaces/workspace-1/identity/scim/scim-provider-1",
+      ]),
+    );
+  } finally {
+    await act(async () => cleanup());
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});
