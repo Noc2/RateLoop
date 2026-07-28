@@ -15,11 +15,14 @@ test("reviewer consensus has a distinct policy threshold without changing legacy
   );
   assert.match(migration, /ALTER COLUMN "reviewer_consensus_threshold_bps" SET DEFAULT 7000/u);
   assert.match(migration, /"reviewer_consensus_threshold_bps" BETWEEN 0 AND 10000/u);
-  assert.deepEqual(journal.entries.at(-1), {
-    idx: 158,
-    version: "7",
-    when: 1785218400000,
-    tag: "0158_reviewer_consensus_threshold",
-    breakpoints: true,
-  });
+  assert.deepEqual(
+    journal.entries.find(entry => entry.tag === "0158_reviewer_consensus_threshold"),
+    {
+      idx: 158,
+      version: "7",
+      when: 1785218400000,
+      tag: "0158_reviewer_consensus_threshold",
+      breakpoints: true,
+    },
+  );
 });
