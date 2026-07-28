@@ -32,7 +32,7 @@ test("workspace settings keeps subscription and panel funding separate", () => {
   assert.match(source, /kind: "checkout" \| "portal"/);
   assert.match(source, /plan: "early_access"/);
   assert.match(source, /showPanelFunding/);
-  assert.match(source, /billing\?\.limits\.paidPanels \|\| topups\?\.enabled \|\| hasFundingActivity/);
+  assert.match(source, /const showPanelFunding = Boolean\(selected\)/);
 });
 
 test("workspace settings focuses the funding hash after its async panel renders", () => {

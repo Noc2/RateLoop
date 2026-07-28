@@ -193,7 +193,7 @@ test("an existing non-attention subscription offers management without payment-w
   }
 });
 
-test("a delayed panel-funding hash target scrolls and receives focus without changing the URL", async () => {
+test("a zero panel-funding balance is visible and receives deep-link focus before billing loads", async () => {
   const restoreDom = installTestDom();
   const { act, cleanup, render } = await import("@testing-library/react");
   const { WorkspaceSettingsClient } = await import("./WorkspaceSettingsClient");
@@ -221,25 +221,16 @@ test("a delayed panel-funding hash target scrolls and receives focus without cha
 
   try {
     const view = render(<WorkspaceSettingsClient initialWorkspaceId="workspace-1" />);
-    await view.findByRole("heading", { name: "Plan and usage" });
-    assert.equal(document.getElementById("panel-funding"), null, "the async funding panel should not exist yet");
-
-    await act(async () => {
-      resolveBilling(
-        Response.json(
-          billingResponse({
-            limits: { activeAgents: 1, activePrivateGroups: 0, paidPanels: true },
-          }),
-        ),
-      );
-    });
-
     const panel = await view.findByRole("region", { name: "Panel funding" });
-    assert.equal(document.activeElement, panel, "the delayed hash target should hold focus");
+    assert.ok(view.getAllByText("$0.00").length >= 3);
+    assert.equal(document.activeElement, panel, "the balance hash target should hold focus");
     assert.equal(scrollCalls.length, 1);
     assert.equal(scrollCalls[0]?.target, panel);
     assert.deepEqual(scrollCalls[0]?.options, { block: "start" });
     assert.equal(`${window.location.pathname}${window.location.search}${window.location.hash}`, expectedLocation);
+    await act(async () => {
+      resolveBilling(Response.json(billingResponse()));
+    });
   } finally {
     await act(async () => cleanup());
     HTMLElement.prototype.scrollIntoView = previousScrollIntoView;

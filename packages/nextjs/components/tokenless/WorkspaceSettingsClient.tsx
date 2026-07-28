@@ -761,13 +761,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
         identityForm.entryPoint ||
         identityForm.certificate,
     );
-  const hasFundingActivity = Boolean(
-    selected &&
-      [selected.prepaid.settledAtomic, selected.prepaid.reservedAtomic, selected.prepaid.availableAtomic].some(
-        value => BigInt(value) > 0n,
-      ),
-  );
-  const showPanelFunding = Boolean(billing?.limits.paidPanels || topups?.enabled || hasFundingActivity);
+  const showPanelFunding = Boolean(selected);
 
   useEffect(() => {
     if (!selectedId || !showPanelFunding) return;
