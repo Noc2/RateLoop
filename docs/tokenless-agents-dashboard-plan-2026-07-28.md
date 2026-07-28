@@ -339,7 +339,7 @@ persists in the URL.
 | --------------------------------------------- | --------------------------------------------------------------------------- | ----------------------- |
 | Decisions settled                             | `assuranceMetrics.reviewsCompleted`                                         | exists                  |
 | Human agreement rate, with Wilson lower bound | `AgentAssuranceScopeSummary.humanAgreementBps` / `humanAgreementLower95Bps` | exists, unrendered      |
-| Disagreement rate                             | `assuranceMetrics.scopes[].disagreements`                                   | exists, discarded in UI |
+| Rejection rate — see the correction in §6     | `assuranceMetrics.scopes[].disagreements`                                   | exists, discarded in UI |
 | Median time to decision                       | `assuranceMetrics.scopes[].latencyMilliseconds`                             | exists, summed away     |
 
 Cost per decision joins this row once §7 lands.
@@ -403,14 +403,38 @@ runs with links into Reviews. Detail without losing place, per principle 8.
 
 Precision matters here because these numbers will appear in evidence exports.
 
-- **Human agreement rate** — `agreementCount / comparableCount` over comparable
+- **Reviewer endorsement rate** — renamed from "human agreement rate". The
+  `agreement` column records whether the review panel judged the agent's output
+  acceptable against an owner-fixed binary criterion. That is endorsement of the
+  agent, not agreement between reviewers, and calling it "agreement" invites
+  exactly the confusion corrected below. The reliability literature reserves
+  *agreement* for rater-to-rater consistency; Label Studio names its three
+  families separately (Agreement, GT Agreement, Prediction Agreement) and
+  Confident AI avoids the word for this comparison entirely, calling it "Eval
+  Alignment". Computed as `agreementCount / comparableCount` over comparable
   cases only, reported with the Wilson 95% lower bound already computed at
   [`agentRegistry.ts:1090`](../packages/nextjs/lib/tokenless/agentRegistry.ts:1090).
   Always display the lower bound beside the point estimate; a 100% rate over three
   cases and over three hundred are different claims.
-- **Disagreement rate** — decisions where reviewers did not reach unanimity,
-  divided by decisions with at least two responding reviewers. Distinct from
-  `1 − agreement`, which compares humans to the agent.
+- **Correction, 28 July 2026.** An earlier draft defined "disagreement rate" as
+  reviewers failing to reach unanimity, and asserted it was distinct from
+  `1 − agreement`. That is wrong.
+  `assuranceMetrics.scopes[].disagreements`
+  ([`assuranceMetrics.ts:342`](../packages/nextjs/lib/tokenless/assuranceMetrics.ts:342))
+  and `agreementCount`
+  ([`agentRegistry.ts:980`](../packages/nextjs/lib/tokenless/agentRegistry.ts:980))
+  read the same `agreement` column of the same table over the same `comparable`
+  denominator. They are exact complements. Putting both on the headline row would
+  have shown one number twice — and at two different windows, 30-day against
+  lifetime, so they would not even have summed to 100%.
+- **Rejection rate** — `agreement = 'disagree'` over comparable cases, the
+  complement of endorsement. It belongs in the attention list and in alerts,
+  **never on the same row as the endorsement rate**.
+- **Reviewer consensus** — the genuinely distinct measure: whether reviewers
+  agreed with *each other*. Sourced from `mechanismHealth.unanimityRateBps` at
+  workspace level and `OversightCase.disagreementBps` per case, not from the
+  `agreement` column. It belongs in a separate "Review quality" block, because
+  endorsement rates the agent while consensus rates the rubric and the panel.
 - **Inter-reviewer agreement** — new, §7. Report **Krippendorff's α** at workspace
   level because the reviewer pool rotates and overlap is partial; report **pairwise
   percentage agreement** in the reviewer matrix because it is legible. Do not use
