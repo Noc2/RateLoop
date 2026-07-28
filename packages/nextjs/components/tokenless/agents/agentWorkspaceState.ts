@@ -79,8 +79,9 @@ export function agentTabHref(tab: AgentTab, workspaceId?: string) {
   return `/agents?${params.toString()}`;
 }
 
-export function agentSignInReturnTo(input: { tab?: string; workspaceId?: string; step?: string }) {
+export function agentSignInReturnTo(input: { returning?: string; tab?: string; workspaceId?: string; step?: string }) {
   const params = new URLSearchParams();
+  if (input.returning === "oauth") params.set("returning", input.returning);
   if (input.tab) params.set("tab", resolveAgentTabParam(input.tab));
   if (input.workspaceId) params.set("workspace", input.workspaceId);
   if (input.step) params.set("step", input.step);

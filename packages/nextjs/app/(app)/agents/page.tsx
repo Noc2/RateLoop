@@ -18,6 +18,7 @@ function firstQueryValue(value: string | string[] | undefined) {
 }
 
 type AgentsSearchParams = Promise<{
+  returning?: string | string[];
   tab?: string | string[];
   workspace?: string | string[];
   step?: string | string[];
@@ -30,6 +31,7 @@ export async function generateMetadata({ searchParams }: { searchParams: AgentsS
 export default async function AgentsPage({ searchParams }: { searchParams: AgentsSearchParams }) {
   const params = await searchParams;
   const rawTab = firstQueryValue(params.tab);
+  const returning = firstQueryValue(params.returning);
   const requestedWorkspaceId = firstQueryValue(params.workspace);
   const requestedStep = firstQueryValue(params.step);
   const cookieStore = await cookies();
@@ -38,14 +40,20 @@ export default async function AgentsPage({ searchParams }: { searchParams: Agent
   if (!session) {
     return (
       <AgentsSignInPrompt
-        returnTo={agentSignInReturnTo({ tab: rawTab, workspaceId: requestedWorkspaceId, step: requestedStep })}
+        returnTo={agentSignInReturnTo({
+          returning,
+          tab: rawTab,
+          workspaceId: requestedWorkspaceId,
+          step: requestedStep,
+        })}
       />
     );
   }
 
   const tab = resolveAgentTabParam(rawTab);
   const workspaces = await listProductWorkspaces(session.principalId);
-  const workspace = selectRequestedWorkspace(workspaces, requestedWorkspaceId);
+  const workspace =
+    returning === "oauth" && !requestedWorkspaceId ? null : selectRequestedWorkspace(workspaces, requestedWorkspaceId);
   let hasConnectedAgent = false;
   let setup = null;
 

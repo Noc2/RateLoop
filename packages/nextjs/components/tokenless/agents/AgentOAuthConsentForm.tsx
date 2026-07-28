@@ -16,6 +16,8 @@ type RelayResponse = {
   redirectTo?: string;
 };
 
+const OAUTH_WORKSPACE_RETURN = "/agents?tab=connect&returning=oauth";
+
 function isLoopbackRedirect(value: string | undefined) {
   if (!value) return false;
   try {
@@ -97,7 +99,7 @@ export function AgentOAuthConsentForm({ autoAuthorize, values }: Props) {
     setCallbackDelivered(true);
     if (window.opener && !window.opener.closed) window.close();
     redirectTimerRef.current = window.setTimeout(() => {
-      window.location.replace("/agents?tab=overview");
+      window.location.replace(OAUTH_WORKSPACE_RETURN);
     }, 1_600);
   }
 
@@ -118,7 +120,7 @@ export function AgentOAuthConsentForm({ autoAuthorize, values }: Props) {
               ? "Returning to RateLoop…"
               : "Finishing the secure callback…"}
         </p>
-        <Link href="/agents?tab=overview" className="rateloop-gradient-action mt-6 min-h-11 px-5">
+        <Link href={OAUTH_WORKSPACE_RETURN} className="rateloop-gradient-action mt-6 min-h-11 px-5">
           Back to Agents
         </Link>
         <iframe

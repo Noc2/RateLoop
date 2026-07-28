@@ -43,7 +43,8 @@ test("loopback OAuth completion stays branded while preserving a no-JavaScript r
   assert.match(consentForm, /sandbox=""/);
   assert.match(consentForm, /referrerPolicy="no-referrer"/);
   assert.match(consentForm, /window\.close\(\)/);
-  assert.match(consentForm, /window\.location\.replace\("\/agents\?tab=overview"\)/);
+  assert.match(consentForm, /OAUTH_WORKSPACE_RETURN = "\/agents\?tab=connect&returning=oauth"/);
+  assert.match(consentForm, /window\.location\.replace\(OAUTH_WORKSPACE_RETURN\)/);
   assert.match(consentForm, /action="\/api\/agent\/oauth\/authorize"[\s\S]*method="post"/);
   assert.match(authorizeRoute, /BROWSER_RELAY_HEADER/);
   assert.match(authorizeRoute, /outcome \? \{ outcome \} : \{\}/);
