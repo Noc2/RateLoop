@@ -30,3 +30,7 @@ test("paid eligibility preserves server field errors and clears them as values c
   assert.match(source, /error=\{fieldErrors\.declaredResidenceCountry\}/);
   assert.match(source, /aria-invalid=\{fieldErrors\.sanctionsConsent/);
 });
+
+test("paid eligibility hides paid-work reassurance after advisory-only selection", () => {
+  assert.match(source, /\{state\?\.status !== "declined" \? \([\s\S]*No blocked earnings later/u);
+});

@@ -533,18 +533,20 @@ export function PaidEligibilityClient() {
         {error ? <p className="mt-5 rounded-lg bg-red-400/10 p-3 text-sm text-red-100">{error}</p> : null}
       </section>
 
-      <aside className="surface-card rounded-2xl p-6">
-        <p className="font-mono text-xs uppercase tracking-widest text-base-content/55">Why this happens now</p>
-        <h2 className="mt-2 text-xl font-semibold">No blocked earnings later</h2>
-        <p className="mt-4 text-sm leading-6 text-base-content/60">
-          Every paid-work gate is complete before the first voucher. Browsing and advisory calibration remain available
-          without this step.
-        </p>
-        <p className="mt-4 border-l-2 border-[var(--rateloop-yellow)] bg-amber-300/[0.07] py-2 pl-3 text-xs leading-5 text-base-content/60">
-          Normal claims publicly link a one-time vote key to its per-round payout destination. Recovery stays
-          client-controlled.
-        </p>
-      </aside>
+      {state?.status !== "declined" ? (
+        <aside className="surface-card rounded-2xl p-6">
+          <p className="font-mono text-xs uppercase tracking-widest text-base-content/55">Why this happens now</p>
+          <h2 className="mt-2 text-xl font-semibold">No blocked earnings later</h2>
+          <p className="mt-4 text-sm leading-6 text-base-content/60">
+            Every paid-work gate is complete before the first voucher. Browsing and advisory calibration remain
+            available without this step.
+          </p>
+          <p className="mt-4 border-l-2 border-[var(--rateloop-yellow)] bg-amber-300/[0.07] py-2 pl-3 text-xs leading-5 text-base-content/60">
+            Normal claims publicly link a one-time vote key to its per-round payout destination. Recovery stays
+            client-controlled.
+          </p>
+        </aside>
+      ) : null}
     </div>
   );
 }
