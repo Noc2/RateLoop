@@ -125,7 +125,7 @@ export function AgentWorkspacePanels({
           <OversightAlertsPanel workspaceId={workspaceId} />
         ) : null}
         {hasConnectedAgent && resolvedTab === "evaluations" ? (
-          <EvaluationDashboardPanel initialWorkspaceId={workspaceId} showWorkspaceSelector={false} />
+          <EvaluationDashboardPanel initialWorkspaceId={workspaceId} />
         ) : null}
         {hasConnectedAgent && resolvedTab === "evidence" ? (
           <EvidenceWorkspacePanel workspaceId={workspaceId} canManage={canManage} />

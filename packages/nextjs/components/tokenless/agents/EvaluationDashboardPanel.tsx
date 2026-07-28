@@ -3,7 +3,7 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { AdaptiveCoverageSummary } from "~~/components/tokenless/agents/AdaptiveCoverageSummary";
 import { ModelEvidencePanel } from "~~/components/tokenless/agents/ModelEvidencePanel";
-import { Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
+import { Field, TextareaField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import type { AssuranceMetricsSnapshot } from "~~/lib/tokenless/assuranceMetrics";
@@ -235,6 +235,11 @@ function ClientDecisionButtons({
             label="Reasons"
             className="mt-2 w-full border-white/10 bg-[var(--rateloop-field)] text-sm"
             placeholder="Reasons (required for this run, at least 10 characters)"
+            hint={
+              explanationMissing
+                ? `At least 10 characters are required before you can sign off — ${10 - note.trim().length} to go.`
+                : "Long enough to sign off."
+            }
             value={note}
             error={fieldErrors.note}
             maxLength={2000}
@@ -316,6 +321,7 @@ function OverrideRecordForm({
   }
 
   const trendLabel = deciderTrendLabel(trend);
+  const reasonsTooShort = reasons.trim().length < 10;
   return (
     <form className="mt-4 border-t border-white/10 pt-4" onSubmit={event => event.preventDefault()}>
       <p className="text-sm font-semibold text-base-content/65">Record what you did with this output</p>
@@ -333,6 +339,11 @@ function OverrideRecordForm({
         label="Reasons"
         className="mt-3 w-full border-white/10 bg-[var(--rateloop-field)] text-sm"
         placeholder="Reasons (required, 10-2000 characters)"
+        hint={
+          reasonsTooShort
+            ? `At least 10 characters are required before you can record an outcome — ${10 - reasons.trim().length} to go.`
+            : "Long enough to record an outcome."
+        }
         value={reasons}
         error={fieldErrors.reasons}
         onChange={event => {
@@ -361,7 +372,7 @@ function OverrideRecordForm({
             type="button"
             className="btn btn-outline btn-sm capitalize"
             onClick={event => void submit(event, outcome)}
-            disabled={busy || reasons.trim().length < 10}
+            disabled={busy || reasonsTooShort}
           >
             {outcome}
           </button>
@@ -605,13 +616,7 @@ function RunCard({
   );
 }
 
-export function EvaluationDashboardPanel({
-  initialWorkspaceId = "",
-  showWorkspaceSelector = true,
-}: {
-  initialWorkspaceId?: string;
-  showWorkspaceSelector?: boolean;
-}) {
+export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialWorkspaceId?: string }) {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [workspaceId, setWorkspaceId] = useState("");
   const [dashboard, setDashboard] = useState<EvaluationDashboard | null>(null);
@@ -659,6 +664,7 @@ export function EvaluationDashboardPanel({
     void (async () => {
       setLoading(true);
       setError(null);
+      setMetricsError(false);
       try {
         const body = await readJson(
           await fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/evaluations`, {
@@ -696,40 +702,12 @@ export function EvaluationDashboardPanel({
     return () => controller.abort();
   }, [workspaceId]);
 
-  function selectWorkspace(nextWorkspaceId: string) {
-    setWorkspaceId(nextWorkspaceId);
-    setDashboard(null);
-    setAssuranceMetrics(null);
-    setError(null);
-  }
-
   return (
     <div className="space-y-5">
       <section className="surface-card rounded-2xl p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-pink)]">Evaluations</p>
-            <h2 className="mt-2 text-2xl font-semibold">Human review results</h2>
-            <p className="mt-2 text-sm text-base-content/55">Decisions and evidence from your agent workflows.</p>
-          </div>
-          {showWorkspaceSelector && workspaces.length > 1 ? (
-            <SelectField
-              containerClassName="min-w-56"
-              className="border-white/10 bg-[var(--rateloop-field)]"
-              label="Workspace"
-              labelClassName="text-sm text-base-content/60"
-              value={workspaceId}
-              onChange={event => selectWorkspace(event.target.value)}
-              disabled={loading}
-            >
-              {workspaces.map(workspace => (
-                <option key={workspace.workspaceId} value={workspace.workspaceId}>
-                  {workspace.name}
-                </option>
-              ))}
-            </SelectField>
-          ) : null}
-        </div>
+        <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-pink)]">Evaluations</p>
+        <h2 className="mt-2 text-2xl font-semibold">Human review results</h2>
+        <p className="mt-2 text-sm text-base-content/55">Decisions and evidence from your agent workflows.</p>
       </section>
 
       {error ? (
