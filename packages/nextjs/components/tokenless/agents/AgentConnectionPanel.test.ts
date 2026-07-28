@@ -152,12 +152,15 @@ test("replay-revoked OAuth integrations expose the owner recovery action", () =>
   assert.match(source, /revokes its current access tokens and restores the existing safe OAuth credential/);
 });
 
-test("the default adaptive policy explains its reachable calibration evidence", () => {
-  assert.match(source, /two stable\s+15-case windows/);
-  assert.match(source, /at least 14 agent-human agreements each/);
-  assert.match(source, /Coverage starts at 100%, then may move to 50%,\s+then 25%/);
-  assert.match(source, /Monitoring never drops below 25%/);
-  assert.match(source, /full-review calibration\s+block after 100 comparable cases/);
+test("connection approval keeps adaptive policy detail beside the controls that govern it", () => {
+  const editorSource = readFileSync(new URL("./AgentHumanReviewEditor.tsx", import.meta.url), "utf8");
+  assert.match(source, /reviewPolicyCopy\.limits\.adaptiveSummary/);
+  assert.match(source, /<InfoPopover label="About the adaptive preset">/);
+  assert.match(source, /reviewPolicyCopy\.limits\.adaptiveConnectionHelp/);
+  assert.doesNotMatch(source, /Generic MCP is advisory/);
+  assert.match(editorSource, /draft\.mode === "adaptive"/);
+  assert.match(editorSource, /reviewPolicyCopy\.limits\.adaptiveDetail/);
+  assert.match(editorSource, /<InfoPopover label="About adaptive coverage">/);
 });
 
 test("connected agent management opens from a direct action while technical state stays optional", () => {

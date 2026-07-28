@@ -2,6 +2,7 @@
 
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { humanReviewConfirmationMessage } from "./humanReviewConfirmation";
+import { InfoPopover } from "~~/components/tokenless/InfoPopover";
 import {
   type ReviewRoutingAuthority as Authority,
   type ReviewRoutingMode as Mode,
@@ -649,6 +650,15 @@ export function AgentHumanReviewEditor({
             onModeChange={changeReviewMode}
             onAuthorityChange={authority => update("authority", authority)}
           />
+          {draft.mode === "adaptive" ? (
+            <div className="flex items-start gap-2 rounded-xl border border-white/10 p-4 text-sm text-base-content/70">
+              <p>{reviewPolicyCopy.limits.adaptiveDetail}</p>
+              <InfoPopover label="About adaptive coverage">
+                Coverage changes only after enough comparable decisions. The minimum review rate and maximum gap remain
+                visible below.
+              </InfoPopover>
+            </div>
+          ) : null}
           {draft.mode !== "manual" ? (
             <details
               className="rounded-xl border border-white/10 p-4"

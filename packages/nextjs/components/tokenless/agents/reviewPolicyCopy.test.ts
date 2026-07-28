@@ -83,3 +83,16 @@ test("canonical field names also drive setup and review-setup validation", () =>
   assert.doesNotMatch(timingSource, /"Reviewer count"/);
   assert.doesNotMatch(compensationSource, /"USDC per reviewer"/);
 });
+
+test("adaptive policy detail is concise at connection time and complete in review setup", () => {
+  const connectionSource = readFileSync(new URL("./AgentConnectionPanel.tsx", import.meta.url), "utf8");
+  assert.equal(reviewPolicyCopy.limits.adaptiveSummary, "Safe adaptive preset applied.");
+  assert.ok(reviewPolicyCopy.limits.adaptiveConnectionHelp.split(/\s+/u).length <= 20);
+  assert.match(reviewPolicyCopy.limits.adaptiveDetail, /two stable 15-case windows/u);
+  assert.match(reviewPolicyCopy.limits.adaptiveDetail, /at least 14 agent-human agreements each/u);
+  assert.match(reviewPolicyCopy.limits.adaptiveDetail, /70% minimum declared confidence/u);
+  assert.match(reviewPolicyCopy.limits.adaptiveDetail, /at most 20 outputs/u);
+  assert.match(reviewPolicyCopy.limits.adaptiveDetail, /100 comparable cases/u);
+  assert.match(connectionSource, /reviewPolicyCopy\.limits\.adaptiveConnectionHelp/u);
+  assert.match(editorSource, /reviewPolicyCopy\.limits\.adaptiveDetail/u);
+});

@@ -15,6 +15,7 @@ import {
   isUsableAgentConnection,
   selectReconnectableOAuthConnections,
 } from "./agentWorkspaceState";
+import { reviewPolicyCopy } from "./reviewPolicyCopy";
 import { Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
@@ -650,14 +651,9 @@ function PairingApprovalCard({
             required
           />
         </div>
-        <div className="mt-4 rounded-lg border border-white/10 bg-white/[0.025] p-4 text-xs leading-5 text-base-content/55">
-          <strong className="text-base-content/75">Safe adaptive preset:</strong> private invited reviewers, two stable
-          15-case windows with at least 14 agent-human agreements each, 70% minimum declared confidence, review for high
-          and critical risk, and at most 20 outputs without a sample. Coverage starts at 100%, then may move to 50%,
-          then 25% after stable evidence. Monitoring never drops below 25% and returns to a full-review calibration
-          block after 100 comparable cases. Generic MCP is advisory: RateLoop decides and records when review is
-          required, but cannot prove this host blocks an answer before review finishes. Customize the immutable review
-          policy in the Review policy panel after approval.
+        <div className="mt-4 flex items-center gap-2 text-xs text-base-content/60">
+          <span>{reviewPolicyCopy.limits.adaptiveSummary}</span>
+          <InfoPopover label="About the adaptive preset">{reviewPolicyCopy.limits.adaptiveConnectionHelp}</InfoPopover>
         </div>
       </fieldset>
 

@@ -13,6 +13,7 @@ test("the contextual editor owns every human-review dimension through one canoni
     assert.match(source, new RegExp(label));
   }
   assert.match(source, /reviewPolicyCopy\.question\.criterion/);
+  assert.match(source, /reviewPolicyCopy\.limits\.adaptiveDetail/);
   assert.match(source, /reviewPolicyCopy\.timing\.responseWindow/);
   assert.match(source, /reviewPolicyCopy\.payment\.bountyPerReviewer/);
   assert.match(source, /canChooseQuestionAuthority/);
