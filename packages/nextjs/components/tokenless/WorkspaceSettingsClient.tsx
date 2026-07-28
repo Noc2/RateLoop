@@ -170,6 +170,8 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
   const [topupBusy, setTopupBusy] = useState(false);
   const [topupError, setTopupError] = useState<string | null>(null);
   const [showIdentity, setShowIdentity] = useState(false);
+  const [showApiAccess, setShowApiAccess] = useState(false);
+  const [showWorkspaceCreation, setShowWorkspaceCreation] = useState(false);
   const [identity, setIdentity] = useState<WorkspaceIdentity | null>(null);
   const [identityBusy, setIdentityBusy] = useState(false);
   const [identityError, setIdentityError] = useState<string | null>(null);
@@ -380,6 +382,17 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
       setTopupError(cause instanceof Error ? cause.message : "Unable to load prepaid funding.");
     });
   }, [canManageTopups, loadTopups, selectedId, workspaceRequests]);
+
+  useEffect(() => {
+    setIdentity(null);
+    setIdentityError(null);
+    if (!selectedId || !canManageIdentity) return;
+    const workspaceId = selectedId;
+    void loadIdentity(workspaceId).catch(cause => {
+      if (!workspaceRequests.isWorkspaceCurrent(workspaceId)) return;
+      setIdentityError(cause instanceof Error ? cause.message : "Unable to load enterprise identity.");
+    });
+  }, [canManageIdentity, loadIdentity, selectedId, workspaceRequests]);
 
   useEffect(() => {
     const state = new URLSearchParams(window.location.search).get("billing");
@@ -719,6 +732,13 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
         identityForm.entryPoint ||
         identityForm.certificate,
     );
+  const hasFundingActivity = Boolean(
+    selected &&
+      [selected.prepaid.settledAtomic, selected.prepaid.reservedAtomic, selected.prepaid.availableAtomic].some(
+        value => BigInt(value) > 0n,
+      ),
+  );
+  const showPanelFunding = Boolean(billing?.limits.paidPanels || topups?.enabled || hasFundingActivity);
 
   const workspaceForm = (
     <form className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start" onSubmit={createWorkspace}>
@@ -772,7 +792,30 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
             {selected && canManageWorkspace ? (
               <>
                 <WorkspaceMembersPanel canManage workspaceId={selected.workspaceId} />
-                <WorkspaceApiKeysPanel workspaceId={selected.workspaceId} />
+                <section className="mt-5 rounded-xl border border-white/10 p-5" aria-labelledby="workspace-api-access">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h2 id="workspace-api-access" className="text-xl font-semibold">
+                        API access
+                      </h2>
+                      <p className="mt-1 text-sm text-base-content/55">Keys for direct workspace integrations.</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn rateloop-secondary-action min-h-10 px-4"
+                      aria-controls="workspace-api-key-settings"
+                      aria-expanded={showApiAccess}
+                      onClick={() => setShowApiAccess(current => !current)}
+                    >
+                      {showApiAccess ? "Done" : "Manage API keys"}
+                    </button>
+                  </div>
+                  {showApiAccess ? (
+                    <div id="workspace-api-key-settings" className="mt-5 border-t border-white/10 pt-5">
+                      <WorkspaceApiKeysPanel workspaceId={selected.workspaceId} />
+                    </div>
+                  ) : null}
+                </section>
               </>
             ) : null}
             <section
@@ -1133,7 +1176,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
               ) : null}
             </section>
 
-            {selected ? (
+            {selected && showPanelFunding ? (
               <section
                 id="panel-funding"
                 aria-labelledby="panel-funding-heading"
@@ -1203,11 +1246,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                       {topupBusy ? "Creating invoice…" : "Create invoice"}
                     </button>
                   </form>
-                ) : canManageTopups && topups ? (
-                  <p className="mt-4 text-xs leading-5 text-base-content/55">
-                    USD invoice funding is not enabled for this deployment.
-                  </p>
-                ) : canManageTopups && !topupError ? (
+                ) : canManageTopups && !topups && !topupError ? (
                   <p className="mt-4 text-xs leading-5 text-base-content/55" role="status">
                     Loading prepaid funding…
                   </p>
@@ -1271,7 +1310,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
               </section>
             ) : null}
 
-            {selected && canManageIdentity ? (
+            {selected && canManageIdentity && identity?.enabled ? (
               <section aria-labelledby="enterprise-identity" className="mt-5 rounded-xl border border-white/10 p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
@@ -1293,11 +1332,6 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                 </div>
                 {showIdentity ? (
                   <div className="mt-5 space-y-5 border-t border-white/10 pt-5">
-                    {identity && !identity.enabled ? (
-                      <p className="rounded-lg border border-white/10 bg-white/[0.02] p-4 text-sm text-base-content/60">
-                        Enterprise identity is not enabled for this deployment.
-                      </p>
-                    ) : null}
                     {identity?.enabled ? (
                       <>
                         {identityToken ? (
@@ -1601,10 +1635,21 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
       </div>
 
       <section className="surface-card rounded-2xl p-6" aria-labelledby="create-another-workspace-heading">
-        <h2 id="create-another-workspace-heading" className="text-lg font-semibold">
-          Create another workspace
-        </h2>
-        {workspaceForm}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 id="create-another-workspace-heading" className="text-lg font-semibold">
+            Workspaces
+          </h2>
+          <button
+            type="button"
+            className="btn rateloop-secondary-action min-h-10 px-4"
+            aria-controls="create-workspace-form"
+            aria-expanded={showWorkspaceCreation}
+            onClick={() => setShowWorkspaceCreation(current => !current)}
+          >
+            {showWorkspaceCreation ? "Cancel" : "Create another workspace"}
+          </button>
+        </div>
+        {showWorkspaceCreation ? <div id="create-workspace-form">{workspaceForm}</div> : null}
       </section>
     </div>
   );

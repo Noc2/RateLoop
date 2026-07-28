@@ -31,6 +31,8 @@ test("workspace settings keeps subscription and panel funding separate", () => {
   assert.match(source, /\/billing\/\$\{kind\}/);
   assert.match(source, /kind: "checkout" \| "portal"/);
   assert.match(source, /plan: "early_access"/);
+  assert.match(source, /showPanelFunding/);
+  assert.match(source, /billing\?\.limits\.paidPanels \|\| topups\?\.enabled \|\| hasFundingActivity/);
 });
 
 test("workspace settings communicates entitlement and checkout lifecycle", () => {
@@ -89,14 +91,17 @@ test("enterprise identity settings cover provider lifecycle and workspace-local 
   assert.match(source, /Last sync:/);
   assert.match(source, /Revoke this SCIM token/);
   assert.match(source, /identityFormDirty/);
-  assert.match(source, /selected && canManageIdentity/);
-  assert.match(source, /Enterprise identity is not enabled for this deployment/);
+  assert.match(source, /selected && canManageIdentity && identity\?\.enabled/);
+  assert.doesNotMatch(source, /Enterprise identity is not enabled for this deployment/);
   assert.match(source, /Copy this SCIM bearer token now/);
   assert.match(source, /Publish this domain verification token/);
 });
 
 test("workspace managers can create one-time scoped API keys without result webhooks", () => {
   assert.match(source, /<WorkspaceApiKeysPanel workspaceId=\{selected\.workspaceId\} \/>/);
+  assert.match(source, /Manage API keys/);
+  assert.match(source, /aria-expanded=\{showApiAccess\}/);
+  assert.match(source, /showApiAccess \? \(/);
   assert.match(apiKeySource, /<OneTimeSecretNotice label="this API key"/);
   assert.match(apiKeySource, /New keys expire after 90 days and secrets are\s+stored only as hashes/);
   assert.match(apiKeySource, /setRevealedToken\(null\)/);
@@ -129,6 +134,8 @@ test("workspace management creation continues into guided agent setup", () => {
   assert.match(source, /workspaces\.length === 0/);
   assert.match(source, /Create another workspace/);
   assert.match(source, /aria-labelledby="create-another-workspace-heading"/);
+  assert.match(source, /aria-expanded=\{showWorkspaceCreation\}/);
+  assert.match(source, /showWorkspaceCreation \? <div id="create-workspace-form">/);
   assert.match(source, /sm:grid-cols-\[minmax\(0,1fr\)_auto\]/);
   assert.doesNotMatch(source, /<details[^>]*>\s*<summary[^>]*>Create another workspace/);
   assert.doesNotMatch(source, /rateloop-gradient-action mt-3 w-full/);
