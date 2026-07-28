@@ -64,8 +64,15 @@ export function validatePublicQuestionMediaPreviewCapability(input: {
   const expected = createHmac("sha256", previewCapabilityKey())
     .update(payload({ ...input, expiresAtSeconds }))
     .digest();
-  const supplied = Buffer.from(match[2]!, "base64url");
-  if (supplied.byteLength !== expected.byteLength || !timingSafeEqual(supplied, expected)) return null;
+  const encodedSignature = match[2]!;
+  const supplied = Buffer.from(encodedSignature, "base64url");
+  if (
+    supplied.byteLength !== expected.byteLength ||
+    supplied.toString("base64url") !== encodedSignature ||
+    !timingSafeEqual(supplied, expected)
+  ) {
+    return null;
+  }
   return { expiresAt: new Date(expiresAtSeconds * 1_000) };
 }
 
