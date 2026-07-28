@@ -14,6 +14,23 @@ test("the evidence workspace keeps verification and export state explicit", () =
   assert.match(source, /Verification details/);
   assert.match(source, /respondingReviewerCount/);
   assert.match(source, /targetReviewerCount/);
+  assert.match(source, /Point-in-time record/);
+  assert.match(source, /Review coverage and timing/);
+  for (const field of [
+    "targetExpectedJudgmentCount",
+    "assignedExpectedJudgmentCount",
+    "submittedJudgmentCount",
+    "validJudgmentCount",
+    "invalidJudgmentCount",
+    "pendingJudgmentCount",
+    "missingTargetJudgmentCount",
+    "missingAssignedJudgmentCount",
+  ]) {
+    assert.match(source, new RegExp(field));
+  }
+  assert.match(source, /responseSubmissionLatencyFromPeriodStartMs/);
+  assert.match(source, /Median response time/);
+  assert.match(source, /95th percentile/);
   assert.doesNotMatch(source, /No decision packet yet|A packet appears after/);
   assert.match(source, /evidence:verify/);
   assert.match(source, /audit:verify/);

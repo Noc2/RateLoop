@@ -30,6 +30,17 @@ type EvidencePacket = {
     generatedAt: string;
     aggregation: {
       suite: { outcome: "pass" | "fail" | "insufficient" };
+      judgmentCoverage?: {
+        caseCount: number;
+        targetExpectedJudgmentCount: number;
+        assignedExpectedJudgmentCount: number;
+        submittedJudgmentCount: number;
+        validJudgmentCount: number;
+        invalidJudgmentCount: number;
+        pendingJudgmentCount: number;
+        missingTargetJudgmentCount: number;
+        missingAssignedJudgmentCount: number;
+      };
       reviewerCoverage?: {
         sourceSubpanels?: Array<{
           source: string;
@@ -48,6 +59,15 @@ type EvidencePacket = {
         minimumAggregationSize: number;
         categories: Array<{ key: string; reviewerCount?: number; suppressed: boolean }>;
         unqualified: { reviewerCount?: number; suppressed: boolean };
+      };
+      period?: {
+        responseSubmissionLatencyFromPeriodStartMs?: {
+          count: number;
+          minimum: number | null;
+          median: number | null;
+          p95: number | null;
+          maximum: number | null;
+        };
       };
     };
     settlement?: { mode: string; statement: string; links: string[] };
@@ -119,6 +139,62 @@ function safeExternalEvidenceLink(value: string) {
   } catch {
     return null;
   }
+}
+
+function responseLatency(milliseconds: number | null | undefined) {
+  if (milliseconds === null || milliseconds === undefined) return "Unavailable";
+  if (milliseconds < 1_000) return `${milliseconds} ms`;
+  if (milliseconds < 60_000) return `${(milliseconds / 1_000).toFixed(1)} sec`;
+  const minutes = Math.floor(milliseconds / 60_000);
+  const seconds = Math.round((milliseconds % 60_000) / 1_000);
+  return `${minutes} min${seconds ? ` ${seconds} sec` : ""}`;
+}
+
+function PacketCoverage({ packet }: { packet: EvidencePacket }) {
+  const coverage = packet.payload.aggregation.judgmentCoverage;
+  const latency = packet.payload.reviewContext?.period?.responseSubmissionLatencyFromPeriodStartMs;
+  if (!coverage && !latency) return null;
+  return (
+    <details className="mt-4 rounded-xl border border-white/10 p-4">
+      <summary className="cursor-pointer text-sm font-semibold">Review coverage and timing</summary>
+      {coverage ? (
+        <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+          {[
+            ["Cases", coverage.caseCount],
+            ["Target expected", coverage.targetExpectedJudgmentCount],
+            ["Assigned expected", coverage.assignedExpectedJudgmentCount],
+            ["Submitted", coverage.submittedJudgmentCount],
+            ["Valid", coverage.validJudgmentCount],
+            ["Invalid", coverage.invalidJudgmentCount],
+            ["Pending", coverage.pendingJudgmentCount],
+            ["Missing from target", coverage.missingTargetJudgmentCount],
+            ["Missing from assignments", coverage.missingAssignedJudgmentCount],
+          ].map(([label, value]) => (
+            <div key={label}>
+              <dt className="text-xs text-base-content/55">{label}</dt>
+              <dd className="mt-1 font-mono">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+      {latency ? (
+        <dl className="mt-4 grid gap-3 border-t border-white/10 pt-4 text-sm sm:grid-cols-3">
+          <div>
+            <dt className="text-xs text-base-content/55">Response count</dt>
+            <dd className="mt-1 font-mono">{latency.count}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-base-content/55">Median response time</dt>
+            <dd className="mt-1">{responseLatency(latency.median)}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-base-content/55">95th percentile</dt>
+            <dd className="mt-1">{responseLatency(latency.p95)}</dd>
+          </div>
+        </dl>
+      ) : null}
+    </details>
+  );
 }
 
 function resultHrefForRun(workspaceId: string, runId: string, currentSearch: string) {
@@ -614,6 +690,9 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                     <div className="mt-3 flex flex-wrap gap-2">
                       <span className={`badge border-0 capitalize ${outcomeStyle(outcome)}`}>{outcome}</span>
                       <span className="badge border-white/10 bg-white/[0.04] text-base-content/65">
+                        Point-in-time record
+                      </span>
+                      <span className="badge border-white/10 bg-white/[0.04] text-base-content/65">
                         {anchorLabel(attestation, canManage)}
                       </span>
                     </div>
@@ -683,6 +762,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                     </div>
                   ) : null}
                 </dl>
+                <PacketCoverage packet={packet} />
                 <details className="mt-4 border-t border-white/10 pt-4">
                   <summary className="cursor-pointer text-sm font-semibold text-base-content/65">
                     Verification details

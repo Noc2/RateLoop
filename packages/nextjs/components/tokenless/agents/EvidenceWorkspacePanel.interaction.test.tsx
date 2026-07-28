@@ -33,7 +33,31 @@ const evidencePacket = {
     packetId: "packet-evidence-1",
     runId: "run-evidence-1",
     generatedAt: "2026-07-20T10:00:00.000Z",
-    aggregation: { suite: { outcome: "pass" } },
+    aggregation: {
+      suite: { outcome: "pass" },
+      judgmentCoverage: {
+        caseCount: 2,
+        targetExpectedJudgmentCount: 6,
+        assignedExpectedJudgmentCount: 6,
+        submittedJudgmentCount: 5,
+        validJudgmentCount: 4,
+        invalidJudgmentCount: 1,
+        pendingJudgmentCount: 0,
+        missingTargetJudgmentCount: 1,
+        missingAssignedJudgmentCount: 1,
+      },
+    },
+    reviewContext: {
+      period: {
+        responseSubmissionLatencyFromPeriodStartMs: {
+          count: 5,
+          minimum: 1_000,
+          median: 90_000,
+          p95: 240_000,
+          maximum: 240_000,
+        },
+      },
+    },
   },
   signing: {
     algorithm: "Ed25519",
@@ -135,6 +159,12 @@ test("a packet reveals verification while manager-only exports and controls stay
     assert.equal(resultHref.pathname, "/agents/results");
     assert.equal(resultHref.searchParams.get("workspace"), "workspace-evidence");
     assert.equal(resultHref.searchParams.get("resultRun"), "run-evidence-1");
+    assert.ok(view.getByText("Point-in-time record"));
+    assert.ok(view.getByText("Review coverage and timing"));
+    assert.ok(view.getByText("Target expected"));
+    assert.ok(view.getByText("Median response time"));
+    assert.ok(view.getByText("1 min 30 sec"));
+    assert.ok(view.getByText("4 min"));
     assert.equal(view.queryByRole("heading", { name: "Compliance exports" }), null);
     assert.equal(view.queryByRole("button", { name: "Retention, keys, and delivery" }), null);
   } finally {
