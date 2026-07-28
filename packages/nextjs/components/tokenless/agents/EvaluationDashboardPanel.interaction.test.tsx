@@ -174,7 +174,7 @@ test("an attributed run shows its exact agent version without the legacy disclai
 
   try {
     const view = await mount();
-    assert.ok(await view.findByText("agent_support"));
+    assert.equal((await view.findAllByText("agent_support")).length, 2);
     assert.ok(view.getByText("agent_version_support_7"));
     assert.equal(
       view.queryByText(
@@ -298,6 +298,49 @@ test("a failed run explains the recorded failure and exposes its case reasons", 
     await userEvent.setup({ document }).click(view.getByText("Why this failed: case detail and reviewer reasons"));
     assert.ok(await view.findByText("The candidate did not answer the question."));
   } finally {
+    await act(async () => cleanup());
+    restoreFetch();
+    restoreDom();
+  }
+});
+
+test("result filters restore from the URL and every evidence-backed result links to its packet", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup } = await import("@testing-library/react");
+  const restoreFetch = installFetch(
+    dashboard({
+      runs: [
+        run(),
+        run({
+          runId: "run_failed_2",
+          projectName: "Failed release",
+          suiteName: "Payment recovery",
+          status: "failed",
+          workflowKey: "checkout",
+          evidencePacketAvailable: true,
+          evidencePacketDigest: "0xpacket",
+          completedAt: "2026-07-21T00:00:00.000Z",
+        }),
+      ],
+      summary: { totalRuns: 2, completedRuns: 1, evidenceBackedRuns: 2, validResponses: 12 },
+    }),
+  );
+  window.history.replaceState(null, "", "/agents/results?workspace=workspace-1&resultStatus=failed");
+
+  try {
+    const view = await mount();
+    assert.ok(await view.findByText("Failed release"));
+    assert.equal(view.queryByText("Release gate"), null);
+    assert.ok(view.getByText("Showing 1 of 2 results"));
+    assert.equal((view.getByRole("combobox", { name: "Outcome" }) as HTMLSelectElement).value, "failed");
+    const evidence = view.getByRole("link", { name: "Open evidence" });
+    const href = new URL(evidence.getAttribute("href") ?? "", "https://rateloop.local");
+    assert.equal(href.pathname, "/agents/evidence");
+    assert.equal(href.searchParams.get("workspace"), "workspace-1");
+    assert.equal(href.searchParams.get("run"), "run_failed_2");
+    assert.equal(href.searchParams.get("resultStatus"), "failed");
+  } finally {
+    window.history.replaceState(null, "", "/agents/results");
     await act(async () => cleanup());
     restoreFetch();
     restoreDom();

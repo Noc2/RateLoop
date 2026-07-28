@@ -1,9 +1,18 @@
 "use client";
 
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { AdaptiveCoverageSummary } from "~~/components/tokenless/agents/AdaptiveCoverageSummary";
 import { ModelEvidencePanel } from "~~/components/tokenless/agents/ModelEvidencePanel";
-import { Field, TextareaField } from "~~/components/tokenless/forms/Field";
+import { agentTabHref } from "~~/components/tokenless/agents/agentWorkspaceState";
+import {
+  DEFAULT_EVALUATION_URL_STATE,
+  type EvaluationUrlState,
+  evaluationUrlHref,
+  parseEvaluationUrlState,
+} from "~~/components/tokenless/agents/evaluationUrlState";
+import { updateEvidenceUrlSearch } from "~~/components/tokenless/agents/evidenceUrlState";
+import { Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import { formatHumanDurationFromSeconds } from "~~/lib/humanDuration";
@@ -48,6 +57,22 @@ function decisionLabel(decision: EvaluationRun["clientDecision"]) {
 
 function runNeedsDecision(run: EvaluationRun) {
   return run.status === "completed" && run.evidencePacketAvailable && !run.clientDecision;
+}
+
+function runPresentationStatus(run: EvaluationRun) {
+  if (runNeedsDecision(run)) return "needs_action";
+  if (["failed", "dead"].includes(run.status)) return "failed";
+  if (["completed", "cancelled"].includes(run.status)) return "completed";
+  return "waiting";
+}
+
+function evidenceHrefForRun(workspaceId: string, runId: string, currentSearch: string) {
+  const route = new URL(
+    agentTabHref("evidence", workspaceId, new URLSearchParams(currentSearch)),
+    "https://rateloop.local",
+  );
+  route.search = updateEvidenceUrlSearch(route.search, { runId, packetId: null });
+  return `${route.pathname}${route.search}`;
 }
 
 function AssuranceMetricsSummary({ snapshot }: { snapshot: AssuranceMetricsSnapshot }) {
@@ -517,10 +542,12 @@ function RunCard({
   run,
   workspaceId,
   trend,
+  evidenceHref,
 }: {
   run: EvaluationRun;
   workspaceId: string;
   trend?: DeciderDecisionTrend;
+  evidenceHref: string | null;
 }) {
   const share = run.candidateSelectionShareBps;
   const [clientDecision, setClientDecision] = useState(run.clientDecision);
@@ -582,6 +609,14 @@ function RunCard({
           </div>
         ) : null}
       </div>
+
+      {evidenceHref ? (
+        <div className="mt-4">
+          <Link className="btn btn-outline btn-sm" href={evidenceHref}>
+            Open evidence
+          </Link>
+        </div>
+      ) : null}
 
       <details className="mt-4 border-t border-white/10 pt-4">
         <summary className="cursor-pointer text-sm font-semibold text-base-content/65">
@@ -689,6 +724,30 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
   const [metricsError, setMetricsError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [urlState, setUrlState] = useState<EvaluationUrlState>(DEFAULT_EVALUATION_URL_STATE);
+  const [currentSearch, setCurrentSearch] = useState("");
+
+  const updateUrlState = useCallback((patch: Partial<EvaluationUrlState>) => {
+    const href = evaluationUrlHref({
+      pathname: window.location.pathname,
+      search: window.location.search,
+      hash: window.location.hash,
+      patch,
+    });
+    window.history.replaceState(window.history.state, "", href);
+    setCurrentSearch(window.location.search);
+    setUrlState(parseEvaluationUrlState(window.location.search));
+  }, []);
+
+  useEffect(() => {
+    const restoreUrlState = () => {
+      setCurrentSearch(window.location.search);
+      setUrlState(parseEvaluationUrlState(window.location.search));
+    };
+    restoreUrlState();
+    window.addEventListener("popstate", restoreUrlState);
+    return () => window.removeEventListener("popstate", restoreUrlState);
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -767,9 +826,81 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
     return () => controller.abort();
   }, [workspaceId]);
 
-  const orderedRuns = dashboard
-    ? [...dashboard.runs].sort((left, right) => Number(runNeedsDecision(right)) - Number(runNeedsDecision(left)))
-    : [];
+  const agentOptions = useMemo(() => {
+    if (!dashboard) return [];
+    const labels = new Map(dashboard.agents.map(agent => [agent.agentId, agent.displayName || agent.externalId]));
+    for (const run of dashboard.runs) {
+      if (run.attribution.status === "attributed" && !labels.has(run.attribution.agentId)) {
+        labels.set(run.attribution.agentId, run.attribution.agentId);
+      }
+    }
+    return [...labels].sort((left, right) => left[1].localeCompare(right[1]));
+  }, [dashboard]);
+
+  const workflowOptions = useMemo(
+    () =>
+      dashboard
+        ? [
+            ...new Set(dashboard.runs.map(run => run.workflowKey).filter((value): value is string => Boolean(value))),
+          ].sort((left, right) => left.localeCompare(right))
+        : [],
+    [dashboard],
+  );
+
+  const orderedRuns = useMemo(() => {
+    if (!dashboard) return [];
+    const query = urlState.query.toLocaleLowerCase();
+    const cutoff =
+      urlState.date === "all" ? null : Date.now() - Number.parseInt(urlState.date, 10) * 24 * 60 * 60 * 1_000;
+    return dashboard.runs
+      .filter(run => {
+        if (urlState.runId && run.runId !== urlState.runId) return false;
+        if (
+          query &&
+          ![
+            run.projectName,
+            run.suiteName,
+            run.runId,
+            run.workflowKey,
+            run.evidencePacketDigest,
+            run.attribution.status === "attributed" ? run.attribution.agentId : null,
+          ]
+            .filter((value): value is string => Boolean(value))
+            .some(value => value.toLocaleLowerCase().includes(query))
+        ) {
+          return false;
+        }
+        if (
+          urlState.agentId &&
+          (run.attribution.status !== "attributed" || run.attribution.agentId !== urlState.agentId)
+        ) {
+          return false;
+        }
+        if (urlState.workflowKey && run.workflowKey !== urlState.workflowKey) return false;
+        if (urlState.status !== "all" && runPresentationStatus(run) !== urlState.status) return false;
+        if (cutoff !== null) {
+          const timestamp = new Date(run.completedAt ?? run.createdAt).getTime();
+          if (!Number.isFinite(timestamp) || timestamp < cutoff) return false;
+        }
+        return true;
+      })
+      .sort((left, right) => {
+        const actionDifference = Number(runNeedsDecision(right)) - Number(runNeedsDecision(left));
+        if (actionDifference !== 0) return actionDifference;
+        return (
+          new Date(right.completedAt ?? right.createdAt).getTime() -
+          new Date(left.completedAt ?? left.createdAt).getTime()
+        );
+      });
+  }, [dashboard, urlState]);
+
+  const filtersActive =
+    urlState.query !== "" ||
+    urlState.agentId !== "" ||
+    urlState.workflowKey !== "" ||
+    urlState.status !== "all" ||
+    urlState.date !== "all" ||
+    urlState.runId !== null;
 
   return (
     <div className="space-y-5">
@@ -808,9 +939,92 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
             <h2 id="evaluation-runs-heading" className="text-xl font-semibold">
               Results
             </h2>
-            {orderedRuns.map(run => (
-              <RunCard key={run.runId} run={run} workspaceId={workspaceId} trend={dashboard.deciderTrend} />
-            ))}
+            <div className="surface-card rounded-2xl p-4">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                <Field
+                  label="Search results"
+                  value={urlState.query}
+                  placeholder="Project, suite, run, or packet"
+                  onChange={event => updateUrlState({ query: event.target.value, runId: null })}
+                />
+                <SelectField
+                  label="Agent"
+                  value={urlState.agentId}
+                  onChange={event => updateUrlState({ agentId: event.target.value, runId: null })}
+                >
+                  <option value="">All agents</option>
+                  {agentOptions.map(([agentId, label]) => (
+                    <option key={agentId} value={agentId}>
+                      {label}
+                    </option>
+                  ))}
+                </SelectField>
+                <SelectField
+                  label="Workflow"
+                  value={urlState.workflowKey}
+                  onChange={event => updateUrlState({ workflowKey: event.target.value, runId: null })}
+                >
+                  <option value="">All workflows</option>
+                  {workflowOptions.map(workflowKey => (
+                    <option key={workflowKey} value={workflowKey}>
+                      {workflowKey}
+                    </option>
+                  ))}
+                </SelectField>
+                <SelectField
+                  label="Outcome"
+                  value={urlState.status}
+                  onChange={event =>
+                    updateUrlState({ status: event.target.value as EvaluationUrlState["status"], runId: null })
+                  }
+                >
+                  <option value="all">All outcomes</option>
+                  <option value="needs_action">Needs action</option>
+                  <option value="failed">Failed</option>
+                  <option value="completed">Completed</option>
+                  <option value="waiting">Waiting</option>
+                </SelectField>
+                <SelectField
+                  label="Date"
+                  value={urlState.date}
+                  onChange={event =>
+                    updateUrlState({ date: event.target.value as EvaluationUrlState["date"], runId: null })
+                  }
+                >
+                  <option value="all">Any time</option>
+                  <option value="7">Last 7 days</option>
+                  <option value="30">Last 30 days</option>
+                </SelectField>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-base-content/55">
+                <p>
+                  Showing {orderedRuns.length} of {dashboard.runs.length} results
+                </p>
+                {filtersActive ? (
+                  <button type="button" className="link" onClick={() => updateUrlState(DEFAULT_EVALUATION_URL_STATE)}>
+                    Clear filters
+                  </button>
+                ) : null}
+              </div>
+            </div>
+            {orderedRuns.length > 0 ? (
+              orderedRuns.map(run => (
+                <RunCard
+                  key={run.runId}
+                  run={run}
+                  workspaceId={workspaceId}
+                  trend={dashboard.deciderTrend}
+                  evidenceHref={
+                    run.evidencePacketAvailable ? evidenceHrefForRun(workspaceId, run.runId, currentSearch) : null
+                  }
+                />
+              ))
+            ) : (
+              <div className="surface-card rounded-2xl p-6">
+                <h3 className="font-semibold">No results match these filters</h3>
+                <p className="mt-2 text-sm text-base-content/55">Clear one or more filters to see other runs.</p>
+              </div>
+            )}
           </section>
 
           <details className="surface-card rounded-2xl p-6">
