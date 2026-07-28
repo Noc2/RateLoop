@@ -71,6 +71,9 @@ test("the ten-character reason rule stays visible while the decider types", asyn
 
   try {
     const view = await mount();
+    await userEvent
+      .setup({ document })
+      .click(await view.findByRole("button", { name: "Record override or corrective action" }));
     const reasons = (await view.findAllByRole("textbox", { name: /Reasons/ }))[0]!;
     const accepted = view.getByRole("button", { name: "accepted" });
 
