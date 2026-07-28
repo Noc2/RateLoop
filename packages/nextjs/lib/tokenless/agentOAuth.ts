@@ -729,6 +729,19 @@ export async function exchangeAgentOAuthToken(
       throw new AgentOAuthError("invalid_grant", "The refresh token is invalid or misbound.");
     }
     const tokenFamilyId = text(row, "token_family_id")!;
+    // Expiry and family state are checked before replay so that presenting a token which is already
+    // worthless cannot revoke a live family. Otherwise any long-expired copy of a refresh token
+    // stays a permanent kill switch for the grant it came from.
+    if (
+      text(row, "family_status") !== "active" ||
+      date(row, "revoked_at") ||
+      !date(row, "expires_at") ||
+      date(row, "expires_at")!.getTime() <= now.getTime() ||
+      !date(row, "absolute_expires_at") ||
+      date(row, "absolute_expires_at")!.getTime() <= now.getTime()
+    ) {
+      throw new AgentOAuthError("invalid_grant", "The refresh token or token family is inactive or expired.");
+    }
     if (date(row, "used_at") || date(row, "replaced_at")) {
       await client.query(
         `UPDATE tokenless_agent_oauth_refresh_tokens
@@ -739,16 +752,6 @@ export async function exchangeAgentOAuthToken(
       await revokeTokenFamily(client, tokenFamilyId, now, "refresh_token_replay");
       await client.query("COMMIT");
       throw new AgentOAuthError("invalid_grant", "Refresh-token replay revoked this token family.");
-    }
-    if (
-      text(row, "family_status") !== "active" ||
-      date(row, "revoked_at") ||
-      !date(row, "expires_at") ||
-      date(row, "expires_at")!.getTime() <= now.getTime() ||
-      !date(row, "absolute_expires_at") ||
-      date(row, "absolute_expires_at")!.getTime() <= now.getTime()
-    ) {
-      throw new AgentOAuthError("invalid_grant", "The refresh token or token family is inactive or expired.");
     }
     const existingScopes = canonicalScopes(parseJsonList(row.granted_scopes_json, "granted scopes"));
     const requestedScopes = input.scope ? canonicalScopes(input.scope) : existingScopes;

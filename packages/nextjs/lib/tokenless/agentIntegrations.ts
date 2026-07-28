@@ -1342,8 +1342,12 @@ export async function recoverAgentIntegrationOAuth(input: {
        WHERE i.workspace_id=$1 AND i.integration_id=$2 AND i.status='active'
          AND i.activation_mode IN ('preauthorized_safe','owner_approved')
          AND (r.used_at IS NOT NULL OR r.replaced_at IS NOT NULL)
-       ORDER BY CASE WHEN r.revocation_reason='refresh_token_replay_presented' THEN 0 ELSE 1 END,
-                r.generation DESC
+         -- Never hand the connection back to whoever presented the replayed token. The presenter
+         -- may be an attacker holding an old copy, and restoring their generation while revoking
+         -- the newest one would transfer the grant to them. The legitimate client holds the newest
+         -- generation, so that is the only one worth restoring.
+         AND (r.revocation_reason IS NULL OR r.revocation_reason <> 'refresh_token_replay_presented')
+       ORDER BY r.generation DESC
        LIMIT 1
        FOR UPDATE`,
       [input.workspaceId, input.integrationId],

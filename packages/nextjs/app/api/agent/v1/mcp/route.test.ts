@@ -992,19 +992,32 @@ test("an owner can recover only a replay-revoked public OAuth integration", asyn
     false,
   );
 
+  // The replayed generation is never restored: whoever presented it may be holding a stolen copy,
+  // so handing the connection back to them is the one outcome recovery must not produce.
+  await assert.rejects(
+    () =>
+      exchangeAgentOAuthToken({
+        grantType: "refresh_token",
+        clientId,
+        refreshToken: tokens.refresh_token,
+        resource: getCanonicalAgentMcpResource(),
+      }),
+    /invalid|expired|revoked|inactive/iu,
+  );
+  const replayedRefresh = await dbClient.execute({
+    sql: `SELECT revoked_at FROM tokenless_agent_oauth_refresh_tokens WHERE token_hash=?`,
+    args: [originalRefreshHash],
+  });
+  assert.ok(replayedRefresh.rows[0]?.revoked_at);
+
+  // The legitimate client holds the newest generation, and that is what recovery restores.
   const refreshed = await exchangeAgentOAuthToken({
     grantType: "refresh_token",
     clientId,
-    refreshToken: tokens.refresh_token,
+    refreshToken: retainedRefreshToken,
     resource: getCanonicalAgentMcpResource(),
   });
-  // Recovery restores the presented generation; using it rotates it forward again.
-  assert.notEqual(refreshed.refresh_token, tokens.refresh_token);
-  const obsoleteRefresh = await dbClient.execute({
-    sql: `SELECT revoked_at FROM tokenless_agent_oauth_refresh_tokens WHERE token_hash=?`,
-    args: [retainedRefreshHash],
-  });
-  assert.ok(obsoleteRefresh.rows[0]?.revoked_at);
+  assert.notEqual(refreshed.refresh_token, retainedRefreshToken);
   await assert.rejects(
     () => authenticateAgentMcpPrincipal(`Bearer ${tokens.access_token}`),
     /invalid|expired|revoked/iu,
