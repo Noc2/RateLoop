@@ -7,7 +7,9 @@ const source = readFileSync(new URL("./OversightAlertsPanel.tsx", import.meta.ur
 test("the oversight alerts panel lists notifications with an unread count and read control", () => {
   assert.match(source, /\/api\/notifications\/inbox\?limit=50/);
   assert.match(source, /notification\.kind !== "oversightAlerts"/);
+  assert.match(source, /if \(!notification\.href\) return false/);
   assert.match(source, /targetWorkspace === workspaceId/);
+  assert.doesNotMatch(source, /return !targetWorkspace/);
   assert.match(source, /notifications\.filter\(notification => !notification\.readAt\)\.length/);
   assert.match(source, /unreadCount/);
   assert.match(source, /unread\b/);

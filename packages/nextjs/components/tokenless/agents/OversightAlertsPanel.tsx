@@ -29,12 +29,12 @@ const ALERT_EVENT_OPTIONS = [
 
 function belongsToWorkspace(notification: OversightInboxNotification, workspaceId: string) {
   if (notification.kind !== "oversightAlerts") return false;
-  if (!notification.href) return true;
+  if (!notification.href) return false;
   try {
     const targetWorkspace = new URL(notification.href, "https://rateloop.local").searchParams.get("workspace");
-    return !targetWorkspace || targetWorkspace === workspaceId;
+    return targetWorkspace === workspaceId;
   } catch {
-    return true;
+    return false;
   }
 }
 
