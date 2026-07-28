@@ -3,7 +3,7 @@ import { TOKENLESS_HOST_CAPABILITIES } from "~~/lib/tokenless/hostCapabilities";
 export type SiteSearchEntry = {
   title: string;
   href: string;
-  area: "Page" | "Docs";
+  area: "Task" | "Page" | "Docs";
   description: string;
   keywords?: readonly string[];
 };
@@ -17,25 +17,74 @@ export const SITE_SEARCH_INDEX: readonly SiteSearchEntry[] = [
     keywords: ["home", "human assurance loop", "AI review"],
   },
   {
-    title: "Discover",
-    href: "/human?tab=discover",
-    area: "Page",
-    description: "Browse and search public review questions and private human-assurance assignments.",
-    keywords: ["content", "questions", "review work", "humans", "rate"],
+    title: "Connect an agent",
+    href: "/agents?tab=connect",
+    area: "Task",
+    description: "Connect RateLoop to a supported agent host.",
+    keywords: ["agent setup", "MCP connection", "add agent", "connection"],
   },
   {
-    title: "Agents",
-    href: "/agents",
+    title: "Set review policy",
+    href: "/agents?tab=registry",
+    area: "Task",
+    description: "Change review rules and invite workspace reviewers.",
+    keywords: ["invite reviewer", "review settings", "reviews", "audience", "response window"],
+  },
+  {
+    title: "View results",
+    href: "/agents?tab=evaluations",
+    area: "Task",
+    description: "Inspect completed human-review results and pending decisions.",
+    keywords: ["evaluations", "review outcome", "decision", "verdict"],
+  },
+  {
+    title: "Export evidence",
+    href: "/agents?tab=evidence",
+    area: "Task",
+    description: "Inspect and export workspace review evidence.",
+    keywords: ["audit", "download evidence", "verification", "records"],
+  },
+  {
+    title: "Review work",
+    href: "/human?tab=discover",
+    area: "Task",
+    description: "Open assigned review work and reviewer history.",
+    keywords: ["questions", "to review", "discover", "rate", "human"],
+  },
+  {
+    title: "Reviewer access",
+    href: "/human?tab=profile",
+    area: "Task",
+    description: "Manage reviewer identity and workspace access.",
+    keywords: ["profile", "access", "eligibility", "reviewer account"],
+  },
+  {
+    title: "Notifications",
+    href: "/human?tab=settings",
+    area: "Task",
+    description: "Choose which review and account notifications you receive.",
+    keywords: ["email", "alerts", "settings"],
+  },
+  {
+    title: "Workspace and billing",
+    href: "/agents?tab=overview",
+    area: "Task",
+    description: "Open workspace access, plan, and billing information.",
+    keywords: ["billing", "subscription", "members", "workspace settings"],
+  },
+  {
+    title: "Agent workspace",
+    href: "/agents?tab=overview",
     area: "Page",
-    description: "Connect agents, manage review policies, and inspect human-assurance evidence.",
-    keywords: ["agent setup", "MCP connection", "evaluations", "workspace"],
+    description: "Open the current workspace overview.",
+    keywords: ["agents", "workspace"],
   },
   {
     title: "Pricing",
     href: "/pricing",
     area: "Page",
-    description: "Compare RateLoop workspace plans and paid-panel costs.",
-    keywords: ["free", "early access", "subscription", "USDC", "cost"],
+    description: "Compare RateLoop workspace plans and included review decisions.",
+    keywords: ["free", "early access", "subscription", "cost"],
   },
   {
     title: "Terms",
@@ -62,8 +111,8 @@ export const SITE_SEARCH_INDEX: readonly SiteSearchEntry[] = [
     title: "Introduction",
     href: "/docs",
     area: "Docs",
-    description: "Start with RateLoop's human-assurance model and the agent, reviewer, and builder paths.",
-    keywords: ["human judgment", "adaptive review", "blind panel", "getting started"],
+    description: "Start with connection, review policy, reviewer work, and evidence tasks.",
+    keywords: ["human judgment", "invited review", "getting started"],
   },
   {
     title: "Use Cases",
@@ -113,7 +162,7 @@ export const SITE_SEARCH_INDEX: readonly SiteSearchEntry[] = [
     title: "How It Works",
     href: "/docs/how-it-works",
     area: "Docs",
-    description: "Follow adaptive review coverage, one review cycle, reviewer work, settlement, and decision evidence.",
+    description: "Follow the hosted agent, invited-reviewer, result, and evidence journey.",
     keywords: ["workflow", "review cycle", "assurance loop"],
   },
   {
@@ -127,32 +176,25 @@ export const SITE_SEARCH_INDEX: readonly SiteSearchEntry[] = [
     title: "One human-review cycle",
     href: "/docs/how-it-works#agent-flow",
     area: "Docs",
-    description: "Quote, create an ask, fund it, wait for the operation, and read the result.",
-    keywords: ["quote ask payment wait result", "agent flow", "x402"],
+    description: "Evaluate eligible work, request one review, wait, and read the result.",
+    keywords: ["agent flow", "request review", "wait for review"],
   },
   {
     title: "The reviewer flow",
     href: "/docs/how-it-works#reviewer-flow",
     area: "Docs",
-    description: "Eligibility, blinded assignments, sealed answers, panel predictions, and paid claims.",
-    keywords: ["human reviewer", "paid work", "commit", "prediction"],
-  },
-  {
-    title: "Settlement paths",
-    href: "/docs/how-it-works#settlement-paths",
-    area: "Docs",
-    description: "See normal settlement, zero-commit refunds, quorum failure, and beacon-failure compensation.",
-    keywords: ["refund", "compensation", "accepted work", "terminal path"],
+    description: "See how invited workspace reviewers receive and answer assigned work.",
+    keywords: ["human reviewer", "assignment", "independent answer"],
   },
   {
     title: "Decision evidence",
     href: "/docs/how-it-works#decision-evidence",
     area: "Docs",
-    description: "Interpret verdicts, reasons, disagreement, scoring, compensation, and settlement references.",
+    description: "Interpret verdicts, reasons, disagreement, policy scope, and available evidence.",
     keywords: ["decision packet", "result", "audit"],
   },
   {
-    title: "Evidence & Compliance Mapping",
+    title: "Evidence reference",
     href: "/docs/evidence",
     area: "Docs",
     description: "Inspect review packet fields, local verification steps, framework mappings, and explicit limits.",
@@ -201,15 +243,15 @@ export const SITE_SEARCH_INDEX: readonly SiteSearchEntry[] = [
     title: "Agents & MCP",
     href: "/docs/ai",
     area: "Docs",
-    description: "Connect agent clients and choose browser-handoff, delegated prepaid, or self-funded publishing.",
+    description: "Connect an agent to the hosted invited-review workflow.",
     keywords: ["Codex", "Claude", "Cursor", "Copilot", "Gemini", "OpenClaw", "remote MCP", "workspace MCP"],
   },
   {
-    title: "Agent publishing lanes",
-    href: "/docs/ai#choose-a-publishing-lane",
+    title: "Connected workspace review",
+    href: "/docs/ai#workspace-review-flow",
     area: "Docs",
-    description: "Compare approval-bound browser handoffs with policy-bound autonomous publishing.",
-    keywords: ["browser handoff", "delegated prepaid", "self-funded", "API key"],
+    description: "Follow the protected MCP sequence for one owner-approved review policy.",
+    keywords: ["agent context", "evaluate review", "request review", "wait", "result"],
   },
   {
     title: "Agent approval and privacy",
@@ -222,7 +264,7 @@ export const SITE_SEARCH_INDEX: readonly SiteSearchEntry[] = [
     title: "SDK",
     href: "/docs/sdk",
     area: "Docs",
-    description: "Add a paid human-assurance panel through the versioned quote, ask, payment, wait, and result API.",
+    description: "Technical reference for the separately gated fund-backed settlement API.",
     keywords: ["TypeScript", "createTokenlessRateLoopClient", "integration", "authorization", "idempotency"],
   },
   {
@@ -236,7 +278,7 @@ export const SITE_SEARCH_INDEX: readonly SiteSearchEntry[] = [
     title: "Tech Stack",
     href: "/docs/tech-stack",
     area: "Docs",
-    description: "The mechanisms behind RateLoop's production human-assurance loop.",
+    description: "Technical reference for connected review and separately gated settlement architecture.",
     keywords: ["architecture", "Base", "USDC", "MCP", "RBTS"],
   },
   {
@@ -264,7 +306,7 @@ export const SITE_SEARCH_INDEX: readonly SiteSearchEntry[] = [
     title: "Audience Policies",
     href: "/docs/tech-stack#audience-policies",
     area: "Docs",
-    description: "Freeze invited, network, or hybrid reviewer rules for one ask.",
+    description: "Freeze reviewer-source and admission rules for one architecture-level ask.",
     keywords: ["panel", "admission", "reviewer source", "publication"],
   },
   {
@@ -327,7 +369,7 @@ export const SITE_SEARCH_INDEX: readonly SiteSearchEntry[] = [
     title: "Smart Contracts",
     href: "/docs/smart-contracts",
     area: "Docs",
-    description: "Understand RateLoop's immutable fund core, credential issuer, and x402 funding adapter.",
+    description: "Reference the separately gated immutable fund core, credential issuer, and funding adapter.",
     keywords: ["TokenlessPanel", "CredentialIssuer", "X402PanelSubmitter", "deployment key"],
   },
 ] as const;
@@ -348,7 +390,7 @@ function score(entry: SiteSearchEntry, terms: readonly string[], normalizedQuery
 
   if (!terms.every(term => searchable.includes(term))) return -1;
 
-  let value = entry.area === "Docs" ? 2 : 0;
+  let value = entry.area === "Task" ? 20 : entry.area === "Docs" ? 2 : 0;
   if (title === normalizedQuery) value += 100;
   else if (title.startsWith(normalizedQuery)) value += 60;
   else if (title.includes(normalizedQuery)) value += 40;

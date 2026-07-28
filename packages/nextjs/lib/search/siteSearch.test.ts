@@ -19,14 +19,21 @@ test("site search finds documentation by title and topic", () => {
   assert.equal(searchSite("candidate ranking")[0]?.href, "/docs/use-cases#hiring-decisions");
   assert.equal(searchSite("low confidence extraction")[0]?.href, "/docs/use-cases");
   assert.ok(searchSite("adaptive review").some(result => result.href === "/docs/how-it-works#adaptive-review"));
-  assert.ok(searchSite("refund compensation").some(result => result.href === "/docs/how-it-works#settlement-paths"));
-  assert.equal(searchSite("Evidence & Compliance Mapping")[0]?.href, "/docs/evidence");
+  assert.equal(searchSite("Evidence reference")[0]?.href, "/docs/evidence");
   assert.equal(searchSite("OSCAL")[0]?.href, "/docs/evidence");
   assert.equal(searchSite("RFC 3161")[0]?.href, "/docs/evidence#verify");
 });
 
-test("site search includes Discover questions and core pages", () => {
+test("site search includes canonical tasks and core pages", () => {
   assert.equal(searchSite("questions")[0]?.href, "/human?tab=discover");
+  assert.equal(searchSite("connect agent")[0]?.href, "/agents?tab=connect");
+  assert.equal(searchSite("invite reviewer")[0]?.href, "/agents?tab=registry");
+  assert.equal(searchSite("review settings")[0]?.href, "/agents?tab=registry");
+  assert.equal(searchSite("view results")[0]?.href, "/agents?tab=evaluations");
+  assert.equal(searchSite("export evidence")[0]?.href, "/agents?tab=evidence");
+  assert.equal(searchSite("billing")[0]?.href, "/agents?tab=overview");
+  assert.equal(searchSite("notifications")[0]?.href, "/human?tab=settings");
+  assert.equal(searchSite("reviewer access")[0]?.href, "/human?tab=profile");
   assert.equal(searchSite("pricing")[0]?.href, "/pricing");
   assert.deepEqual(searchSite(""), []);
 });
