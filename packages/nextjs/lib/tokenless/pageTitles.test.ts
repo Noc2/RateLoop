@@ -58,5 +58,9 @@ test("signed-in routes derive metadata from the current tab and the root app app
 
   assert.match(agents, /generateMetadata[\s\S]*agentPageTitle\(\(await searchParams\)\.tab\)/);
   assert.match(human, /generateMetadata[\s\S]*humanPageTitle\(await searchParams\)/);
+  assert.match(agents, /<PageHeading heading=\{agentPageTitle\(tab\)\} \/>/);
+  assert.match(human, /<PageHeading[\s\S]*Reviewer notifications[\s\S]*Reviewer profile[\s\S]*Account settings/);
+  assert.doesNotMatch(agents, /<h1 className="sr-only">Agent workspace/);
+  assert.doesNotMatch(human, /<h1 className="sr-only">/);
   assert.match(metadata, /const titleTemplate = "%s \| RateLoop"/);
 });
