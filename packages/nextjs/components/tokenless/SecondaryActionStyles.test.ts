@@ -20,5 +20,10 @@ test("back actions use the solid secondary button with a decorative left chevron
 });
 
 test("landing page calls to action keep their dedicated styling", () => {
-  assert.doesNotMatch(landingPage, /rateloop-secondary-action/);
+  const heroActions = landingPage.slice(
+    landingPage.indexOf('href="/human?tab=discover"'),
+    landingPage.indexOf("<SupportedAgentsSection"),
+  );
+  assert.doesNotMatch(heroActions, /rateloop-secondary-action/);
+  assert.match(landingPage, /href="\/pricing" className="btn rateloop-secondary-action/);
 });
