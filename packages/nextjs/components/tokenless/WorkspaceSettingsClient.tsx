@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { InfoPopover } from "~~/components/tokenless/InfoPopover";
 import { WorkspaceApiKeysPanel } from "~~/components/tokenless/WorkspaceApiKeysPanel";
@@ -188,6 +188,8 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [workspaceRequests] = useState(() => new WorkspaceRequestScope());
+  const upgradeActionRef = useRef<HTMLButtonElement>(null);
+  const upgradeIntentDeliveredRef = useRef(false);
   const selected = workspaces.find(workspace => workspace.workspaceId === selectedId);
   const canManageTopups = selected?.role === "owner" || selected?.role === "billing";
   const canManageIdentity = selected?.role === "owner" || selected?.role === "admin";
@@ -383,6 +385,17 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
     const state = new URLSearchParams(window.location.search).get("billing");
     if (state === "success" || state === "cancelled" || state === "upgrade") setBillingReturn(state);
   }, []);
+
+  // The pricing page's primary call to action lands here with `billing=upgrade`; honour that intent
+  // by taking the user to the upgrade control instead of leaving them to find it.
+  useEffect(() => {
+    if (billingReturn !== "upgrade" || upgradeIntentDeliveredRef.current) return;
+    const upgrade = upgradeActionRef.current;
+    if (!upgrade) return;
+    upgradeIntentDeliveredRef.current = true;
+    upgrade.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    upgrade.focus({ preventScroll: true });
+  }, [billing, billingReturn]);
 
   useEffect(() => {
     if (billingReturn !== "success" || !selectedId || billing?.plan === "early_access") return;
@@ -789,6 +802,18 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                   Checkout received. Your plan activates after payment confirmation.
                 </div>
               ) : null}
+              {billingReturn === "upgrade" ? (
+                <div
+                  className="mt-4 rounded-lg border border-[var(--rateloop-blue)]/30 bg-[var(--rateloop-blue)]/[0.07] p-3 text-sm leading-6 text-base-content/75"
+                  role="status"
+                >
+                  {billing?.plan === "early_access"
+                    ? "This workspace is already on Early Access."
+                    : billing && !billing.canManageBilling
+                      ? "Workspace owners and billing members can start the Early Access upgrade for this workspace."
+                      : "Continue your Early Access upgrade for this workspace below."}
+                </div>
+              ) : null}
               {billingReturn === "cancelled" ? (
                 <div className="mt-4 rounded-lg bg-base-content/[0.05] p-3 text-sm text-base-content/65">
                   Checkout was cancelled. Your current plan has not changed.
@@ -846,6 +871,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                   <div className="mt-5 flex flex-wrap items-center gap-3">
                     {billing.canManageBilling && billing.plan === "free" ? (
                       <button
+                        ref={upgradeActionRef}
                         type="button"
                         className="rateloop-gradient-action min-h-10 px-4"
                         disabled={billingBusy || !billing.checkoutAvailable}
@@ -869,7 +895,13 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                         type="button"
                         className="text-sm font-semibold underline decoration-base-content/35 underline-offset-4"
                         disabled={billingBusy}
-                        onClick={() => void loadBilling(selectedId)}
+                        onClick={() =>
+                          void loadBilling(selectedId).catch(cause =>
+                            setBillingError(
+                              cause instanceof Error ? cause.message : "Unable to refresh billing status.",
+                            ),
+                          )
+                        }
                       >
                         Refresh status
                       </button>
@@ -1094,7 +1126,11 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
               ) : (
                 <p className="mt-4 text-sm text-base-content/55">{billingError ?? "Loading subscription and usage…"}</p>
               )}
-              {billingError && billing ? <p className="mt-4 text-sm text-red-100">{billingError}</p> : null}
+              {billingError && billing ? (
+                <p className="mt-4 text-sm text-red-100" role="alert">
+                  {billingError}
+                </p>
+              ) : null}
             </section>
 
             {selected ? (
