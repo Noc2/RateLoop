@@ -1210,13 +1210,23 @@ test("account deletion tombstones the governance objects an admin left behind", 
           VALUES ('wcc_admin_objects',?,'wsc_admin_objects','CC-1','Cost centre',?,?,?)`,
     args: [workspace.workspaceId, identity.principalId, now, now],
   });
+  // The column holds an EVM address, never a principal id, so the account is only reachable
+  // through its binding. Seeding the principal id here would fabricate a state the application
+  // cannot produce and let a broken match pass.
+  const adminWallet = "0x4444444444444444444444444444444444444444";
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_wallet_bindings
+          (binding_id,principal_id,purpose,wallet_address,wallet_source,chain_id,
+           proof_message_hash,created_at,last_used_at)
+          VALUES ('wb_admin_objects',?,'funding',?,'self_custodial',8453,'proof',?,?)`,
+    args: [identity.principalId, adminWallet, now, now],
+  });
   await dbClient.execute({
     sql: `INSERT INTO tokenless_workspace_api_keys
           (key_id,workspace_id,key_hash,key_prefix,name,role,created_at,wallet_address)
           VALUES ('wak_admin_objects',?,?,'rlk_test','Key','member',?,?)`,
-    args: [workspace.workspaceId, `sha256:${"7".repeat(64)}`, now, identity.principalId],
+    args: [workspace.workspaceId, `sha256:${"7".repeat(64)}`, now, adminWallet],
   });
-
   await deleteAccount({
     confirmation: "DELETE",
     principalId: identity.principalId,
@@ -1229,7 +1239,9 @@ test("account deletion tombstones the governance objects an admin left behind", 
                  (SELECT created_by FROM tokenless_workspace_cost_centers
                   WHERE cost_center_id='wcc_admin_objects') AS cost_centre_creator,
                  (SELECT wallet_address FROM tokenless_workspace_api_keys
-                  WHERE key_id='wak_admin_objects') AS key_wallet`,
+                  WHERE key_id='wak_admin_objects') AS key_wallet,
+                 (SELECT wallet_address FROM tokenless_workspace_api_keys
+                  WHERE key_id='wak_admin_objects') AS key_wallet_again`,
     args: [],
   });
   const row = Object.fromEntries(

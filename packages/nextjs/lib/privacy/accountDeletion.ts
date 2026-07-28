@@ -709,12 +709,28 @@ async function eraseServiceIdentityReferences(
           + (SELECT COUNT(*) FROM groupPolicies) + (SELECT COUNT(*) FROM reviewerTerms) AS pseudonymized`,
     [input.principalId, actorTombstone],
   );
+  // These two columns hold an EVM address, not a principal id, so the departing account is only
+  // reachable through its wallet bindings. An address another live principal still binds is left
+  // alone: it is their spend authority, not this account's identifier.
+  const ownWallets = await client.query(`SELECT wallet_address FROM tokenless_wallet_bindings WHERE principal_id=$1`, [
+    input.principalId,
+  ]);
+  const otherWallets = await client.query(
+    `SELECT wallet_address FROM tokenless_wallet_bindings WHERE principal_id<>$1`,
+    [input.principalId],
+  );
+  const sharedWallets = new Set((otherWallets.rows as Row[]).map(value => String(value.wallet_address)));
+  const exclusiveWallets = [
+    ...new Set(
+      (ownWallets.rows as Row[]).map(value => String(value.wallet_address)).filter(value => !sharedWallets.has(value)),
+    ),
+  ];
   const agentPolicyObjects = await client.query(
     `WITH publishing AS (
        UPDATE tokenless_agent_publishing_policies
        SET created_by=CASE WHEN created_by=$1 THEN $2 ELSE created_by END,
-           payer_address=CASE WHEN payer_address=$1 THEN NULL ELSE payer_address END
-       WHERE created_by=$1 OR payer_address=$1 RETURNING 1
+           payer_address=CASE WHEN payer_address=ANY($3::text[]) THEN NULL ELSE payer_address END
+       WHERE created_by=$1 OR payer_address=ANY($3::text[]) RETURNING 1
      ), reviewPolicies AS (
        UPDATE tokenless_agent_review_policies
        SET created_by=CASE WHEN created_by=$1 THEN $2 ELSE created_by END,
@@ -733,12 +749,13 @@ async function eraseServiceIdentityReferences(
      ), pairingSessions AS (
        UPDATE tokenless_agent_pairing_sessions SET created_by=$2 WHERE created_by=$1 RETURNING 1
      ), apiKeys AS (
-       UPDATE tokenless_workspace_api_keys SET wallet_address=NULL WHERE wallet_address=$1 RETURNING 1
+       UPDATE tokenless_workspace_api_keys SET wallet_address=NULL
+       WHERE wallet_address=ANY($3::text[]) RETURNING 1
      )
      SELECT (SELECT COUNT(*) FROM publishing) + (SELECT COUNT(*) FROM reviewPolicies)
           + (SELECT COUNT(*) FROM requestProfiles) + (SELECT COUNT(*) FROM reviewBindings)
           + (SELECT COUNT(*) FROM pairingSessions) + (SELECT COUNT(*) FROM apiKeys) AS pseudonymized`,
-    [input.principalId, actorTombstone],
+    [input.principalId, actorTombstone, exclusiveWallets],
   );
   return {
     agentAuditEventsPseudonymized: agentAuditEvents.rowCount ?? 0,
