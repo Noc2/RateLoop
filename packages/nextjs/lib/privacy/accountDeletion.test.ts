@@ -16,6 +16,7 @@ import {
   deleteAccount,
   getAccountDeletionPreview,
 } from "~~/lib/privacy/accountDeletion";
+import { createSubjectRequest, processSubjectRequestQueue } from "~~/lib/privacy/lifecycle";
 import {
   __setPaidEligibilityOverridesForTests,
   ensureAssuranceRaterProfile,
@@ -296,7 +297,7 @@ test("account deletion revokes authentication, removes shared access, and permit
     memberships: 0,
     wallet_bindings: 0,
     paid_eligibility_decisions: 0,
-    categories: 12,
+    categories: 13,
   });
 
   await assert.rejects(
@@ -536,6 +537,50 @@ test("account deletion pseudonymizes durable agent, oversight, public-media, and
     refreshTokensPseudonymized: 1,
     tokenFamiliesPseudonymized: 1,
   });
+});
+
+test("account deletion erases the plaintext subject export the same principal generated", async () => {
+  const now = new Date("2026-07-16T08:20:00.000Z");
+  await seedBetterAuthUser("better-export", "export@example.test");
+  const identity = await resolveBetterAuthPrincipal({ betterAuthUserId: "better-export" });
+  const requested = await createSubjectRequest({
+    identityAssurance: "better_auth:passkey",
+    now,
+    principalId: identity.principalId,
+    requestType: "export",
+    scope: { principal: true },
+  });
+  assert.deepEqual(await processSubjectRequestQueue(now), { completed: 1, queued: 1 });
+  const generated = await dbClient.execute({
+    sql: "SELECT payload_json FROM tokenless_subject_request_exports WHERE request_id=?",
+    args: [requested.requestId],
+  });
+  assert.match(String(generated.rows[0]?.payload_json), /"schemaVersion":"rateloop\.subject-export\.v4"/u);
+
+  const deleted = await deleteAccount({
+    confirmation: "DELETE",
+    principalId: identity.principalId,
+    recentAuthProof: await deletionProof("better-export", identity.principalId, now),
+    now,
+  });
+  const remaining = await dbClient.execute({
+    sql: "SELECT COUNT(*) AS count FROM tokenless_subject_request_exports WHERE principal_id=?",
+    args: [identity.principalId],
+  });
+  const remainingCount = remaining.rows[0]?.count;
+  assert.equal(Number(Array.isArray(remainingCount) ? remainingCount[0] : remainingCount), 0);
+
+  const completion = await dbClient.execute({
+    sql: "SELECT deleted_categories_json,evidence_json FROM tokenless_subject_request_completions WHERE request_id=?",
+    args: [deleted.requestId],
+  });
+  assert.ok(
+    (JSON.parse(String(completion.rows[0]?.deleted_categories_json)) as string[]).includes("subject_export_payloads"),
+  );
+  const evidence = JSON.parse(String(completion.rows[0]?.evidence_json)) as {
+    categoryEvidence: Record<string, Record<string, number>>;
+  };
+  assert.deepEqual(evidence.categoryEvidence.subject_export_payloads, { remainingExportPayloads: 0 });
 });
 
 test("account deletion deletes unused private quotes and anonymizes retained quote ownership", async () => {

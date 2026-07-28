@@ -804,6 +804,7 @@ async function insertDeletionEvidence(
     ["eligibility_handoffs", "erase", "completed", null, null],
     ["world_id_and_rater_linkage", "erase", "completed", null, null],
     ["private_quote_plaintext_payloads", "erase", "completed", null, null],
+    ["subject_export_payloads", "erase", "completed", null, null],
     [
       "referenced_private_quote_commitments",
       "retain",
@@ -880,6 +881,7 @@ async function insertDeletionEvidence(
         "eligibility_handoffs",
         "world_id_and_rater_linkage",
         "private_quote_plaintext_payloads",
+        "subject_export_payloads",
       ]),
       JSON.stringify(["service_identity_references", "oauth_authorization_records"]),
       JSON.stringify([
@@ -1413,6 +1415,8 @@ async function collectDeletionCategoryEvidence(
           WHERE oauth_subject_principal_id = $1 AND status = 'active') AS active_agent_integrations,
        (SELECT COUNT(*) FROM tokenless_better_auth_users WHERE id = $2) AS better_auth_users,
        (SELECT COUNT(*) FROM tokenless_browser_identities WHERE principal_address = $1) AS browser_identities,
+       (SELECT COUNT(*) FROM tokenless_subject_request_exports WHERE principal_id = $1)
+         AS subject_request_export_payloads,
        (SELECT COUNT(*) FROM tokenless_workspace_members WHERE account_address = $1) AS workspace_memberships,
        (SELECT COUNT(*) FROM tokenless_workspace_member_clients WHERE account_address = $1) AS workspace_clients,
        (SELECT COUNT(*) FROM tokenless_workspace_member_governance WHERE account_address = $1)
@@ -1522,6 +1526,9 @@ async function collectDeletionCategoryEvidence(
       deletedUnreferenced: input.privateQuoteErasure.deletedUnreferenced,
       erasedReferencedContent: input.privateQuoteErasure.erasedReferencedContent,
     },
+    subject_export_payloads: {
+      remainingExportPayloads: rowNumber(row, "subject_request_export_payloads"),
+    },
     referenced_private_quote_commitments: {
       retainedReferencedCommitmentOnly: input.privateQuoteErasure.retainedReferencedCommitmentOnly,
       ownerTombstone:
@@ -1592,6 +1599,7 @@ async function collectDeletionCategoryEvidence(
     privateQuoteOwnerLinks: input.privateQuoteErasure.remainingDirectOwnerLinks,
     publicMediaIdentityLinks: rowNumber(row, "public_media_identity_links"),
     publicMediaQuotaIdentityLinks: rowNumber(row, "public_media_quota_identity_links"),
+    subjectRequestExportPayloads: rowNumber(row, "subject_request_export_payloads"),
     walletBindings: rowNumber(row, "wallet_bindings"),
     walletChallenges: rowNumber(row, "wallet_challenges"),
     workspaceClients: rowNumber(row, "workspace_clients"),
@@ -1793,6 +1801,9 @@ export async function deleteAccount(input: {
     ]);
     await client.query(`DELETE FROM tokenless_passkey_action_proofs WHERE principal_id = $1`, [input.principalId]);
     await client.query(`DELETE FROM tokenless_browser_identities WHERE principal_address = $1`, [input.principalId]);
+    // A completed access or export request leaves the subject's whole record as plaintext JSON
+    // for seven days. The deletion receipt is only honest if that copy goes with the account.
+    await client.query(`DELETE FROM tokenless_subject_request_exports WHERE principal_id = $1`, [input.principalId]);
     if (email) {
       await client.query(
         `DELETE FROM tokenless_better_auth_verifications
