@@ -128,6 +128,13 @@ test("a packet reveals verification while manager-only exports and controls stay
     const view = await mount(false);
     await view.findByRole("heading", { name: "Decision packets" });
     assert.ok(view.getByText("Verify an export"));
+    const resultHref = new URL(
+      view.getByRole("link", { name: "Open result" }).getAttribute("href") ?? "",
+      "https://rateloop.local",
+    );
+    assert.equal(resultHref.pathname, "/agents/results");
+    assert.equal(resultHref.searchParams.get("workspace"), "workspace-evidence");
+    assert.equal(resultHref.searchParams.get("resultRun"), "run-evidence-1");
     assert.equal(view.queryByRole("heading", { name: "Compliance exports" }), null);
     assert.equal(view.queryByRole("button", { name: "Retention, keys, and delivery" }), null);
   } finally {

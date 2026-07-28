@@ -6,6 +6,8 @@ import { GrcEvidenceDelivery } from "./GrcEvidenceDelivery";
 import { MetricsEvidenceAccess } from "./MetricsEvidenceAccess";
 import { SiemEvidenceDelivery } from "./SiemEvidenceDelivery";
 import { WormEvidenceDelivery } from "./WormEvidenceDelivery";
+import { agentTabHref } from "./agentWorkspaceState";
+import { updateEvaluationUrlSearch } from "./evaluationUrlState";
 import {
   DEFAULT_EVIDENCE_URL_STATE,
   type EvidenceDateFilter,
@@ -117,6 +119,21 @@ function safeExternalEvidenceLink(value: string) {
   } catch {
     return null;
   }
+}
+
+function resultHrefForRun(workspaceId: string, runId: string, currentSearch: string) {
+  const preserved = new URLSearchParams(currentSearch);
+  for (const key of ["q", "outcome", "date", "run", "packet"]) preserved.delete(key);
+  const route = new URL(agentTabHref("evaluations", workspaceId, preserved), "https://rateloop.local");
+  route.search = updateEvaluationUrlSearch(route.search, {
+    query: "",
+    agentId: "",
+    workflowKey: "",
+    status: "all",
+    date: "all",
+    runId,
+  });
+  return `${route.pathname}${route.search}`;
 }
 
 async function downloadJson(url: string, filename: string) {
@@ -597,6 +614,12 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
+                    <Link
+                      href={resultHrefForRun(workspaceId, packet.payload.runId, urlSnapshot.search)}
+                      className="btn btn-sm rateloop-secondary-action"
+                    >
+                      Open result
+                    </Link>
                     <Link
                       href={evidenceUrlHref({
                         pathname: urlSnapshot.pathname,
