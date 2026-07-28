@@ -36,6 +36,11 @@ test("tokenless navigation uses the shared page background", () => {
   assert.doesNotMatch(source, /bg-black(?:\/\d+)?/);
 });
 
+test("shell sign-in actions preserve the current destination", () => {
+  assert.match(shellSource, /useSearchParams\(\)\.toString\(\)/);
+  assert.match(shellSource, /<ThirdwebSessionButton compact=\{compact\} returnTo=\{returnTo\}/);
+});
+
 test("tokenless routes expose one main landmark and a keyboard skip link", () => {
   assert.match(shellSource, /href="#main-content"/);
   assert.match(shellSource, /Skip to main content/);

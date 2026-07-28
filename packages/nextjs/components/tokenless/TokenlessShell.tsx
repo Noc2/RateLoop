@@ -3,7 +3,7 @@
 import { Suspense } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { RateLoopLogo } from "~~/components/RateLoopLogo";
 import { SiteSearch } from "~~/components/tokenless/navigation/SiteSearch";
 import { DOCS_NAV } from "~~/constants/docsNav";
@@ -97,6 +97,13 @@ function Brand({ compact = false }: { compact?: boolean }) {
   );
 }
 
+function ShellSessionButton({ compact = false }: { compact?: boolean }) {
+  const pathname = usePathname() ?? "/";
+  const search = useSearchParams().toString();
+  const returnTo = search ? `${pathname}?${search}` : pathname;
+  return <ThirdwebSessionButton compact={compact} returnTo={returnTo} />;
+}
+
 function NavLinks({ mobile = false }: { mobile?: boolean }) {
   const pathname = usePathname() ?? "";
 
@@ -158,7 +165,9 @@ function NavLinks({ mobile = false }: { mobile?: boolean }) {
       })}
       {mobile ? (
         <div className="mt-2 border-t border-white/10 px-2 pt-4">
-          <ThirdwebSessionButton />
+          <Suspense fallback={<div aria-hidden="true" className="h-11" />}>
+            <ShellSessionButton />
+          </Suspense>
           <div className="mt-3 flex items-center gap-3 px-2 text-sm text-base-content/60">
             <Link href="/pricing" className="transition-colors hover:text-base-content">
               Pricing
@@ -258,7 +267,9 @@ export function TokenlessShell({ children }: { children: React.ReactNode }) {
           <NavLinks />
         </nav>
         <div className="mt-auto flex w-full shrink-0 flex-col items-stretch gap-2 border-t border-[color:var(--rateloop-shell-border-strong)] px-2.5 pt-4">
-          <ThirdwebSessionButton compact />
+          <Suspense fallback={<div aria-hidden="true" className="h-11" />}>
+            <ShellSessionButton compact />
+          </Suspense>
         </div>
       </aside>
 
