@@ -690,6 +690,16 @@ async function debitPrepaidReversal(
     throw new Error("topup_reversal_binding_conflict");
   }
   const balance = await settledPrepaidBalance(client, workspaceId);
+  // The insert is a no-op when this reference was already written. That is the ordinary redelivery
+  // case and the stored magnitude matches, but a smaller one means two distinct reversals shared a
+  // reference and this one was swallowed. Report it rather than answer with the earlier amount.
+  if (-storedDelta < debitAtomic) {
+    return {
+      attention: "prepaid_reversal_reference_collision",
+      matched: true,
+      reversedAtomic: (-storedDelta).toString(),
+    };
+  }
   return {
     matched: true,
     reversedAtomic: (-storedDelta).toString(),

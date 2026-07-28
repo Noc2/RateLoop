@@ -424,6 +424,44 @@ test("a credit note for a credited top-up debits the prepaid balance exactly onc
   assert.equal(String(debits.rows[0]?.delta_atomic), "-100000000");
 });
 
+test("successive partial refunds each debit their own share", async () => {
+  await seedCreditedTopup("topup_partial", "in_partial");
+  canonicalInvoicePayments = [{ invoice: "in_partial" }];
+  // `refunds` is not expanded on a real delivery, so only the running total is available.
+  const partialRefund = (createdAt: number, amountRefunded: number) =>
+    ({
+      api_version: "2026-06-30.basil",
+      created: createdAt,
+      data: {
+        object: {
+          amount_refunded: amountRefunded,
+          id: "ch_partial",
+          object: "charge",
+          payment_intent: "pi_partial",
+        },
+      },
+      id: `evt_partial_${amountRefunded}`,
+      livemode: false,
+      object: "event",
+      pending_webhooks: 1,
+      request: null,
+      type: "charge.refunded",
+    }) as unknown as Stripe.Event;
+
+  canonicalCharge = { amount_refunded: 3_000, id: "ch_partial", payment_intent: "pi_partial" } as Stripe.Charge;
+  assert.deepEqual(await processStripeWebhook({ event: partialRefund(1_784_035_600, 3_000), rawBody: "partial-1" }), {
+    duplicate: false,
+  });
+
+  canonicalCharge = { amount_refunded: 11_900, id: "ch_partial", payment_intent: "pi_partial" } as Stripe.Charge;
+  assert.deepEqual(await processStripeWebhook({ event: partialRefund(1_784_035_700, 11_900), rawBody: "partial-2" }), {
+    duplicate: false,
+  });
+
+  // The whole invoice is refunded, so the whole credit must be gone rather than the first share.
+  assert.equal(await settledBalance(), "0");
+});
+
 test("a payment for a failed top-up is answered without a rollback so the endpoint keeps working", async () => {
   await dbClient.execute({
     sql: `INSERT INTO tokenless_prepaid_topup_intents

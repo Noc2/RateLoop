@@ -219,14 +219,18 @@ async function resolveReversalTarget(event: Stripe.Event): Promise<ReversalTarge
     const charge = event.data.object as Stripe.Charge;
     const invoiceId = await invoiceIdForCharge(charge);
     if (!invoiceId) return null;
-    // Each `charge.refunded` delivery carries the refund that caused it at the head of the list,
-    // so partial refunds are debited one by one instead of collapsing into the charge id.
+    // `refunds` is not expanded by default, so the individual refund is usually absent and only
+    // the charge's cumulative `amount_refunded` is available. A cumulative amount must never be
+    // keyed on the charge alone: a second partial refund would collide with the first, be dropped
+    // by the conflict clause, and report the first refund's smaller amount as success. Keying on
+    // the running total gives each refund state its own entry, and the reversal cap then debits
+    // exactly the difference. A redelivery repeats a total already seen and stays idempotent.
     const refund = charge.refunds?.data?.[0];
     return {
       grossMinor: refund?.amount ?? charge.amount_refunded,
       invoiceId,
       reinstate: false,
-      reversalId: refund?.id ?? charge.id,
+      reversalId: refund?.id ?? `${charge.id}:${charge.amount_refunded}`,
     };
   }
   if (event.type === "charge.dispute.created" || event.type === "charge.dispute.closed") {
