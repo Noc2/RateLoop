@@ -1054,6 +1054,7 @@ export const tokenlessAgentReviewPolicies = pgTable(
     mode: text("mode").notNull(),
     enabled: boolean("enabled").notNull().default(true),
     agreementThresholdBps: integer("agreement_threshold_bps").notNull(),
+    reviewerConsensusThresholdBps: integer("reviewer_consensus_threshold_bps").notNull().default(7_000),
     productionFloorBps: integer("production_floor_bps").notNull(),
     maximumUnreviewedGap: integer("maximum_unreviewed_gap").notNull(),
     fixedRateBps: integer("fixed_rate_bps"),

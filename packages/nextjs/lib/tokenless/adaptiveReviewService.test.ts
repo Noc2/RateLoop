@@ -350,6 +350,34 @@ test("comparable human-agreement evidence requires at least two respondents", ()
   );
 });
 
+test("endorsement and reviewer-consensus thresholds are projected independently", () => {
+  const policy = __adaptiveReviewServiceTestUtils.policyFromRow({
+    policy_id: "policy-thresholds",
+    version: 1,
+    agent_id: "agent-thresholds",
+    agent_version_id: "version-thresholds",
+    mode: "adaptive",
+    agreement_threshold_bps: 8_500,
+    reviewer_consensus_threshold_bps: 6_000,
+    production_floor_bps: 1_000,
+    fixed_rate_bps: null,
+    maximum_unreviewed_gap: 20,
+    rules_json: "{}",
+    audience_policy_json: "{}",
+    publishing_policy_id: null,
+  });
+
+  assert.equal(policy.agreementThresholdBps, 8_500);
+  assert.equal(policy.reviewerConsensusThresholdBps, 6_000);
+  assert.equal(
+    __adaptiveReviewServiceTestUtils.humanAgreementGatePassed(
+      [{ responding_human_count: 2, human_human_agreement_bps: 6_500 }],
+      policy.reviewerConsensusThresholdBps,
+    ),
+    true,
+  );
+});
+
 test("partitions assurance scopes by model identity but not reasoning effort or service tier", async () => {
   const setup = await fixture();
   const sol = await evaluateAdaptiveReviewRequirement({

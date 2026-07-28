@@ -60,6 +60,7 @@ type ReviewPolicyRow = {
   agentVersionId: string;
   mode: "manual" | "always" | "rules" | "adaptive" | "fixed";
   agreementThresholdBps: number;
+  reviewerConsensusThresholdBps: number;
   productionFloorBps: number;
   fixedRateBps: number | null;
   maximumUnreviewedGap: number;
@@ -413,6 +414,7 @@ function policyFromRow(row: QueryRow | undefined): ReviewPolicyRow {
     agentVersionId,
     mode,
     agreementThresholdBps: rowInteger(row, "agreement_threshold_bps"),
+    reviewerConsensusThresholdBps: rowInteger(row, "reviewer_consensus_threshold_bps"),
     productionFloorBps: rowInteger(row, "production_floor_bps"),
     fixedRateBps,
     maximumUnreviewedGap: rowInteger(row, "maximum_unreviewed_gap"),
@@ -519,7 +521,7 @@ function observationWindow(
     agreements,
     safetyGatesAvailable: ADAPTIVE_SAFETY_GATES_AVAILABLE,
     completionGatePassed: comparable === 15,
-    humanAgreementGatePassed: humanAgreementGatePassed(rows, policy.agreementThresholdBps),
+    humanAgreementGatePassed: humanAgreementGatePassed(rows, policy.reviewerConsensusThresholdBps),
     latencyGatePassed: rows.every(row => {
       if (policy.rules.maximumLatencyMs === null) return true;
       return (
@@ -661,7 +663,8 @@ async function refreshScopeState(
 async function loadPolicy(client: PoolClient, workspaceId: string, request: ReturnType<typeof normalizeRequest>) {
   const result = await client.query(
     `SELECT p.policy_id, p.version, p.agent_id, p.agent_version_id, p.mode,
-            p.agreement_threshold_bps, p.production_floor_bps, p.fixed_rate_bps, p.maximum_unreviewed_gap,
+            p.agreement_threshold_bps, p.reviewer_consensus_threshold_bps,
+            p.production_floor_bps, p.fixed_rate_bps, p.maximum_unreviewed_gap,
             p.rules_json, p.audience_policy_json, p.publishing_policy_id
      FROM tokenless_agent_review_policies p
      JOIN tokenless_agents a
@@ -1726,7 +1729,8 @@ export async function getAdaptiveAssuranceState(input: {
                  s.human_review_binding_id, s.human_review_binding_version,
                  s.request_profile_id, s.request_profile_version, s.request_profile_hash,
                  p.policy_id, p.version, p.agent_id, p.agent_version_id, p.mode,
-                 p.agreement_threshold_bps, p.production_floor_bps, p.fixed_rate_bps, p.maximum_unreviewed_gap,
+                 p.agreement_threshold_bps, p.reviewer_consensus_threshold_bps,
+                 p.production_floor_bps, p.fixed_rate_bps, p.maximum_unreviewed_gap,
                  p.rules_json, p.audience_policy_json
           FROM tokenless_agent_evaluation_scopes s
           JOIN tokenless_agent_review_policies p
@@ -1751,6 +1755,7 @@ export async function getAdaptiveAssuranceState(input: {
 export const __adaptiveReviewServiceTestUtils = {
   humanAgreementGatePassed,
   initialLifecycleDisposition,
+  policyFromRow,
   setBeforeAdaptiveEvaluationWorkForTests(value: typeof beforeAdaptiveEvaluationWorkForTests) {
     beforeAdaptiveEvaluationWorkForTests = value;
   },
