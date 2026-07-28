@@ -434,6 +434,9 @@ test("People finalizes setup once and reports operational request readiness", ()
   assert.match(flowSource, /postcondition\.canSend/);
   assert.match(flowSource, /Automatic requests stay unavailable until enough reviewers join/);
   assert.match(flowSource, /Finish setup/);
+  assert.match(flowSource, /url\.searchParams\.delete\("step"\)/);
+  assert.match(flowSource, /router\.replace\(`\$\{url\.pathname\}\$\{url\.search\}`\)/);
+  assert.doesNotMatch(flowSource, /window\.location\.assign\(destination\)/);
   assert.doesNotMatch(flowSource, /agent-setup\/people/);
 });
 

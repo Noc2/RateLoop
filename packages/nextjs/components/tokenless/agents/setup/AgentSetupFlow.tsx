@@ -307,6 +307,14 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   const peopleDecisionTouched = useRef(false);
   const sharedInvitationCapacityTouched = useRef(false);
   const currentStep = setup.currentStep === "complete" ? "people" : setup.currentStep;
+
+  function openCompletedWorkspace() {
+    const url = new URL(window.location.href);
+    url.pathname = "/agents";
+    url.searchParams.set("workspace", setup.workspaceId);
+    url.searchParams.delete("step");
+    router.replace(`${url.pathname}${url.search}`);
+  }
   const privateExpertiseRequirements = useMemo(
     () =>
       (setup.reviewDraft?.requestProfile.expertiseRequirements ?? []).filter(
@@ -1213,11 +1221,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
         revision: typeof body.revision === "number" ? body.revision : current.revision,
       }));
       if (!invitation?.destinationUrl) {
-        const destination =
-          typeof body.destination === "string"
-            ? body.destination
-            : `/agents?workspace=${encodeURIComponent(setup.workspaceId)}&tab=overview`;
-        window.location.assign(destination);
+        openCompletedWorkspace();
       }
     } catch (cause) {
       captureFormError(cause, "Unable to save the people step.");
@@ -1228,13 +1232,13 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
 
   async function finishSetup() {
     if (setup.complete) {
-      window.location.assign(`/agents?workspace=${encodeURIComponent(setup.workspaceId)}&tab=overview`);
+      openCompletedWorkspace();
       return;
     }
     setBusy(true);
     setError(null);
     try {
-      const body = await readJson(
+      await readJson(
         await fetch(`/api/account/workspaces/${encodeURIComponent(setup.workspaceId)}/agent-setup/complete`, {
           method: "POST",
           body: JSON.stringify({ revision: setup.revision }),
@@ -1242,11 +1246,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
           headers: { "Content-Type": "application/json" },
         }),
       );
-      const destination =
-        typeof body.destination === "string"
-          ? body.destination
-          : `/agents?workspace=${encodeURIComponent(setup.workspaceId)}&tab=overview`;
-      window.location.assign(destination);
+      openCompletedWorkspace();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to finish setup.");
       setBusy(false);
