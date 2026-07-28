@@ -42,7 +42,10 @@ import {
   abandonStalePublicNetworkFoundation,
   preparePublicNetworkAudienceForBinding,
 } from "~~/lib/tokenless/publicNetworkReviewReachability";
-import { processPublicQuestionMediaDeletionByAssetId } from "~~/lib/tokenless/publicQuestionMedia";
+import {
+  processPublicQuestionMediaDeletionByAssetId,
+  sweepExpiredPublicQuestionMedia,
+} from "~~/lib/tokenless/publicQuestionMedia";
 import { reconcilePaidRaterCommit } from "~~/lib/tokenless/raterService";
 import { TokenlessServiceError, sweepExpiredTokenlessQuotes } from "~~/lib/tokenless/server";
 import { processSurpriseBountyPayments } from "~~/lib/tokenless/surpriseBountyService";
@@ -228,10 +231,20 @@ export async function seedTokenlessScheduledWork(now = new Date(), scanLimit = 1
             ORDER BY updated_at ASC, commit_id ASC LIMIT ?`,
       args: [limit],
     }),
+    // A deletion job that already tombstoned its object row no longer matches
+    // `status = 'active'`, so the object table alone stops seeding it the moment the work becomes
+    // resumable. The union keeps every unfinished job on the schedule until it reaches 'completed'.
     dbClient.execute({
-      sql: `SELECT object_id FROM tokenless_assurance_artifact_objects
-            WHERE status = 'active' AND delete_after <= ? ORDER BY created_at ASC LIMIT ?`,
-      args: [now, limit],
+      sql: `SELECT candidate.object_id FROM (
+              SELECT object_id, created_at AS sort_at FROM tokenless_assurance_artifact_objects
+              WHERE status = 'active' AND delete_after <= ?
+              UNION
+              SELECT object_id, created_at AS sort_at FROM tokenless_artifact_deletion_jobs
+              WHERE state <> 'completed' AND next_attempt_at <= ?
+            ) candidate
+            GROUP BY candidate.object_id
+            ORDER BY MIN(candidate.sort_at) ASC LIMIT ?`,
+      args: [now, now, limit],
     }),
     dbClient.execute({
       sql: `SELECT asset_id FROM tokenless_public_question_media
@@ -339,6 +352,7 @@ type MaintenanceProcessors = {
   refreshMechanismHealth: typeof refreshCompletedAssuranceMechanismHealth;
   sweepNonceDrift: typeof sweepManagedEvmNonceDrift;
   sweepExpiredQuotes: typeof sweepExpiredTokenlessQuotes;
+  sweepExpiredPublicMedia: typeof sweepExpiredPublicQuestionMedia;
   reconcileDirectPrivateReviewDeadlines: typeof reconcileDueDirectPrivateReviewDeadlines;
   reconcilePaidAssignmentSettlements: typeof reconcilePaidAssignmentSettlements;
   reconcileNetworkAssignmentSettlements: typeof reconcileNetworkAssignmentSettlements;
@@ -349,8 +363,13 @@ type MaintenanceProcessors = {
   purgeIntegrityPrivateFeatures: typeof purgeExpiredIntegrityEpochPrivateFeatures;
 };
 
+// The three scheduled-work stages and the evidence-pending health probe are pipeline steps rather
+// than injectable processors, but an uncaught throw in any of them used to abandon every processor
+// that ran after them for the whole tick. They are isolated under their own names.
+type MaintenanceStage = "seedScheduledWork" | "claimDueWork" | "processClaimedWork" | "evidencePendingHealth";
+
 type MaintenanceProcessorFailure = {
-  processor: keyof MaintenanceProcessors;
+  processor: keyof MaintenanceProcessors | MaintenanceStage;
   errorCode: string;
 };
 
@@ -364,7 +383,7 @@ function maintenanceProcessorErrorCode(error: unknown) {
 
 async function runIsolatedMaintenanceProcessor<T>(input: {
   failures: MaintenanceProcessorFailure[];
-  processor: keyof MaintenanceProcessors;
+  processor: keyof MaintenanceProcessors | MaintenanceStage;
   run: () => Promise<T>;
   fallback: T;
 }) {
@@ -414,6 +433,7 @@ const defaultProcessors: MaintenanceProcessors = {
   refreshMechanismHealth: refreshCompletedAssuranceMechanismHealth,
   sweepNonceDrift: sweepManagedEvmNonceDrift,
   sweepExpiredQuotes: sweepExpiredTokenlessQuotes,
+  sweepExpiredPublicMedia: sweepExpiredPublicQuestionMedia,
   reconcileDirectPrivateReviewDeadlines: reconcileDueDirectPrivateReviewDeadlines,
   reconcilePaidAssignmentSettlements,
   reconcileNetworkAssignmentSettlements,
@@ -643,6 +663,14 @@ export async function runTokenlessScheduledMaintenance(input: {
       run: () => processors.sweepExpiredQuotes({ now, limit: workLimit }),
       fallback: { deleted: 0, scanned: 0 } as Awaited<ReturnType<MaintenanceProcessors["sweepExpiredQuotes"]>>,
     });
+    // Unattached public media used to be swept only by the two upload routes, so a workspace that
+    // stopped uploading never expired its own media. It belongs on the schedule with its siblings.
+    const expiredPublicMedia = await runIsolatedMaintenanceProcessor({
+      failures: processorFailures,
+      processor: "sweepExpiredPublicMedia",
+      run: () => processors.sweepExpiredPublicMedia({ now, limit: workLimit }),
+      fallback: { deleted: 0, failed: [] } as Awaited<ReturnType<MaintenanceProcessors["sweepExpiredPublicMedia"]>>,
+    });
     const subjectRequests = await runIsolatedMaintenanceProcessor({
       failures: processorFailures,
       processor: "processSubjectRequests",
@@ -780,15 +808,50 @@ export async function runTokenlessScheduledMaintenance(input: {
         unavailable: 0,
       } as Awaited<ReturnType<MaintenanceProcessors["sweepNonceDrift"]>>,
     });
-    const seeded = await seedTokenlessScheduledWork(now);
-    const items = await claimDueWork(now, workLimit);
-    const work = await processClaimedWork({
-      appOrigin: input.appOrigin,
-      items,
-      now,
-      processors,
+    const seeded = await runIsolatedMaintenanceProcessor({
+      failures: processorFailures,
+      processor: "seedScheduledWork",
+      run: () => seedTokenlessScheduledWork(now),
+      fallback: {
+        chainRecoveries: 0,
+        deletions: 0,
+        publicNetworkAudiences: 0,
+        publicNetworkFoundations: 0,
+        publicMediaDeletions: 0,
+        raterCommitRecoveries: 0,
+        settlements: 0,
+      } as Awaited<ReturnType<typeof seedTokenlessScheduledWork>>,
     });
-    const evidencePending = await evidencePendingOperationalHealth(now);
+    const items = await runIsolatedMaintenanceProcessor({
+      failures: processorFailures,
+      processor: "claimDueWork",
+      run: () => claimDueWork(now, workLimit),
+      fallback: [] as Row[],
+    });
+    const work = await runIsolatedMaintenanceProcessor({
+      failures: processorFailures,
+      processor: "processClaimedWork",
+      run: () =>
+        processClaimedWork({
+          appOrigin: input.appOrigin,
+          items,
+          now,
+          processors,
+        }),
+      fallback: { completed: 0, dead: 0, deferred: 0, retry: 0 },
+    });
+    const evidencePending = await runIsolatedMaintenanceProcessor({
+      failures: processorFailures,
+      processor: "evidencePendingHealth",
+      run: () => evidencePendingOperationalHealth(now),
+      fallback: {
+        pendingCount: 0,
+        oldestCreatedAt: null,
+        oldestAgeSeconds: null,
+        alertAfterSeconds: EVIDENCE_PENDING_ALERT_SECONDS,
+        alert: false,
+      } as Awaited<ReturnType<typeof evidencePendingOperationalHealth>>,
+    });
     const deadWorkResult = await dbClient.execute({
       sql: "SELECT COUNT(*) AS count FROM tokenless_scheduled_work_items WHERE state = 'dead'",
     });
@@ -982,7 +1045,8 @@ export async function runTokenlessScheduledMaintenance(input: {
       paidAssignmentSettlements.retry > 0 ||
       networkAssignmentSettlements.retry > 0 ||
       directPrivateReviewEvidence.dead > 0 ||
-      directPrivateReviewEvidence.retry > 0
+      directPrivateReviewEvidence.retry > 0 ||
+      expiredPublicMedia.failed.length > 0
         ? "degraded"
         : "healthy";
     const summary = {
@@ -1006,6 +1070,7 @@ export async function runTokenlessScheduledMaintenance(input: {
       enterpriseIdentityAudit: { reservations: enterpriseIdentityAuditReservations, delivery: enterpriseIdentityAudit },
       mechanismHealth,
       expiredQuotes,
+      expiredPublicMedia,
       processorFailures,
       directPrivateReviewDeadlines,
       paidAssignmentSettlements,

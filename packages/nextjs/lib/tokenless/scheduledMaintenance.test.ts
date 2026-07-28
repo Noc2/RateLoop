@@ -396,6 +396,93 @@ test("one processor failure degrades the run without skipping later processors o
   assert.doesNotMatch(JSON.stringify(result.summary), /private-provider-detail/u);
 });
 
+test("expired public question media is swept by the cron rather than by upload traffic", async () => {
+  const sweptAt: Array<Date | undefined> = [];
+  const result = await runTokenlessScheduledMaintenance({
+    appOrigin: "https://tokenless.example.test",
+    now: NOW,
+    processors: {
+      ...processors(async () => undefined),
+      async sweepExpiredPublicMedia(input) {
+        sweptAt.push(input?.now);
+        return { deleted: 2, failed: [] };
+      },
+    },
+  });
+  if (result.status === "duplicate") assert.fail("first invocation cannot be duplicate");
+  assert.equal(result.status, "healthy");
+  assert.deepEqual(result.summary.expiredPublicMedia, { deleted: 2, failed: [] });
+  assert.deepEqual(sweptAt, [NOW]);
+
+  const degraded = await runTokenlessScheduledMaintenance({
+    appOrigin: "https://tokenless.example.test",
+    now: new Date(NOW.getTime() + 5 * 60_000),
+    processors: {
+      ...processors(async () => undefined),
+      async sweepExpiredPublicMedia() {
+        return { deleted: 0, failed: ["pqm_stuck"] };
+      },
+    },
+  });
+  if (degraded.status === "duplicate") assert.fail("second bucket cannot be duplicate");
+  assert.equal(degraded.status, "degraded");
+  assert.deepEqual(degraded.summary.expiredPublicMedia, { deleted: 0, failed: ["pqm_stuck"] });
+});
+
+test("a failure in any scheduled-work stage is isolated instead of skipping every later processor", async () => {
+  for (const stage of [
+    { processor: "seedScheduledWork", sql: "FROM tokenless_assurance_artifact_objects" },
+    { processor: "claimDueWork", sql: "stale worker claim recovered" },
+    { processor: "processClaimedWork", sql: "dead_at = ?, updated_at = ?" },
+    { processor: "evidencePendingHealth", sql: "MIN(created_at) AS oldest_created_at" },
+  ]) {
+    const memory = createMemoryDatabaseResources();
+    __setDatabaseResourcesForTests(memory);
+    await dbClient.execute({
+      sql: `INSERT INTO tokenless_scheduled_work_items
+            (item_id, kind, subject_key, state, attempt_count, next_attempt_at, created_at, updated_at)
+            VALUES ('swi_stage_isolation', 'delete_artifact', 'object_stage_isolation', 'pending', 0, ?, ?, ?)`,
+      args: [NOW, NOW, NOW],
+    });
+    __setDatabaseResourcesForTests({
+      ...memory,
+      client: {
+        async execute(query: Parameters<typeof memory.client.execute>[0]) {
+          const sql = typeof query === "string" ? query : query.sql;
+          if (sql.includes(stage.sql)) {
+            const error = new Error(`${stage.processor} interrupted`);
+            error.name = "StageOutage";
+            throw error;
+          }
+          return memory.client.execute(query);
+        },
+      },
+    });
+
+    let notificationsRan = false;
+    const result = await runTokenlessScheduledMaintenance({
+      appOrigin: "https://tokenless.example.test",
+      now: NOW,
+      processors: {
+        ...processors(async () => undefined),
+        async deleteArtifact() {
+          if (stage.processor === "processClaimedWork") throw new Error("deletion provider unavailable");
+          return true;
+        },
+        async processNotifications() {
+          notificationsRan = true;
+          return { dead: 0, delivered: 0, enqueued: 0, materialized: 0, parked: 0, retry: 0, suppressed: 0 };
+        },
+      },
+    });
+    if (result.status === "duplicate") assert.fail(`${stage.processor} invocation cannot be duplicate`);
+    assert.equal(notificationsRan, true, `${stage.processor} must not skip later processors`);
+    assert.equal(result.status, "degraded");
+    assert.deepEqual(result.summary.processorFailures, [{ processor: stage.processor, errorCode: "StageOutage" }]);
+    assert.doesNotMatch(JSON.stringify(result.summary), /interrupted/u);
+  }
+});
+
 test("scheduled work seeds only server-funded executions whose recovery claim is due", async () => {
   await seedRecoverableExecution("operation_recovery_due", {
     claimExpiresAt: new Date(NOW.getTime() - 1),
