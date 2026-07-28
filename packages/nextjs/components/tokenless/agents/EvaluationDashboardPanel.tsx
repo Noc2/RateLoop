@@ -707,7 +707,6 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
       <section className="surface-card rounded-2xl p-6">
         <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-pink)]">Evaluations</p>
         <h2 className="mt-2 text-2xl font-semibold">Human review results</h2>
-        <p className="mt-2 text-sm text-base-content/55">Decisions and evidence from your agent workflows.</p>
       </section>
 
       {error ? (
@@ -724,16 +723,6 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
           <p className="mt-2 text-sm text-base-content/55">Evaluations belong to a workspace.</p>
         </div>
       ) : null}
-
-      {assuranceMetrics ? <AssuranceMetricsSummary snapshot={assuranceMetrics} /> : null}
-      {metricsError ? (
-        <p className="text-xs text-amber-100/80" role="status">
-          Assurance operations metrics are temporarily unavailable.
-        </p>
-      ) : null}
-
-      {dashboard ? <ModelEvidencePanel profiles={dashboard.modelProfiles} /> : null}
-      {dashboard ? <AdaptiveCoverageSummary agents={dashboard.agents} /> : null}
 
       {!loading && dashboard?.runs.length === 0 ? (
         <section className="surface-card rounded-2xl p-6" aria-labelledby="evaluations-empty-heading">
@@ -755,53 +744,17 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
             ))}
           </section>
 
-          <section className="surface-card rounded-2xl p-6" aria-labelledby="publishing-limits-heading">
-            <h2 id="publishing-limits-heading" className="text-base font-semibold">
-              Publishing limits
-            </h2>
-            {!dashboard.canViewPublishingPolicies ? (
-              <p className="mt-3 text-sm text-base-content/55">Visible to workspace owners and admins.</p>
-            ) : dashboard.publishingPolicies?.length === 0 ? (
-              <p className="mt-3 text-sm text-base-content/55">No publishing policy configured.</p>
-            ) : (
-              <div className="mt-3 space-y-3">
-                {dashboard.publishingPolicies?.map(policy => (
-                  <article key={policy.policyId} className="surface-card-nested rounded-xl p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <h3 className="font-medium">
-                        {policy.name} · v{policy.version}
-                      </h3>
-                      <span className="rounded-md bg-white/[0.06] px-2 py-1 text-xs">
-                        {policy.enabled && !policy.revokedAt ? "active" : "inactive"}
-                      </span>
-                    </div>
-                    <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-                      <div>
-                        <dt className="text-xs text-base-content/55">Per panel</dt>
-                        <dd className="mt-1 font-mono">{usdc(policy.maxPanelAtomic)}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-xs text-base-content/55">Daily</dt>
-                        <dd className="mt-1 font-mono">{usdc(policy.maxDailyAtomic)}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-xs text-base-content/55">Monthly</dt>
-                        <dd className="mt-1 font-mono">{usdc(policy.maxMonthlyAtomic)}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-xs text-base-content/55">Maximum humans</dt>
-                        <dd className="mt-1 font-mono">{policy.maxPanelSize}</dd>
-                      </div>
-                    </dl>
-                  </article>
-                ))}
-              </div>
-            )}
-          </section>
-
           <details className="surface-card rounded-2xl p-6">
-            <summary className="cursor-pointer text-sm font-semibold">Workspace evaluation details</summary>
+            <summary className="cursor-pointer text-sm font-semibold">Operations and policy details</summary>
             <div className="mt-5 space-y-6">
+              {assuranceMetrics ? <AssuranceMetricsSummary snapshot={assuranceMetrics} /> : null}
+              {metricsError ? (
+                <p className="text-xs text-amber-100/80" role="status">
+                  Assurance operations metrics are temporarily unavailable.
+                </p>
+              ) : null}
+              <ModelEvidencePanel profiles={dashboard.modelProfiles} />
+              <AdaptiveCoverageSummary agents={dashboard.agents} />
               <section aria-labelledby="evaluation-summary-heading">
                 <h2 id="evaluation-summary-heading" className="text-base font-semibold">
                   Summary
@@ -819,6 +772,49 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
                     </div>
                   ))}
                 </dl>
+              </section>
+              <section aria-labelledby="publishing-limits-heading">
+                <h2 id="publishing-limits-heading" className="text-base font-semibold">
+                  Publishing limits
+                </h2>
+                {!dashboard.canViewPublishingPolicies ? (
+                  <p className="mt-3 text-sm text-base-content/55">Visible to workspace owners and admins.</p>
+                ) : dashboard.publishingPolicies?.length === 0 ? (
+                  <p className="mt-3 text-sm text-base-content/55">No publishing policy configured.</p>
+                ) : (
+                  <div className="mt-3 space-y-3">
+                    {dashboard.publishingPolicies?.map(policy => (
+                      <article key={policy.policyId} className="surface-card-nested rounded-xl p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <h3 className="font-medium">
+                            {policy.name} · v{policy.version}
+                          </h3>
+                          <span className="rounded-md bg-white/[0.06] px-2 py-1 text-xs">
+                            {policy.enabled && !policy.revokedAt ? "active" : "inactive"}
+                          </span>
+                        </div>
+                        <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                          <div>
+                            <dt className="text-xs text-base-content/55">Per panel</dt>
+                            <dd className="mt-1 font-mono">{usdc(policy.maxPanelAtomic)}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-base-content/55">Daily</dt>
+                            <dd className="mt-1 font-mono">{usdc(policy.maxDailyAtomic)}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-base-content/55">Monthly</dt>
+                            <dd className="mt-1 font-mono">{usdc(policy.maxMonthlyAtomic)}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-base-content/55">Maximum humans</dt>
+                            <dd className="mt-1 font-mono">{policy.maxPanelSize}</dd>
+                          </div>
+                        </dl>
+                      </article>
+                    ))}
+                  </div>
+                )}
               </section>
             </div>
           </details>
