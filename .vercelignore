@@ -1,0 +1,8 @@
+.git
+.yarn/cache
+.yarn/unplugged
+**/node_modules
+**/.next
+**/coverage
+**/test-results
+**/playwright-report
