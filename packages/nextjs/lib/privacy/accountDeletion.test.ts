@@ -1188,3 +1188,56 @@ test("account deletion covers direct-review reservations, identities, and policy
   assert.match(source, /direct_private_assignments/u);
   assert.match(source, /private_group_policy_acceptances/u);
 });
+
+test("account deletion tombstones the governance objects an admin left behind", async () => {
+  const now = new Date("2026-07-28T09:15:00.000Z");
+  await seedBetterAuthUser("better-admin-objects", "admin-objects@example.test");
+  const identity = await resolveBetterAuthPrincipal({ betterAuthUserId: "better-admin-objects" });
+  // Owned workspaces block deletion, so the gap is an admin acting in someone else's workspace.
+  const workspace = await createWorkspace({
+    name: "Admin objects",
+    ownerAddress: "0x2222222222222222222222222222222222222222",
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_workspace_clients
+          (client_id,workspace_id,name,created_by,created_at,updated_at)
+          VALUES ('wsc_admin_objects',?,'Acme',?,?,?)`,
+    args: [workspace.workspaceId, identity.principalId, now, now],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_workspace_cost_centers
+          (cost_center_id,workspace_id,client_id,code,name,created_by,created_at,updated_at)
+          VALUES ('wcc_admin_objects',?,'wsc_admin_objects','CC-1','Cost centre',?,?,?)`,
+    args: [workspace.workspaceId, identity.principalId, now, now],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_workspace_api_keys
+          (key_id,workspace_id,key_hash,key_prefix,name,role,created_at,wallet_address)
+          VALUES ('wak_admin_objects',?,?,'rlk_test','Key','member',?,?)`,
+    args: [workspace.workspaceId, `sha256:${"7".repeat(64)}`, now, identity.principalId],
+  });
+
+  await deleteAccount({
+    confirmation: "DELETE",
+    principalId: identity.principalId,
+    recentAuthProof: await deletionProof("better-admin-objects", identity.principalId, now),
+    now,
+  });
+
+  const stored = await dbClient.execute({
+    sql: `SELECT (SELECT created_by FROM tokenless_workspace_clients WHERE client_id='wsc_admin_objects') AS client_creator,
+                 (SELECT created_by FROM tokenless_workspace_cost_centers
+                  WHERE cost_center_id='wcc_admin_objects') AS cost_centre_creator,
+                 (SELECT wallet_address FROM tokenless_workspace_api_keys
+                  WHERE key_id='wak_admin_objects') AS key_wallet`,
+    args: [],
+  });
+  const row = Object.fromEntries(
+    Object.entries(stored.rows[0] ?? {}).map(([key, value]) => [key, Array.isArray(value) ? value[0] : value]),
+  );
+  assert.doesNotMatch(JSON.stringify(row), new RegExp(identity.principalId, "u"));
+  assert.match(String(row.client_creator), /^deleted-actor:/u);
+  assert.match(String(row.cost_centre_creator), /^deleted-actor:/u);
+  // The bound wallet has no retention reason once the key's owner is gone.
+  assert.equal(row.key_wallet, null);
+});

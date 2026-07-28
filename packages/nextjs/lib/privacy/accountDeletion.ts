@@ -98,6 +98,8 @@ type PrivateQuoteErasureEvidence = {
 
 type ServiceIdentityErasureEvidence = {
   agentAuditEventsPseudonymized: number;
+  agentPolicyObjectsPseudonymized: number;
+  workspaceGovernanceObjectsPseudonymized: number;
   agentIntegrationsPseudonymized: number;
   agentVersionsPseudonymized: number;
   agentsPseudonymized: number;
@@ -685,6 +687,59 @@ async function eraseServiceIdentityReferences(
      WHERE oauth_subject_principal_id=$2 OR target_approved_by=$2`,
     [input.tombstonePrincipalId, input.principalId, actorTombstone],
   );
+  // Governance and agent-configuration objects belong to a workspace that outlives the account, so
+  // they are tombstoned rather than deleted: "an authorised person configured this" is worth
+  // keeping, the identity is not. Account deletion blocks only on *owned* workspaces, so an admin
+  // of someone else's workspace could otherwise leave a stable identifier on every object they
+  // created. The hash-chained audit event tables are deliberately excluded — rewriting an actor
+  // reference in place would break chain verification for the whole workspace.
+  const workspaceGovernanceObjects = await client.query(
+    `WITH clients AS (
+       UPDATE tokenless_workspace_clients SET created_by=$2 WHERE created_by=$1 RETURNING 1
+     ), costCenters AS (
+       UPDATE tokenless_workspace_cost_centers SET created_by=$2 WHERE created_by=$1 RETURNING 1
+     ), groups AS (
+       UPDATE tokenless_private_groups SET created_by=$2 WHERE created_by=$1 RETURNING 1
+     ), groupPolicies AS (
+       UPDATE tokenless_private_group_policy_versions SET created_by=$2 WHERE created_by=$1 RETURNING 1
+     ), reviewerTerms AS (
+       UPDATE tokenless_workspace_reviewer_terms_versions SET created_by=$2 WHERE created_by=$1 RETURNING 1
+     )
+     SELECT (SELECT COUNT(*) FROM clients) + (SELECT COUNT(*) FROM costCenters) + (SELECT COUNT(*) FROM groups)
+          + (SELECT COUNT(*) FROM groupPolicies) + (SELECT COUNT(*) FROM reviewerTerms) AS pseudonymized`,
+    [input.principalId, actorTombstone],
+  );
+  const agentPolicyObjects = await client.query(
+    `WITH publishing AS (
+       UPDATE tokenless_agent_publishing_policies
+       SET created_by=CASE WHEN created_by=$1 THEN $2 ELSE created_by END,
+           payer_address=CASE WHEN payer_address=$1 THEN NULL ELSE payer_address END
+       WHERE created_by=$1 OR payer_address=$1 RETURNING 1
+     ), reviewPolicies AS (
+       UPDATE tokenless_agent_review_policies
+       SET created_by=CASE WHEN created_by=$1 THEN $2 ELSE created_by END,
+           approved_by=CASE WHEN approved_by=$1 THEN $2 ELSE approved_by END
+       WHERE created_by=$1 OR approved_by=$1 RETURNING 1
+     ), requestProfiles AS (
+       UPDATE tokenless_agent_review_request_profiles
+       SET created_by=CASE WHEN created_by=$1 THEN $2 ELSE created_by END,
+           approved_by=CASE WHEN approved_by=$1 THEN $2 ELSE approved_by END
+       WHERE created_by=$1 OR approved_by=$1 RETURNING 1
+     ), reviewBindings AS (
+       UPDATE tokenless_agent_human_review_bindings
+       SET created_by=CASE WHEN created_by=$1 THEN $2 ELSE created_by END,
+           approved_by=CASE WHEN approved_by=$1 THEN $2 ELSE approved_by END
+       WHERE created_by=$1 OR approved_by=$1 RETURNING 1
+     ), pairingSessions AS (
+       UPDATE tokenless_agent_pairing_sessions SET created_by=$2 WHERE created_by=$1 RETURNING 1
+     ), apiKeys AS (
+       UPDATE tokenless_workspace_api_keys SET wallet_address=NULL WHERE wallet_address=$1 RETURNING 1
+     )
+     SELECT (SELECT COUNT(*) FROM publishing) + (SELECT COUNT(*) FROM reviewPolicies)
+          + (SELECT COUNT(*) FROM requestProfiles) + (SELECT COUNT(*) FROM reviewBindings)
+          + (SELECT COUNT(*) FROM pairingSessions) + (SELECT COUNT(*) FROM apiKeys) AS pseudonymized`,
+    [input.principalId, actorTombstone],
+  );
   return {
     agentAuditEventsPseudonymized: agentAuditEvents.rowCount ?? 0,
     agentIntegrationsPseudonymized: agentIntegrations.rowCount ?? 0,
@@ -695,6 +750,10 @@ async function eraseServiceIdentityReferences(
     oversightAttestationsPseudonymized: oversightAttestations.rowCount ?? 0,
     publicMediaPseudonymized: publicMedia.rowCount ?? 0,
     publicMediaQuotasErased: publicMediaQuotas.rowCount ?? 0,
+    agentPolicyObjectsPseudonymized: Number((agentPolicyObjects.rows[0] as Row | undefined)?.pseudonymized ?? 0),
+    workspaceGovernanceObjectsPseudonymized: Number(
+      (workspaceGovernanceObjects.rows[0] as Row | undefined)?.pseudonymized ?? 0,
+    ),
     workspaceMovesPseudonymized: workspaceMoves.rowCount ?? 0,
   };
 }
