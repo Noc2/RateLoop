@@ -215,7 +215,7 @@ export function BetterAuthSignIn() {
     );
   }
 
-  async function useAnotherAccount() {
+  async function switchAccount() {
     await perform(async () => {
       await logoutBrowserSession();
       setSession(null);
@@ -257,7 +257,7 @@ export function BetterAuthSignIn() {
         <button
           className="btn btn-outline min-h-11 w-full"
           disabled={busy}
-          onClick={() => void useAnotherAccount()}
+          onClick={() => void switchAccount()}
           type="button"
         >
           Use another account
