@@ -2,6 +2,7 @@ import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient } from "~~/lib/db";
 import { type AgentAssuranceScopeSummary, type WorkspaceAgent } from "~~/lib/tokenless/agentRegistry";
+import { type AgentReviewQuality, loadAgentReviewQuality } from "~~/lib/tokenless/agentReviewQuality";
 import { type AssuranceMetricsSnapshot, collectWorkspaceAssuranceMetrics } from "~~/lib/tokenless/assuranceMetrics";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import { wilsonIntervalBps } from "~~/lib/tokenless/transparency";
@@ -183,6 +184,7 @@ export type AgentOverview = {
         }
       | UnavailableMetric;
   };
+  reviewQuality: AgentReviewQuality;
   agentVersions: {
     periodLabel: "Lifetime by scope";
     parents: AgentOverviewParent[];
@@ -987,6 +989,7 @@ export function projectAgentOverview(input: {
     page: number;
   };
   attention?: AgentOverview["attention"];
+  reviewQuality?: AgentReviewQuality;
   now: Date;
 }): AgentOverview {
   const startsAt = new Date(input.now.getTime() - OVERVIEW_WINDOW_MS);
@@ -1063,6 +1066,18 @@ export function projectAgentOverview(input: {
       startsAt,
       endsAt: input.now,
     }),
+    reviewQuality:
+      input.reviewQuality ??
+      ({
+        periodLabel: "Last 30 days",
+        availability: "empty",
+        privacyThreshold: null,
+        consensus: { available: false, reason: "No completed review cases in this window." },
+        reviewerConsistency: { available: false, reason: "No completed review cases in this window." },
+        panelSplit: { available: false, reason: "No completed review cases in this window." },
+        hotspots: { workflows: [], riskTiers: [], cases: [] },
+        decisionTime: { available: false, reason: "No completed review cases in this window." },
+      } satisfies AgentReviewQuality),
     agentVersions: input.agentVersionPage
       ? agentVersionPage({
           parents: input.agentVersionPage.parents,
@@ -1119,8 +1134,14 @@ export async function getAgentOverview(input: {
     throw new TokenlessServiceError("Overview page is invalid.", 400, "invalid_overview_page", false, "page");
   }
   const access = await requireAgentOverviewAccess(input.accountAddress, input.workspaceId);
+  const startsAt = new Date(now.getTime() - OVERVIEW_WINDOW_MS);
   const totalParentCountPromise = countAgentOverviewParents(input.workspaceId);
   const metricsPromise = collectWorkspaceAssuranceMetrics({ workspaceId: input.workspaceId, now });
+  const reviewQualityPromise = loadAgentReviewQuality({
+    workspaceId: input.workspaceId,
+    startsAt,
+    endsAt: now,
+  });
   const observationPromise = dbClient.execute({
     sql: `SELECT ob.agreement,ob.comparable,ob.latency_ms,ob.cost_atomic,ob.finalized_at
             FROM tokenless_agent_evaluation_observations ob
@@ -1135,7 +1156,7 @@ export async function getAgentOverview(input: {
               AND profile.result_semantics='assurance'
             ORDER BY ob.finalized_at DESC,ob.observation_id DESC
             LIMIT ?`,
-    args: [input.workspaceId, new Date(now.getTime() - OVERVIEW_WINDOW_MS), now, MAX_AGENT_OVERVIEW_OBSERVATIONS + 1],
+    args: [input.workspaceId, startsAt, now, MAX_AGENT_OVERVIEW_OBSERVATIONS + 1],
   });
   const attentionPromise = loadAgentOverviewAttention({
     workspaceId: input.workspaceId,
@@ -1144,11 +1165,12 @@ export async function getAgentOverview(input: {
   const totalParentCount = await totalParentCountPromise;
   const totalPages = Math.max(1, Math.ceil(totalParentCount / AGENT_OVERVIEW_PARENT_PAGE_SIZE));
   const page = Math.min(requestedPage, totalPages);
-  const [metrics, observationResult, parentPage, attention] = await Promise.all([
+  const [metrics, observationResult, parentPage, attention, reviewQuality] = await Promise.all([
     metricsPromise,
     observationPromise,
     loadAgentOverviewParentPage({ workspaceId: input.workspaceId, page, totalParentCount }),
     attentionPromise,
+    reviewQualityPromise,
   ]);
   return projectAgentOverview({
     agents: [],
@@ -1163,6 +1185,7 @@ export async function getAgentOverview(input: {
       page: parentPage.page,
     },
     attention,
+    reviewQuality,
     now,
   });
 }

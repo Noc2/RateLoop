@@ -9,6 +9,7 @@ import type {
   AgentOverviewParent,
   AgentOverviewScope,
 } from "~~/lib/tokenless/agentOverview";
+import type { AgentReviewQualityHotspot } from "~~/lib/tokenless/agentReviewQuality";
 import { readJson } from "~~/lib/tokenless/http";
 
 const trendDateFormatter = new Intl.DateTimeFormat("en", {
@@ -396,6 +397,203 @@ function TrendPanels({ overview }: { overview: AgentOverview }) {
   );
 }
 
+function privacyThresholdLabel(overview: AgentOverview) {
+  const threshold = overview.reviewQuality.privacyThreshold;
+  if (!threshold) return null;
+  return threshold.minimum === threshold.maximum
+    ? `${threshold.minimum} reviewers`
+    : `${threshold.minimum}–${threshold.maximum} reviewers`;
+}
+
+function QualityDistribution({
+  rows,
+  unit,
+}: {
+  rows: Array<{ key: string; label: string; count: number; shareBps: number }>;
+  unit: "cases" | "decisions";
+}) {
+  return (
+    <div className="mt-4 space-y-3">
+      {rows.map(row => (
+        <div key={row.key}>
+          <div className="mb-1 flex items-center justify-between gap-3 text-xs text-base-content/60">
+            <span>{row.label}</span>
+            <span className="font-mono">
+              {percent(row.shareBps)} · n = {row.count.toLocaleString()}
+            </span>
+          </div>
+          <progress
+            className="progress progress-primary h-1.5 w-full"
+            max={10_000}
+            value={row.shareBps}
+            aria-label={`${row.label}: ${percent(row.shareBps)}, ${row.count} ${unit}`}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function QualityHotspots({ emptyMessage, hotspots }: { emptyMessage: string; hotspots: AgentReviewQualityHotspot[] }) {
+  if (hotspots.length === 0) return <p className="mt-4 text-sm text-base-content/55">{emptyMessage}</p>;
+  return (
+    <ol className="mt-4 divide-y divide-white/10">
+      {hotspots.map(hotspot => (
+        <li key={hotspot.key} className="py-3 first:pt-0 last:pb-0">
+          <p className="truncate text-sm font-medium">{hotspot.label}</p>
+          <p className="mt-1 text-xs text-base-content/55">
+            {percent(hotspot.splitRateBps)} of cases split · {percent(hotspot.dissentRateBps)} of responses dissent · n
+            = {hotspot.caseCount.toLocaleString()} cases
+          </p>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function ReviewQualityPanel({ overview }: { overview: AgentOverview }) {
+  const quality = overview.reviewQuality;
+  const threshold = privacyThresholdLabel(overview);
+  const privacyCopy = threshold
+    ? `Each included case met its frozen privacy threshold (${threshold}).`
+    : "Cases appear only after their frozen privacy threshold is met.";
+  return (
+    <section aria-labelledby="agent-review-quality-heading">
+      <div className="mb-3">
+        <div>
+          <h2 id="agent-review-quality-heading" className="text-xl font-semibold">
+            Review quality
+          </h2>
+          <p className="mt-1 text-sm text-base-content/55">
+            Workspace aggregates only. No reviewer identities or response rows.
+          </p>
+        </div>
+      </div>
+      {quality.availability !== "available" ? (
+        <article className="surface-card rounded-2xl p-5">
+          <p className="font-medium">
+            {quality.availability === "suppressed" ? "Privacy threshold not met" : "No data"}
+          </p>
+          <p className="mt-2 text-sm text-base-content/55">
+            {quality.consensus.available ? "Review quality is available." : quality.consensus.reason}
+          </p>
+          <p className="mt-2 text-xs text-base-content/50">{privacyCopy}</p>
+        </article>
+      ) : (
+        <>
+          <div className="grid gap-5 xl:grid-cols-4">
+            <article className="surface-card rounded-2xl p-5">
+              <h3 className="text-base font-semibold">Reviewer consensus</h3>
+              {quality.consensus.available ? (
+                <>
+                  <p className="mt-2 text-3xl font-semibold">{percent(quality.consensus.unanimityRateBps)} unanimous</p>
+                  <p className="mt-2 text-xs text-base-content/55">
+                    {quality.consensus.unanimousCaseCount.toLocaleString()} of{" "}
+                    {quality.consensus.caseCount.toLocaleString()} cases
+                    {quality.consensus.limitedSample ? " · too few cases to be reliable" : ""}
+                  </p>
+                </>
+              ) : null}
+            </article>
+            <article className="surface-card rounded-2xl p-5">
+              <h3 className="text-base font-semibold">Reviewer consistency (α)</h3>
+              <p className="mt-1 text-sm text-base-content/55">
+                Agreement beyond chance across baseline, candidate, and tie.
+              </p>
+              {quality.reviewerConsistency.available ? (
+                <>
+                  <p className="mt-2 text-3xl font-semibold">
+                    α = {(quality.reviewerConsistency.alphaMilli / 1_000).toFixed(3)}
+                  </p>
+                  <p className="mt-2 text-xs text-base-content/55">
+                    n = {quality.reviewerConsistency.caseCount.toLocaleString()} cases ·{" "}
+                    {quality.reviewerConsistency.ratingCount.toLocaleString()} responses
+                    {quality.reviewerConsistency.limitedSample ? " · too few cases to be reliable" : ""}
+                  </p>
+                </>
+              ) : (
+                <p className="mt-4 text-sm text-base-content/55">{quality.reviewerConsistency.reason}</p>
+              )}
+            </article>
+            <article className="surface-card rounded-2xl p-5 xl:col-span-2">
+              <h3 className="text-base font-semibold">Panel-split distribution</h3>
+              <p className="mt-1 text-sm text-base-content/55">
+                Cases grouped by the share of valid responses outside their modal choice.
+              </p>
+              {quality.panelSplit.available ? (
+                <QualityDistribution
+                  unit="cases"
+                  rows={quality.panelSplit.buckets.map(bucket => ({
+                    key: bucket.key,
+                    label: bucket.label,
+                    count: bucket.caseCount,
+                    shareBps: bucket.shareBps,
+                  }))}
+                />
+              ) : null}
+            </article>
+          </div>
+          <div className="mt-5 grid gap-5 xl:grid-cols-3">
+            <article className="surface-card rounded-2xl p-5">
+              <h3 className="text-base font-semibold">Time to decision</h3>
+              {quality.decisionTime.available ? (
+                <>
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-xs text-base-content/55">Median</p>
+                      <p className="mt-1 text-xl font-semibold">{duration(quality.decisionTime.medianMilliseconds)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-base-content/55">95th percentile</p>
+                      <p className="mt-1 text-xl font-semibold">{duration(quality.decisionTime.p95Milliseconds)}</p>
+                    </div>
+                  </div>
+                  <QualityDistribution
+                    unit="decisions"
+                    rows={quality.decisionTime.buckets.map(bucket => ({
+                      key: bucket.key,
+                      label: bucket.label,
+                      count: bucket.decisionCount,
+                      shareBps: bucket.shareBps,
+                    }))}
+                  />
+                  <p className="mt-3 text-xs text-base-content/55">
+                    n = {quality.decisionTime.sampleSize.toLocaleString()} settled decisions
+                    {quality.decisionTime.limitedSample ? " · too few decisions to be reliable" : ""}
+                  </p>
+                </>
+              ) : (
+                <p className="mt-4 text-sm text-base-content/55">{quality.decisionTime.reason}</p>
+              )}
+            </article>
+            <article className="surface-card rounded-2xl p-5">
+              <h3 className="text-base font-semibold">Workflow hotspots</h3>
+              <QualityHotspots
+                hotspots={quality.hotspots.workflows}
+                emptyMessage="No attributed workflow had a split panel in this window."
+              />
+            </article>
+            <article className="surface-card rounded-2xl p-5">
+              <h3 className="text-base font-semibold">Risk-tier hotspots</h3>
+              <QualityHotspots
+                hotspots={quality.hotspots.riskTiers}
+                emptyMessage="No attributed risk tier had a split panel in this window."
+              />
+            </article>
+          </div>
+          {quality.hotspots.cases.length > 0 ? (
+            <article className="surface-card mt-5 rounded-2xl p-5">
+              <h3 className="text-base font-semibold">Case hotspots</h3>
+              <QualityHotspots hotspots={quality.hotspots.cases} emptyMessage="" />
+            </article>
+          ) : null}
+          <p className="mt-3 text-xs text-base-content/50">{privacyCopy}</p>
+        </>
+      )}
+    </section>
+  );
+}
+
 function ScopeTable({ parent }: { parent: AgentOverviewParent }) {
   if (parent.scopes.length === 0) {
     return <p className="p-4 text-sm text-base-content/55">No assurance scope evidence for this version yet.</p>;
@@ -733,6 +931,7 @@ export function AgentOverviewMonitor({ workspaceId }: { workspaceId: string }) {
       </section>
       <HeadlineCards overview={overview} />
       <TrendPanels overview={overview} />
+      <ReviewQualityPanel overview={overview} />
       {error ? (
         <p className="rounded-xl border border-red-300/20 bg-red-300/[0.06] p-4 text-sm text-red-100" role="alert">
           {error}

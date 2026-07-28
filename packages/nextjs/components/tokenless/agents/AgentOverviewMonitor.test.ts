@@ -19,6 +19,14 @@ test("the connected-agent overview mounts the fixed monitor", () => {
   assert.match(source, /overview\.window\.label/);
   assert.match(source, /Review outcome trend/);
   assert.match(source, /Decision-time trend/);
+  assert.match(source, /Review quality/);
+  assert.match(source, /Reviewer consensus/);
+  assert.match(source, /Reviewer consistency \(α\)/);
+  assert.match(source, /Panel-split distribution/);
+  assert.match(source, /Workflow hotspots/);
+  assert.match(source, /Risk-tier hotspots/);
+  assert.match(source, /Time to decision/);
+  assert.match(source, /overview\.reviewQuality/);
   assert.match(source, /overview\.attention\.periodLabel/);
   assert.match(source, /Low confidence/);
   assert.match(source, /Insufficient evidence/);
@@ -36,6 +44,13 @@ test("overview parent and child records are bounded at the data source", () => {
   assert.match(projectionSource, /SELECT candidates\.\*,COUNT\(\*\) OVER\(\) AS total_item_count/);
   assert.match(projectionSource, /LIMIT 6/);
   assert.doesNotMatch(projectionSource, /listWorkspaceAgents/);
+});
+
+test("review quality loads only after workspace membership is authorized", () => {
+  const access = projectionSource.indexOf("await requireAgentOverviewAccess");
+  const quality = projectionSource.indexOf("loadAgentReviewQuality", access);
+  assert.ok(access >= 0);
+  assert.ok(quality > access);
 });
 
 test("agent-version parents disclose bounded scope evidence without reviewer axes or a scope average", () => {

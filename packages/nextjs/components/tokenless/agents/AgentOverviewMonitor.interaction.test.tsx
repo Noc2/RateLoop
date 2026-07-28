@@ -62,6 +62,82 @@ const overview = {
       ],
     },
   },
+  reviewQuality: {
+    periodLabel: "Last 30 days",
+    availability: "available",
+    privacyThreshold: { minimum: 3, maximum: 3 },
+    consensus: {
+      available: true,
+      unanimityRateBps: 6_000,
+      unanimousCaseCount: 6,
+      caseCount: 10,
+      limitedSample: true,
+    },
+    reviewerConsistency: {
+      available: true,
+      alphaMilli: 396,
+      caseCount: 10,
+      ratingCount: 30,
+      limitedSample: true,
+    },
+    panelSplit: {
+      available: true,
+      splitCaseCount: 4,
+      caseCount: 10,
+      buckets: [
+        { key: "unanimous", label: "Unanimous", caseCount: 6, shareBps: 6_000 },
+        { key: "low", label: "Under 25% dissent", caseCount: 1, shareBps: 1_000 },
+        { key: "moderate", label: "25–50% dissent", caseCount: 2, shareBps: 2_000 },
+        { key: "high", label: "50%+ dissent", caseCount: 1, shareBps: 1_000 },
+      ],
+    },
+    hotspots: {
+      workflows: [
+        {
+          key: "refund-review",
+          label: "refund-review",
+          caseCount: 5,
+          splitCaseCount: 3,
+          splitRateBps: 6_000,
+          dissentRateBps: 2_500,
+        },
+      ],
+      riskTiers: [
+        {
+          key: "high",
+          label: "high",
+          caseCount: 4,
+          splitCaseCount: 2,
+          splitRateBps: 5_000,
+          dissentRateBps: 2_000,
+        },
+      ],
+      cases: [
+        {
+          key: "case-refund",
+          label: "Ambiguous refund",
+          caseCount: 2,
+          splitCaseCount: 2,
+          splitRateBps: 10_000,
+          dissentRateBps: 3_333,
+        },
+      ],
+    },
+    decisionTime: {
+      available: true,
+      medianMilliseconds: 600_000,
+      p95Milliseconds: 7_200_000,
+      sampleSize: 10,
+      limitedSample: true,
+      buckets: [
+        { key: "under_5m", label: "Under 5 min", decisionCount: 2, shareBps: 2_000 },
+        { key: "5m_to_15m", label: "5–15 min", decisionCount: 3, shareBps: 3_000 },
+        { key: "15m_to_1h", label: "15–60 min", decisionCount: 3, shareBps: 3_000 },
+        { key: "1h_to_4h", label: "1–4 hours", decisionCount: 2, shareBps: 2_000 },
+        { key: "over_4h", label: "Over 4 hours", decisionCount: 0, shareBps: 0 },
+      ],
+    },
+  },
   agentVersions: {
     periodLabel: "Lifetime by scope",
     totalParentCount: 21,
@@ -197,6 +273,15 @@ test("the overview renders four fixed answers and expands lifetime scope evidenc
     assert.ok(view.getByRole("img", { name: /review outcome trend/i }));
     assert.ok(view.getByRole("img", { name: /decision-time trend/i }));
     assert.ok(view.getByText("2 endorsed · 1 rejected · 1 inconclusive"));
+    assert.ok(view.getByRole("heading", { name: "Review quality" }));
+    assert.ok(view.getByText("60.0% unanimous"));
+    assert.ok(view.getByRole("heading", { name: "Reviewer consistency (α)" }));
+    assert.ok(view.getByText("α = 0.396"));
+    assert.ok(view.getByRole("heading", { name: "Panel-split distribution" }));
+    assert.ok(view.getByText("Ambiguous refund"));
+    assert.ok(view.getByText("95th percentile"));
+    assert.ok(view.getByText(/Each included case met its frozen privacy threshold \(3 reviewers\)/));
+    assert.equal(view.queryByText(/reviewer-[0-9a-f]+/iu), null);
     assert.ok(view.getByText(/Lifetime by scope.*never an average/));
     assert.ok(view.getByText("65.0%"));
     assert.ok(view.getByRole("heading", { name: "Attention" }));
