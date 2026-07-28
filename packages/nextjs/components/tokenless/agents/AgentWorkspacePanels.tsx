@@ -4,6 +4,7 @@ import { useCallback, useReducer, useState } from "react";
 import { useRouter } from "next/navigation";
 import { WorkspaceSettingsClient } from "../WorkspaceSettingsClient";
 import { WorkspaceStopBanner } from "../WorkspaceStopControl";
+import { Button } from "../ui/Button";
 import { AgentConnectionPanel } from "./AgentConnectionPanel";
 import { AgentRegistryPanel } from "./AgentRegistryPanel";
 import { AgentReviewsPanel } from "./AgentReviewsPanel";
@@ -44,7 +45,9 @@ export function AgentWorkspacePanels({
     workspaceId: string;
     entries: AgentConnectionHistoryEntry[];
   }>({ workspaceId, entries: [] });
+  const [agentManagementWorkspaceId, setAgentManagementWorkspaceId] = useState<string | null>(null);
   const connectionHistory = connectionHistoryState.workspaceId === workspaceId ? connectionHistoryState.entries : [];
+  const showAgentManagement = agentManagementWorkspaceId === workspaceId;
 
   const handleConnectionState = useCallback(() => refreshAgents(), []);
   const handleConnectionHistoryChange = useCallback(
@@ -105,12 +108,38 @@ export function AgentWorkspacePanels({
           />
         ) : null}
         {hasConnectedAgent && resolvedTab === "connect" ? (
-          <AgentRegistryPanel
-            workspaceId={workspaceId}
-            agentRevision={agentRevision}
-            connectionHistory={connectionHistory}
-            onAgentsChanged={refreshAgents}
-          />
+          <section className="surface-card rounded-2xl p-5" aria-labelledby="agent-version-management-heading">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 id="agent-version-management-heading" className="font-semibold">
+                  Agent versions
+                </h2>
+                <p className="mt-1 text-sm text-base-content/60">
+                  Update workflow versions or view archived agents when needed.
+                </p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                aria-controls="agent-version-management"
+                aria-expanded={showAgentManagement}
+                onClick={() => setAgentManagementWorkspaceId(current => (current === workspaceId ? null : workspaceId))}
+              >
+                {showAgentManagement ? "Done" : "Manage agent versions"}
+              </Button>
+            </div>
+            {showAgentManagement ? (
+              <div id="agent-version-management" className="mt-5 border-t border-white/10 pt-5">
+                <AgentRegistryPanel
+                  workspaceId={workspaceId}
+                  agentRevision={agentRevision}
+                  connectionHistory={connectionHistory}
+                  onAgentsChanged={refreshAgents}
+                />
+              </div>
+            ) : null}
+          </section>
         ) : null}
         {hasConnectedAgent && resolvedTab === "inbox" && canManage ? (
           <HumanReviewApprovalInbox workspaceId={workspaceId} />

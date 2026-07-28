@@ -241,7 +241,15 @@ test("agent and human-review mutations still refresh dependent panels", () => {
   assert.match(panelsSource, /onAgentsChanged=\{refreshAgents\}/);
 });
 
-test("connection events feed the shared audit history at the bottom of the connection view", () => {
+test("agent versions open from a direct secondary action on the connection view", () => {
+  assert.match(panelsSource, /Manage agent versions/);
+  assert.match(panelsSource, /aria-controls="agent-version-management"/);
+  assert.match(panelsSource, /aria-expanded=\{showAgentManagement\}/);
+  assert.match(panelsSource, /showAgentManagement \? \(/);
+  assert.match(panelsSource, /<AgentRegistryPanel/);
+});
+
+test("connection events feed the shared audit history inside agent version management", () => {
   assert.match(panelsSource, /onConnectionHistoryChange=\{handleConnectionHistoryChange\}/);
   assert.match(panelsSource, /connectionHistory=\{connectionHistory\}/);
   assert.match(panelsSource, /connectionHistoryState\.workspaceId === workspaceId/);
