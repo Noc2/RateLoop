@@ -8,6 +8,34 @@ const { renderToStaticMarkup } = require("react-dom/server") as {
   renderToStaticMarkup: (element: React.ReactElement) => string;
 };
 
+test("reviewer assignment URLs preserve queue context only for validated opened assignments", async () => {
+  const { reviewerAssignmentHref } = await import("./HumanAssuranceRaterClient");
+  const termsHash = `sha256:${"a".repeat(64)}`;
+
+  assert.equal(
+    reviewerAssignmentHref(
+      "https://rateloop-tokenless.vercel.app/human/review?scope=private&source=inbox#review-queue",
+      "haas_assignment_123",
+      termsHash,
+    ),
+    `/human/review?scope=private&source=inbox&assignment=haas_assignment_123&terms=${encodeURIComponent(
+      termsHash,
+    )}#review-queue`,
+  );
+  assert.equal(
+    reviewerAssignmentHref("https://rateloop-tokenless.vercel.app/docs", "haas_assignment_123", termsHash),
+    null,
+  );
+  assert.equal(
+    reviewerAssignmentHref(
+      "https://rateloop-tokenless.vercel.app/human/review",
+      "haas_assignment_123",
+      "sha256:not-a-hash",
+    ),
+    null,
+  );
+});
+
 test("private rater queue opens one assigned task without unrelated eligibility UI", async () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
   const { HumanAssuranceRaterClient } = await import("./HumanAssuranceRaterClient");

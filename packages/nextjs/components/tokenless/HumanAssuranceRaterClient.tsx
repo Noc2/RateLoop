@@ -166,6 +166,29 @@ function firstValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
 }
 
+export function reviewerAssignmentHref(currentHref: string, assignmentId: string, termsHash: string) {
+  const current = new URL(currentHref, "https://rateloop.local");
+  const id = assignmentId.trim();
+  const terms = termsHash.trim();
+  if (
+    current.pathname !== "/human/review" ||
+    id.length < 8 ||
+    id.length > 256 ||
+    !/^sha256:[0-9a-f]{64}$/u.test(terms)
+  ) {
+    return null;
+  }
+  current.searchParams.set("assignment", id);
+  current.searchParams.set("terms", terms);
+  return `${current.pathname}${current.search}${current.hash}`;
+}
+
+function persistReviewerAssignment(assignmentId: string, termsHash: string) {
+  if (typeof window === "undefined") return;
+  const href = reviewerAssignmentHref(window.location.href, assignmentId, termsHash);
+  if (href) window.history.replaceState(window.history.state, "", href);
+}
+
 const PRIVATE_REVIEW_JSON_OPTIONS = { fallbackMessage: "The private review request failed." };
 
 function formatDate(value: string) {
@@ -557,6 +580,8 @@ export function HumanAssuranceRaterClient({
       }
       if (opened.task && typeof opened.task === "object") applyLoadedTask(opened.task);
       else await loadAssignment(id);
+      if (privateStateEpoch !== privateStateEpochRef.current) return;
+      persistReviewerAssignment(id, termsHash.trim());
     } catch (cause) {
       if (privateStateEpoch !== privateStateEpochRef.current) return;
       const recoverable = cause instanceof HttpJsonError && cause.code === "assignment_expired";

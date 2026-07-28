@@ -230,6 +230,7 @@ test("an unchanged private-group policy opens without asking for terms again", a
   };
 
   try {
+    window.history.replaceState(null, "", "/human/review?scope=private&source=inbox#review-queue");
     const view = render(
       <HumanAssuranceRaterClient
         principalId={PRINCIPAL_A}
@@ -246,6 +247,12 @@ test("an unchanged private-group policy opens without asking for terms again", a
     await waitFor(() => assert.ok(view.getByRole("heading", { name: "Complete your assigned review" })));
     assert.equal(acceptanceBody.current?.confidentialityTermsAccepted, false);
     assert.equal(acceptanceBody.current?.confidentialityTermsHash, termsHash);
+    assert.equal(
+      `${window.location.pathname}${window.location.search}${window.location.hash}`,
+      `/human/review?scope=private&source=inbox&assignment=${binaryTask.assignmentId}&terms=${encodeURIComponent(
+        termsHash,
+      )}#review-queue`,
+    );
   } finally {
     cleanup();
     globalThis.fetch = previousFetch;
