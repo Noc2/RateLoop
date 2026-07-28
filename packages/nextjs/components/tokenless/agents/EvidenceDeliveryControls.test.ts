@@ -23,10 +23,10 @@ test("enterprise delivery controls use the workspace assurance APIs", () => {
 });
 
 test("enterprise delivery status and management stay visible", () => {
-  assert.match(wormSource, /<section[^>]+aria-labelledby="immutable-archive-heading"/);
-  assert.match(siemSource, /<section[^>]+aria-labelledby="siem-event-streams-heading"/);
-  assert.match(grcSource, /<section[^>]+aria-labelledby="grc-connectors-heading"/);
-  assert.match(metricsSource, /<section[^>]+aria-labelledby="metrics-access-heading"/);
+  assert.match(wormSource, /<Card as="section"[^>]+aria-labelledby="immutable-archive-heading"/);
+  assert.match(siemSource, /<Card as="section"[^>]+aria-labelledby="siem-event-streams-heading"/);
+  assert.match(grcSource, /<Card as="section"[^>]+aria-labelledby="grc-connectors-heading"/);
+  assert.match(metricsSource, /<Card as="section"[^>]+aria-labelledby="metrics-access-heading"/);
   for (const value of files.slice(1)) {
     assert.doesNotMatch(value, /<details className="surface-card-nested/);
   }

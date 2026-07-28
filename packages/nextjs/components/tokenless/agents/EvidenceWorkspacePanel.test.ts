@@ -82,7 +82,10 @@ test("the evidence workspace keeps verification and export state explicit", () =
 });
 
 test("workspace compliance controls expose only browser-safe endpoints", () => {
-  assert.match(source, /!loading && canManage \? \(\s*<section[^>]+aria-labelledby="compliance-export-heading"/s);
+  assert.match(
+    source,
+    /!loading && canManage \? \(\s*<Card as="section"[^>]+aria-labelledby="compliance-export-heading"/s,
+  );
   assert.match(source, /Export operating evidence for an audit/);
   assert.match(source, /\/audit\/export/);
   assert.match(source, /\/assurance\/coverage\/export/);

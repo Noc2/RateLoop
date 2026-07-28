@@ -44,7 +44,7 @@ test("Agents uses URL-backed workspace tabs", () => {
 test("Human profile keeps established surface cards without a dashboard hero", () => {
   const profile = source("./account/ProfileClient.tsx");
 
-  assert.match(profile, /surface-card rounded-2xl/);
+  assert.match(profile, /<Card as="section" className="rounded-2xl/);
   assert.match(profile, /<h2 id="profile-display-name-heading"[\s\S]*Display name[\s\S]*<\/h2>/);
   assert.match(profile, /<Field[\s\S]*id="profile-display-name"[\s\S]*label="Display name"/);
   assert.doesNotMatch(profile, /How RateLoop addresses you/);
