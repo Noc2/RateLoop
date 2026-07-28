@@ -56,17 +56,19 @@ test("tokenless routes expose one main landmark and a keyboard skip link", () =>
   }
 });
 
-test("tokenless site search restores the established navbar treatment", () => {
+test("tokenless site search keeps the navbar treatment with explicit submission", () => {
   const source = readFileSync(new URL("./navigation/SiteSearch.tsx", import.meta.url), "utf8");
 
   assert.match(source, /MagnifyingGlassIcon/);
   assert.match(source, /border-0 bg-base-content\/\[0\.12\]/);
   assert.match(source, /!shadow-none/);
-  assert.match(source, /px-4 text-center/);
+  assert.match(source, /pl-3 pr-16 text-base/);
   assert.doesNotMatch(source, /input-bordered|header-search-input/);
   assert.match(source, /placeholder="Search"/);
   assert.match(source, /const SEARCH_ROUTE = "\/search"/);
-  assert.match(source, /SEARCH_DEBOUNCE_MS = 200/);
+  assert.match(source, /<form onSubmit=\{submit\}/);
+  assert.match(source, /type="submit"/);
+  assert.doesNotMatch(source, /SEARCH_DEBOUNCE_MS/);
   assert.match(source, /aria-label="Search RateLoop"/);
   assert.doesNotMatch(source, /placeholder="Search answers"/);
 });
