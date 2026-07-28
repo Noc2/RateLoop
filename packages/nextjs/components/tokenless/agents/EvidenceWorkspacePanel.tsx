@@ -76,7 +76,14 @@ type EvidencePacket = {
   signing: { algorithm: "Ed25519"; keyId: string; publicKey: string };
 };
 
-type PacketRow = { packet: EvidencePacket; projectName: string; suiteName: string };
+type PacketRow = {
+  packet: EvidencePacket;
+  projectId: string;
+  projectName: string;
+  suiteId: string;
+  suiteName: string;
+  suiteVersion: number;
+};
 type Attestation = {
   jobId: string;
   artifactKind: string;
@@ -149,6 +156,36 @@ function responseLatency(milliseconds: number | null | undefined) {
   const minutes = Math.floor(milliseconds / 60_000);
   const seconds = Math.round((milliseconds % 60_000) / 1_000);
   return `${minutes} min${seconds ? ` ${seconds} sec` : ""}`;
+}
+
+function packetIdentity({ packet }: PacketRow) {
+  return `${packet.payload.runId}\u0000${packet.payload.packetId}`;
+}
+
+function packetLineage({ projectId, suiteId }: PacketRow) {
+  return `${projectId}\u0000${suiteId}`;
+}
+
+function comparePacketRecency(left: PacketRow, right: PacketRow) {
+  const generatedAt = Date.parse(left.packet.payload.generatedAt) - Date.parse(right.packet.payload.generatedAt);
+  if (generatedAt !== 0) return generatedAt;
+  if (left.suiteVersion !== right.suiteVersion) return left.suiteVersion - right.suiteVersion;
+  return packetIdentity(left).localeCompare(packetIdentity(right));
+}
+
+function newerPacketsByIdentity(rows: PacketRow[]) {
+  const latestByLineage = new Map<string, PacketRow>();
+  for (const row of rows) {
+    const lineage = packetLineage(row);
+    const current = latestByLineage.get(lineage);
+    if (!current || comparePacketRecency(row, current) > 0) latestByLineage.set(lineage, row);
+  }
+  return new Map(
+    rows.flatMap(row => {
+      const latest = latestByLineage.get(packetLineage(row));
+      return latest && latest !== row ? [[packetIdentity(row), latest] as const] : [];
+    }),
+  );
 }
 
 function PacketCoverage({ packet }: { packet: EvidencePacket }) {
@@ -483,8 +520,11 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                 credentials: "same-origin",
               }),
             ),
+            projectId: run.projectId,
             projectName: run.projectName,
+            suiteId: run.suiteId,
             suiteName: run.suiteName,
+            suiteVersion: run.suiteVersion,
           })),
       );
       setPackets(packetRows);
@@ -557,12 +597,12 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
       );
     });
   }, [dateFilter, outcomeFilter, packetQuery, packets]);
+  const newerPacketByIdentity = useMemo(() => newerPacketsByIdentity(packets), [packets]);
 
   return (
     <div className="space-y-5">
       <section className="surface-card rounded-2xl p-6">
-        <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-pink)]">Evidence</p>
-        <div className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 className="text-2xl font-semibold">Decision records and exports</h2>
           </div>
@@ -675,6 +715,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
             const settlementLinks = (packet.payload.settlement?.links ?? [])
               .map(safeExternalEvidenceLink)
               .filter((link): link is string => link !== null);
+            const newerPacket = newerPacketByIdentity.get(`${packet.payload.runId}\u0000${packet.payload.packetId}`);
             return (
               <article
                 key={packet.payload.packetId}
@@ -749,6 +790,41 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                     </button>
                   </div>
                 </div>
+                {newerPacket ? (
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--rateloop-blue)]/25 bg-[var(--rateloop-blue)]/[0.05] px-4 py-3 text-xs leading-5">
+                    <p className="text-base-content/70">
+                      A newer packet exists for this project and suite. This signed packet remains an immutable
+                      point-in-time record.
+                    </p>
+                    <Link
+                      href={evidenceUrlHref({
+                        pathname: urlSnapshot.pathname,
+                        search: urlSnapshot.search,
+                        hash: urlSnapshot.hash,
+                        patch: {
+                          runId: newerPacket.packet.payload.runId,
+                          packetId: newerPacket.packet.payload.packetId,
+                        },
+                      })}
+                      scroll={false}
+                      className="font-semibold underline underline-offset-4"
+                      onClick={event => {
+                        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+                          return;
+                        event.preventDefault();
+                        updateUrlState(
+                          {
+                            runId: newerPacket.packet.payload.runId,
+                            packetId: newerPacket.packet.payload.packetId,
+                          },
+                          "push",
+                        );
+                      }}
+                    >
+                      Open newer packet
+                    </Link>
+                  </div>
+                ) : null}
                 <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
                   <div>
                     <dt className="text-xs text-base-content/55">Generated</dt>

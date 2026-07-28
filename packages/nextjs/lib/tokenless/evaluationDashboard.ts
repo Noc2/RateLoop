@@ -15,6 +15,8 @@ export type EvaluationRun = {
   runId: string;
   projectId: string;
   projectName: string;
+  suiteId: string;
+  suiteVersion: number;
   suiteName: string;
   status: string;
   workflowKey: string | null;
@@ -511,7 +513,7 @@ export async function getWorkspaceEvaluationDashboard(input: {
               UNION
               SELECT run_id FROM requested_project_runs
             )
-            SELECT r.run_id, r.project_id, r.status, r.created_at, r.completed_at,
+            SELECT r.run_id, r.project_id, r.suite_id, r.suite_version, r.status, r.created_at, r.completed_at,
                    p.name AS project_name, s.name AS suite_name,
                    ap.reviewer_source, ap.compensation, ap.buyer_privacy_json,
                    d.decision AS client_decision, ep.packet_id, ep.packet_digest,
@@ -714,6 +716,8 @@ export async function getWorkspaceEvaluationDashboard(input: {
       runId,
       projectId: rowString(row, "project_id")!,
       projectName: rowString(row, "project_name")!,
+      suiteId: rowString(row, "suite_id")!,
+      suiteVersion: rowNumber(row, "suite_version"),
       suiteName: rowString(row, "suite_name")!,
       status,
       workflowKey: rowString(row, "attribution_workflow_key"),

@@ -376,6 +376,9 @@ test("evaluation dashboard keeps legacy runs unattributed and joins an exact age
   });
 
   const suppressed = await getWorkspaceEvaluationDashboard({ accountAddress: OWNER, workspaceId });
+  assert.equal(suppressed.runs[0]?.projectId, projectId);
+  assert.equal(suppressed.runs[0]?.suiteId, suite.suiteId);
+  assert.equal(suppressed.runs[0]?.suiteVersion, suite.version);
   assert.equal(suppressed.runs[0]?.sampleStatus, "suppressed");
   assert.equal(suppressed.runs[0]?.candidateSelectionShareBps, null);
   assert.equal(suppressed.runs[0]?.choices, null);

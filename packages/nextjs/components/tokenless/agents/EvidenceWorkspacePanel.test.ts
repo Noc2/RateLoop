@@ -6,6 +6,7 @@ const source = readFileSync(new URL("./EvidenceWorkspacePanel.tsx", import.meta.
 
 test("the evidence workspace keeps verification and export state explicit", () => {
   assert.match(source, /Decision records and exports/);
+  assert.doesNotMatch(source, /tracking-widest[^>]*>\s*Evidence\s*</);
   assert.match(source, /Export packet/);
   assert.doesNotMatch(source, /Evidence settings/);
   assert.match(source, /Retention, keys, and delivery/);
@@ -15,6 +16,13 @@ test("the evidence workspace keeps verification and export state explicit", () =
   assert.match(source, /respondingReviewerCount/);
   assert.match(source, /targetReviewerCount/);
   assert.match(source, /Point-in-time record/);
+  assert.match(source, /projectId: run\.projectId/);
+  assert.match(source, /suiteId: run\.suiteId/);
+  assert.match(source, /suiteVersion: run\.suiteVersion/);
+  assert.match(source, /newerPacketsByIdentity\(packets\)/);
+  assert.match(source, /A newer packet exists for this project and suite/);
+  assert.match(source, /This signed packet remains an immutable\s+point-in-time record/);
+  assert.match(source, /Open newer packet/);
   assert.match(source, /Review coverage and timing/);
   for (const field of [
     "targetExpectedJudgmentCount",

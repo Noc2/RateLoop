@@ -142,8 +142,11 @@ test("a packet reveals verification while manager-only exports and controls stay
   const restoreFetch = installFetch([
     {
       runId: "run-evidence-1",
+      projectId: "project-release-controls",
       projectName: "Release controls",
+      suiteId: "suite-production-readiness",
       suiteName: "Production readiness",
+      suiteVersion: 1,
       evidencePacketAvailable: true,
     },
   ]);
@@ -181,14 +184,20 @@ test("evidence selection and filters restore from the URL and preserve workspace
   const restoreFetch = installFetch([
     {
       runId: "run-evidence-1",
+      projectId: "project-release-controls",
       projectName: "Release controls",
+      suiteId: "suite-release-lineage",
       suiteName: "Production readiness",
+      suiteVersion: 1,
       evidencePacketAvailable: true,
     },
     {
       runId: "run-evidence-2",
+      projectId: "project-release-controls",
       projectName: "Release controls",
+      suiteId: "suite-release-lineage",
       suiteName: "Deployment safety",
+      suiteVersion: 2,
       evidencePacketAvailable: true,
     },
   ]);
@@ -213,6 +222,17 @@ test("evidence selection and filters restore from the URL and preserve workspace
       selectedLink.getAttribute("href"),
       "/agents?tab=evidence&workspace=workspace-evidence&source=audit&q=release&outcome=pass&date=30&run=run-evidence-2&packet=packet-evidence-2",
     );
+    const newerPacketLink = view.getByRole("link", { name: "Open newer packet" });
+    assert.match(newerPacketLink.closest("article")?.textContent ?? "", /Production readiness/);
+    assert.match(
+      newerPacketLink.closest("article")?.textContent ?? "",
+      /newer packet exists.*signed packet remains an immutable point-in-time record/is,
+    );
+    assert.equal(
+      newerPacketLink.getAttribute("href"),
+      "/agents?tab=evidence&workspace=workspace-evidence&source=audit&q=release&outcome=pass&date=30&run=run-evidence-2&packet=packet-evidence-2",
+    );
+    assert.doesNotMatch(selectedLink.closest("article")?.textContent ?? "", /newer packet exists/i);
 
     const user = userEvent.setup({ document });
     await user.click(view.getByRole("link", { name: "Open packet" }));
