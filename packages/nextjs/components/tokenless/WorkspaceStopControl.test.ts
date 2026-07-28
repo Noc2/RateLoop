@@ -20,7 +20,8 @@ test("the danger-zone stop action requires a reason and never resumes agents imp
   assert.match(controlSource, /method: "DELETE"/);
   // Release and safe-state semantics preserve the design-of-record authority boundary.
   assert.match(controlSource, /holds gated work undelivered/);
-  assert.match(controlSource, /Release stop \(agents stay halted until re-granted\)/);
+  assert.match(controlSource, /<ConfirmDialog/);
+  assert.match(controlSource, /confirmLabel="Release stop"/);
   assert.match(controlSource, /Agents do not restart/);
   assert.doesNotMatch(controlSource, /EU AI Act compliant|makes you compliant|satisfies Article/i);
 });
@@ -28,7 +29,7 @@ test("the danger-zone stop action requires a reason and never resumes agents imp
 test("the engaged banner persists across agents pages and the panel mounts in the manager workspace card", () => {
   assert.match(controlSource, /export function WorkspaceStopBanner/);
   assert.match(controlSource, /All agent activity is stopped for this workspace\./);
-  assert.match(controlSource, /each agent needs a fresh\s+publishing grant/);
+  assert.equal(controlSource.match(/fresh publishing grant/g)?.length, 1);
   assert.match(panelsSource, /<WorkspaceStopBanner workspaceId=\{workspaceId\} \/>/);
   assert.doesNotMatch(panelsSource, /<WorkspaceDangerZone/);
   assert.match(settingsSource, /selected && canManageWorkspace \? \(\s*<WorkspaceDangerZone/);

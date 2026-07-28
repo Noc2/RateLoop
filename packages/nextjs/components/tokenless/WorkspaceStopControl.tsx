@@ -3,6 +3,7 @@
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { TextareaField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import { ConfirmDialog } from "~~/components/tokenless/ui/ConfirmDialog";
 import { readJson } from "~~/lib/tokenless/http";
 
 export type WorkspaceStopState = {
@@ -48,8 +49,7 @@ export function WorkspaceStopBanner({ workspaceId }: { workspaceId: string }) {
       <p className="font-semibold">All agent activity is stopped for this workspace.</p>
       <p className="mt-1 text-red-100/80">
         Stopped {new Date(stop.engagedAt).toLocaleString()} — {stop.reason}. New outputs stay blocked and no
-        review-triggered release can occur. Releasing the stop resumes nothing automatically; each agent needs a fresh
-        publishing grant.
+        review-triggered release can occur.
       </p>
     </div>
   );
@@ -59,6 +59,7 @@ export function WorkspaceStopPanel({ workspaceId }: { workspaceId: string }) {
   const [revision, setRevision] = useState(0);
   const stop = useWorkspaceStopState(workspaceId, revision);
   const [confirming, setConfirming] = useState(false);
+  const [confirmingRelease, setConfirmingRelease] = useState(false);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const { capture, clear, fieldErrors, formError } = useFormErrors();
@@ -104,6 +105,7 @@ export function WorkspaceStopPanel({ workspaceId }: { workspaceId: string }) {
           credentials: "same-origin",
         }),
       );
+      setConfirmingRelease(false);
       refresh();
     } catch (cause) {
       capture(cause, "Unable to release the stop.");
@@ -121,8 +123,7 @@ export function WorkspaceStopPanel({ workspaceId }: { workspaceId: string }) {
             Stop all agent activity
           </h3>
           <p className="mt-1 max-w-3xl text-sm leading-6 text-base-content/65">
-            Blocks new outputs and holds gated work undelivered. Agents do not restart when the stop is released; each
-            needs a fresh publishing grant.
+            Blocks new outputs and holds gated work undelivered.
           </p>
         </div>
         {!engaged && !confirming ? (
@@ -140,8 +141,16 @@ export function WorkspaceStopPanel({ workspaceId }: { workspaceId: string }) {
         <div className="mt-4 rounded-xl bg-red-400/10 p-4 text-sm leading-6 text-red-100" role="status">
           <p className="font-semibold">Stop engaged {new Date(stop.engagedAt).toLocaleString()}</p>
           <p className="mt-1 text-red-100/80">Reason: {stop.reason}</p>
-          <button type="button" className="btn btn-outline btn-sm mt-3" onClick={release} disabled={busy}>
-            Release stop (agents stay halted until re-granted)
+          <p className="mt-1 text-red-100/80">
+            Agents do not restart when this stop is released. Each agent needs a fresh publishing grant.
+          </p>
+          <button
+            type="button"
+            className="btn btn-outline btn-sm mt-3"
+            onClick={() => setConfirmingRelease(true)}
+            disabled={busy}
+          >
+            Release stop
           </button>
         </div>
       ) : confirming ? (
@@ -184,6 +193,16 @@ export function WorkspaceStopPanel({ workspaceId }: { workspaceId: string }) {
           {formError}
         </p>
       ) : null}
+      <ConfirmDialog
+        open={confirmingRelease}
+        title="Release this workspace stop?"
+        description="Confirm that you want to release the workspace stop."
+        confirmLabel="Release stop"
+        busy={busy}
+        destructive={false}
+        onCancel={() => setConfirmingRelease(false)}
+        onConfirm={() => void release()}
+      />
     </section>
   );
 }
