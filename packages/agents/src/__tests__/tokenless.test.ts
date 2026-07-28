@@ -129,6 +129,8 @@ describe("tokenless agents client", () => {
         prompt: "Ship it?",
         rationale: { mode: "optional" },
       },
+      dataClassification: "internal" as const,
+      visibility: "private" as const,
       requestedPanelSize: 5,
       responseWindowSeconds: 3_600,
     });

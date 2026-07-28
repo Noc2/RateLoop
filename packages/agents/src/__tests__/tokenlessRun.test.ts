@@ -84,6 +84,8 @@ const quoteRequest = {
     prompt: "Is this safe?",
     rationale: { mode: "off" },
   },
+  dataClassification: "internal" as const,
+  visibility: "private" as const,
   requestedPanelSize: 3,
   responseWindowSeconds: 3_600,
 } satisfies TokenlessQuoteRequest;
