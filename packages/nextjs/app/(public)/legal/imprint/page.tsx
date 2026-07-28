@@ -1,5 +1,7 @@
 import Link from "next/link";
-import type { NextPage } from "next";
+import type { Metadata, NextPage } from "next";
+
+export const metadata: Metadata = { title: "Imprint" };
 
 const ImprintPage: NextPage = () => {
   return (

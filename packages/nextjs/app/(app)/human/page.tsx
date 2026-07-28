@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import type { Metadata } from "next";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { HumanAssuranceRaterClient } from "~~/components/tokenless/HumanAssuranceRaterClient";
 import { AccountDeletionPanel } from "~~/components/tokenless/account/AccountDeletionPanel";
@@ -10,23 +11,26 @@ import { HumanAccountSignInPrompt } from "~~/components/tokenless/human/HumanAcc
 import { HumanProfileContent } from "~~/components/tokenless/human/HumanProfileContent";
 import { type HumanTab, HumanTabs } from "~~/components/tokenless/human/HumanTabs";
 import { AUTH_SESSION_COOKIE, findAuthSession } from "~~/lib/auth/session";
+import { humanPageTitle } from "~~/lib/tokenless/pageTitles";
 import { isWorldIdAssuranceEnabled } from "~~/lib/tokenless/worldIdAssurance";
 
 const HUMAN_TABS = new Set<HumanTab>(["discover", "profile", "settings"]);
 
-export default async function HumanPage({
-  searchParams,
-}: {
-  searchParams: Promise<{
-    assignment?: string | string[];
-    invite?: string | string[];
-    terms?: string | string[];
-    q?: string | string[];
-    scope?: string | string[];
-    tab?: string | string[];
-    view?: string | string[];
-  }>;
-}) {
+type HumanSearchParams = Promise<{
+  assignment?: string | string[];
+  invite?: string | string[];
+  terms?: string | string[];
+  q?: string | string[];
+  scope?: string | string[];
+  tab?: string | string[];
+  view?: string | string[];
+}>;
+
+export async function generateMetadata({ searchParams }: { searchParams: HumanSearchParams }): Promise<Metadata> {
+  return { title: humanPageTitle(await searchParams) };
+}
+
+export default async function HumanPage({ searchParams }: { searchParams: HumanSearchParams }) {
   const params = await searchParams;
   const requestedTab = Array.isArray(params.tab) ? params.tab[0] : params.tab;
   const tab = HUMAN_TABS.has(requestedTab as HumanTab) ? (requestedTab as HumanTab) : "discover";

@@ -1,6 +1,9 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { HumanAssuranceLoop } from "~~/components/assurance/HumanAssuranceLoop";
 import { DocsTitle } from "~~/components/docs/DocsTitle";
+
+export const metadata: Metadata = { title: "How RateLoop works" };
 
 export default function HowTokenlessWorksPage() {
   return (

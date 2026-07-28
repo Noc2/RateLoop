@@ -1,5 +1,8 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { DocsTitle } from "~~/components/docs/DocsTitle";
+
+export const metadata: Metadata = { title: "SDK guide" };
 
 export default function SdkPage() {
   return (

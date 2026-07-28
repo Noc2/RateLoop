@@ -1,4 +1,7 @@
 import Link from "next/link";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = { title: "Legal" };
 
 const documents = [
   ["Terms", "/legal/terms", "Rules, responsibilities, payment terms, and service limitations."],

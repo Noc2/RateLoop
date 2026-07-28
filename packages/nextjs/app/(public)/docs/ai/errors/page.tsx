@@ -1,5 +1,7 @@
-import type { NextPage } from "next";
+import type { Metadata, NextPage } from "next";
 import { DocsTitle } from "~~/components/docs/DocsTitle";
+
+export const metadata: Metadata = { title: "Agent error reference" };
 
 const errors = [
   ["invalid_quote", "The quote shape or atomic economics are invalid.", "Correct the request before retrying."],

@@ -1,9 +1,11 @@
 import { cookies } from "next/headers";
+import type { Metadata } from "next";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { AgentWorkspacePanels } from "~~/components/tokenless/agents/AgentWorkspacePanels";
 import { AgentsSignInPrompt } from "~~/components/tokenless/agents/AgentsSignInPrompt";
 import { resolveAgentTabParam, selectRequestedWorkspace } from "~~/components/tokenless/agents/agentWorkspaceState";
 import { AUTH_SESSION_COOKIE, findAuthSession } from "~~/lib/auth/session";
+import { agentPageTitle } from "~~/lib/tokenless/pageTitles";
 import { listProductWorkspaces } from "~~/lib/tokenless/productCore";
 import { getWorkspaceAgentSetup } from "~~/lib/tokenless/workspaceAgentSetup";
 
@@ -11,11 +13,17 @@ function firstQueryValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-export default async function AgentsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ tab?: string | string[]; workspace?: string | string[]; step?: string | string[] }>;
-}) {
+type AgentsSearchParams = Promise<{
+  tab?: string | string[];
+  workspace?: string | string[];
+  step?: string | string[];
+}>;
+
+export async function generateMetadata({ searchParams }: { searchParams: AgentsSearchParams }): Promise<Metadata> {
+  return { title: agentPageTitle((await searchParams).tab) };
+}
+
+export default async function AgentsPage({ searchParams }: { searchParams: AgentsSearchParams }) {
   const cookieStore = await cookies();
   const session = await findAuthSession(cookieStore.get(AUTH_SESSION_COOKIE)?.value);
 
