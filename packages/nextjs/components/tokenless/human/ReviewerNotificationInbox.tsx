@@ -77,7 +77,7 @@ function NotificationList({
                   ) : null}
                 </div>
                 <p className="mt-1 text-sm leading-6 text-base-content/65">{notification.body}</p>
-                <time dateTime={notification.createdAt} className="mt-1 block text-xs text-base-content/50">
+                <time dateTime={notification.createdAt} className="mt-1 block text-xs text-base-content/55">
                   {dateLabel(notification.createdAt)}
                 </time>
               </div>

@@ -257,7 +257,7 @@ export function WorkspaceApiKeysPanel({ workspaceId }: { workspaceId: string }) 
                     className="inline-flex flex-wrap items-baseline gap-x-2 rounded-md bg-base-content/[0.05] px-2.5 py-1.5 text-xs"
                   >
                     <span>{WORKSPACE_API_KEY_SCOPE_DETAILS[scope].label}</span>
-                    <code className="text-base-content/50">{scope}</code>
+                    <code className="text-base-content/55">{scope}</code>
                   </li>
                 ))}
               </ul>

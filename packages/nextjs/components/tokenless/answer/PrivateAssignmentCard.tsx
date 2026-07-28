@@ -92,25 +92,25 @@ export function PrivateAssignmentCard({ assignment }: { assignment: PrivateAnswe
         <div className="border-t border-white/[0.07] px-4 py-4 sm:px-5">
           {assignment.reviewQuestion ? (
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-base-content/45">Review focus</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-base-content/55">Review focus</p>
               <p className="mt-1 text-sm text-base-content/85">{assignment.reviewQuestion}</p>
             </div>
           ) : null}
           <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
             <div>
-              <dt className="text-base-content/45">Assigned</dt>
+              <dt className="text-base-content/55">Assigned</dt>
               <dd className="mt-0.5 text-base-content/80">{dateLabel(assignment.createdAt)}</dd>
             </div>
             <div>
-              <dt className="text-base-content/45">Last updated</dt>
+              <dt className="text-base-content/55">Last updated</dt>
               <dd className="mt-0.5 text-base-content/80">{dateLabel(assignment.updatedAt)}</dd>
             </div>
             <div>
-              <dt className="text-base-content/45">Cases</dt>
+              <dt className="text-base-content/55">Cases</dt>
               <dd className="mt-0.5 text-base-content/80">{assignment.caseCount}</dd>
             </div>
             <div>
-              <dt className="text-base-content/45">Compensation</dt>
+              <dt className="text-base-content/55">Compensation</dt>
               <dd className="mt-0.5 text-base-content/80">{assignment.paidAssignment ? "Paid" : "Unpaid"}</dd>
             </div>
           </dl>

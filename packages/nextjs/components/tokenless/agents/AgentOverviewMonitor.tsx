@@ -494,7 +494,7 @@ function ReviewQualityPanel({ overview }: { overview: AgentOverview }) {
           <p className="mt-2 text-sm text-base-content/55">
             {quality.consensus.available ? "Review quality is available." : quality.consensus.reason}
           </p>
-          <p className="mt-2 text-xs text-base-content/50">{privacyCopy}</p>
+          <p className="mt-2 text-xs text-base-content/55">{privacyCopy}</p>
         </Card>
       ) : (
         <>
@@ -604,7 +604,7 @@ function ReviewQualityPanel({ overview }: { overview: AgentOverview }) {
               <QualityHotspots hotspots={quality.hotspots.cases} emptyMessage="" />
             </Card>
           ) : null}
-          <p className="mt-3 text-xs text-base-content/50">{privacyCopy}</p>
+          <p className="mt-3 text-xs text-base-content/55">{privacyCopy}</p>
         </>
       )}
     </section>
@@ -636,7 +636,7 @@ function ScopeTable({ parent }: { parent: AgentOverviewParent }) {
             <tr key={scope.scopeId}>
               <td>
                 <span className="font-medium">{scope.workflowKey}</span>
-                <code className="mt-1 block max-w-52 truncate text-[10px] text-base-content/45">{scope.scopeId}</code>
+                <code className="mt-1 block max-w-52 truncate text-[10px] text-base-content/55">{scope.scopeId}</code>
               </td>
               <td className="capitalize">{scope.riskTier}</td>
               <td>{stageLabel(scope.stage)}</td>
