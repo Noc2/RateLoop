@@ -380,6 +380,7 @@ export function AgentHumanReviewEditor({
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [advancedLimitsOpen, setAdvancedLimitsOpen] = useState(false);
   const { capture, clear, fieldErrors, formError } = useFormErrors();
 
   const load = useCallback(
@@ -470,6 +471,12 @@ export function AgentHumanReviewEditor({
       setStatus(savedStatus(saved, draft.authority));
       onSaved?.();
     } catch (cause) {
+      if (
+        cause instanceof FormFieldError &&
+        ["ratePercent", "maximumUnreviewedGap", "requiredRiskTiers", "minimumConfidencePercent"].includes(cause.field)
+      ) {
+        setAdvancedLimitsOpen(true);
+      }
       capture(cause, "Unable to save human review.");
     } finally {
       setBusy(false);
@@ -622,7 +629,11 @@ export function AgentHumanReviewEditor({
             onAuthorityChange={authority => update("authority", authority)}
           />
           {draft.mode !== "manual" ? (
-            <details className="rounded-xl border border-white/10 p-4">
+            <details
+              className="rounded-xl border border-white/10 p-4"
+              open={advancedLimitsOpen}
+              onToggle={event => setAdvancedLimitsOpen(event.currentTarget.open)}
+            >
               <summary className="cursor-pointer text-sm font-medium">Advanced review limits</summary>
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 {draft.mode === "adaptive" || draft.mode === "fixed" ? (
@@ -635,7 +646,6 @@ export function AgentHumanReviewEditor({
                     value={draft.ratePercent}
                     error={fieldErrors.ratePercent}
                     onChange={event => update("ratePercent", event.target.value)}
-                    required
                     disabled={draft.mode === "adaptive"}
                   />
                 ) : null}
@@ -647,7 +657,6 @@ export function AgentHumanReviewEditor({
                   value={draft.maximumUnreviewedGap}
                   error={fieldErrors.maximumUnreviewedGap}
                   onChange={event => update("maximumUnreviewedGap", event.target.value)}
-                  required
                 />
                 {draft.mode === "rules" ? (
                   <>
