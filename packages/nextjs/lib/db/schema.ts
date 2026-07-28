@@ -1401,6 +1401,10 @@ export const tokenlessAgentReviewOpportunityTransitionEvents = pgTable(
       table.opportunityId,
       table.toRevision,
     ),
+    workspaceOccurredIdx: index("tokenless_agent_review_transition_events_workspace_occurred_idx").on(
+      table.workspaceId,
+      table.occurredAt,
+    ),
     timelineIdx: index("tokenless_agent_review_opportunity_transition_events_timeline_idx").on(
       table.workspaceId,
       table.opportunityId,
