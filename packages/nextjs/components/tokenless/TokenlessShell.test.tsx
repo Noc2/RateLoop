@@ -6,12 +6,12 @@ const shellSource = readFileSync(new URL("./TokenlessShell.tsx", import.meta.url
 
 test("tokenless shell exposes Humans, Agents, and Docs without the legacy product navigation", async () => {
   const source = shellSource;
-  assert.match(source, /href: "\/human", label: "Humans"/);
-  assert.match(source, /href: "\/agents", label: "Agents"/);
+  assert.match(source, /href: "\/human\/review", label: "Humans"/);
+  assert.match(source, /href: "\/agents\/overview", label: "Agents"/);
   assert.doesNotMatch(source, /For Humans|For Agents/);
   assert.match(source, /href: "\/docs", label: "Docs"/);
   assert.match(source, /\["Pricing", "\/pricing"\]/);
-  assert.match(source, /href="\/pricing"/);
+  assert.match(source, /publicHref\("\/pricing"\)/);
   assert.match(source, /icon: GlobeAltIcon/);
   assert.match(source, /icon: PlusCircleIcon/);
   assert.match(source, /icon: BookOpenIcon/);
@@ -39,6 +39,15 @@ test("tokenless navigation uses the shared page background", () => {
 test("shell sign-in actions preserve the current destination", () => {
   assert.match(shellSource, /useSearchParams\(\)\.toString\(\)/);
   assert.match(shellSource, /<ThirdwebSessionButton compact=\{compact\} returnTo=\{returnTo\}/);
+});
+
+test("public content keeps a quiet validated return to the originating workspace", () => {
+  assert.match(shellSource, /workspaceReturnPathForLocation/);
+  assert.match(shellSource, /workspacePublicContentHref/);
+  assert.match(shellSource, /function WorkspaceReturnLink/);
+  assert.match(shellSource, /Back to workspace/);
+  assert.match(shellSource, /isPublicContentPath\(pathname\)/);
+  assert.match(shellSource, /href=\{publicHref\(link\.href\)\}/);
 });
 
 test("Docs sub-navigation uses the longest matching route", () => {

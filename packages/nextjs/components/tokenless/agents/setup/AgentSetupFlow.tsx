@@ -1,7 +1,6 @@
 "use client";
 
 import { type FormEvent, Fragment, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AgentConnectionTroubleshooting } from "../AgentConnectionTroubleshooting";
 import {
@@ -66,6 +65,7 @@ import { humanReviewConfirmationMessage } from "~~/components/tokenless/agents/h
 import { reviewPolicyCopy } from "~~/components/tokenless/agents/reviewPolicyCopy";
 import { ChoiceInput, Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import { WorkspacePublicContentLink } from "~~/components/tokenless/navigation/WorkspacePublicContentLink";
 import { Button } from "~~/components/tokenless/ui/Button";
 import { SegmentedChoice } from "~~/components/tokenless/ui/SegmentedChoice";
 import { useConfirmDialog } from "~~/components/tokenless/ui/useConfirmDialog";
@@ -1328,15 +1328,12 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
         {currentStep === "connect" ? (
           <>
             <SetupStageHeader headingRef={headingRef} title="Connect your agent" />
-            <Link
+            <WorkspacePublicContentLink
               className="mt-3 inline-flex min-h-11 items-center gap-1 text-sm font-medium text-[var(--rateloop-blue)] underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rateloop-blue)]"
               href="/docs/connect"
-              target="_blank"
-              rel="noopener noreferrer"
             >
-              Connection guide <span aria-hidden="true">↗</span>
-              <span className="sr-only"> (opens in a new tab)</span>
-            </Link>
+              Connection guide
+            </WorkspacePublicContentLink>
             <SetupActionBar>
               {backButton}
               {setup.connection.status === "connected" ? (

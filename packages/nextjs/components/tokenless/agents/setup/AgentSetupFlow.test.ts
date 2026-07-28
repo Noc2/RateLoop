@@ -51,9 +51,9 @@ test("the connection stage links the setup guide without replacing its primary a
     flowSource.indexOf('currentStep === "agent"'),
   );
   assert.match(connectStage, /href="\/docs\/connect"/);
+  assert.match(connectStage, /<WorkspacePublicContentLink/);
   assert.match(connectStage, /Connection guide/);
-  assert.match(connectStage, /target="_blank"/);
-  assert.match(connectStage, /rel="noopener noreferrer"/);
+  assert.doesNotMatch(connectStage, /target="_blank"|opens in a new tab/);
   assert.match(connectStage, /Create connection message/);
 });
 

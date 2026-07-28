@@ -18,6 +18,7 @@ import {
 } from "./evidenceUrlState";
 import { Field, SelectField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import { WorkspacePublicContentLink } from "~~/components/tokenless/navigation/WorkspacePublicContentLink";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import type { EvaluationDashboard } from "~~/lib/tokenless/evaluationDashboard";
 import { readJson } from "~~/lib/tokenless/http";
@@ -267,9 +268,9 @@ function VerificationInstructions({
       <div className="mt-4 space-y-4">
         <p className="max-w-3xl text-sm leading-6 text-base-content/55">
           Never verify a packet with the key inside it. Download the pinned key from key history.{" "}
-          <a className="link" href="/docs/evidence#verify">
+          <WorkspacePublicContentLink className="link" href="/docs/evidence#verify">
             Open the verification guide
-          </a>
+          </WorkspacePublicContentLink>
           .
         </p>
         <div className="flex flex-wrap gap-2">
