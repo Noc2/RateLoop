@@ -1,4 +1,5 @@
 import type { AgentTab } from "./AgentTabs";
+import { type EvidenceUrlState, updateEvidenceUrlSearch } from "./evidenceUrlState";
 
 type WorkspaceOption = { workspaceId: string };
 type ConnectionOption = {
@@ -87,13 +88,23 @@ export function agentTabHref(tab: AgentTab, workspaceId?: string) {
   return `/agents?${params.toString()}`;
 }
 
-export function agentSignInReturnTo(input: { returning?: string; tab?: string; workspaceId?: string; step?: string }) {
+export function agentSignInReturnTo(input: {
+  returning?: string;
+  tab?: string;
+  workspaceId?: string;
+  step?: string;
+  evidence?: EvidenceUrlState;
+}) {
   const params = new URLSearchParams();
   if (input.returning === "oauth") params.set("returning", input.returning);
   if (input.tab) params.set("tab", resolveAgentTabParam(input.tab));
   if (input.workspaceId) params.set("workspace", input.workspaceId);
   if (input.step) params.set("step", input.step);
-  return params.size > 0 ? `/agents?${params.toString()}` : "/agents";
+  const search =
+    params.get("tab") === "evidence" && input.evidence
+      ? updateEvidenceUrlSearch(params, input.evidence)
+      : params.toString();
+  return search ? `/agents?${search}` : "/agents";
 }
 
 export function nextAgentTabIndex(currentIndex: number, key: string, tabCount: number) {

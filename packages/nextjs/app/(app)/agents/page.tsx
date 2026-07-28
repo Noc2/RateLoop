@@ -8,6 +8,7 @@ import {
   resolveAgentTabParam,
   selectRequestedWorkspace,
 } from "~~/components/tokenless/agents/agentWorkspaceState";
+import { parseEvidenceUrlState } from "~~/components/tokenless/agents/evidenceUrlState";
 import { AUTH_SESSION_COOKIE, findAuthSession } from "~~/lib/auth/session";
 import { agentPageTitle } from "~~/lib/tokenless/pageTitles";
 import { listProductWorkspaces } from "~~/lib/tokenless/productCore";
@@ -22,6 +23,11 @@ type AgentsSearchParams = Promise<{
   tab?: string | string[];
   workspace?: string | string[];
   step?: string | string[];
+  q?: string | string[];
+  outcome?: string | string[];
+  date?: string | string[];
+  run?: string | string[];
+  packet?: string | string[];
 }>;
 
 export async function generateMetadata({ searchParams }: { searchParams: AgentsSearchParams }): Promise<Metadata> {
@@ -34,6 +40,17 @@ export default async function AgentsPage({ searchParams }: { searchParams: Agent
   const returning = firstQueryValue(params.returning);
   const requestedWorkspaceId = firstQueryValue(params.workspace);
   const requestedStep = firstQueryValue(params.step);
+  const requestedEvidenceParams = new URLSearchParams();
+  for (const [key, value] of [
+    ["q", firstQueryValue(params.q)],
+    ["outcome", firstQueryValue(params.outcome)],
+    ["date", firstQueryValue(params.date)],
+    ["run", firstQueryValue(params.run)],
+    ["packet", firstQueryValue(params.packet)],
+  ] as const) {
+    if (value) requestedEvidenceParams.set(key, value);
+  }
+  const requestedEvidence = parseEvidenceUrlState(requestedEvidenceParams);
   const cookieStore = await cookies();
   const session = await findAuthSession(cookieStore.get(AUTH_SESSION_COOKIE)?.value);
 
@@ -45,6 +62,7 @@ export default async function AgentsPage({ searchParams }: { searchParams: Agent
           tab: rawTab,
           workspaceId: requestedWorkspaceId,
           step: requestedStep,
+          evidence: requestedEvidence,
         })}
       />
     );

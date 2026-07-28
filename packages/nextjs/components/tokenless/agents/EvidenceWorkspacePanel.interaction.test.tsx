@@ -42,12 +42,24 @@ const evidencePacket = {
   },
 };
 
+const secondEvidencePacket = {
+  ...evidencePacket,
+  packetDigest: `sha256:${"b".repeat(64)}`,
+  payload: {
+    ...evidencePacket.payload,
+    packetId: "packet-evidence-2",
+    runId: "run-evidence-2",
+    generatedAt: "2026-07-27T10:00:00.000Z",
+  },
+};
+
 function installFetch(runs: Record<string, unknown>[]) {
   const previousFetch = globalThis.fetch;
   globalThis.fetch = async input => {
     const url = String(input);
     if (url.endsWith("/evaluations")) return Response.json(dashboard(runs));
     if (url.endsWith("/assurance/runs/run-evidence-1/evidence")) return Response.json(evidencePacket);
+    if (url.endsWith("/assurance/runs/run-evidence-2/evidence")) return Response.json(secondEvidencePacket);
     if (url.includes("/assurance/attestations?")) return Response.json({ attestations: [] });
     if (url.endsWith("/assurance/retention")) {
       return Response.json({
@@ -118,6 +130,85 @@ test("a packet reveals verification while manager-only exports and controls stay
     assert.ok(view.getByText("Verify an export"));
     assert.equal(view.queryByRole("heading", { name: "Compliance exports" }), null);
     assert.equal(view.queryByRole("button", { name: "Retention, keys, and delivery" }), null);
+  } finally {
+    await act(async () => cleanup());
+    restoreFetch();
+    restoreDom();
+  }
+});
+
+test("evidence selection and filters restore from the URL and preserve workspace context on changes", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup, waitFor } = await import("@testing-library/react");
+  const userEvent = (await import("@testing-library/user-event")).default;
+  const restoreFetch = installFetch([
+    {
+      runId: "run-evidence-1",
+      projectName: "Release controls",
+      suiteName: "Production readiness",
+      evidencePacketAvailable: true,
+    },
+    {
+      runId: "run-evidence-2",
+      projectName: "Release controls",
+      suiteName: "Deployment safety",
+      evidencePacketAvailable: true,
+    },
+  ]);
+  const initialLocation =
+    "/agents?tab=evidence&workspace=workspace-evidence&source=audit&q=release&outcome=pass&date=30&run=run-evidence-2&packet=packet-evidence-2";
+  window.history.replaceState(null, "", initialLocation);
+
+  try {
+    const view = await mount(false);
+    await view.findByRole("heading", { name: "Decision packets" });
+
+    await waitFor(() => {
+      const selectedLink = view.getByRole("link", { name: "Link to packet" });
+      assert.match(selectedLink.closest("article")?.textContent ?? "", /Deployment safety/);
+      assert.equal((view.getByRole("searchbox", { name: "Workflow or project" }) as HTMLInputElement).value, "release");
+      assert.equal((view.getByRole("combobox", { name: "Outcome" }) as HTMLSelectElement).value, "pass");
+      assert.equal((view.getByRole("combobox", { name: "Date" }) as HTMLSelectElement).value, "30");
+    });
+
+    const selectedLink = view.getByRole("link", { name: "Link to packet" });
+    assert.equal(
+      selectedLink.getAttribute("href"),
+      "/agents?tab=evidence&workspace=workspace-evidence&source=audit&q=release&outcome=pass&date=30&run=run-evidence-2&packet=packet-evidence-2",
+    );
+
+    const user = userEvent.setup({ document });
+    await user.click(view.getByRole("link", { name: "Open packet" }));
+    let params = new URLSearchParams(window.location.search);
+    assert.equal(params.get("run"), "run-evidence-1");
+    assert.equal(params.get("packet"), "packet-evidence-1");
+
+    const query = view.getByRole("searchbox", { name: "Workflow or project" }) as HTMLInputElement;
+    await user.clear(query);
+    await user.type(query, "safety");
+    await user.selectOptions(view.getByRole("combobox", { name: "Outcome" }), "fail");
+    await user.selectOptions(view.getByRole("combobox", { name: "Date" }), "7");
+
+    params = new URLSearchParams(window.location.search);
+    assert.equal(params.get("tab"), "evidence");
+    assert.equal(params.get("workspace"), "workspace-evidence");
+    assert.equal(params.get("source"), "audit");
+    assert.equal(params.get("q"), "safety");
+    assert.equal(params.get("outcome"), "fail");
+    assert.equal(params.get("date"), "7");
+    assert.equal(params.get("run"), "run-evidence-1");
+    assert.equal(params.get("packet"), "packet-evidence-1");
+
+    await act(async () => window.history.back());
+    await waitFor(() => {
+      assert.equal((view.getByRole("searchbox", { name: "Workflow or project" }) as HTMLInputElement).value, "release");
+      assert.equal((view.getByRole("combobox", { name: "Outcome" }) as HTMLSelectElement).value, "pass");
+      assert.equal((view.getByRole("combobox", { name: "Date" }) as HTMLSelectElement).value, "30");
+      assert.match(
+        view.getByRole("link", { name: "Link to packet" }).closest("article")?.textContent ?? "",
+        /Deployment safety/,
+      );
+    });
   } finally {
     await act(async () => cleanup());
     restoreFetch();

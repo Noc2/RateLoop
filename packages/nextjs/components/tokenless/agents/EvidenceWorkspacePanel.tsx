@@ -1,10 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { GrcEvidenceDelivery } from "./GrcEvidenceDelivery";
 import { MetricsEvidenceAccess } from "./MetricsEvidenceAccess";
 import { SiemEvidenceDelivery } from "./SiemEvidenceDelivery";
 import { WormEvidenceDelivery } from "./WormEvidenceDelivery";
+import {
+  DEFAULT_EVIDENCE_URL_STATE,
+  type EvidenceDateFilter,
+  type EvidenceOutcomeFilter,
+  type EvidenceUrlState,
+  evidenceUrlHref,
+  parseEvidenceUrlState,
+} from "./evidenceUrlState";
 import { Field, SelectField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
@@ -76,6 +85,12 @@ type TrustedKey = {
 };
 type TrustedKeyHistory = { keys: TrustedKey[]; untrustedPacketKeyCount: number };
 type EvidenceDeliveryKind = "worm" | "siem" | "grc" | "metrics";
+type EvidenceUrlSnapshot = {
+  pathname: string;
+  search: string;
+  hash: string;
+  state: EvidenceUrlState;
+};
 
 function outcomeStyle(outcome: string) {
   if (outcome === "pass") return "bg-emerald-300/10 text-emerald-100";
@@ -304,15 +319,52 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
   const [retention, setRetention] = useState<RetentionPolicy | null>(null);
   const [keys, setKeys] = useState<TrustedKey[]>([]);
   const [untrustedPacketKeyCount, setUntrustedPacketKeyCount] = useState(0);
-  const [selectedPacket, setSelectedPacket] = useState<EvidencePacket | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyPacket, setBusyPacket] = useState<string | null>(null);
   const [showAdvancedControls, setShowAdvancedControls] = useState(false);
-  const [packetQuery, setPacketQuery] = useState("");
-  const [outcomeFilter, setOutcomeFilter] = useState<"all" | "pass" | "fail" | "insufficient">("all");
-  const [dateFilter, setDateFilter] = useState<"all" | "7" | "30">("all");
+  const [urlSnapshot, setUrlSnapshot] = useState<EvidenceUrlSnapshot>(() => {
+    const params = new URLSearchParams({ tab: "evidence" });
+    if (workspaceId) params.set("workspace", workspaceId);
+    return {
+      pathname: "/agents",
+      search: params.toString(),
+      hash: "",
+      state: DEFAULT_EVIDENCE_URL_STATE,
+    };
+  });
   const [deliveryKind, setDeliveryKind] = useState<EvidenceDeliveryKind | null>(null);
+  const { date: dateFilter, outcome: outcomeFilter, query: packetQuery } = urlSnapshot.state;
+
+  const updateUrlState = useCallback((patch: Partial<EvidenceUrlState>, mode: "push" | "replace" = "replace") => {
+    const href = evidenceUrlHref({
+      pathname: window.location.pathname,
+      search: window.location.search,
+      hash: window.location.hash,
+      patch,
+    });
+    if (mode === "push") window.history.pushState(window.history.state, "", href);
+    else window.history.replaceState(window.history.state, "", href);
+    setUrlSnapshot({
+      pathname: window.location.pathname,
+      search: window.location.search.slice(1),
+      hash: window.location.hash,
+      state: parseEvidenceUrlState(window.location.search),
+    });
+  }, []);
+
+  useEffect(() => {
+    const restoreUrlState = () =>
+      setUrlSnapshot({
+        pathname: window.location.pathname,
+        search: window.location.search.slice(1),
+        hash: window.location.hash,
+        state: parseEvidenceUrlState(window.location.search),
+      });
+    restoreUrlState();
+    window.addEventListener("popstate", restoreUrlState);
+    return () => window.removeEventListener("popstate", restoreUrlState);
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -337,12 +389,6 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
           })),
       );
       setPackets(packetRows);
-      setSelectedPacket(
-        current =>
-          packetRows.find(row => row.packet.payload.packetId === current?.payload.packetId)?.packet ??
-          packetRows[0]?.packet ??
-          null,
-      );
       if (canManage) {
         const [attestationBody, retentionBody, keyBody] = await Promise.all([
           readJson<{ attestations: Attestation[] }>(
@@ -379,6 +425,17 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
     [attestations],
   );
   const base = `/api/account/workspaces/${encodeURIComponent(workspaceId)}`;
+  const selectedPacket = useMemo(() => {
+    const { packetId, runId } = urlSnapshot.state;
+    const selected =
+      packetId || runId
+        ? packets.find(
+            row =>
+              (!packetId || row.packet.payload.packetId === packetId) && (!runId || row.packet.payload.runId === runId),
+          )
+        : null;
+    return selected?.packet ?? packets[0]?.packet ?? null;
+  }, [packets, urlSnapshot.state]);
   const selectedTrustedKey = selectedPacket
     ? (keys.find(key => key.keyId === selectedPacket.signing.keyId) ?? null)
     : null;
@@ -473,12 +530,12 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
               label="Workflow or project"
               type="search"
               value={packetQuery}
-              onChange={event => setPacketQuery(event.target.value)}
+              onChange={event => updateUrlState({ query: event.target.value })}
             />
             <SelectField
               label="Outcome"
               value={outcomeFilter}
-              onChange={event => setOutcomeFilter(event.target.value as "all" | "pass" | "fail" | "insufficient")}
+              onChange={event => updateUrlState({ outcome: event.target.value as EvidenceOutcomeFilter })}
             >
               <option value="all">All outcomes</option>
               <option value="pass">Pass</option>
@@ -488,7 +545,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
             <SelectField
               label="Date"
               value={dateFilter}
-              onChange={event => setDateFilter(event.target.value as "all" | "7" | "30")}
+              onChange={event => updateUrlState({ date: event.target.value as EvidenceDateFilter })}
             >
               <option value="all">Any time</option>
               <option value="7">Last 7 days</option>
@@ -502,6 +559,9 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
             </div>
           ) : null}
           {visiblePackets.map(({ packet, projectName, suiteName }) => {
+            const selected =
+              selectedPacket?.payload.packetId === packet.payload.packetId &&
+              selectedPacket.payload.runId === packet.payload.runId;
             const outcome = packet.payload.aggregation.suite.outcome;
             const attestation = attestationByDigest.get(packet.packetDigest);
             const sourceSubpanels = packet.payload.aggregation.reviewerCoverage?.sourceSubpanels ?? [];
@@ -517,7 +577,12 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
               .map(safeExternalEvidenceLink)
               .filter((link): link is string => link !== null);
             return (
-              <article key={packet.payload.packetId} className="surface-card rounded-2xl p-5">
+              <article
+                key={packet.payload.packetId}
+                className={`surface-card rounded-2xl p-5 ${
+                  selected ? "border-[var(--rateloop-blue)]/35 bg-[var(--rateloop-blue)]/[0.025]" : ""
+                }`}
+              >
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                   <div>
                     <p className="font-mono text-xs uppercase tracking-wider text-[var(--rateloop-blue)]">
@@ -531,23 +596,50 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                       </span>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    className="btn btn-sm rateloop-gradient-action"
-                    disabled={busyPacket === packet.payload.packetId}
-                    onClick={() => {
-                      setBusyPacket(packet.payload.packetId);
-                      setSelectedPacket(packet);
-                      void downloadJson(
-                        `${base}/assurance/runs/${encodeURIComponent(packet.payload.runId)}/evidence`,
-                        downloadName("rateloop-evidence", packet.payload.packetId),
-                      )
-                        .catch(cause => setError(cause instanceof Error ? cause.message : "Unable to export packet."))
-                        .finally(() => setBusyPacket(null));
-                    }}
-                  >
-                    {busyPacket === packet.payload.packetId ? "Exporting…" : "Export packet"}
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <Link
+                      href={evidenceUrlHref({
+                        pathname: urlSnapshot.pathname,
+                        search: urlSnapshot.search,
+                        hash: urlSnapshot.hash,
+                        patch: { runId: packet.payload.runId, packetId: packet.payload.packetId },
+                      })}
+                      scroll={false}
+                      aria-current={selected ? "page" : undefined}
+                      className="btn btn-sm rateloop-secondary-action"
+                      onClick={event => {
+                        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+                          return;
+                        event.preventDefault();
+                        updateUrlState(
+                          { runId: packet.payload.runId, packetId: packet.payload.packetId },
+                          selected ? "replace" : "push",
+                        );
+                      }}
+                    >
+                      {selected ? "Link to packet" : "Open packet"}
+                    </Link>
+                    <button
+                      type="button"
+                      className="btn btn-sm rateloop-gradient-action"
+                      disabled={busyPacket === packet.payload.packetId}
+                      onClick={() => {
+                        setBusyPacket(packet.payload.packetId);
+                        updateUrlState(
+                          { runId: packet.payload.runId, packetId: packet.payload.packetId },
+                          selected ? "replace" : "push",
+                        );
+                        void downloadJson(
+                          `${base}/assurance/runs/${encodeURIComponent(packet.payload.runId)}/evidence`,
+                          downloadName("rateloop-evidence", packet.payload.packetId),
+                        )
+                          .catch(cause => setError(cause instanceof Error ? cause.message : "Unable to export packet."))
+                          .finally(() => setBusyPacket(null));
+                      }}
+                    >
+                      {busyPacket === packet.payload.packetId ? "Exporting…" : "Export packet"}
+                    </button>
+                  </div>
                 </div>
                 <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
                   <div>

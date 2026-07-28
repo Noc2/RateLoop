@@ -143,6 +143,20 @@ test("connected navigation splits the owner stack into URL-backed task tabs", ()
     agentSignInReturnTo({ returning: "oauth", tab: "evidence", workspaceId: "workspace one", step: "people" }),
     "/agents?returning=oauth&tab=evidence&workspace=workspace+one&step=people",
   );
+  assert.equal(
+    agentSignInReturnTo({
+      tab: "evidence",
+      workspaceId: "workspace one",
+      evidence: {
+        query: "release",
+        outcome: "fail",
+        date: "30",
+        runId: "run one",
+        packetId: "packet one",
+      },
+    }),
+    "/agents?tab=evidence&workspace=workspace+one&q=release&outcome=fail&date=30&run=run+one&packet=packet+one",
+  );
   assert.match(pageSource, /returning === "oauth" && !requestedWorkspaceId/);
   assert.match(tabsSource, /value: "overview", label: "Overview"/);
   assert.match(tabsSource, /value: "connect", label: "Connections"/);
