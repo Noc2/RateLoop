@@ -21,6 +21,7 @@ import {
   type QuestionMediaReviewState,
 } from "~~/components/tokenless/answer/QuestionMedia";
 import { ChoiceInput, Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
+import { Card } from "~~/components/tokenless/ui/Card";
 import { subscribeToBrowserAuthSessionChanges } from "~~/lib/auth/client";
 
 const HANDOFF_VERSION = "rateloop.handoff.v1" as const;
@@ -816,11 +817,11 @@ export function TokenlessHandoffClient() {
   if (handoff.status === "invalid") {
     return (
       <div className="mx-auto w-full max-w-3xl grow px-4 py-16 sm:py-24">
-        <section className="rateloop-surface-card border-error/30 p-6 sm:p-9" role="alert">
+        <Card as="section" variant="marketing" className="border-error/30 p-6 sm:p-9" role="alert">
           <p className="font-mono text-xs uppercase tracking-widest text-error">Cannot open review</p>
           <h1 className="mt-4 text-3xl font-semibold">This review link is not valid</h1>
           <p className="mt-4 leading-7 text-base-content/65">Return to your agent and request a new review link.</p>
-        </section>
+        </Card>
       </div>
     );
   }
@@ -842,7 +843,7 @@ export function TokenlessHandoffClient() {
           </div>
         ) : null}
 
-        <section className="rateloop-surface-card mt-7 p-5 sm:p-7" aria-live="polite">
+        <Card as="section" variant="marketing" className="mt-7 p-5 sm:p-7" aria-live="polite">
           <h2 className="text-2xl font-semibold">{result ? "Authenticated outcome" : "Ask submitted"}</h2>
           <p className="mt-2 font-mono text-xs text-base-content/55">Request {handoff.operationKey}</p>
 
@@ -895,7 +896,7 @@ export function TokenlessHandoffClient() {
               </button>
             </div>
           )}
-        </section>
+        </Card>
       </div>
     );
   }
@@ -905,13 +906,13 @@ export function TokenlessHandoffClient() {
   if (handoff.status === "expired") {
     return (
       <div className="mx-auto w-full max-w-3xl grow px-4 py-16 sm:py-24">
-        <section className="rateloop-surface-card border-error/30 p-6 sm:p-9" role="alert">
+        <Card as="section" variant="marketing" className="border-error/30 p-6 sm:p-9" role="alert">
           <p className="font-mono text-xs uppercase tracking-widest text-error">Review link expired</p>
           <h1 className="mt-4 text-3xl font-semibold">Ask the agent for a new link.</h1>
           <p className="mt-4 text-sm leading-6 text-base-content/65">
             This link expired <time dateTime={payload.expiresAt}>{formatDate(payload.expiresAt)}</time>.
           </p>
-        </section>
+        </Card>
       </div>
     );
   }
@@ -936,14 +937,11 @@ export function TokenlessHandoffClient() {
       ) : null}
 
       <div className="mt-8 max-w-4xl">
-        <section className="rateloop-surface-card p-5 sm:p-7" aria-labelledby="review-heading">
+        <Card as="section" variant="marketing" className="p-5 sm:p-7" aria-labelledby="review-heading">
           <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-green)]">Review</p>
-              <h2 id="review-heading" className="mt-2 text-2xl font-semibold">
-                Question
-              </h2>
-            </div>
+            <h2 id="review-heading" className="text-2xl font-semibold">
+              Question
+            </h2>
             <span className="rounded-full border border-white/15 px-3 py-1 text-xs text-base-content/65">
               {request.question.kind === "binary" ? "Binary" : "Head to head"}
             </span>
@@ -1077,12 +1075,11 @@ export function TokenlessHandoffClient() {
               <SummaryItem label="Handoff ID" value={payload.handoffId} mono />
             </dl>
           </details>
-        </section>
+        </Card>
       </div>
 
-      <section className="rateloop-surface-card mt-6 max-w-4xl p-5 sm:p-7" aria-labelledby="quote-heading">
-        <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Price</p>
-        <div className="mt-2 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+      <Card as="section" variant="marketing" className="mt-6 max-w-4xl p-5 sm:p-7" aria-labelledby="quote-heading">
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
           <div>
             <h2 id="quote-heading" className="text-2xl font-semibold">
               Get the exact price
@@ -1110,9 +1107,6 @@ export function TokenlessHandoffClient() {
               <div>
                 <p className="text-sm text-base-content/55">Total</p>
                 <p className="mt-1 text-2xl font-semibold">{formatUsdcAtomic(quote.economics.totalFundedAtomic)}</p>
-                <p className="mt-2 text-sm text-base-content/60">
-                  Includes {formatUsdcAtomic(quote.economics.attemptReserve.fundedAtomic)} accepted-work reserve.
-                </p>
               </div>
               <p className="text-sm text-base-content/55">
                 {quote.panel.requestedSize} reviewers · expires {formatDate(quote.expiresAt)}
@@ -1146,47 +1140,46 @@ export function TokenlessHandoffClient() {
             </div>
           </div>
         ) : null}
-      </section>
+      </Card>
 
       {quote ? (
-        <section className="rateloop-surface-card mt-6 max-w-4xl p-5 sm:p-7" aria-labelledby="submit-heading">
-          <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-green)]">Submit</p>
-          <h2 id="submit-heading" className="mt-2 text-2xl font-semibold">
+        <Card as="section" variant="marketing" className="mt-6 max-w-4xl p-5 sm:p-7" aria-labelledby="submit-heading">
+          <h2 id="submit-heading" className="text-2xl font-semibold">
             Send this ask
           </h2>
           <p className="mt-2 text-sm leading-6 text-base-content/60">
             Submitting reserves {formatUsdcAtomic(quote.economics.totalFundedAtomic)} from the selected workspace.
           </p>
 
-          <div className="mt-5 rounded-xl border border-white/10 bg-black/15 p-4">
-            {session.status === "loading" ? (
-              <p className="text-sm text-base-content/60" role="status">
-                Checking your RateLoop session…
-              </p>
-            ) : session.status === "anonymous" ? (
-              <div className="text-sm leading-6 text-base-content/70">
-                <p>
-                  <strong className="text-base-content">Sign in required.</strong> Open sign-in in a new tab, then
-                  return to this tab to continue. This review link stays in this browser tab and is never sent to
-                  RateLoop during sign-in.
+          {session.status !== "authenticated" ? (
+            <div className="mt-5 rounded-xl border border-white/10 bg-black/15 p-4">
+              {session.status === "loading" ? (
+                <p className="text-sm text-base-content/60" role="status">
+                  Checking your RateLoop session…
                 </p>
-                <a
-                  href="/sign-in"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-3 inline-block font-semibold underline underline-offset-4"
-                >
-                  Sign in in a new tab
-                </a>
-              </div>
-            ) : session.status === "error" ? (
-              <p className="text-sm leading-6 text-error" role="alert">
-                {session.message}
-              </p>
-            ) : (
-              <p className="text-sm text-base-content/70">Choose the workspace that will fund this ask.</p>
-            )}
-          </div>
+              ) : session.status === "anonymous" ? (
+                <div className="text-sm leading-6 text-base-content/70">
+                  <p>
+                    <strong className="text-base-content">Sign in required.</strong> Open sign-in in a new tab, then
+                    return to this tab to continue. This review link stays in this browser tab and is never sent to
+                    RateLoop during sign-in.
+                  </p>
+                  <a
+                    href="/sign-in"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-3 inline-block font-semibold underline underline-offset-4"
+                  >
+                    Sign in in a new tab
+                  </a>
+                </div>
+              ) : (
+                <p className="text-sm leading-6 text-error" role="alert">
+                  {session.message}
+                </p>
+              )}
+            </div>
+          ) : null}
 
           {session.status === "authenticated" ? (
             <div className="mt-5">
@@ -1263,17 +1256,18 @@ export function TokenlessHandoffClient() {
                 : `Submit and reserve ${formatUsdcAtomic(quote.economics.totalFundedAtomic)}`}
             </button>
           </div>
-        </section>
+        </Card>
       ) : null}
 
       {activeOperationKey ? (
-        <section
-          className="rateloop-surface-card mt-6 max-w-4xl p-5 sm:p-7"
+        <Card
+          as="section"
+          variant="marketing"
+          className="mt-6 max-w-4xl p-5 sm:p-7"
           aria-labelledby="result-heading"
           aria-live="polite"
         >
-          <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-pink)]">Result</p>
-          <div className="mt-2 flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
             <div>
               <h2 id="result-heading" className="text-2xl font-semibold">
                 {result ? "Authenticated outcome" : "Ask submitted"}
@@ -1328,14 +1322,8 @@ export function TokenlessHandoffClient() {
                       : "Not available"
                   }
                 />
-                <SummaryItem
-                  label="Paid bounty"
-                  value={`${formatUsdcAtomic(result.economics.bounty.paidAtomic)} (${result.economics.bounty.paidAtomic} atomic)`}
-                />
-                <SummaryItem
-                  label="Refunded"
-                  value={`${formatUsdcAtomic(result.economics.refund.totalAtomic)} (${result.economics.refund.totalAtomic} atomic)`}
-                />
+                <SummaryItem label="Paid bounty" value={formatUsdcAtomic(result.economics.bounty.paidAtomic)} />
+                <SummaryItem label="Refunded" value={formatUsdcAtomic(result.economics.refund.totalAtomic)} />
                 <SummaryItem label="Updated" value={formatDate(result.updatedAt)} />
               </dl>
               <div className="mt-6 rounded-xl border border-amber-300/20 bg-amber-300/5 p-5 text-sm leading-6 text-base-content/65">
@@ -1353,7 +1341,7 @@ export function TokenlessHandoffClient() {
               </div>
             </>
           ) : null}
-        </section>
+        </Card>
       ) : null}
     </div>
   );

@@ -250,7 +250,7 @@ test("browser handoff keeps essential privacy and price facts visible while tech
   assert.match(handoffSource, /Technical request details/);
   assert.match(handoffSource, /Price breakdown/);
   assert.match(handoffSource, /sourceLabel\(request\.audience\.source\)[\s\S]{0,100}request\.requestedPanelSize/);
-  assert.match(handoffSource, /accepted-work reserve/);
+  assert.match(handoffSource, /Accepted-work reserve/);
   assert.match(handoffSource, /\{quote \? \([\s\S]*aria-labelledby="submit-heading"/);
   assert.ok(handoffSource.indexOf('label="Classification"') < handoffSource.indexOf("checked={privacyConfirmed}"));
   assert.ok(handoffSource.indexOf('label="Redaction summary"') < handoffSource.indexOf("checked={privacyConfirmed}"));
@@ -261,6 +261,37 @@ test("browser handoff keeps essential privacy and price facts visible while tech
   assert.match(handoffSource, /Reviewer rules/);
   assert.match(handoffSource, /Quote ID/);
   assert.doesNotMatch(handoffSource, /Draft summary|Lock the exact economics|01 · Review|02 · Quote|03 · Submit/);
+});
+
+test("handoff content cleanup preserves consent and consequence safeguards", () => {
+  assert.match(
+    handoffSource,
+    /I confirm this ask contains only public, synthetic, or meaningfully redacted non-sensitive data\./,
+  );
+  assert.match(
+    handoffSource,
+    /It\s+contains no secrets, credentials, regulated personal data, or confidential customer material\./,
+  );
+  assert.match(handoffSource, /No funds are reserved until you submit the ask\./);
+  assert.match(
+    handoffSource,
+    /Submitting reserves \{formatUsdcAtomic\(quote\.economics\.totalFundedAtomic\)\} from the selected workspace\./,
+  );
+  assert.match(
+    handoffSource,
+    /This review link stays in this browser tab and is never sent to[\s\S]{0,40}RateLoop during sign-in\./,
+  );
+  assert.match(handoffSource, /Reviewer rules" value=\{request\.audience\.admissionPolicyHash\}/);
+  assert.match(
+    handoffSource,
+    /This panel is decision support, not an automatic release, safety, legal, or compliance approval\. The[\s\S]{0,40}accountable person remains responsible for the final action\./,
+  );
+
+  assert.equal(handoffSource.match(/variant="marketing"/g)?.length, 7);
+  assert.doesNotMatch(handoffSource, /className="rateloop-surface-card/);
+  assert.doesNotMatch(handoffSource, />Review<|>Price<|>Submit<|>Result</);
+  assert.doesNotMatch(handoffSource, /Choose the workspace that will fund this ask\./);
+  assert.doesNotMatch(handoffSource, /\}\s+atomic\)/);
 });
 
 test("browser handoff renders and verifies media before privacy approval or network mutation", () => {
