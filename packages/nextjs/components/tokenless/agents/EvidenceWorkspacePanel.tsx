@@ -75,6 +75,7 @@ type TrustedKey = {
   packetCount: number;
 };
 type TrustedKeyHistory = { keys: TrustedKey[]; untrustedPacketKeyCount: number };
+type EvidenceDeliveryKind = "worm" | "siem" | "grc" | "metrics";
 
 function outcomeStyle(outcome: string) {
   if (outcome === "pass") return "bg-emerald-300/10 text-emerald-100";
@@ -318,6 +319,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
   const [packetQuery, setPacketQuery] = useState("");
   const [outcomeFilter, setOutcomeFilter] = useState<"all" | "pass" | "fail" | "insufficient">("all");
   const [dateFilter, setDateFilter] = useState<"all" | "7" | "30">("all");
+  const [deliveryKind, setDeliveryKind] = useState<EvidenceDeliveryKind | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -720,17 +722,48 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
         <section className="surface-card rounded-2xl p-6" aria-labelledby="enterprise-delivery-heading">
           <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Delivery</p>
           <h2 id="enterprise-delivery-heading" className="mt-2 text-xl font-semibold">
-            Enterprise evidence delivery
+            Evidence integrations
           </h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-base-content/55">
-            Connect evidence to systems your security and compliance teams already operate.
+            Add or update one delivery destination at a time.
           </p>
-          <div className="mt-5 grid items-start gap-3 lg:grid-cols-2">
-            <WormEvidenceDelivery workspaceId={workspaceId} />
-            <SiemEvidenceDelivery workspaceId={workspaceId} />
-            <GrcEvidenceDelivery workspaceId={workspaceId} />
-            <MetricsEvidenceAccess workspaceId={workspaceId} />
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            {(
+              [
+                ["worm", "Immutable archive", "Send exports to an object-locked archive."],
+                ["siem", "Event stream", "Send oversight events to a security event system."],
+                ["grc", "Compliance connector", "Deliver evidence to a governance or compliance system."],
+                ["metrics", "Metrics access", "Issue access for operational evidence metrics."],
+              ] as const
+            ).map(([kind, label, description]) => (
+              <article key={kind} className="surface-card-nested rounded-xl p-4">
+                <h3 className="font-semibold">{label}</h3>
+                <p className="mt-1 text-sm text-base-content/55">{description}</p>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm mt-3"
+                  aria-controls="evidence-delivery-editor"
+                  aria-expanded={deliveryKind === kind}
+                  onClick={() => setDeliveryKind(kind)}
+                >
+                  Configure {label.toLocaleLowerCase()}
+                </button>
+              </article>
+            ))}
           </div>
+          {deliveryKind ? (
+            <div id="evidence-delivery-editor" className="mt-5 border-t border-white/10 pt-5">
+              <div className="mb-4 flex justify-end">
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDeliveryKind(null)}>
+                  Close integration setup
+                </button>
+              </div>
+              {deliveryKind === "worm" ? <WormEvidenceDelivery workspaceId={workspaceId} /> : null}
+              {deliveryKind === "siem" ? <SiemEvidenceDelivery workspaceId={workspaceId} /> : null}
+              {deliveryKind === "grc" ? <GrcEvidenceDelivery workspaceId={workspaceId} /> : null}
+              {deliveryKind === "metrics" ? <MetricsEvidenceAccess workspaceId={workspaceId} /> : null}
+            </div>
+          ) : null}
         </section>
       ) : null}
     </div>

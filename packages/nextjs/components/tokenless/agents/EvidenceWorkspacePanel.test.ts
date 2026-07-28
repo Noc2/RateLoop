@@ -55,4 +55,12 @@ test("workspace compliance controls expose only browser-safe endpoints", () => {
   assert.match(source, /\/assurance\/metrics\/grafana/);
   assert.match(source, /minimumRetentionMonths/);
   assert.doesNotMatch(source, /TOKENLESS_|PRIVATE_KEY|secretRef|credentialRef/);
+  assert.match(source, /Evidence integrations/);
+  assert.match(source, /Add or update one delivery destination at a time/);
+  assert.match(source, /Configure \{label\.toLocaleLowerCase\(\)\}/);
+  assert.match(source, /deliveryKind === "worm" \? <WormEvidenceDelivery/);
+  assert.match(source, /deliveryKind === "siem" \? <SiemEvidenceDelivery/);
+  assert.match(source, /deliveryKind === "grc" \? <GrcEvidenceDelivery/);
+  assert.match(source, /deliveryKind === "metrics" \? <MetricsEvidenceAccess/);
+  assert.doesNotMatch(source, /grid items-start gap-3 lg:grid-cols-2/);
 });
