@@ -15,7 +15,6 @@ import {
   isUsableAgentConnection,
   selectReconnectableOAuthConnections,
 } from "./agentWorkspaceState";
-import { useRateLoopNotifications } from "~~/components/tokenless/RateLoopNotificationProvider";
 import { Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
@@ -702,7 +701,6 @@ export function AgentConnectionPanel({
   onConnectionStateChange?: (connected: boolean) => void;
   onConnectionHistoryChange?: (history: AgentConnectionHistoryEntry[]) => void;
 }) {
-  const notifications = useRateLoopNotifications();
   const [connectionIntents, setConnectionIntents] = useState<AgentConnectionIntent[]>([]);
   const [pairings, setPairings] = useState<AgentPairing[]>([]);
   const [integrations, setIntegrations] = useState<AgentIntegration[]>([]);
@@ -891,7 +889,6 @@ export function AgentConnectionPanel({
             ? "Reconnect message copied. Paste it once into the same agent task."
             : "Connection message copied. Paste it once into the agent chat you want to connect.",
         );
-        notifications.success("Connection message copied to clipboard.");
         void fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/agent-connections/onboarding-events`, {
           method: "POST",
           body: JSON.stringify({ event: "connection_message_copied" }),
@@ -901,7 +898,6 @@ export function AgentConnectionPanel({
         }).catch(() => undefined);
       } catch {
         setError("Clipboard access was denied. The complete message is selected below for one manual copy.");
-        notifications.error("Clipboard access was blocked. The connection message is selected for manual copying.");
         window.requestAnimationFrame(() => {
           manualMessageRef.current?.focus();
           manualMessageRef.current?.select();
@@ -927,7 +923,6 @@ export function AgentConnectionPanel({
       await navigator.clipboard.writeText(manualConnectionMessage);
       setError(null);
       setStatus("Connection message copied. Paste it once into the agent chat you want to connect.");
-      notifications.success("Connection message copied to clipboard.");
       void fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/agent-connections/onboarding-events`, {
         method: "POST",
         body: JSON.stringify({ event: "connection_message_copied" }),
@@ -937,7 +932,6 @@ export function AgentConnectionPanel({
       }).catch(() => undefined);
     } catch {
       setError("Clipboard access was denied. The complete message is selected below for manual copying.");
-      notifications.error("Clipboard access was blocked. The connection message is selected for manual copying.");
       manualMessageRef.current?.focus();
       manualMessageRef.current?.select();
     }
@@ -1143,10 +1137,8 @@ export function AgentConnectionPanel({
     try {
       await navigator.clipboard.writeText(reveal.secret);
       setStatus("Legacy credential copied. Store it only in the existing agent host's secure credential setting.");
-      notifications.success("Legacy credential copied to clipboard.");
     } catch {
       setError("Clipboard access was denied. Copy the legacy credential manually from the one-time reveal.");
-      notifications.error("Clipboard access was blocked. Copy the legacy credential manually.");
     }
   }
 

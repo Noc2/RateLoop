@@ -55,7 +55,8 @@ test("the complete connection message stays visible with accessible copy recover
   assert.match(source, /Copy message/);
   assert.match(source, /copyVisibleConnectionMessage/);
   assert.match(source, /complete message is selected below for one manual copy/);
-  assert.match(source, /notifications\.success\("Connection message copied to clipboard\."\)/);
+  assert.match(source, /setStatus\("Connection message copied\./);
+  assert.doesNotMatch(source, /useRateLoopNotifications|notifications\.(success|error)/);
   assert.match(source, /<AgentConnectionTroubleshooting \/>/);
 });
 
