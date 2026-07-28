@@ -99,7 +99,7 @@ function requiresFundResolution(preview: WorkspaceDeletionPreview) {
 
 export function WorkspaceDeletionPanel({ workspaceId, workspaceName }: WorkspaceDeletionPanelProps) {
   const [preview, setPreview] = useState<WorkspaceDeletionPreview | null>(null);
-  const [confirmationName, setConfirmationName] = useState("");
+  const [confirmation, setConfirmation] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [resolutionQueued, setResolutionQueued] = useState<string | null>(null);
@@ -126,11 +126,7 @@ export function WorkspaceDeletionPanel({ workspaceId, workspaceName }: Workspace
 
   async function requestDeletion(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (
-      !preview ||
-      (preview.blockers.length > 0 && !requiresFundResolution(preview)) ||
-      confirmationName !== preview.workspace.name
-    ) {
+    if (!preview || (preview.blockers.length > 0 && !requiresFundResolution(preview)) || confirmation !== "DELETE") {
       return;
     }
     setSubmitting(true);
@@ -139,7 +135,7 @@ export function WorkspaceDeletionPanel({ workspaceId, workspaceName }: Workspace
       const result = await readJson<WorkspaceDeletionResult>(
         await fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/deletion`, {
           method: "POST",
-          body: JSON.stringify({ confirmationName }),
+          body: JSON.stringify({ confirmation }),
           credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
         }),
@@ -157,7 +153,7 @@ export function WorkspaceDeletionPanel({ workspaceId, workspaceName }: Workspace
   }
 
   const impacts = preview ? impactRows(preview) : [];
-  const confirmed = preview ? confirmationName === preview.workspace.name : false;
+  const confirmed = confirmation === "DELETE";
   const fundResolutionRequired = preview ? requiresFundResolution(preview) : false;
   const canRequest = preview ? preview.blockers.length === 0 || fundResolutionRequired : false;
 
@@ -231,17 +227,13 @@ export function WorkspaceDeletionPanel({ workspaceId, workspaceName }: Workspace
             {canRequest ? (
               <div className="mt-5">
                 <Field
-                  label={
-                    <>
-                      Type <span className="font-semibold text-base-content">{preview.workspace.name}</span> to confirm
-                    </>
-                  }
+                  label="Type DELETE to confirm"
                   className="rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                  value={confirmationName}
-                  error={fieldErrors.confirmationName}
+                  value={confirmation}
+                  error={fieldErrors.confirmation}
                   onChange={event => {
-                    clear("confirmationName");
-                    setConfirmationName(event.target.value);
+                    clear("confirmation");
+                    setConfirmation(event.target.value);
                   }}
                   autoComplete="off"
                   spellCheck={false}
@@ -278,7 +270,7 @@ export function WorkspaceDeletionPanel({ workspaceId, workspaceName }: Workspace
                 disabled={submitting}
                 onClick={() => {
                   setPreview(null);
-                  setConfirmationName("");
+                  setConfirmation("");
                   setResolutionQueued(null);
                   clear();
                 }}

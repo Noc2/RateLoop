@@ -468,18 +468,18 @@ async function eraseWorkspacePrivateQuoteOwnership(
 
 export async function requestWorkspaceDeletion(input: {
   accountAddress: string;
-  confirmationName: string;
+  confirmation: string;
   identityAssurance: string;
   now?: Date;
   workspaceId: string;
 }) {
-  if (typeof input.confirmationName !== "string") {
+  if (typeof input.confirmation !== "string") {
     throw new TokenlessServiceError(
-      "Workspace name confirmation is required.",
+      "Type DELETE to confirm workspace deletion.",
       400,
       "workspace_confirmation_required",
       false,
-      "confirmationName",
+      "confirmation",
     );
   }
   const requester = accountReference(input.accountAddress);
@@ -493,13 +493,13 @@ export async function requestWorkspaceDeletion(input: {
       lock: true,
     });
     const preview = previewFromRow(previewRow);
-    if (input.confirmationName !== preview.workspace.name) {
+    if (input.confirmation !== "DELETE") {
       throw new TokenlessServiceError(
-        "Workspace name confirmation does not match.",
+        "Type DELETE exactly to confirm workspace deletion.",
         400,
         "workspace_confirmation_mismatch",
         false,
-        "confirmationName",
+        "confirmation",
       );
     }
     if (preview.blockers.length > 0) {

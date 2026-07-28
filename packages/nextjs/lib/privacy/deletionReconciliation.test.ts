@@ -43,7 +43,7 @@ test("blob-first public media deletion completes the durable workspace erasure r
   });
   const request = await requestWorkspaceDeletion({
     accountAddress: OWNER,
-    confirmationName: "Delete media",
+    confirmation: "DELETE",
     identityAssurance: "better_auth:passkey",
     now: NOW,
     workspaceId,

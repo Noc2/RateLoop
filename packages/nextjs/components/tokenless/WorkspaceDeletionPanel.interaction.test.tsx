@@ -55,14 +55,14 @@ test("a funded workspace owner can queue verified fund resolution without forfei
     const user = userEvent.setup({ document });
     await user.click(view.getByRole("button", { name: "Delete workspace" }));
 
-    const confirmation = await view.findByRole("textbox", { name: /Type Funded workspace to confirm/u });
+    const confirmation = await view.findByRole("textbox", { name: /Type DELETE to confirm/u });
     const submit = view.getByRole("button", { name: "Request verified refund" });
     assert.equal(submit.hasAttribute("disabled"), true);
-    await user.type(confirmation, "Funded workspace");
+    await user.type(confirmation, "DELETE");
     assert.equal(submit.hasAttribute("disabled"), false);
     await user.click(submit);
 
-    assert.deepEqual(requests, [{ confirmationName: "Funded workspace" }]);
+    assert.deepEqual(requests, [{ confirmation: "DELETE" }]);
     const status = await view.findByRole("status");
     assert.match(status.textContent ?? "", /balance has not been forfeited/u);
     assert.match(status.textContent ?? "", /wfr_funded_workspace/u);

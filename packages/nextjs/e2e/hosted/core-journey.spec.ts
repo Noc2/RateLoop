@@ -436,7 +436,7 @@ test("@hosted-core completes a real OAuth, three-account, two-reviewer private j
     }
     if (workspaceId) {
       await browserJson(owner, "POST", `/api/account/workspaces/${encodeURIComponent(workspaceId)}/deletion`, {
-        body: { confirmationName: workspaceName },
+        body: { confirmation: "DELETE" },
         statuses: [202],
       }).catch(error => cleanupFailures.push(error));
     }

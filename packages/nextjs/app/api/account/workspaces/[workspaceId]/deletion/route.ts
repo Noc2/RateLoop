@@ -39,7 +39,7 @@ export async function POST(request: NextRequest, context: Context) {
     return NextResponse.json(
       await requestWorkspaceDeletion({
         accountAddress: session.principalId,
-        confirmationName: String((body as Record<string, unknown>).confirmationName ?? ""),
+        confirmation: String((body as Record<string, unknown>).confirmation ?? ""),
         identityAssurance: session.authProvider,
         workspaceId,
       }),

@@ -78,7 +78,7 @@ test("workspace deletion preview is private, no-store, and owner-only with maske
   });
 });
 
-test("workspace deletion mutation enforces same-origin and exact-name confirmation", async () => {
+test("workspace deletion mutation enforces same-origin and exact DELETE confirmation", async () => {
   const owner = await authenticatedPrincipal("mutation");
   const { workspaceId } = await createWorkspace({ name: "Confirm this name", ownerAddress: owner.principalId });
   const path = `/api/account/workspaces/${workspaceId}/deletion`;
@@ -86,7 +86,7 @@ test("workspace deletion mutation enforces same-origin and exact-name confirmati
 
   const crossOrigin = await POST(
     browserRequest(path, {
-      body: { confirmationName: "Confirm this name" },
+      body: { confirmation: "DELETE" },
       method: "POST",
       origin: "https://attacker.example",
       token: owner.token,
@@ -98,7 +98,7 @@ test("workspace deletion mutation enforces same-origin and exact-name confirmati
 
   const mismatch = await POST(
     browserRequest(path, {
-      body: { confirmationName: "confirm this name" },
+      body: { confirmation: "delete" },
       method: "POST",
       origin: APP_ORIGIN,
       token: owner.token,
@@ -111,7 +111,7 @@ test("workspace deletion mutation enforces same-origin and exact-name confirmati
 
   const deleted = await POST(
     browserRequest(path, {
-      body: { confirmationName: "Confirm this name" },
+      body: { confirmation: "DELETE" },
       method: "POST",
       origin: APP_ORIGIN,
       token: owner.token,

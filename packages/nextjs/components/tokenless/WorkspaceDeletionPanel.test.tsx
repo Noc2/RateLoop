@@ -7,13 +7,14 @@ const dangerSource = readFileSync(new URL("./WorkspaceDangerZone.tsx", import.me
 const panelsSource = readFileSync(new URL("./agents/AgentWorkspacePanels.tsx", import.meta.url), "utf8");
 const settingsSource = readFileSync(new URL("./WorkspaceSettingsClient.tsx", import.meta.url), "utf8");
 
-test("the visible workspace deletion action loads a preview before accepting an exact-name confirmation", () => {
+test("the visible workspace deletion action loads a preview before accepting the shared DELETE confirmation", () => {
   assert.match(source, /onClick=\{\(\) => void loadPreview\(\)\}/);
   assert.doesNotMatch(source, /<details|onToggle=/);
   assert.match(source, /\/api\/account\/workspaces\/\$\{encodeURIComponent\(workspaceId\)\}\/deletion/);
   assert.match(source, /cache: "no-store"/);
-  assert.match(source, /JSON\.stringify\(\{ confirmationName \}\)/);
-  assert.match(source, /confirmationName !== preview\.workspace\.name/);
+  assert.match(source, /JSON\.stringify\(\{ confirmation \}\)/);
+  assert.match(source, /confirmation !== "DELETE"/);
+  assert.match(source, /label="Type DELETE to confirm"/);
   assert.match(source, /requiresFundResolution\(preview\)/);
   assert.match(source, /Request verified refund/);
   assert.match(source, /resolutionQueued/);

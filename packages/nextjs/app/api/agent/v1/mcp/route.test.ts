@@ -2090,7 +2090,7 @@ test("OAuth keeps one stable tool list and fails closed for unavailable paid-net
   await requestWorkspaceDeletion({
     accountAddress: principalId,
     workspaceId,
-    confirmationName: "One-message OAuth",
+    confirmation: "DELETE",
     identityAssurance: "better_auth:passkey",
   });
   const revoked = await POST(resumedRequest({ id: 160, jsonrpc: "2.0", method: "tools/list", params: {} }));

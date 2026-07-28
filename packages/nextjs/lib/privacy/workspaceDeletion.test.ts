@@ -306,7 +306,7 @@ test("workspace deletion blocks nonzero funds, active subscriptions, and reserva
     () =>
       requestWorkspaceDeletion({
         accountAddress: OWNER,
-        confirmationName: "Funded workspace",
+        confirmation: "DELETE",
         identityAssurance: "better_auth:passkey",
         now: NOW,
         workspaceId,
@@ -338,7 +338,7 @@ test("funded workspace erasure queues a refund and resumes the same subject requ
   });
   const blocked = await requestWorkspaceDeletion({
     accountAddress: OWNER,
-    confirmationName: "Refund before erase",
+    confirmation: "DELETE",
     identityAssurance: "better_auth:passkey",
     now: NOW,
     workspaceId,
@@ -361,7 +361,7 @@ test("funded workspace erasure queues a refund and resumes the same subject requ
   assert.deepEqual((await getWorkspaceDeletionPreview({ accountAddress: OWNER, workspaceId })).blockers, []);
   const completed = await requestWorkspaceDeletion({
     accountAddress: OWNER,
-    confirmationName: "Refund before erase",
+    confirmation: "DELETE",
     identityAssurance: "better_auth:passkey",
     now: new Date(NOW.getTime() + 120_000),
     workspaceId,
@@ -380,7 +380,7 @@ test("funded workspace erasure queues a refund and resumes the same subject requ
   );
 });
 
-test("workspace deletion requires the exact current name and atomically erases forecast integrity state", async () => {
+test("workspace deletion requires exact DELETE confirmation and atomically erases forecast integrity state", async () => {
   const { workspaceId } = await createWorkspace({ name: "Delete exactly", ownerAddress: OWNER });
   const { apiKeyId } = await createWorkspaceApiKey({ name: "Delete me", workspaceId });
   await dbClient.execute({
@@ -483,7 +483,7 @@ test("workspace deletion requires the exact current name and atomically erases f
     () =>
       requestWorkspaceDeletion({
         accountAddress: OWNER,
-        confirmationName: "delete exactly",
+        confirmation: "delete",
         identityAssurance: "better_auth:passkey",
         now: NOW,
         workspaceId,
@@ -499,7 +499,7 @@ test("workspace deletion requires the exact current name and atomically erases f
   );
   const deleted = await requestWorkspaceDeletion({
     accountAddress: OWNER,
-    confirmationName: "Delete exactly",
+    confirmation: "DELETE",
     identityAssurance: "better_auth:passkey",
     now: NOW,
     workspaceId,
@@ -666,7 +666,7 @@ test("workspace deletion deletes unused private quotes and anonymizes referenced
 
   const deleted = await requestWorkspaceDeletion({
     accountAddress: OWNER,
-    confirmationName: "Quote workspace",
+    confirmation: "DELETE",
     identityAssurance: "better_auth:passkey",
     now: NOW,
     workspaceId,
@@ -718,7 +718,7 @@ test("workspace deletion marks private media for worker reconciliation and keeps
 
   const deleted = await requestWorkspaceDeletion({
     accountAddress: OWNER,
-    confirmationName: "Media workspace",
+    confirmation: "DELETE",
     identityAssurance: "better_auth:passkey",
     now: NOW,
     workspaceId,
@@ -757,7 +757,7 @@ test("workspace deletion tombstones copied network reviewer data without deletin
 
   const deleted = await requestWorkspaceDeletion({
     accountAddress: OWNER,
-    confirmationName: "Network copy workspace",
+    confirmation: "DELETE",
     identityAssurance: "better_auth:passkey",
     now: NOW,
     workspaceId,
@@ -887,7 +887,7 @@ test("network evidence expiry rebinds retained voucher copies to the assignment 
   const seeded = await seedWorkspaceNetworkAssignment(workspaceId);
   const deleted = await requestWorkspaceDeletion({
     accountAddress: OWNER,
-    confirmationName: "Network expiry workspace",
+    confirmation: "DELETE",
     identityAssurance: "better_auth:passkey",
     now: NOW,
     workspaceId,
@@ -982,7 +982,7 @@ test("legal holds defer network evidence expiry without rebinding retained revie
   const seeded = await seedWorkspaceNetworkAssignment(workspaceId);
   const deleted = await requestWorkspaceDeletion({
     accountAddress: OWNER,
-    confirmationName: "Network hold workspace",
+    confirmation: "DELETE",
     identityAssurance: "better_auth:passkey",
     now: NOW,
     workspaceId,
@@ -1034,7 +1034,7 @@ test("network evidence expiry preserves a still-payable voucher and remains retr
   const seeded = await seedWorkspaceNetworkAssignment(workspaceId);
   const deleted = await requestWorkspaceDeletion({
     accountAddress: OWNER,
-    confirmationName: "Network payable workspace",
+    confirmation: "DELETE",
     identityAssurance: "better_auth:passkey",
     now: NOW,
     workspaceId,
@@ -1154,7 +1154,7 @@ test("workspace deletion clears invited paid eligibility and retains a recorded 
 
   const deleted = await requestWorkspaceDeletion({
     accountAddress: OWNER,
-    confirmationName: "Invited paid workspace",
+    confirmation: "DELETE",
     identityAssurance: "better_auth:passkey",
     now: NOW,
     workspaceId,
