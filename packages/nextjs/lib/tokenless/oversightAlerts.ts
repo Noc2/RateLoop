@@ -191,6 +191,7 @@ export async function updateWorkspaceAlertPreferences(input: {
 
 type AlertCandidate = {
   principalAddress: string;
+  workspaceId: string;
   sourceType: OversightAlertSourceType;
   sourceKey: string;
   title: string;
@@ -233,7 +234,8 @@ function eventAlertContent(eventType: string, workspaceName: string) {
 
 async function loadEventAlertCandidates(limit: number): Promise<AlertCandidate[]> {
   const result = await dbClient.execute({
-    sql: `SELECT b.principal_address, o.event_id AS source_key, o.event_type, w.name AS workspace_name
+    sql: `SELECT b.principal_address, o.workspace_id, o.event_id AS source_key, o.event_type,
+                 w.name AS workspace_name
           FROM tokenless_assurance_event_outbox o
           JOIN tokenless_workspaces w ON w.workspace_id = o.workspace_id AND w.status = 'active'
           LEFT JOIN tokenless_workspace_alert_preferences p ON p.workspace_id = o.workspace_id
@@ -256,11 +258,17 @@ async function loadEventAlertCandidates(limit: number): Promise<AlertCandidate[]
   });
   return (result.rows as Row[]).flatMap(row => {
     const principalAddress = text(row, "principal_address");
+    const workspaceId = text(row, "workspace_id");
     const sourceKey = text(row, "source_key");
     const eventType = text(row, "event_type");
-    if (!principalAddress || !sourceKey || !eventType) return [];
+    if (!principalAddress || !workspaceId || !sourceKey || !eventType) return [];
     return [
-      { principalAddress, sourceKey, ...eventAlertContent(eventType, text(row, "workspace_name") ?? "your workspace") },
+      {
+        principalAddress,
+        workspaceId,
+        sourceKey,
+        ...eventAlertContent(eventType, text(row, "workspace_name") ?? "your workspace"),
+      },
     ];
   });
 }
@@ -287,6 +295,7 @@ async function loadWorkspaceStopCandidates(limit: number): Promise<AlertCandidat
     return [
       {
         principalAddress,
+        workspaceId,
         sourceType: "oversight.workspace_stopped" as const,
         sourceKey: `${workspaceId}:${engagedAt.toISOString()}`,
         title: "Workspace stop engaged",
@@ -327,6 +336,7 @@ async function loadDisagreementSpikeCandidates(now: Date, limit: number): Promis
     return [
       {
         principalAddress,
+        workspaceId,
         sourceType: "oversight.disagreement_spike" as const,
         sourceKey: `${workspaceId}:${utcDay(now)}`,
         title: "Disagreement spike",
@@ -355,15 +365,17 @@ async function loadCoverageFloorCandidates(now: Date, limit: number): Promise<Al
   });
   return (result.rows as Row[]).flatMap(row => {
     const principalAddress = text(row, "principal_address");
+    const workspaceId = text(row, "workspace_id");
     const scopeId = text(row, "scope_id");
     const stage = text(row, "stage") ?? "";
     const floorBps = Number(row.production_floor_bps ?? 0);
     const stageRate = STAGE_RATE_BPS[stage];
-    if (!principalAddress || !scopeId || stageRate === undefined || stageRate > floorBps) return [];
+    if (!principalAddress || !workspaceId || !scopeId || stageRate === undefined || stageRate > floorBps) return [];
     const workspaceName = text(row, "workspace_name") ?? "your workspace";
     return [
       {
         principalAddress,
+        workspaceId,
         sourceType: "oversight.coverage_floor_hit" as const,
         sourceKey: `${scopeId}:${utcDay(now)}`,
         title: "Coverage floor reached",
@@ -410,7 +422,7 @@ export async function materializeOversightAlertNotifications(input: { limit?: nu
         candidate.principalAddress,
         candidate.title,
         candidate.body,
-        "/agents?tab=evaluations",
+        `/agents?tab=inbox&workspace=${encodeURIComponent(candidate.workspaceId)}`,
         candidate.sourceType,
         candidate.sourceKey,
         now,

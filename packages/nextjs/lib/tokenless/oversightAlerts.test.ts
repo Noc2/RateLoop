@@ -203,7 +203,7 @@ async function seedObservations(input: {
 
 async function notificationsFor(principal: string) {
   const result = await dbClient.execute({
-    sql: `SELECT source_type, source_key, title, preference_key FROM tokenless_notifications
+    sql: `SELECT source_type, source_key, title, preference_key, href FROM tokenless_notifications
           WHERE principal_address = ? ORDER BY source_type ASC, source_key ASC`,
     args: [principal],
   });
@@ -248,6 +248,9 @@ test("gate and review-failure events alert owners and admins in-app, once, respe
     ["oversight.gate_blocked", "oversight.review_expired", "oversight.review_failed"],
   );
   assert.ok(ownerAlerts.every(row => row.preference_key === "oversightAlerts"));
+  assert.ok(
+    ownerAlerts.every(row => row.href === `/agents?tab=inbox&workspace=${encodeURIComponent(setup.workspaceId)}`),
+  );
   // Plain members never receive oversight alerts.
   assert.equal((await notificationsFor(setup.member.principalId)).length, 0);
   // Idempotent: a second cycle inserts nothing new.
