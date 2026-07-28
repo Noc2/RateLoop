@@ -134,17 +134,14 @@ function VerificationInstructions({
   trustedKey,
   trustedKeyDownloadUrl,
 }: {
-  packet: EvidencePacket | null;
+  packet: EvidencePacket;
   attestation: Attestation | null;
   trustedKey: TrustedKey | null;
   trustedKeyDownloadUrl: string | null;
 }) {
-  const packetCommand =
-    packet && trustedKey
-      ? `yarn workspace @rateloop/nextjs evidence:verify packet.json --public-key './${trustedKeyFilename(trustedKey.keyId)}' --key-id '${trustedKey.keyId}'`
-      : packet
-        ? "This packet's key is not in the workspace trust history. Do not verify it using its embedded key."
-        : "Export a packet to show its pinned-key verification command.";
+  const packetCommand = trustedKey
+    ? `yarn workspace @rateloop/nextjs evidence:verify packet.json --public-key './${trustedKeyFilename(trustedKey.keyId)}' --key-id '${trustedKey.keyId}'`
+    : "This packet's key is not in the workspace trust history. Do not verify it using its embedded key.";
   const attestationCommand =
     attestation?.state === "completed" && attestation.signerKeyId
       ? `yarn workspace @rateloop/nextjs attestation:verify attestation-witness.json \\
@@ -161,9 +158,11 @@ function VerificationInstructions({
       <summary className="cursor-pointer text-sm font-semibold">Verify an export</summary>
       <div className="mt-4 space-y-4">
         <p className="max-w-3xl text-sm leading-6 text-base-content/55">
-          Download the matching Ed25519 SPKI pin from workspace key history, then recompute the packet signature, Merkle
-          roots, aggregation, and digest. Never use the public key embedded in the packet as its own trust anchor. The
-          audit command recomputes every chain link and the exported head.
+          Never verify a packet with the key inside it. Download the pinned key from key history.{" "}
+          <a className="link" href="/docs/evidence#verify">
+            Open the verification guide
+          </a>
+          .
         </p>
         <div className="flex flex-wrap gap-2">
           {trustedKey && trustedKeyDownloadUrl ? (
@@ -174,12 +173,12 @@ function VerificationInstructions({
             >
               Download trusted SPKI pin
             </a>
-          ) : packet ? (
+          ) : (
             <p className="w-full text-sm text-red-100" role="alert">
               A trusted pin for {packet.signing.keyId} is unavailable to this account or is missing from workspace key
               history.
             </p>
-          ) : null}
+          )}
           {attestation?.state === "completed" ? (
             <a
               className="btn btn-sm border-white/10 bg-white/[0.06] hover:bg-white/[0.1]"
@@ -205,12 +204,6 @@ function VerificationInstructions({
         >
           {copied ? "Copied" : "Copy commands"}
         </button>
-        <p className="text-xs leading-5 text-base-content/55">
-          Select the attestation signer, Rekor log key, and TSA certificate chain through an independent trust process;
-          none is trusted merely because it appears in a witness. A completed external-attestation job records a Rekor
-          UUID. Export-boundary jobs separately report their timestamp-token status; absence is shown as pending or
-          failed, never complete.
-        </p>
       </div>
     </details>
   );
@@ -315,7 +308,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyPacket, setBusyPacket] = useState<string | null>(null);
-  const [showEvidenceSettings, setShowEvidenceSettings] = useState(false);
+  const [showAdvancedControls, setShowAdvancedControls] = useState(false);
   const [packetQuery, setPacketQuery] = useState("");
   const [outcomeFilter, setOutcomeFilter] = useState<"all" | "pass" | "fail" | "insufficient">("all");
   const [dateFilter, setDateFilter] = useState<"all" | "7" | "30">("all");
@@ -422,11 +415,11 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
               <button
                 type="button"
                 className="btn btn-sm border-white/10 bg-white/[0.06]"
-                aria-controls="evidence-settings"
-                aria-expanded={showEvidenceSettings}
-                onClick={() => setShowEvidenceSettings(current => !current)}
+                aria-controls="evidence-advanced-controls"
+                aria-expanded={showAdvancedControls}
+                onClick={() => setShowAdvancedControls(current => !current)}
               >
-                {showEvidenceSettings ? "Close settings" : "Evidence settings"}
+                Retention, keys, and delivery
               </button>
             ) : null}
             <button type="button" className="btn btn-sm border-white/10 bg-white/[0.06]" onClick={() => void load()}>
@@ -444,6 +437,22 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
       <AsyncSection loading={loading} loadingLabel="Loading evidence">
         {null}
       </AsyncSection>
+
+      {!loading && canManage ? (
+        <section className="surface-card rounded-2xl p-6" aria-labelledby="compliance-export-heading">
+          <h2 id="compliance-export-heading" className="text-xl font-semibold">
+            Compliance exports
+          </h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-base-content/55">
+            Export operating evidence for an audit. These records do not replace accountable human oversight.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <ExportLink href={`${base}/audit/export`}>Audit log</ExportLink>
+            <ExportLink href={`${base}/assurance/coverage/export`}>Coverage history</ExportLink>
+            <ExportLink href={`${base}/assurance/metrics/grafana`}>Grafana dashboard JSON</ExportLink>
+          </div>
+        </section>
+      ) : null}
 
       {!loading && packets.length === 0 ? (
         <section className="surface-card rounded-2xl p-6" aria-labelledby="evidence-empty-heading">
@@ -642,7 +651,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
         </section>
       ) : null}
 
-      {!loading ? (
+      {!loading && selectedPacket ? (
         <VerificationInstructions
           packet={selectedPacket}
           attestation={selectedAttestation}
@@ -658,30 +667,20 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
         </p>
       ) : null}
 
-      {!loading && canManage && showEvidenceSettings ? (
+      {!loading && canManage && showAdvancedControls ? (
         <section
-          id="evidence-settings"
+          id="evidence-advanced-controls"
           className="surface-card rounded-2xl p-6"
-          aria-labelledby="compliance-export-heading"
+          aria-labelledby="evidence-retention-heading"
         >
-          <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-green)]">Workspace controls</p>
-          <h2 id="compliance-export-heading" className="mt-2 text-xl font-semibold">
-            Compliance exports
+          <h2 id="evidence-retention-heading" className="text-xl font-semibold">
+            Retention policy
           </h2>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-base-content/55">
-            Export operating evidence for your own controls. These records support an audit; they do not assign or
-            replace your accountable human oversight.
-          </p>
-          <div className="mt-5 flex flex-wrap gap-3">
-            <ExportLink href={`${base}/audit/export`}>Audit log</ExportLink>
-            <ExportLink href={`${base}/assurance/coverage/export`}>Coverage history</ExportLink>
-            <ExportLink href={`${base}/assurance/metrics/grafana`}>Grafana dashboard JSON</ExportLink>
-          </div>
           {retention ? <RetentionEditor policy={retention} workspaceId={workspaceId} onSaved={setRetention} /> : null}
         </section>
       ) : null}
 
-      {!loading && canManage && showEvidenceSettings ? (
+      {!loading && canManage && showAdvancedControls ? (
         <section className="surface-card rounded-2xl p-6" aria-labelledby="trusted-key-heading">
           <h2 id="trusted-key-heading" className="text-xl font-semibold">
             Trusted verification keys
@@ -718,7 +717,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
         </section>
       ) : null}
 
-      {!loading && canManage && showEvidenceSettings ? (
+      {!loading && canManage && showAdvancedControls ? (
         <section className="surface-card rounded-2xl p-6" aria-labelledby="enterprise-delivery-heading">
           <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Delivery</p>
           <h2 id="enterprise-delivery-heading" className="mt-2 text-xl font-semibold">

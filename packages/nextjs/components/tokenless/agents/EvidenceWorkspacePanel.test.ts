@@ -7,9 +7,10 @@ const source = readFileSync(new URL("./EvidenceWorkspacePanel.tsx", import.meta.
 test("the evidence workspace keeps verification and export state explicit", () => {
   assert.match(source, /Decision records and exports/);
   assert.match(source, /Export packet/);
-  assert.match(source, /Evidence settings/);
-  assert.match(source, /aria-expanded=\{showEvidenceSettings\}/);
-  assert.match(source, /canManage && showEvidenceSettings/);
+  assert.doesNotMatch(source, /Evidence settings/);
+  assert.match(source, /Retention, keys, and delivery/);
+  assert.match(source, /aria-expanded=\{showAdvancedControls\}/);
+  assert.match(source, /canManage && showAdvancedControls/);
   assert.match(source, /Verification details/);
   assert.match(source, /respondingReviewerCount/);
   assert.match(source, /targetReviewerCount/);
@@ -27,7 +28,6 @@ test("the evidence workspace keeps verification and export state explicit", () =
   assert.match(source, /Do not verify it using its embedded key/);
   assert.match(source, /attestation:verify/);
   assert.match(source, /--signer-public-key.*--signer-key-id.*--rekor-public-key.*--tsa-ca.*--tsa-chain/s);
-  assert.match(source, /independent trust process/);
   assert.match(source, /Download attestation witness/);
   assert.match(source, /Anchor details restricted/);
   assert.match(source, /Receipt details restricted/);
@@ -45,11 +45,14 @@ test("the evidence workspace keeps verification and export state explicit", () =
   assert.match(source, /No evidence records yet/);
   assert.match(source, /No matching evidence/);
   assert.match(source, /!loading && packets\.length > 0/);
-  assert.match(source, /!loading \? \(\s*<VerificationInstructions/s);
+  assert.match(source, /!loading && selectedPacket \? \(\s*<VerificationInstructions/s);
+  assert.doesNotMatch(source, /Export a packet to show its pinned-key verification command/);
   assert.doesNotMatch(source, /\{packets\.length > 0 \? \(/);
 });
 
 test("workspace compliance controls expose only browser-safe endpoints", () => {
+  assert.match(source, /!loading && canManage \? \(\s*<section[^>]+aria-labelledby="compliance-export-heading"/s);
+  assert.match(source, /Export operating evidence for an audit/);
   assert.match(source, /\/audit\/export/);
   assert.match(source, /\/assurance\/coverage\/export/);
   assert.match(source, /\/assurance\/metrics\/grafana/);
@@ -63,4 +66,10 @@ test("workspace compliance controls expose only browser-safe endpoints", () => {
   assert.match(source, /deliveryKind === "grc" \? <GrcEvidenceDelivery/);
   assert.match(source, /deliveryKind === "metrics" \? <MetricsEvidenceAccess/);
   assert.doesNotMatch(source, /grid items-start gap-3 lg:grid-cols-2/);
+});
+
+test("verification keeps the required independent trust-anchor instruction and links the full guide", () => {
+  assert.match(source, /Never verify a packet with the key inside it\. Download the pinned key from key history\./);
+  assert.match(source, /href="\/docs\/evidence#verify"/);
+  assert.doesNotMatch(source, /recompute the packet signature, Merkle roots, aggregation, and digest/);
 });
