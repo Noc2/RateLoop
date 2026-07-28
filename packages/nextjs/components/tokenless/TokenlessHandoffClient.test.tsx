@@ -277,6 +277,12 @@ test("expired browser handoffs stop at one recovery action", () => {
   assert.match(handoffSource, /Ask the agent for a new link\./);
 });
 
+test("invalid browser handoffs hide parser diagnostics and provide one safe recovery step", () => {
+  assert.match(handoffSource, /This review link is not valid/);
+  assert.match(handoffSource, /Return to your agent and request a new review link\./);
+  assert.doesNotMatch(handoffSource, /handoff\.message/);
+});
+
 test("signed-out handoffs open a fragment-safe sign-in in a separate tab and refresh on return", () => {
   // AUD-15: the bearer handoff lives only in the URL fragment. Sign-in must not navigate this tab
   // away (which would drop the fragment) or place the bearer in a server-visible URL.

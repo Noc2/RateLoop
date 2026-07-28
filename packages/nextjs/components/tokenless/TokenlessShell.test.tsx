@@ -46,6 +46,7 @@ test("tokenless routes expose one main landmark and a keyboard skip link", () =>
     "../../app/(app)/settings/wallets/page.tsx",
     "../../app/(public)/agent/oauth/authorize/page.tsx",
     "../../app/(public)/agent/oauth/device/page.tsx",
+    "../../app/(public)/connect/[intentId]/not-found.tsx",
     "../../app/(public)/connect/[intentId]/page.tsx",
     "./TokenlessHandoffClient.tsx",
   ];

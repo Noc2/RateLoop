@@ -80,7 +80,10 @@ export default async function AgentOAuthDevicePage({ searchParams }: { searchPar
   try {
     approval = await getAgentOAuthDeviceApproval(userCode);
   } catch (error) {
-    const message = error instanceof AgentOAuthError ? error.message : "That verification code could not be checked.";
+    const message =
+      error instanceof AgentOAuthError
+        ? "That code is invalid or expired. Check it and try again, or return to your agent for a new code."
+        : "We couldn't check that code. Try again.";
     return (
       <div className="flex grow items-start justify-center px-4 py-16 sm:py-24">
         <CodeEntry message={message} />

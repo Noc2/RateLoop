@@ -24,6 +24,15 @@ test("OAuth consent shows exact scopes before the decision", () => {
   assert.match(consentForm, /name="decision" value="deny"/);
 });
 
+test("invalid OAuth and device requests provide plain-language recovery without raw protocol errors", () => {
+  assert.match(authorizePage, /RateLoop couldn&apos;t verify the information in this authorization link\./);
+  assert.match(authorizePage, /start the connection again/);
+  assert.doesNotMatch(authorizePage, /oauth\.message|client_id is required/);
+  assert.match(devicePage, /That code is invalid or expired\./);
+  assert.match(devicePage, /return to your agent for a new code/);
+  assert.doesNotMatch(devicePage, /error\.message/);
+});
+
 test("loopback OAuth completion stays branded while preserving a no-JavaScript redirect", () => {
   assert.match(consentForm, /x-rateloop-oauth-callback-relay/);
   assert.match(consentForm, /Authorization approved/);

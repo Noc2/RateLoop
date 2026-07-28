@@ -22,6 +22,10 @@ const publicApi = readFileSync(
   "utf8",
 );
 const publicPage = readFileSync(new URL("../../../app/(public)/connect/[intentId]/page.tsx", import.meta.url), "utf8");
+const publicNotFound = readFileSync(
+  new URL("../../../app/(public)/connect/[intentId]/not-found.tsx", import.meta.url),
+  "utf8",
+);
 const publicClient = readFileSync(new URL("./PublicAgentConnectionStatus.tsx", import.meta.url), "utf8");
 const oauthRecovery = readFileSync(
   new URL(
@@ -82,6 +86,13 @@ test("public connection page exposes safe human and machine handoff state", () =
   assert.match(publicPage, /Resolve this connection/);
   assert.match(publicPage, /role="alert"/);
   assert.match(publicPage, /!recoveryAction \? <PublicAgentConnectionStatus \/> : null/);
+});
+
+test("missing connection intents explain recovery instead of falling through to the generic 404", () => {
+  assert.match(publicNotFound, /This connection link is no longer available/);
+  assert.match(publicNotFound, /invalid, expired, or replaced/);
+  assert.match(publicNotFound, /href="\/agents\?tab=connect"/);
+  assert.match(publicNotFound, /Open Connection/);
 });
 
 test("claim fragment is inspected only in the browser and never stored or sent", () => {

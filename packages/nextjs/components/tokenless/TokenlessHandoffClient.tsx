@@ -67,7 +67,7 @@ type SessionState =
 
 type HandoffState =
   | { status: "loading" }
-  | { status: "invalid"; message: string }
+  | { status: "invalid" }
   | { status: "recovery"; operationKey: string }
   | { status: "expired"; payload: TokenlessHandoffPayload }
   | { status: "ready"; payload: TokenlessHandoffPayload };
@@ -491,15 +491,10 @@ export function TokenlessHandoffClient() {
             setRequest(failure.payload.request);
             setMediaReview(failure.payload.request.question.media ? { status: "pending" } : { status: "ready" });
             return;
-          } catch (bindingCause) {
-            cause = bindingCause;
-          }
+          } catch {}
         }
         if (cancelled) return;
-        setHandoff({
-          status: "invalid",
-          message: cause instanceof Error ? cause.message : "Invalid handoff link.",
-        });
+        setHandoff({ status: "invalid" });
       }
     })();
     return () => {
@@ -823,8 +818,8 @@ export function TokenlessHandoffClient() {
       <div className="mx-auto w-full max-w-3xl grow px-4 py-16 sm:py-24">
         <section className="rateloop-surface-card border-error/30 p-6 sm:p-9" role="alert">
           <p className="font-mono text-xs uppercase tracking-widest text-error">Cannot open review</p>
-          <h1 className="mt-4 text-3xl font-semibold">Ask the agent for a new link.</h1>
-          <p className="mt-4 leading-7 text-base-content/65">{handoff.message}</p>
+          <h1 className="mt-4 text-3xl font-semibold">This review link is not valid</h1>
+          <p className="mt-4 leading-7 text-base-content/65">Return to your agent and request a new review link.</p>
         </section>
       </div>
     );

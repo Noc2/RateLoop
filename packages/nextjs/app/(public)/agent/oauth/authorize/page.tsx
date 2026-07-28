@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { AgentOAuthConsentForm } from "~~/components/tokenless/agents/AgentOAuthConsentForm";
 import { AUTH_SESSION_COOKIE, findAuthSession } from "~~/lib/auth/session";
-import { AgentOAuthError, validateAgentOAuthAuthorizationRequest } from "~~/lib/tokenless/agentOAuth";
+import { validateAgentOAuthAuthorizationRequest } from "~~/lib/tokenless/agentOAuth";
 
 export const metadata: Metadata = {
   title: "Authorize agent",
@@ -24,11 +24,7 @@ export default async function AgentOAuthAuthorizePage({ searchParams }: { search
   let authorization;
   try {
     authorization = await validateAgentOAuthAuthorizationRequest(raw);
-  } catch (error) {
-    const oauth =
-      error instanceof AgentOAuthError
-        ? error
-        : new AgentOAuthError("invalid_request", "The authorization request is invalid.");
+  } catch {
     return (
       <div className="flex grow items-start justify-center px-4 py-16 sm:py-24">
         <section className="surface-card w-full max-w-lg rounded-2xl p-6 sm:p-9" aria-labelledby="oauth-error-title">
@@ -37,10 +33,10 @@ export default async function AgentOAuthAuthorizePage({ searchParams }: { search
             This connection request is invalid
           </h1>
           <p className="mt-4 text-sm leading-6 text-base-content/65" role="alert">
-            {oauth.message}
+            RateLoop couldn&apos;t verify the information in this authorization link.
           </p>
           <p className="mt-6 text-sm leading-6 text-base-content/55">
-            Return to the agent that opened this page and restart the connection.
+            Return to the agent that opened this page and start the connection again.
           </p>
         </section>
       </div>
