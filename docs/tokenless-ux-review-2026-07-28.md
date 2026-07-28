@@ -7,7 +7,8 @@ and simple to use. It combines:
   workspace, documentation, global search, and mobile layouts;
 - a source review of the corresponding Next.js components and shared patterns;
 - current guidance from WCAG 2.2, the GOV.UK Design System, the US Web Design
-  System, the UK Office for National Statistics, and Nielsen Norman Group.
+  System, the UK Office for National Statistics, Nielsen Norman Group, and FIDO
+  Alliance passkey guidance.
 
 This is an expert review, not a replacement for research with representative
 workspace owners and reviewers. No production data or settings were changed.
@@ -49,22 +50,60 @@ The live deployment had not received that change at the time of this review.
 - Reviewer: To review, History, Profile, and Settings
 - Agent workspace: Workspace, Connection, Inbox, Reviews, Evaluations, and
   Evidence
+- Sign-in, passkey and social-provider choices, wallet settings, handoff
+  recovery, OAuth device entry, OAuth authorization errors, connection-link
+  errors, and the legal index
 - Empty, loading, disabled, warning, accepted, expired, and completed states
+
+### Coverage audit
+
+A second pass checked every user-facing `page.tsx` route against the first
+report. It found that the main signed-in workspace was covered well, but
+onboarding, authentication, authorization, purpose-bound wallet connection,
+legal content, and route-specific recovery had been underweighted.
+
+| Journey                            | Review method                | Remaining validation                                     |
+| ---------------------------------- | ---------------------------- | -------------------------------------------------------- |
+| Home, pricing, docs, search, legal | Live and source              | Content comprehension with prospective customers         |
+| Reviewer and agent workspace       | Live and source              | Representative owner and reviewer usability sessions     |
+| Welcome                            | Source; live redirected      | New-account session                                      |
+| Sign-in and email code entry       | Live and source              | Real code, passkey, provider fallback, and recovery      |
+| Agent OAuth and connection links   | Live error/entry and source  | Valid approval, denial, expiry, and reconnect            |
+| Handoff                            | Live missing-link and source | Valid signed-in and signed-out handoff                   |
+| Wallet purpose selection           | Live and source              | Real connect, rejection, wrong network, and unlink       |
+| Payment and on-chain settlement    | Source only                  | Eligible funded test account and current test deployment |
+
+Legacy shortcut routes were also checked. `/ask`, `/rate`, `/settings`, and
+`/settings/workspace` redirect to their canonical signed-in destinations. This
+is a good foundation; documentation, search, and support should link directly
+to those canonical locations instead of preserving the legacy names.
 
 ### Responsive review
 
-The home page, reviewer queue, and agent Workspace page were checked at a
-390-by-844 CSS-pixel viewport. The shell reflowed without page-level horizontal
-scrolling. The six agent tabs wrap to two rows and remain usable, but their
-hierarchy becomes harder to scan. WCAG reflow at 320 CSS pixels and 400% zoom
-still needs a formal test.
+The home page, reviewer queue, and agent Workspace page were first checked at a
+390-by-844 CSS-pixel viewport. A second spot check covered ten representative
+routes at 320-by-800 CSS pixels: home, pricing, docs, sign-in, reviewer settings,
+agent registry, agent evaluations, wallet settings, handoff, and OAuth device
+entry.
+
+None of those routes produced page-level horizontal overflow. Each had one
+`h1`, no duplicate IDs detected by the basic DOM check, and no obviously
+unlabelled native form control. This is evidence of a sound responsive
+foundation, not a WCAG conformance result. The six agent tabs still wrap to two
+rows and become harder to scan. Table-local scrolling, keyboard focus, screen
+reader output, measured contrast, text resize, and 400% browser zoom still need
+formal testing.
 
 ### Limitations
 
 - No analytics, support tickets, session recordings, or user interviews were
   available.
 - Authentication, destructive actions, payment, and on-chain transactions were
-  not performed as part of this review.
+  not completed as part of this review. Authentication entry and recovery
+  surfaces were inspected without submitting credentials.
+- Valid OAuth consent, connection, handoff, wallet, and paid-settlement paths
+  were not executed; their non-sensitive entry/error states and source were
+  reviewed.
 - Contrast was visually inspected but not measured across every state.
 - The live deployment and local source were temporarily out of sync, as noted
   above.
@@ -102,6 +141,31 @@ These principles are the standard against which the findings were assessed.
    hierarchy. See
    [NN/g card sorting](https://www.nngroup.com/articles/card-sorting-definition/)
    and [tree testing](https://www.nngroup.com/articles/tree-testing/).
+9. **Accessible authentication and recovery.** Sign-in must not depend on a
+   cognitive-function test. Email codes should support paste and autocomplete,
+   while account switching, fallback, and recovery remain explicit. See
+   [WCAG accessible authentication](https://www.w3.org/WAI/WCAG22/Understanding/accessible-authentication-minimum)
+   and the
+   [FIDO passkey design guidelines](https://www.passkeycentral.org/design-guidelines/).
+10. **Confirm consequential actions.** Before financial, legal, privacy, or
+    destructive submission, let users review the important answers and
+    consequence, then correct them without starting over. See
+    [GOV.UK check answers](https://design-system.service.gov.uk/patterns/check-answers/)
+    and
+    [WCAG error prevention](https://www.w3.org/WAI/WCAG22/Understanding/error-prevention-legal-financial-data).
+11. **Use alerts and statuses sparingly.** Alerts should be relevant to the
+    current goal, explain the next step, and use the smallest workable status
+    set. Simplify the transaction before adding another status or task-list
+    abstraction. See [USWDS alert guidance](https://designsystem.digital.gov/components/alert/)
+    and
+    [GOV.UK guidance for multiple tasks](https://design-system.service.gov.uk/patterns/complete-multiple-tasks/).
+12. **Give long content a scan layer.** Search, tables of contents, descriptive
+    titles, and short key-point summaries help users find the right section;
+    they do not replace required legal or safety text. See
+    [WCAG multiple ways](https://www.w3.org/WAI/WCAG22/Understanding/multiple-ways.html),
+    [WCAG page titled](https://www.w3.org/WAI/WCAG22/Understanding/page-titled.html),
+    and the
+    [USWDS summary box](https://designsystem.digital.gov/components/summary-box/).
 
 ## Priority definitions
 
@@ -121,6 +185,14 @@ describes budgeted, sealed, paid terminal settlement as the normal human check.
 The active product shown in the signed-in journey is a private, invited, unpaid
 lane; public paid review and the Feedback Bonus are unavailable.
 
+The mismatch is not confined to one landing page. **How it works** presents
+`Quote → Ask → Payment → Wait → Result`, adaptive paid panels, prepaid USDC,
+EIP-3009, eligibility, sealed commits, and on-chain terminal settlement as the
+ordinary path. The pricing page separately explains reviewer cost and a 90/10
+split without first saying that this lane cannot currently be used. The
+evidence documentation is accurate at a protocol level but makes that future
+architecture look like the active user journey.
+
 This is more than excess copy. A user can make an incorrect decision about
 compensation, eligibility, and product readiness.
 
@@ -130,6 +202,8 @@ compensation, eligibility, and product readiness.
 - Separate “available now” from advanced architecture or future paid lanes.
 - Use four task entries: **Connect an agent**, **Set review policy**,
   **Complete a review**, and **Verify evidence**.
+- Omit inactive paid-lane pricing, or label it as unavailable before presenting
+  fees and mechanics. Do not use a disabled call to action as the explanation.
 - Add a release check that prevents customer-facing paid, privacy, custody, or
   settlement claims from getting ahead of the deployed system.
 
@@ -188,6 +262,11 @@ Examples observed in the live product and source include:
   the paid lane is unavailable;
 - a Feedback Bonus wallet connection shown in Inbox with no eligible bonus;
 - payment notification choices when the user has no paid work;
+- a dedicated wallet page that immediately offers **Pay for public asks** and
+  **Receive reviewer payouts**, although neither path applies in the current
+  hosted lane;
+- that wallet page showing a disabled **Connecting** state before the user has
+  chosen to connect;
 - deployment-specific messages such as “USD invoice funding is not enabled for
   this deployment.”
 
@@ -200,7 +279,11 @@ starting around line 521. The profile composition is visible in
 
 Do not show a capability until it is available and relevant to the current
 user. Show a short eligibility or availability explanation only after the user
-chooses that path. Do not expose deployment state in ordinary product copy.
+chooses that path. Open wallet setup from a real funding or payout action with
+the purpose preselected; do not make an inactive wallet hub part of ordinary
+settings. Preserve the useful warning that reusing a public Base address can
+link paid activity, but show it at the moment it informs a real choice. Do not
+expose deployment state in ordinary product copy.
 
 **Acceptance criteria**
 
@@ -377,24 +460,94 @@ Several destructive actions use inconsistent native confirmation prompts.
 There is no shared retry behavior for asynchronous sections, and raw backend
 errors can reach users.
 
+The 320-pixel DOM spot check also found two `main` landmarks on wallet settings,
+handoff, and OAuth device entry. The shared
+[`TokenlessShell.tsx`](../packages/nextjs/components/tokenless/TokenlessShell.tsx)
+already supplies the page `main`; route components should not nest another one.
+Misused landmarks make screen-reader navigation less predictable. See the
+[WAI-ARIA landmarks example](https://www.w3.org/WAI/ARIA/apg/patterns/landmarks/examples/HTML5.html).
+
+Docs and signed-in Human and Agent views also share the generic document title
+**RateLoop — Human assurance for AI**. A browser tab, history entry, or assistive
+technology announcement therefore does not identify the current destination or
+selected tab. A single-page application should update its title when the view
+changes.
+
 **Recommendation**
 
 - Render hint and error independently, or reference only mounted IDs.
 - Add a visible-on-focus **Skip to main content** link.
+- Keep exactly one page-level `main` landmark. Use `section` or `div` for
+  content inside the shell.
+- Give every public route and selected signed-in tab a concise descriptive
+  document title, such as **Results · Test · RateLoop**.
 - Standardize loading, empty, error, and retry states.
 - Use one accessible confirmation dialog that names the target and consequence.
 - Announce dynamic save, search, and loading outcomes as status messages.
 - Measure every muted text and control state against WCAG 2.2 AA; do not infer
   compliance from the color token name.
-- Test the entire common path with keyboard only and at 320 CSS pixels.
+- Test the entire common path with keyboard only. Verify focus is never obscured
+  and interactive targets meet WCAG 2.2 minimum sizing.
 
 See [GOV.UK validation guidance](https://design-system.service.gov.uk/patterns/validation/)
 for preserving entered values, showing an error summary, and placing a specific
-message beside each invalid field.
+message beside each invalid field. Also see
+[WCAG focus not obscured](https://www.w3.org/WAI/WCAG22/Understanding/focus-not-obscured-minimum)
+and [target size](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum).
+
+### 11. Authentication and authorization need clearer account and recovery states
+
+Sign-in offers email code, passkey, Google, and Apple choices in a compact
+surface. The email field is labelled **Work email**, although personal email
+accounts are accepted. Visiting sign-in while already authenticated still shows
+the entire sign-in form instead of identifying the active account and offering
+an intentional switch.
+
+After an email code is sent,
+[`BetterAuthSignIn.tsx`](../packages/nextjs/components/auth/BetterAuthSignIn.tsx)
+shows a single six-digit field and **Verify**. The field correctly supports
+one-time-code autocomplete and does not block paste, but the state does not show
+the destination address, **Change email**, or a timed **Resend code** action.
+Provider and backend errors can also be surfaced too literally.
+
+The OAuth entry states show a similar contrast. Device authorization is concise
+and the valid consent source clearly lists what an agent may and may not do.
+However, an incomplete authorization URL renders the raw diagnostic
+`client_id is required.` A missing connection intent falls through to the
+generic site 404 instead of explaining that the connection link is invalid or
+expired.
+
+**Recommendation**
+
+- Rename **Work email** to **Email address** unless an enforced work-domain rule
+  is added.
+- For an authenticated session, show **Continue as [name]** and **Use another
+  account** before displaying a fresh form.
+- After sending a code, show the redacted destination, **Change email**, a
+  resend cooldown, and explicit expired-code recovery. Preserve the intended
+  destination through every auth method.
+- Use **Continue with Google** and **Continue with Apple** so all provider
+  actions describe the same outcome.
+- Convert expected auth and OAuth failures to plain-language recovery states.
+  Keep raw protocol diagnostics in optional technical details or server logs.
+- Give connection and handoff links route-specific invalid, expired, and
+  already-used states with the next safe action.
+- Test passkey registration, returning-device sign-in, cross-device sign-in,
+  cancellation, missing credential, provider failure, account switching, and
+  recovery with representative users.
+
+**Acceptance criteria**
+
+- Users always know which account is active and where a code was sent.
+- Every failed or expired auth, OAuth, connection, and handoff state offers one
+  safe next step.
+- A user can recover without clearing browser state or starting from the home
+  page.
+- No raw provider or protocol error is the only user-facing explanation.
 
 ## P2 findings
 
-### 11. The home page is visually strong but weakens trust with zero-value proof
+### 12. The home page is visually strong but weakens trust with zero-value proof
 
 The hero is focused and responsive. Its `0 Verified Humans`, `5 Ratings`, and
 `$0 USDC Paid` row is not persuasive social proof. For a signed-in user, **Start
@@ -410,7 +563,7 @@ their work.
 - Use the pricing page as the complete source and show only a short price
   summary on the home page.
 
-### 12. Reviewer History is sparse but repetitive
+### 13. Reviewer History is sparse but repetitive
 
 History cards are very tall and repeatedly show **Private assignment**, **Agent
 private reviews**, data handling, case count, and “Assignment expires” for
@@ -424,7 +577,7 @@ distinguish one review from another.
 - Add state and date filters only when volume justifies them.
 - Put data handling and assignment mechanics in one details view.
 
-### 13. Empty states and notification settings show redundant or irrelevant copy
+### 14. Empty states and notification settings show redundant or irrelevant copy
 
 The reviewer queue's concise **No review work is available right now** state is
 a good baseline, but **Check again** and a separate **Have an invitation?**
@@ -443,7 +596,7 @@ Resend account.
 - Group notifications by the user's roles and available capabilities.
 - Say **Email notifications unavailable**, not **Resend not configured**.
 
-### 14. Mobile works, but the secondary hierarchy does not scale cleanly
+### 15. Mobile works, but the secondary hierarchy does not scale cleanly
 
 At 390 pixels, the reviewer tabs and six agent tabs wrap to two rows. The agent
 workspace selector and primary action then consume another two rows before
@@ -458,6 +611,49 @@ scan.
 - Give the workspace selector its own stable row.
 - Keep the page title, current state, and primary action above long forms.
 - Convert comparison tables to locally scrollable regions or record summaries.
+
+### 16. Long legal and evidence content needs a scan layer
+
+The legal index is a strong task-oriented page: each policy has a recognizable
+name and a short explanation. Individual policies are necessarily much denser.
+The privacy notice, for example, contains important operational and technical
+detail but offers little support for deciding which section matters now.
+
+Documentation has the same issue at a different scale. **Evidence & Compliance
+Mapping** presents a large, valuable reference table, while navigation labels
+the same area **Compliance**, the app calls it **Evidence**, and the home page
+links to an **Evidence guide**. Users must first resolve the terminology, then
+scan the whole reference.
+
+This is not a reason to hide or shorten required legal, privacy, security, or
+settlement information. It is a reason to add a reliable way into it.
+
+**Recommendation**
+
+- Preserve the full legal and technical content and its heading hierarchy.
+- Add an **At a glance** summary with three to five key points, clearly
+  distinguished from the complete policy.
+- Add in-page navigation to long policies and reference pages, plus
+  topic-specific search where the corpus justifies it.
+- Use one destination name—preferably **Evidence** in the product and
+  **Evidence reference** for the documentation—and make headings and links
+  match it.
+- Keep material cost, privacy, permission, custody, safety, and irreversible
+  consequences visible at the action they govern; a summary must never become
+  the only disclosure.
+- Replace pricing email links with a short accessible contact path when
+  conversion measurement and structured follow-up are needed. Preserve the
+  price and eligibility information before that action.
+
+**Acceptance criteria**
+
+- A user can reach a named policy or evidence topic by direct navigation,
+  search, or in-page links.
+- Summaries contain only claims supported by the full current document and
+  deployed product.
+- The complete legal text remains available without a disclosure interaction.
+- Evidence terminology is consistent across app navigation, docs, search, and
+  home-page links.
 
 ## Proposed navigation and ownership
 
@@ -482,6 +678,12 @@ the Overview indefinitely:
 - Enterprise identity
 - Evidence delivery
 - Danger zone
+
+Account settings should own sign-in methods, sessions, notifications, export,
+and account deletion. Wallet setup should not be a permanent sibling
+destination while paid work is unavailable. When applicable, enter it from
+**Fund a review** or **Set a payout wallet** with the purpose and consequence
+already clear.
 
 For reviewers:
 
@@ -544,11 +746,18 @@ Create shared patterns for:
 - status and timestamp;
 - empty state;
 - loading and retry;
+- authenticated account switch and email-code recovery;
 - form errors and status announcements;
 - confirmation dialog;
+- invalid, expired, and already-used task links;
 - record list and detail disclosure;
 - human-readable duration;
 - technical details.
+
+Use a dedicated interruption page only when a user must understand a material
+consequence before continuing. Do not add interruption screens to ordinary
+low-risk navigation. See
+[GOV.UK interruption-page guidance](https://design-system.service.gov.uk/patterns/interruption-pages/).
 
 ## Recommended implementation sequence
 
@@ -562,9 +771,11 @@ Create shared patterns for:
 ### Phase 2 — Remove misleading and unavailable content
 
 1. Align public documentation with the hosted release.
-2. Hide unavailable review, paid, bonus, billing, and enterprise paths.
+2. Hide unavailable review, paid, wallet, bonus, billing, and enterprise paths.
 3. Remove raw vendor, deployment, protocol, and enum language.
 4. Resolve contradictory loading and workflow states.
+5. Align pricing, Evidence naming, and long-form summaries with the same release
+   contract.
 
 ### Phase 3 — Simplify the two core journeys
 
@@ -580,23 +791,33 @@ Create shared patterns for:
    danger controls to direct settings destinations.
 3. Reduce Profile to identity and access; conditionally add Payments.
 4. Replace embedded reviewer search results with compact links.
+5. Make account switching, email-code recovery, and route-specific link
+   recovery explicit.
 
 ### Phase 5 — Accessibility and validation
 
-1. Fix shared form descriptions and add skip navigation.
+1. Fix shared form descriptions, nested `main` landmarks, document titles, and
+   skip navigation.
 2. Test keyboard, focus, status announcements, error recovery, touch targets,
    and contrast.
 3. Test reflow at 320 CSS pixels and text at 200% and 400% zoom.
-4. Run moderated usability tests on the end-to-end owner and reviewer paths.
+4. Test passkey, provider, code, OAuth, handoff, and wallet fallback states.
+5. Run moderated usability tests on the end-to-end owner and reviewer paths.
 
 ## Suggested research plan
 
 Before locking the new labels and hierarchy:
 
-1. Run a small open card sort with representative agent owners and reviewers.
+1. Run an open card sort with representative agent owners and reviewers. For
+   qualitative discovery, recruit at least 15 participants overall and ensure
+   each meaningfully different audience is represented; run separate studies
+   when their mental models are expected to differ. Use at least 30–50
+   participants when comparing quantitative grouping patterns.
 2. Build a text-only tree from the proposed navigation.
 3. Test these tasks without using the destination label in the prompt:
+   - sign in, switch account, and recover from an expired code;
    - connect a new agent;
+   - approve or deny a real agent authorization request;
    - invite a workspace member;
    - change when a review is requested;
    - find a result that needs a decision;
@@ -606,7 +827,22 @@ Before locking the new labels and hierarchy:
    - recover or claim payment when applicable.
 4. Measure first choice, completion, backtracking, time, and misunderstood
    labels.
-5. Test a clickable prototype, then repeat the same tasks in the browser.
+5. Segment results by first-time workspace owner, returning owner,
+   reviewer, and administrator/billing role. A label that works for one role
+   must not erase another role's task.
+6. Test a clickable prototype, then repeat the same tasks in the browser.
+7. Record a baseline before implementation and repeat the same task wording
+   after each phase. Suggested targets are at least 90% task completion, no more
+   than one wrong first-level choice on common tasks, and a clear unassisted
+   explanation of the next action. Treat these as product targets, not universal
+   usability standards.
+
+Card-sort sample guidance varies with whether the goal is qualitative insight
+or stable percentages. The recommendation above follows the distinction
+described in
+[NN/g card-sorting methods and sample sizes](https://www.nngroup.com/articles/card-sorting-definition/);
+the exact number should be adjusted for audience diversity and the decision's
+risk.
 
 For the two critical journeys, a participant should be able to:
 
@@ -615,12 +851,21 @@ For the two critical journeys, a participant should be able to:
 - distinguish a review, response, result, decision, and evidence packet;
 - find a completed record without knowing RateLoop's protocol vocabulary;
 - complete an invited review on mobile with keyboard or touch.
+- recover from an expired or invalid auth, OAuth, connection, or handoff state
+  without returning to the home page.
 
 ## What to preserve
 
 - The established RateLoop visual identity and responsive shell
 - The concise reviewer empty state
+- Welcome's source-reviewed first-choice staging for **Review AI work** versus
+  **Connect an agent**
 - Connection's visible status and safe-access summary
+- OAuth consent's explicit capability boundaries and Allow/Deny actions
+- Handoff's concise missing-link recovery
+- The legal index's task-oriented list
+- Email-code autocomplete and paste support
+- The representative 320-pixel routes' lack of page-level overflow
 - Keyboard-aware tabs and reduced-motion support
 - Accessible info popovers for genuinely optional explanation
 - Technical and audit details when disclosed intentionally
