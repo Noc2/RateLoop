@@ -31,6 +31,7 @@ test("an already reserved voucher retries the prepared device queue and waits fo
   assert.match(source, /A reveal publishes the plaintext/);
   assert.match(source, /Public blockchain\s+records generally cannot be erased/);
   assert.match(source, /href="\/legal\/privacy#on-chain-data"/);
+  assert.match(source, /\{answer \? \(\s*<section[\s\S]*What becomes public/);
   assert.ok(source.indexOf("What becomes public") < source.indexOf("{recoveryUrl && activePreparedSubmission"));
   assert.match(source, /dueTokenlessCommits\(queue, principalId\)/);
   assert.match(source, /queue\.list\(principalId\)/);

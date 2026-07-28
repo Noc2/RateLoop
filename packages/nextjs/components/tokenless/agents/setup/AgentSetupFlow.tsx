@@ -2001,8 +2001,9 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     <span className="inline-flex items-center gap-2">
                       {reviewPolicyCopy.payment.feedbackBonus}
                       <InfoPopover label="About Feedback Bonus">
-                        Optional and separate from the guaranteed bounty. A human later chooses useful written feedback
-                        to pay.
+                        {reviewCompensation.compensationMode === "usdc"
+                          ? "Optional and separate from the guaranteed bounty. A human later chooses useful written feedback to pay."
+                          : "A human later chooses useful written feedback to pay."}
                       </InfoPopover>
                     </span>
                   </legend>

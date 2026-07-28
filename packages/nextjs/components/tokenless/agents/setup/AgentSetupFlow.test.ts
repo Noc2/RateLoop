@@ -203,7 +203,7 @@ test("review setup controls independent base compensation, optional Feedback Bon
   assert.match(flowSource, /<InfoPopover label="About Feedback Bonus">/);
   assert.match(
     flowSource,
-    /Optional and separate from the guaranteed bounty\. A human later chooses useful written feedback\s+to pay\./,
+    /reviewCompensation\.compensationMode === "usdc"\s*\?\s*"Optional and separate from the guaranteed bounty\. A human later chooses useful written feedback to pay\."\s*:\s*"A human later chooses useful written feedback to pay\."/,
   );
   assert.match(flowSource, /reviewCompensation\.feedbackBonusEnabled/);
   assert.match(flowSource, /feedbackBonusAwarderKind/);

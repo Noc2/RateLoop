@@ -265,6 +265,14 @@ test("voucher and commit APIs stay unreachable until the downloaded recovery bac
       />,
     );
     const screen = within(document.body);
+    assert.equal(screen.queryByRole("heading", { name: "What becomes public" }), null);
+    assert.equal(screen.queryByRole("link", { name: "Read the privacy notice" }), null);
+    assert.equal(
+      requests.some(url => url === "/api/rater/vouchers" || url.includes("/api/rater/commits")),
+      false,
+    );
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Supported" }));
     assert.ok(screen.getByRole("heading", { name: "What becomes public" }));
     assert.match(
       screen.getByText(/submitting a paid rating publishes a tlock ciphertext/iu).textContent ?? "",
@@ -274,12 +282,6 @@ test("voucher and commit APIs stay unreachable until the downloaded recovery bac
       screen.getByRole("link", { name: "Read the privacy notice" }).getAttribute("href"),
       "/legal/privacy#on-chain-data",
     );
-    assert.equal(
-      requests.some(url => url === "/api/rater/vouchers" || url.includes("/api/rater/commits")),
-      false,
-    );
-    const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: "Supported" }));
     fireEvent.change(screen.getByRole("spinbutton", { name: /what percentage/iu }), { target: { value: "73" } });
     await waitFor(() =>
       assert.equal(screen.getByRole<HTMLButtonElement>("button", { name: "Create recovery backup" }).disabled, false),

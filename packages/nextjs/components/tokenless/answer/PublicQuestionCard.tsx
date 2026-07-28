@@ -995,23 +995,25 @@ export function PublicQuestionCard({
                   />
                 </fieldset>
               ) : null}
-              <section
-                className="mt-5 rounded-lg border border-[var(--rateloop-blue)]/30 bg-[var(--rateloop-blue)]/[0.06] p-3 text-xs leading-5"
-                aria-labelledby={`public-records-${task.roundId}`}
-              >
-                <h3 id={`public-records-${task.roundId}`} className="font-semibold">
-                  What becomes public
-                </h3>
-                <p className="mt-2 text-base-content/70">
-                  Submitting a paid rating publishes a tlock ciphertext containing your vote, crowd forecast, response
-                  hash, per-round payout address, and salt. It becomes publicly decryptable after the commit deadline
-                  even if no keeper or reviewer submits a reveal. A reveal publishes the plaintext. Public blockchain
-                  records generally cannot be erased.
-                </p>
-                <Link href="/legal/privacy#on-chain-data" className="mt-2 inline-block underline underline-offset-4">
-                  Read the privacy notice
-                </Link>
-              </section>
+              {answer ? (
+                <section
+                  className="mt-5 rounded-lg border border-[var(--rateloop-blue)]/30 bg-[var(--rateloop-blue)]/[0.06] p-3 text-xs leading-5"
+                  aria-labelledby={`public-records-${task.roundId}`}
+                >
+                  <h3 id={`public-records-${task.roundId}`} className="font-semibold">
+                    What becomes public
+                  </h3>
+                  <p className="mt-2 text-base-content/70">
+                    Submitting a paid rating publishes a tlock ciphertext containing your vote, crowd forecast, response
+                    hash, per-round payout address, and salt. It becomes publicly decryptable after the commit deadline
+                    even if no keeper or reviewer submits a reveal. A reveal publishes the plaintext. Public blockchain
+                    records generally cannot be erased.
+                  </p>
+                  <Link href="/legal/privacy#on-chain-data" className="mt-2 inline-block underline underline-offset-4">
+                    Read the privacy notice
+                  </Link>
+                </section>
+              ) : null}
               {recoveryUrl && activePreparedSubmission ? (
                 <div className="mt-5 rounded-lg border border-white/10 p-3">
                   <p className="font-mono text-[11px] uppercase tracking-widest text-[var(--rateloop-blue)]">
