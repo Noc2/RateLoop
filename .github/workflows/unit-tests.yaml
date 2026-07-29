@@ -113,6 +113,8 @@ jobs:
         run: yarn install --immutable
       - name: Test app
         run: yarn next:test
+      - name: Check OSCAL compliance-map drift
+        run: yarn workspace @rateloop/nextjs oscal:check
       - name: Check app types
         run: yarn next:check-types
       - name: Build isolated tokenless app

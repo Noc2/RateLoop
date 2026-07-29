@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { DocsTitle } from "~~/components/docs/DocsTitle";
 import { Card } from "~~/components/tokenless/ui/Card";
+import { assuranceComplianceMap } from "~~/config/assuranceComplianceMap.mjs";
 
 export const metadata: Metadata = { title: "Evidence reference" };
 
@@ -80,44 +81,30 @@ const OVERSIGHT_MATRIX = [
   },
 ] as const;
 
-const COMPLIANCE_ROWS = [
-  {
-    framework: "ISO/IEC 42001:2023",
-    href: "https://www.iso.org/standard/81230.html",
-    references: "A.6, including A.6.2.8, and A.9.2",
-    artifacts: "Review packet, coverage export, audit chain, gate evidence, and host-reported execution context.",
-    boundary:
-      "Supports lifecycle, event-log, and responsible-use evidence; it does not demonstrate control implementation, effectiveness, or certification.",
-  },
-  {
-    framework: "EU AI Act",
-    href: "https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng",
-    references: "Articles 14(3)(b), 14(4), 26(2), 26(5)-(6), and 73",
-    artifacts: "Review packet, coverage export, audit chain, gate evidence, and host-reported execution context.",
-    boundary:
-      "May support evidence relevant to these duties; it neither determines applicability nor establishes fulfillment or compliance.",
-  },
-  {
-    framework: "NIST AI RMF",
-    href: "https://airc.nist.gov/airmf-resources/playbook/",
-    references: "MEASURE and MANAGE",
-    artifacts: "Coverage, agreement, disagreement, latency, escalation, gate, exception, and follow-up records.",
-    boundary:
-      "Supports measurement and risk-response evidence; it is not a NIST assessment, endorsement, or risk-acceptance decision.",
-  },
-  {
-    framework: "FINRA",
-    href: "https://www.finra.org/rules-guidance/notices/24-09",
-    secondarySource: {
-      label: "FINRA Rule 3110",
-      href: "https://www.finra.org/rules-guidance/rulebooks/finra-rules/3110",
-    },
-    references: "Regulatory Notice 24-09 and Rule 3110",
-    artifacts: "Configured review, escalation, host-reported model metadata, outcomes, exceptions, and audit history.",
-    boundary:
-      "May be incorporated into a member firm's supervision records; it does not establish or approve the supervisory system.",
-  },
-] as const;
+const FRAMEWORKS_BY_ID = new Map(
+  assuranceComplianceMap.frameworks.map(framework => [framework.id, framework] as const),
+);
+const ARTIFACTS_BY_ID = new Map(
+  assuranceComplianceMap.evidenceArtifacts.map(artifact => [artifact.id, artifact] as const),
+);
+export const COMPLIANCE_ROWS = assuranceComplianceMap.mappings.map(mapping => {
+  const framework = FRAMEWORKS_BY_ID.get(mapping.frameworkId);
+  if (!framework) throw new Error(`Unknown compliance framework: ${mapping.frameworkId}`);
+
+  return {
+    id: mapping.id,
+    framework: framework.title,
+    href: framework.sources[0]?.href ?? framework.namespace,
+    reference: mapping.reference,
+    purpose: mapping.evidencePurpose,
+    artifacts: mapping.evidenceArtifactIds.map(artifactId => {
+      const artifact = ARTIFACTS_BY_ID.get(artifactId);
+      if (!artifact) throw new Error(`Unknown compliance evidence artifact: ${artifactId}`);
+      return artifact.title;
+    }),
+    boundary: mapping.nonClaim,
+  };
+});
 
 const REDACTED_PACKET = `{
   "payload": {
@@ -342,22 +329,17 @@ GET /api/public/assurance/attestations/{jobId}`}</code>
           </thead>
           <tbody>
             {COMPLIANCE_ROWS.map(row => (
-              <tr key={row.framework} className="border-t border-base-content/10 align-top">
+              <tr key={row.id} className="border-t border-base-content/10 align-top">
                 <td className="px-4 py-4">
                   <a href={row.href} className="font-semibold text-base-content underline underline-offset-4">
                     {row.framework}
                   </a>
-                  <span className="mt-1 block text-base-content/55">{row.references}</span>
-                  {"secondarySource" in row ? (
-                    <a
-                      href={row.secondarySource.href}
-                      className="mt-2 block text-xs text-base-content/60 underline underline-offset-4"
-                    >
-                      {row.secondarySource.label}
-                    </a>
-                  ) : null}
+                  <span className="mt-1 block text-base-content/55">{row.reference}</span>
                 </td>
-                <td className="px-4 py-4 leading-6 text-base-content/70">{row.artifacts}</td>
+                <td className="px-4 py-4 leading-6 text-base-content/70">
+                  <span>{row.purpose}.</span>
+                  <span className="mt-2 block text-xs text-base-content/60">{row.artifacts.join("; ")}.</span>
+                </td>
                 <td className="px-4 py-4 leading-6 text-base-content/60">{row.boundary}</td>
               </tr>
             ))}

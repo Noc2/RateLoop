@@ -12,7 +12,8 @@ const { renderToStaticMarkup } = require("react-dom/server") as {
 
 test("evidence docs explain exact artifacts, checks, mappings, and boundaries", async () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
-  const { default: EvidencePage } = await import("./page");
+  const { COMPLIANCE_ROWS, default: EvidencePage } = await import("./page");
+  const { assuranceComplianceMap } = await import("../../../../config/assuranceComplianceMap.mjs");
   const html = renderToStaticMarkup(<EvidencePage />).replace(/\s+/g, " ");
 
   assert.match(html, /Evidence.*rateloop-text-gradient.*Reference/i);
@@ -81,15 +82,20 @@ test("evidence docs explain exact artifacts, checks, mappings, and boundaries", 
     /Scheduled enforcement removes due private artifact content and access logs unless a legal hold applies/i,
   );
   assert.match(html, /canonical audit chain remain as integrity records/i);
-  assert.match(html, /ISO\/IEC 42001:2023.*A\.6, including A\.6\.2\.8, and A\.9\.2/i);
-  assert.match(html, /Articles 14\(3\)\(b\), 14\(4\), 26\(2\), 26\(5\)-\(6\), and 73/i);
+  assert.equal(COMPLIANCE_ROWS.length, assuranceComplianceMap.mappings.length);
+  for (const mapping of assuranceComplianceMap.mappings) {
+    const row = COMPLIANCE_ROWS.find(candidate => candidate.id === mapping.id);
+    assert.ok(row, `missing rendered mapping ${mapping.id}`);
+    assert.equal(row.boundary, mapping.nonClaim);
+    assert.ok(html.includes(mapping.nonClaim.replaceAll("'", "&#x27;")), `missing rendered non-claim ${mapping.id}`);
+  }
+  assert.match(html, /ISO\/IEC 42001:2023.*A\.6/i);
+  assert.match(html, /Article 26\(5\)-\(6\)/i);
   assert.doesNotMatch(html, /Article 12|Article 72|17 CFR 240\.17a-4|Rule 17a-4/i);
-  assert.match(html, /May support evidence relevant to these duties/i);
-  assert.match(html, /neither determines applicability nor establishes fulfillment or compliance/i);
   assert.doesNotMatch(html, /26\(1\)/);
-  assert.match(html, /NIST AI RMF.*MEASURE and MANAGE/i);
-  assert.match(html, /Regulatory Notice 24-09 and Rule 3110/i);
-  assert.match(html, /href="https:\/\/www\.finra\.org\/rules-guidance\/rulebooks\/finra-rules\/3110"/i);
+  assert.match(html, /NIST AI Risk Management Framework.*MEASURE/i);
+  assert.match(html, /Regulatory Notice 24-09/i);
+  assert.match(html, /Rule 3110/i);
   assert.match(html, /supports evidence for/i);
   assert.match(html, /Framework cross-reference/i);
   assert.match(html, /In Results, select the packet/i);
