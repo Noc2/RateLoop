@@ -356,13 +356,15 @@ export function createVantaGrcAdapter(fetchImpl: Fetch = fetch): GrcProviderAdap
         });
         const uploaded = await optionalJson(uploadedResponse);
         uploadId = uploaded?.id;
-        await providerRequest(fetchImpl, "vanta", "document submit", `${base}/submit`, {
-          method: "POST",
-          headers,
-          redirect: "error",
-          signal: providerSignal(),
-        });
       }
+      // A matching upload is only a draft, not proof of delivery. Always resume
+      // at the submit boundary and return a receipt only after Vanta accepts it.
+      await providerRequest(fetchImpl, "vanta", "document submit", `${base}/submit`, {
+        method: "POST",
+        headers,
+        redirect: "error",
+        signal: providerSignal(),
+      });
       const reference =
         typeof uploadId === "string" && IDENTIFIER.test(uploadId)
           ? `vanta:document:${config.documentId}:upload:${uploadId}`

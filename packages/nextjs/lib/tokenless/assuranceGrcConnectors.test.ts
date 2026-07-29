@@ -128,7 +128,7 @@ test("normalized GRC evidence is deterministic, control-mapped, and omits raw te
   assert.match(bundle.bundleDigest, /^sha256:[0-9a-f]{64}$/u);
 });
 
-test("Drata uses a stable complete custom-connection session and skips an already-active retry", async () => {
+test("Drata resumes an interrupted session and skips only a completed active session", async () => {
   const calls: Array<{ url: string; init?: RequestInit }> = [];
   const adapter = createDrataGrcAdapter(async (url, init) => {
     calls.push({ url: String(url), init });
@@ -156,6 +156,27 @@ test("Drata uses a stable complete custom-connection session and skips an alread
   assert.ok(calls.some(call => call.url.endsWith(`/sessions/${session}/actions`)));
 
   calls.length = 0;
+  const interruptedAdapter = createDrataGrcAdapter(async (url, init) => {
+    calls.push({ url: String(url), init });
+    const status = String(url).endsWith("/sessions") ? { data: [{ sessionId: session, status: "IN_PROGRESS" }] } : {};
+    return new Response(JSON.stringify(status), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  });
+  await interruptedAdapter.deliver({
+    bundle: evidenceBundle(),
+    credential: "drata-token-never-persisted",
+    idempotencyKey,
+    providerConfig: { connectionId: "42", resourceId: "7" },
+  });
+  assert.equal(calls.length, 3);
+  assert.match(calls[0]!.url, /\/public\/v2\/custom-connections\/42\/resources\/7\/sessions$/u);
+  assert.equal((calls[0]!.init?.headers as Record<string, string>).Authorization, "Bearer drata-token-never-persisted");
+  assert.ok(calls.some(call => call.url.endsWith(`/sessions/${session}`)));
+  assert.ok(calls.some(call => call.url.endsWith(`/sessions/${session}/actions`)));
+
+  calls.length = 0;
   const activeAdapter = createDrataGrcAdapter(async (url, init) => {
     calls.push({ url: String(url), init });
     return new Response(JSON.stringify({ data: [{ sessionId: session, status: "ACTIVE" }] }), {
@@ -170,12 +191,40 @@ test("Drata uses a stable complete custom-connection session and skips an alread
     providerConfig: { connectionId: "42", resourceId: "7" },
   });
   assert.equal(calls.length, 1);
-  assert.match(calls[0]!.url, /\/public\/v2\/custom-connections\/42\/resources\/7\/sessions$/u);
-  assert.equal((calls[0]!.init?.headers as Record<string, string>).Authorization, "Bearer drata-token-never-persisted");
   assert.match(delivered.externalReference, new RegExp(`${session}$`, "u"));
 });
 
-test("Vanta uploads one stable JSON document, submits it, and recognizes a prior upload on retry", async () => {
+test("Drata never reports an interrupted session as delivered when completion fails", async () => {
+  const idempotencyKey = "interrupted-drata-session";
+  const session = `rl_${createHash("sha256").update(idempotencyKey).digest("hex").slice(0, 40)}`;
+  const calls: string[] = [];
+  const adapter = createDrataGrcAdapter(async url => {
+    calls.push(String(url));
+    if (String(url).endsWith("/sessions")) {
+      return new Response(JSON.stringify({ data: [{ sessionId: session, status: "IN_PROGRESS" }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    if (String(url).endsWith("/actions")) return new Response(null, { status: 503 });
+    return new Response(null, { status: 200 });
+  });
+  await assert.rejects(
+    () =>
+      adapter.deliver({
+        bundle: evidenceBundle(),
+        credential: "drata-token-never-persisted",
+        idempotencyKey,
+        providerConfig: { connectionId: "42", resourceId: "7" },
+      }),
+    (error: unknown) =>
+      error instanceof TokenlessServiceError && error.code === "drata_grc_delivery_failed" && error.retryable,
+  );
+  assert.equal(calls.length, 3);
+  assert.match(calls[2]!, new RegExp(`/sessions/${session}/actions$`, "u"));
+});
+
+test("Vanta resumes a prior draft upload at submit before claiming delivery", async () => {
   const bundle = evidenceBundle();
   const calls: Array<{ url: string; init?: RequestInit }> = [];
   const adapter = createVantaGrcAdapter(async (url, init) => {
@@ -208,21 +257,60 @@ test("Vanta uploads one stable JSON document, submits it, and recognizes a prior
   assert.equal(first.externalReference, "vanta:document:rateloop-assurance:upload:upload-1");
 
   const fileName = `rateloop-assurance-${bundle.bundleId}.json`;
-  const retryCalls: string[] = [];
-  const retryAdapter = createVantaGrcAdapter(async url => {
-    retryCalls.push(String(url));
-    return new Response(JSON.stringify({ results: { data: [{ id: "upload-1", fileName }] } }), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
+  const retryCalls: Array<{ url: string; init?: RequestInit }> = [];
+  const retryAdapter = createVantaGrcAdapter(async (url, init) => {
+    retryCalls.push({ url: String(url), init });
+    if (String(url).includes("?pageSize=")) {
+      return new Response(JSON.stringify({ results: { data: [{ id: "upload-1", fileName }] } }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return new Response(null, { status: 200 });
   });
-  await retryAdapter.deliver({
+  const retried = await retryAdapter.deliver({
     bundle,
     credential: "vanta-token-never-persisted",
     idempotencyKey: "vanta-nightly-1",
     providerConfig: { documentId: "rateloop-assurance" },
   });
-  assert.equal(retryCalls.length, 1);
+  assert.equal(retryCalls.length, 2);
+  assert.equal(
+    retryCalls.some(call => call.url.endsWith("/uploads") && call.init?.method === "POST"),
+    false,
+  );
+  assert.equal(retryCalls[1]?.url, "https://api.vanta.com/v1/documents/rateloop-assurance/submit");
+  assert.equal(retryCalls[1]?.init?.method, "POST");
+  assert.equal(retried.externalReference, "vanta:document:rateloop-assurance:upload:upload-1");
+});
+
+test("Vanta never reports a prior upload as delivered when resumed submit fails", async () => {
+  const bundle = evidenceBundle();
+  const fileName = `rateloop-assurance-${bundle.bundleId}.json`;
+  const calls: string[] = [];
+  const adapter = createVantaGrcAdapter(async url => {
+    calls.push(String(url));
+    if (String(url).includes("?pageSize=")) {
+      return new Response(JSON.stringify({ results: { data: [{ id: "upload-1", fileName }] } }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return new Response(null, { status: 503 });
+  });
+  await assert.rejects(
+    () =>
+      adapter.deliver({
+        bundle,
+        credential: "vanta-token-never-persisted",
+        idempotencyKey: "vanta-nightly-interrupted-submit",
+        providerConfig: { documentId: "rateloop-assurance" },
+      }),
+    (error: unknown) =>
+      error instanceof TokenlessServiceError && error.code === "vanta_grc_delivery_failed" && error.retryable,
+  );
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1], "https://api.vanta.com/v1/documents/rateloop-assurance/submit");
 });
 
 test("provider network failures are retryable and never echo credentials", async () => {

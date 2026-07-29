@@ -289,13 +289,14 @@ It logs and returns 200 so Stripe stops retrying. The only durable signal is an
 unadvanced row that nothing reads. Route it into the same per-processor health record
 so a stuck billing event is visible without reading deployment logs.
 
-### 2.7 Fix the two GRC connector retry paths
+### 2.7 Verify Drata retries and fix the Vanta retry path
 
-Both are backwards, and their tests freeze the defect as intended behaviour. One
-treats an active session — the signature of an _interrupted_ delivery — as a reason
-to skip; the other skips the submit call whenever a prior upload is found, so a crash
-between upload and submit means every retry reports success for a document the vendor
-never received. Both then claim delivery on every subsequent reconciliation.
+Drata's `IN_PROGRESS` session is the signature of an interrupted delivery and must
+resume its upload and completion; `ACTIVE` means the session is completed and live.
+Keep both boundaries explicit in tests. Vanta currently skips the submit call whenever
+a prior upload is found, so a crash between upload and submit makes every retry report
+success for a draft the vendor has not accepted. Resume at submit and record delivery
+only after that call succeeds.
 
 ---
 
