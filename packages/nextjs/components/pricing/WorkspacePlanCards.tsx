@@ -76,7 +76,7 @@ export function WorkspacePlanCards({
           `${earlyAccessPlan.decisionsPerPeriod} completed review decisions each subscription period`,
           `${earlyAccessPlan.activeAgents} active agents`,
           "Unlimited invited reviewers",
-          `Then ${earlyAccessListPrice}/month after 12 months`,
+          "After 12 months, 20% off the then-current comparable plan; price changes get at least 60 days’ notice",
         ]}
         footer={
           <Link href={earlyAccessHref} className="rateloop-gradient-action min-h-12 w-full justify-center px-5">

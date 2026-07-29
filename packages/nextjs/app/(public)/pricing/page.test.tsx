@@ -38,7 +38,9 @@ test("pricing page shows three tiers and discloses costs progressively", async (
   );
   assert.doesNotMatch(html, /target="_blank"/);
   assert.match(html, /<s[^>]*>\$99/);
-  assert.match(html, /Then \$99\/month after 12 months/);
+  assert.doesNotMatch(html, /Then \$99\/month after 12 months/);
+  assert.match(html, /After 12 months, 20% off the then-current comparable plan/);
+  assert.match(html, /price changes get at least 60 days’ notice/);
   assert.doesNotMatch(html, /reviewer costs|bounty|execution fee|USDC|stablecoin/i);
   assert.doesNotMatch(html, /7\.5%/);
   assert.doesNotMatch(html, /\$149/);
