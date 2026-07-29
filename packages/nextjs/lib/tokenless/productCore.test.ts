@@ -33,6 +33,7 @@ import {
   createTokenlessQuote,
   preflightTokenlessAskIdempotency,
 } from "~~/lib/tokenless/server";
+import { verifyBusinessWorkspaceForTest } from "~~/test/helpers/verifiedBusinessWorkspace";
 
 const ADDRESS_A: `0x${string}` = "0x1111111111111111111111111111111111111111";
 const ADDRESS_B: `0x${string}` = "0x2222222222222222222222222222222222222222";
@@ -148,13 +149,18 @@ function privateQuoteRequest() {
 
 async function workspaceWithKey(ownerAddress = ADDRESS_A) {
   const { workspaceId } = await createWorkspace({ name: "Acme", ownerAddress });
-  await activateEarlyAccess(workspaceId);
+  await activateEarlyAccess(workspaceId, ownerAddress);
   const key = await createWorkspaceApiKey({ workspaceId, name: "CI" });
   return { workspaceId, ...key };
 }
 
-async function activateEarlyAccess(workspaceId: string) {
+async function activateEarlyAccess(workspaceId: string, ownerAddress: string = ADDRESS_A) {
   const now = new Date();
+  await verifyBusinessWorkspaceForTest({
+    accountAddress: ownerAddress,
+    now,
+    workspaceId,
+  });
   await dbClient.execute({
     sql: `UPDATE tokenless_workspace_subscriptions
           SET plan_key = 'early_access', price_version = 'early_access_usd_99_2026_07',
@@ -529,7 +535,7 @@ test("production prepaid asks keep reservations payment-gated and attach idempot
 test("production wallet asks remain pending until the purpose-bound payment is confirmed", async () => {
   const principalId = "rlp_pending_wallet_principal";
   const { workspaceId } = await createWorkspace({ name: "Pending wallet", ownerAddress: principalId });
-  await activateEarlyAccess(workspaceId);
+  await activateEarlyAccess(workspaceId, principalId);
   const quote = await createTokenlessQuote(quoteRequest());
   const request = {
     idempotencyKey: "wallet:pending:12345678",
@@ -577,7 +583,7 @@ test("production wallet asks remain pending until the purpose-bound payment is c
 test("wallet payment intents require the purpose-bound funding wallet to be the payer", async () => {
   const principalId = "rlp_wallet_test_principal_0001";
   const { workspaceId } = await createWorkspace({ name: "Personal", ownerAddress: principalId });
-  await activateEarlyAccess(workspaceId);
+  await activateEarlyAccess(workspaceId, principalId);
   const quote = await createTokenlessQuote(quoteRequest());
   await assert.rejects(
     () =>

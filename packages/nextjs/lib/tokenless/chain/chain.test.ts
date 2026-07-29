@@ -39,6 +39,7 @@ import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { derivePaidLaneActivationReference } from "~~/lib/tokenless/paidLaneActivation";
 import { attachProductAsk, createWorkspace, prepareProductAsk } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError, createTokenlessAsk, createTokenlessQuote } from "~~/lib/tokenless/server";
+import { verifyBusinessWorkspaceForTest } from "~~/test/helpers/verifiedBusinessWorkspace";
 
 const PANEL = getAddress("0x1111111111111111111111111111111111111111");
 const ISSUER = getAddress("0x2222222222222222222222222222222222222222");
@@ -485,6 +486,22 @@ async function setAskFrozenResponseWindow(operationKey: string, responseWindowSe
   });
 }
 
+async function activatePaidWorkspace(workspaceId: string) {
+  const now = new Date();
+  await verifyBusinessWorkspaceForTest({
+    accountAddress: FUNDER,
+    now,
+    workspaceId,
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_workspace_subscriptions
+          SET plan_key = 'early_access', price_version = 'early_access_usd_99_2026_07',
+              provider_status = 'active', current_period_start = ?, current_period_end = ?, updated_at = ?
+          WHERE workspace_id = ?`,
+    args: [new Date(now.getTime() - 60_000), new Date(now.getTime() + 86_400_000), now, workspaceId],
+  });
+}
+
 async function walletAsk(
   options: {
     attemptReserveAtomic?: string;
@@ -495,14 +512,7 @@ async function walletAsk(
   } = {},
 ) {
   const { workspaceId } = await createWorkspace({ name: "Wallet team", ownerAddress: FUNDER });
-  const now = new Date();
-  await dbClient.execute({
-    sql: `UPDATE tokenless_workspace_subscriptions
-          SET plan_key = 'early_access', price_version = 'early_access_usd_99_2026_07',
-              provider_status = 'active', current_period_start = ?, current_period_end = ?, updated_at = ?
-          WHERE workspace_id = ?`,
-    args: [new Date(now.getTime() - 60_000), new Date(now.getTime() + 86_400_000), now, workspaceId],
-  });
+  await activatePaidWorkspace(workspaceId);
   const policy = options.invited ? invitedAdmissionPolicy() : admissionPolicy();
   const quote = await createTokenlessQuote({
     audience: {
@@ -853,14 +863,7 @@ test("round reconciliation reads back and rejects altered non-event terms", asyn
 
 test("x402 used authorizations reconcile exact receipts or stop as possibly paid without retry", async () => {
   const { workspaceId } = await createWorkspace({ name: "x402 team", ownerAddress: FUNDER });
-  const now = new Date();
-  await dbClient.execute({
-    sql: `UPDATE tokenless_workspace_subscriptions
-          SET plan_key = 'early_access', price_version = 'early_access_usd_99_2026_07',
-              provider_status = 'active', current_period_start = ?, current_period_end = ?, updated_at = ?
-          WHERE workspace_id = ?`,
-    args: [new Date(now.getTime() - 60_000), new Date(now.getTime() + 86_400_000), now, workspaceId],
-  });
+  await activatePaidWorkspace(workspaceId);
   const quote = await createTokenlessQuote({
     audience: {
       admissionPolicyHash: freezeAdmissionPolicy(admissionPolicy()).admissionPolicyHash,

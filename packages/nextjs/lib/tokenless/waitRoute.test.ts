@@ -13,6 +13,7 @@ import {
   recordPrepaidLedgerEntry,
 } from "~~/lib/tokenless/productCore";
 import { createTokenlessAsk, createTokenlessQuote } from "~~/lib/tokenless/server";
+import { verifyBusinessWorkspaceForTest } from "~~/test/helpers/verifiedBusinessWorkspace";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
 
@@ -44,6 +45,11 @@ afterEach(() => {
 async function pendingAsk() {
   const { workspaceId } = await createWorkspace({ name: "Wait route", ownerAddress: OWNER });
   const now = new Date();
+  await verifyBusinessWorkspaceForTest({
+    accountAddress: OWNER,
+    now,
+    workspaceId,
+  });
   await dbClient.execute({
     sql: `UPDATE tokenless_workspace_subscriptions
           SET plan_key = 'early_access', price_version = 'early_access_usd_99_2026_07',
