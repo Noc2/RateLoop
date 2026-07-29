@@ -4,6 +4,7 @@ import type { PoolClient } from "pg";
 import "server-only";
 import sharp from "sharp";
 import { dbClient, dbPool } from "~~/lib/db";
+import { privateBlobStorage } from "~~/lib/tokenless/privateBlobStorage";
 import {
   PUBLIC_QUESTION_MEDIA_PREVIEW_MAX_TTL_MS,
   issuePublicQuestionMediaPreviewCapability,
@@ -40,25 +41,17 @@ let runtimeOverride: PublicQuestionMediaRuntime | null = null;
 function createVercelBlobStore(): PublicQuestionMediaStore {
   return {
     async delete(reference) {
-      const { del } = await import("@vercel/blob");
-      await del(reference);
+      await privateBlobStorage.delete(reference);
     },
     async get(reference) {
-      const { get } = await import("@vercel/blob");
-      const result = await get(reference, { access: "private", useCache: false });
-      if (!result || result.statusCode !== 200 || !result.stream) {
+      const bytes = await privateBlobStorage.get(reference);
+      if (!bytes) {
         throw new TokenlessServiceError("The image object is unavailable.", 404, "public_media_not_found");
       }
-      return new Uint8Array(await new Response(result.stream).arrayBuffer());
+      return bytes;
     },
     async put(pathname, body, contentType) {
-      const { put } = await import("@vercel/blob");
-      const result = await put(pathname, Buffer.from(body), {
-        access: "private",
-        addRandomSuffix: false,
-        contentType,
-      });
-      return result.url;
+      return privateBlobStorage.put(pathname, body, contentType);
     },
   };
 }

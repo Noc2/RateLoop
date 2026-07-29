@@ -14,6 +14,7 @@ import {
 } from "~~/lib/privacy/vault";
 import { createConfiguredPlatformSecretKeyWrappingProvider } from "~~/lib/privacy/vault/platformSecret";
 import { artifactDeletionAuditKey } from "~~/lib/tokenless/idempotencyKeys";
+import { privateBlobStorage } from "~~/lib/tokenless/privateBlobStorage";
 import { authorizeProjectAccount, projectAccountReference } from "~~/lib/tokenless/projectAccess";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -87,25 +88,17 @@ function decodeMasterKey(value: string | undefined) {
 function createVercelBlobStore(): PrivateArtifactStore {
   return {
     async delete(reference) {
-      const { del } = await import("@vercel/blob");
-      await del(reference);
+      await privateBlobStorage.delete(reference);
     },
     async get(reference) {
-      const { get } = await import("@vercel/blob");
-      const result = await get(reference, { access: "private", useCache: false });
-      if (!result || result.statusCode !== 200 || !result.stream) {
+      const bytes = await privateBlobStorage.get(reference);
+      if (!bytes) {
         throw new TokenlessServiceError("The artifact object is unavailable.", 404, "artifact_not_found");
       }
-      return new Uint8Array(await new Response(result.stream).arrayBuffer());
+      return bytes;
     },
     async put(pathname, body) {
-      const { put } = await import("@vercel/blob");
-      const result = await put(pathname, Buffer.from(body), {
-        access: "private",
-        addRandomSuffix: false,
-        contentType: "application/octet-stream",
-      });
-      return result.url;
+      return privateBlobStorage.put(pathname, body, "application/octet-stream");
     },
   };
 }
