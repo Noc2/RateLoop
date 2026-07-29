@@ -4,6 +4,11 @@ Written 29 July 2026, from a second research pass that verified every weakness i
 [design-assessment.md](design-assessment.md) against the code, plus legal and market
 research. Each item below is sized as one commit.
 
+**This plan fixes what is wrong. It does not build what is missing** — the feature
+gaps, and the one feature that would bring RateLoop itself inside the AI Act, are in
+[evaluation-platform-gaps.md](evaluation-platform-gaps.md). Read that second: several
+of its items depend on constraints established here, particularly 3b.7.
+
 ## The ordering principle
 
 The research changed the priority order. Two things emerged that the assessment did
@@ -533,6 +538,14 @@ equivalent-mutant backlog to triage. Not for a solo-maintained repository.
 
 **Promoting the collapsed charts.** Cosmetic next to everything above, and a test
 pins the disclosure's label and position.
+
+**New features, entirely.** Datasets, version comparison, code evaluators, a CI hook
+and the rest are real gaps, but none of them is a defect and none makes an existing
+claim true. They belong after this plan, not inside it — see
+[evaluation-platform-gaps.md](evaluation-platform-gaps.md). The exception worth
+naming here is **LLM-as-judge**, which is not merely deferred: it is constrained by
+3b.7, and building it before the Article 3(1) assessment would undo the regulatory
+position the rest of this plan depends on.
 
 ---
 
