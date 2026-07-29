@@ -26,9 +26,9 @@ natural persons can effectively oversee it. RateLoop operates around the custome
 satisfy that provider design duty. The capabilities below may support an oversight process for a system that was
 designed to expose the necessary controls and information.
 
-## The five Article 14(4) measures
+## Controls the workflow exposes
 
-### 1. Monitor operation — Article 14(4)(a)
+### See operation and exceptions
 
 Your designated people monitor operation from the oversight dashboard: sampling coverage, response latency,
 disagreement, and blocked outputs, per scope. In-app, email, and browser alerts flag disagreement spikes,
@@ -39,7 +39,9 @@ risk tiers — declared metadata labelled host-reported, not independently verif
 You remain responsible for watching those surfaces, understanding the agent's capacities and limitations, and acting
 on what they show for your use case.
 
-### 2. Counter automation bias — Article 14(4)(b)
+Legal context: relevant where a provider addresses Article 14(4)(a) monitoring.
+
+### Collect independent judgments
 
 Independent blinded panels judge the output before your decision: sealed answers keep early judgments private, so
 reviewers cannot anchor on each other. The decision prompt ships with no preselected choice, disagreement and
@@ -49,7 +51,9 @@ visible to them.
 You remain responsible for staying aware of the pull to over-rely on the system and keeping each decision a
 considered one.
 
-### 3. Correctly interpret the output — Article 14(4)(c)
+Legal context: relevant where a provider addresses Article 14(4)(b) automation bias.
+
+### Put the output in context
 
 The owner case view shows the oversight person the actual output, its source context, reviewer rationales, and
 surfaced disagreement before their decision. For workspace-internal cases your workspace owns that data;
@@ -57,7 +61,9 @@ public-network cases keep the aggregate-only view.
 
 You remain responsible for correctly interpreting the output within your domain, workflow, and context.
 
-### 4. Disregard, override, or reverse — Article 14(4)(d)
+Legal context: relevant where a provider addresses Article 14(4)(c) interpretation.
+
+### Record the human decision
 
 Every go, revise, and stop decision is recorded against the case. Per-output override records carry a required
 reasons field and join the workspace audit chain, and the override rate is a first-class metric on the dashboard and
@@ -65,7 +71,9 @@ in coverage exports.
 
 You remain responsible for deciding when to disregard, override, or reverse an output.
 
-### 5. Intervene or stop — Article 14(4)(e)
+Legal context: relevant where a provider addresses Article 14(4)(d) disregard, override, or reversal.
+
+### Control intervention and stop
 
 Only a verified host adapter that controls delivery can establish that an eligible output stayed undelivered until a
 person decided. No host currently holds that tier. Ordinary Codex, plugin, and MCP integrations are advisory: they
@@ -74,6 +82,8 @@ authorizations; a verified host must honor that state at delivery, while an advi
 stop restores no agent grant automatically.
 
 You remain responsible for choosing which outputs are gated, when to intervene, and when to halt.
+
+Legal context: relevant where a provider addresses Article 14(4)(e) intervention or stop controls.
 
 ## Designation, competence, and literacy
 

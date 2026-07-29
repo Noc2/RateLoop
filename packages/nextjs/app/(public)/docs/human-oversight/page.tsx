@@ -8,41 +8,41 @@ export const metadata: Metadata = { title: "Human oversight" };
 const OVERSIGHT_SECTIONS = [
   {
     id: "monitor",
-    requirement: "Article 14(4)(a)",
-    title: "Monitor operation",
+    title: "See operation and exceptions",
     body: "Your designated people monitor operation from the oversight dashboard: sampling coverage, response latency, disagreement, and blocked outputs, per scope. In-app, email, and browser alerts flag disagreement spikes, coverage-floor hits, blocked outputs, failed or expired reviews, and workspace stops, and event webhooks feed your own monitoring. Per-agent evidence summaries show the declared provider and model alongside observed workflows and risk tiers — declared metadata labelled host-reported, not independently verified.",
     responsibility:
       "You remain responsible for watching those surfaces, understanding the agent's capacities and limitations, and acting on what they show for your use case.",
+    legalContext: "Relevant where a provider addresses Article 14(4)(a) monitoring.",
   },
   {
     id: "automation-bias",
-    requirement: "Article 14(4)(b)",
-    title: "Counter automation bias",
+    title: "Collect independent judgments",
     body: "Independent blinded panels judge the output before your decision: sealed answers keep early judgments private, so reviewers cannot anchor on each other. The decision prompt ships with no preselected choice, disagreement and calibration signals appear above the decision buttons, and the deciding person's own override-rate trend stays visible to them.",
     responsibility:
       "You remain responsible for staying aware of the pull to over-rely on the system and keeping each decision a considered one.",
+    legalContext: "Relevant where a provider addresses Article 14(4)(b) automation bias.",
   },
   {
     id: "interpret",
-    requirement: "Article 14(4)(c)",
-    title: "Correctly interpret the output",
+    title: "Put the output in context",
     body: "The owner case view shows the oversight person the actual output, its source context, reviewer rationales, and surfaced disagreement before their decision. For workspace-internal cases your workspace owns that data; public-network cases keep the aggregate-only view.",
     responsibility:
       "You remain responsible for correctly interpreting the output within your domain, workflow, and context.",
+    legalContext: "Relevant where a provider addresses Article 14(4)(c) interpretation.",
   },
   {
     id: "override",
-    requirement: "Article 14(4)(d)",
-    title: "Disregard, override, or reverse",
+    title: "Record the human decision",
     body: "Every go, revise, and stop decision is recorded against the case. Per-output override records carry a required reasons field and join the workspace audit chain, and the override rate is a first-class metric on the dashboard and in coverage exports.",
     responsibility: "You remain responsible for deciding when to disregard, override, or reverse an output.",
+    legalContext: "Relevant where a provider addresses Article 14(4)(d) disregard, override, or reversal.",
   },
   {
     id: "stop",
-    requirement: "Article 14(4)(e)",
-    title: "Intervene or stop",
+    title: "Control intervention and stop",
     body: "Only a verified host adapter that controls delivery can establish that an eligible output stayed undelivered until a person decided. No host currently holds that tier. Ordinary Codex, plugin, and MCP integrations are advisory: they report the review lifecycle but do not verify interception or withheld delivery. RateLoop's workspace stop blocks new review-triggered release authorizations; a verified host must honor that state at delivery, while an advisory host can bypass it. Releasing the stop restores no agent grant automatically.",
     responsibility: "You remain responsible for choosing which outputs are gated, when to intervene, and when to halt.",
+    legalContext: "Relevant where a provider addresses Article 14(4)(e) intervention or stop controls.",
   },
 ] as const;
 
@@ -86,7 +86,7 @@ export default function HumanOversightPage() {
         system that was designed to expose the necessary controls and information.
       </p>
 
-      <h2 id="article-14-4">The five Article 14(4) measures</h2>
+      <h2 id="workflow-controls">Controls the workflow exposes</h2>
       <div className="not-prose my-8 grid gap-4">
         {OVERSIGHT_SECTIONS.map((section, index) => (
           <Card
@@ -96,12 +96,11 @@ export default function HumanOversightPage() {
             id={section.id}
             className="rounded-2xl border-l-2 p-5 sm:p-6"
           >
-            <p className="font-mono text-xs text-base-content/55">
-              {String(index + 1).padStart(2, "0")} · {section.requirement}
-            </p>
+            <p className="font-mono text-xs text-base-content/55">Capability {String(index + 1).padStart(2, "0")}</p>
             <h3 className="mt-2 text-lg font-bold text-base-content">{section.title}</h3>
             <p className="mt-3 text-sm leading-7 text-base-content/65">{section.body}</p>
             <p className="mt-3 text-sm font-semibold leading-7 text-base-content/75">{section.responsibility}</p>
+            <p className="mt-3 text-xs leading-6 text-base-content/55">{section.legalContext}</p>
           </Card>
         ))}
       </div>
