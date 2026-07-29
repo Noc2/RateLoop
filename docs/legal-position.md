@@ -131,6 +131,85 @@ Penalties: up to €35m or 7% for prohibited practices; **up to €15m or 3% for
 deployer obligations including Article 26**. For SMEs the _lower_ of the amount or
 the percentage applies — which is RateLoop's own tier.
 
+### The exposure this section originally missed: RateLoop's own reviewers
+
+Everything above concerns the customer's AI system. The sharper question is whether
+RateLoop operates a high-risk system **of its own**, and the answer turns on a single
+architectural fact.
+
+Annex III(4)(b) covers systems used "to allocate tasks based on individual behaviour
+or personal traits" and "to monitor and evaluate the performance and behaviour of
+persons" in work relationships. RateLoop scores its own reviewers, routes work by
+those scores, and can pause assignments. Recital 57 puts the point beyond argument
+for this product: the category expressly reaches **access to self-employment** and
+persons providing services through platforms, so "our reviewers are contractors" is
+not a defence.
+
+**It escapes today for exactly one reason: none of it is an AI system.** Reviewer
+quality is Krippendorff's alpha and dissent rates; assignment is seeded hash ranking
+with rule-based filtering; sampling is HMAC. Article 3(1) requires a system that
+_infers_, and the Commission's February 2025 guidelines place rule-based software
+outside the definition. Chapter III is never reached.
+
+Two things follow, and they are the most consequential constraints in this document.
+
+**The deterministic design is load-bearing.** It is not merely elegant; it is what
+keeps RateLoop out of the Act. Any inference introduced into scoring, routing or
+triage puts the product inside Article 3(1) — and because classification is assessed
+on the system as placed on the market, an inference feature anywhere plausibly makes
+the whole product an AI system, at which point reviewer management is Annex III(4)(b)
+with RateLoop as **provider**, carrying the full Article 16 stack.
+
+**The Article 6(3) escape hatch is unavailable.** It disapplies high-risk status for
+narrow procedural or preparatory tasks — but a proviso states that an Annex III
+system is _always_ high-risk where it performs profiling of natural persons, and a
+persistent per-reviewer quality score is the textbook case. Note also that claiming
+the filter is not free: Article 6(4) requires a documented pre-market assessment and
+Article 49(2) requires registration in the EU database. Both survived the Digital
+Omnibus, contrary to some commentary describing the rejected proposal.
+
+### Article 50 — the obligation that is not deferred
+
+Article 50 transparency applies from **2 August 2026** and was untouched by the
+deferral. If RateLoop ever generates content — an LLM summary of a candidate output
+for a reviewer is the realistic case — then 50(2) requires machine-readable marking
+of synthetic output, and 50(1) requires telling a person they are interacting with an
+AI system. Article 111(4) gives generative systems already on the market before that
+date until 2 December 2026 to meet the marking requirement.
+
+Conversely, **50(4) is an asset the product does not use.** The disclosure duty for
+AI-generated text published to inform the public does not apply where the content
+underwent human review and a person holds editorial responsibility. That is a
+verbatim description of what RateLoop sells.
+
+### eIDAS — the evidence has no presumption, and the fix is cheap
+
+Signed evidence is admissible and nothing more. Articles 25(1), 35(1) and 41(1)
+guarantee only that electronic form is not itself a ground for exclusion.
+
+The presumptions live one tier up and all require a qualified trust service provider:
+**Article 41(2)** gives a qualified timestamp a presumption of accurate time and
+integrity; **Article 35(2)** gives a qualified seal a presumption of integrity and
+correct origin; and **Article 45k(2)**, added in 2024, gives a qualified electronic
+ledger a presumption of unique sequential ordering and integrity. National law hangs
+its own presumptions off that same tier — German ZPO § 371a and French Code civil
+art. 1367 both key to the qualified variant.
+
+An advanced seal and a qualified seal can be cryptographically identical. The
+difference is institutional, and it is the whole difference: without it, **the
+customer bears the burden of proving hash construction, key custody and clock source
+— which puts RateLoop in the witness box in its customer's litigation.**
+
+RateLoop today signs with a software Ed25519 key held in an environment variable,
+about its own records. That is self-attestation with no independent anchor, and the
+word eIDAS appears nowhere in the codebase.
+
+The remedy is a procurement decision rather than an engineering project: **ETSI EN
+319 422 is a profile of RFC 3161, which the attestation pipeline already
+implements.** Qualified timestamps run roughly €0.50–2.50 each. Becoming a QTSP is
+the thing to avoid — conformity assessment, supervisory approval and biennial audits,
+with listing being constitutive.
+
 ---
 
 ## 2. The claims the product currently makes
