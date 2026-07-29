@@ -20,6 +20,7 @@ test("terms state service limits and accepted-work protection", async () => {
     "#service-scope",
     "#who-may-use",
     "#customer-material",
+    "#ai-system-supplier",
     "#workspace-subscriptions",
     "#trust-privacy",
     "#use-of-results",
@@ -34,6 +35,11 @@ test("terms state service limits and accepted-work protection", async () => {
   assert.match(html, /Stripe processes subscription payment details/i);
   assert.match(html, /Data Processing Addendum.*forms part of the business service agreement/i);
   assert.match(html, /roles follow the actual processing activity/i);
+  assert.match(html, /AI system supplier schedule/i);
+  assert.match(html, /only where a signed order identifies the customer as the provider of a high-risk AI system/i);
+  assert.match(html, /documented service capabilities and limitations/i);
+  assert.match(html, /technical access and interfaces/i);
+  assert.match(html, /not an attestation and does not establish compliance/i);
   assert.match(html, /not financial, legal, medical, or investment advice/i);
   assert.match(
     html,

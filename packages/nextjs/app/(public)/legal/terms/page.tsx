@@ -28,6 +28,7 @@ export default function TermsPage() {
             ["Service scope", "#service-scope"],
             ["Who may use it", "#who-may-use"],
             ["Customer material", "#customer-material"],
+            ["AI system suppliers", "#ai-system-supplier"],
             ["Subscriptions", "#workspace-subscriptions"],
             ["Trust and privacy", "#trust-privacy"],
             ["Use of results", "#use-of-results"],
@@ -69,6 +70,20 @@ export default function TermsPage() {
         remains an independent controller for its own account security, billing, legal compliance, paid-reviewer
         eligibility, fraud prevention, and public-chain settlement purposes. The parties&apos; roles follow the actual
         processing activity, not a blanket label.
+      </p>
+      <h2 id="ai-system-supplier">AI system supplier schedule</h2>
+      <p>
+        This section applies only where a signed order identifies the customer as the provider of a high-risk AI system
+        and identifies RateLoop services that are used or integrated in that system for purposes of Article 25(4) of the
+        EU AI Act. It does not apply merely because RateLoop operates alongside a customer&apos;s system.
+      </p>
+      <p>
+        For that identified integration, the applicable order, service documentation, and this schedule form the written
+        agreement between the parties. RateLoop will provide the documented service capabilities and limitations,
+        relevant technical access and interfaces, reasonably necessary integration information and assistance, and
+        information about the expertise supporting those services. The customer remains responsible for specifying what
+        it needs to meet its obligations as provider. Both parties must cooperate in good faith within their respective
+        technical control; this schedule is not an attestation and does not establish compliance.
       </p>
       <h2 id="funding-accepted-work">Funding and accepted work</h2>
       <p>

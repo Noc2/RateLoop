@@ -29,9 +29,14 @@ test("human-oversight docs lead with capabilities and keep legal context seconda
   assert.doesNotMatch(html, /primary verified path|verified hosts honor/i);
   assert.match(html, /id="deployer-duty"/);
   assert.match(html, /competence basis, training completed, authority scope, and expiry/i);
+  assert.match(html, /Article 26\(3\).*freedom to organize its own resources and activities/i);
+  assert.match(html, /does not turn an outside reviewer into your authorized oversight person/i);
   assert.match(html, /id="provider-design-duty"/);
   assert.match(html, /Article 14 binds the provider of a high-risk AI system/i);
   assert.match(html, /does not by itself satisfy that provider design duty/i);
+  assert.match(html, /Article 25\(4\).*only where RateLoop supplies services used or integrated/i);
+  assert.match(html, /information, capabilities, technical access, assistance, and relevant expertise/i);
+  assert.match(html, /href="\/legal\/terms"/);
 
   for (const [title, requirement, capability, responsibility] of [
     ["See operation and exceptions", "Article 14\\(4\\)\\(a\\)", "oversight dashboard", "watching those surfaces"],
@@ -106,6 +111,8 @@ test("machine human-oversight doc mirrors the page and is cross-linked with evid
   assert.match(oversight, /## The deployer's people and process/);
   assert.match(oversight, /## If you also provide the AI system/);
   assert.match(oversight, /Article 14 binds the provider of a high-risk AI system/i);
+  assert.match(oversight, /\[Article 26\(3\)\]\(https:\/\/eur-lex\.europa\.eu\//i);
+  assert.match(oversight, /\[Article 25\(4\)\]\(https:\/\/eur-lex\.europa\.eu\//i);
   assert.match(oversight, /only a verified host integration can\s+enforce its review state at the output boundary\./);
   assert.match(oversight, /No host currently holds that tier/i);
   for (const heading of [

@@ -26,12 +26,24 @@ records the reviews, decisions, overrides, and stops those people make. These re
 oversight was organized; they do not decide whether the Act applies or establish that the people or process meet
 Article 26(2).
 
+[Article 26(3)](https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng#art_26) preserves the deployer's freedom to
+organize its own resources and activities. That is consistent with using an outside service, but it does not turn an
+outside reviewer into your authorized oversight person; your organization must still make and support the designation
+required by Article 26(2).
+
 ## If you also provide the AI system
 
 Article 14 binds the provider of a high-risk AI system. It requires the system to be designed and developed so that
 natural persons can effectively oversee it. RateLoop operates around the customer's system and does not by itself
 satisfy that provider design duty. The capabilities below may support an oversight process for a system that was
 designed to expose the necessary controls and information.
+
+A customer that is also the system provider should address
+[Article 25(4)](https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng#art_25) only where RateLoop supplies services used
+or integrated in that high-risk system. In that case the provider and RateLoop must document the required information,
+capabilities, technical access, assistance, and relevant expertise in a written agreement. The supplier schedule in
+the [`/legal/terms`](/legal/terms) service terms records that boundary; it is not an attestation or a claim that
+RateLoop is integrated into every customer system.
 
 ## Controls the workflow exposes
 

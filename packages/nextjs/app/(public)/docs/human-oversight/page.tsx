@@ -85,6 +85,14 @@ export default function HumanOversightPage() {
         evidence of how oversight was organized; they do not decide whether the Act applies or establish that the people
         or process meet Article 26(2).
       </p>
+      <p>
+        <a href="https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng#art_26" rel="noreferrer" target="_blank">
+          Article 26(3)
+        </a>{" "}
+        preserves the deployer&apos;s freedom to organize its own resources and activities. That is consistent with
+        using an outside service, but it does not turn an outside reviewer into your authorized oversight person; your
+        organization must still make and support the designation required by Article 26(2).
+      </p>
 
       <h2 id="provider-design-duty">If you also provide the AI system</h2>
       <p>
@@ -92,6 +100,17 @@ export default function HumanOversightPage() {
         that natural persons can effectively oversee it. RateLoop operates around the customer&apos;s system and does
         not by itself satisfy that provider design duty. The capabilities below may support an oversight process for a
         system that was designed to expose the necessary controls and information.
+      </p>
+      <p>
+        A customer that is also the system provider should address{" "}
+        <a href="https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng#art_25" rel="noreferrer" target="_blank">
+          Article 25(4)
+        </a>{" "}
+        only where RateLoop supplies services used or integrated in that high-risk system. In that case the provider and
+        RateLoop must document the required information, capabilities, technical access, assistance, and relevant
+        expertise in a written agreement. The supplier schedule in the <Link href="/legal/terms">service terms</Link>{" "}
+        records that boundary; it is not an attestation or a claim that RateLoop is integrated into every customer
+        system.
       </p>
 
       <h2 id="workflow-controls">Controls the workflow exposes</h2>
