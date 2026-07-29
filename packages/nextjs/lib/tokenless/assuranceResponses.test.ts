@@ -28,6 +28,7 @@ import {
 } from "~~/lib/tokenless/humanAssurance";
 import { type ProductPrincipal, createWorkspace, createWorkspaceApiKey } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
+import { verifyBusinessWorkspaceForTest } from "~~/test/helpers/verifiedBusinessWorkspace";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
 const REVIEWER = "0x2222222222222222222222222222222222222222";
@@ -62,6 +63,7 @@ async function seedArtifact(projectId: string, artifactId: string, role: "baseli
 async function fixture(input: { paid?: boolean; rationaleMode?: "off" | "required"; rubricMinimum?: number } = {}) {
   const { workspaceId } = await createWorkspace({ name: "Response test", ownerAddress: OWNER });
   if (input.paid) {
+    await verifyBusinessWorkspaceForTest({ accountAddress: OWNER, workspaceId });
     const now = new Date();
     await dbClient.execute({
       sql: `UPDATE tokenless_workspace_subscriptions

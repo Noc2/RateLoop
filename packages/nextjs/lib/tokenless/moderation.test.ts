@@ -16,6 +16,7 @@ import {
   createTokenlessQuote,
   waitForTokenlessAsk,
 } from "~~/lib/tokenless/server";
+import { verifyBusinessWorkspaceForTest } from "~~/test/helpers/verifiedBusinessWorkspace";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
 
@@ -46,6 +47,7 @@ afterEach(() => {
 
 async function prepaidAsk() {
   const { workspaceId } = await createWorkspace({ name: "Moderation", ownerAddress: OWNER });
+  await verifyBusinessWorkspaceForTest({ accountAddress: OWNER, workspaceId });
   const now = new Date();
   await dbClient.execute({
     sql: `UPDATE tokenless_workspace_subscriptions

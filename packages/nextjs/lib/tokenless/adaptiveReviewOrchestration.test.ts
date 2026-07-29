@@ -30,6 +30,7 @@ import {
   seedReadyHumanReviewBinding,
 } from "~~/lib/tokenless/testing/humanReviewBindingFixture";
 import { configurePaidLaneTestEnvironment } from "~~/test/helpers/paidLaneEnvironment";
+import { verifyBusinessWorkspaceForTest } from "~~/test/helpers/verifiedBusinessWorkspace";
 
 configurePaidLaneTestEnvironment();
 
@@ -163,6 +164,7 @@ async function fixture(
   } = {},
 ) {
   const { workspaceId } = await createWorkspace({ name: "Adaptive orchestration", ownerAddress: OWNER });
+  await verifyBusinessWorkspaceForTest({ accountAddress: OWNER, workspaceId });
   await activateEarlyAccess(workspaceId);
   const admissionPolicy = await seedNetworkAdmissionPolicy(workspaceId);
   const agent = await createWorkspaceAgent({

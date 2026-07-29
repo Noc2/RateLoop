@@ -32,6 +32,7 @@ import {
 } from "~~/lib/tokenless/humanAssurance";
 import { type ProductPrincipal, createWorkspace, createWorkspaceApiKey } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
+import { verifyBusinessWorkspaceForTest } from "~~/test/helpers/verifiedBusinessWorkspace";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
 
@@ -86,6 +87,7 @@ function policy() {
 
 async function principalFixture() {
   const { workspaceId } = await createWorkspace({ name: "Run orchestration", ownerAddress: OWNER });
+  await verifyBusinessWorkspaceForTest({ accountAddress: OWNER, workspaceId });
   const now = new Date();
   await dbClient.execute({
     sql: `UPDATE tokenless_workspace_subscriptions

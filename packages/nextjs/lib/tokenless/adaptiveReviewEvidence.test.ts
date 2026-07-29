@@ -32,6 +32,7 @@ import {
   seedReadyHumanReviewBinding,
 } from "~~/lib/tokenless/testing/humanReviewBindingFixture";
 import { configurePaidLaneTestEnvironment } from "~~/test/helpers/paidLaneEnvironment";
+import { verifyBusinessWorkspaceForTest } from "~~/test/helpers/verifiedBusinessWorkspace";
 
 configurePaidLaneTestEnvironment();
 
@@ -137,6 +138,7 @@ afterEach(() => {
 
 async function fixture() {
   const { workspaceId } = await createWorkspace({ name: "Adaptive evidence", ownerAddress: OWNER });
+  await verifyBusinessWorkspaceForTest({ accountAddress: OWNER, workspaceId });
   await seedNetworkAdmissionPolicy(workspaceId);
   const now = new Date();
   await dbClient.execute({
