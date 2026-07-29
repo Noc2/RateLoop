@@ -55,15 +55,14 @@ test("evidence docs explain exact artifacts, checks, mappings, and boundaries", 
   assert.match(html, /RateLoop(?:&#x27;|')s floor does not satisfy that duty/i);
   assert.match(html, /Exportable training and calibration records/i);
   assert.match(html, /Choosing those natural persons and ensuring they are competent, trained, and authorized/i);
-  assert.match(html, /RateLoop does not control output delivery in advisory integrations/i);
-  assert.match(html, /Only a verified host adapter that owns the delivery boundary can enforce a held review state/i);
-  assert.match(html, /No host currently holds that tier/i);
-  assert.match(
-    html,
-    /records the model identity reported by the connected host for each execution and labels it host-reported/i,
-  );
-  assert.match(html, /does not independently verify that the reported model produced the output/i);
+  assert.match(html, /Advisory integrations do not control output delivery/i);
+  assert.match(html, /only a verified host adapter that owns the delivery boundary can enforce a held review state/i);
+  assert.match(html, /no host currently holds that tier/i);
+  assert.match(html, /Model identity is labelled host-reported/i);
+  assert.match(html, /does not independently verify which model produced an output/i);
   assert.match(html, /SOC 2 \/ ISO \/ HIPAA \/ residency attestations it does not hold/i);
+  assert.match(html, /evidence method is to publish the boundary beside every control/i);
+  assert.match(html, /limits are part of the verification record, not an apology/i);
   assert.match(html, /no evidence export by itself makes anyone compliant/i);
   assert.match(html, /rateloop\.human-assurance\.evidence\.v3/i);
   assert.match(html, /Frozen scope.*Review context.*Judgment evidence.*Available references and limits/i);
@@ -113,11 +112,8 @@ test("machine docs mirror evidence boundaries and are linked from agent setup", 
   );
 
   assert.match(evidence, /rateloop\.human-assurance\.evidence\.v3/);
-  assert.match(
-    evidence,
-    /records the[\s\S]*model identity reported by the connected host for each\s+execution and labels it host-reported/i,
-  );
-  assert.match(evidence, /does not independently[\s\S]*verify that the reported model produced the output/i);
+  assert.match(evidence, /Model identity is\s+labelled host-reported/i);
+  assert.match(evidence, /does not independently verify which model produced an output/i);
   assert.match(evidence, /evidence:verify.*--public-key.*--key-id/is);
   assert.match(evidence, /audit:verify.*--expected-head/is);
   assert.match(evidence, /attestation:verify.*--signer-public-key.*--rekor-public-key.*--tsa-ca/is);
@@ -132,10 +128,10 @@ test("machine docs mirror evidence boundaries and are linked from agent setup", 
     /Your people provide oversight\. RateLoop records configured review activity and its evidence\./,
   );
   assert.match(evidence, /You remain responsible for/);
-  assert.match(evidence, /RateLoop does not control output delivery in advisory integrations/i);
+  assert.match(evidence, /Advisory integrations do not control output delivery/i);
   assert.match(
     evidence,
-    /Only a verified host adapter that owns the delivery\s+boundary can enforce a held review state/i,
+    /only a verified host adapter that\s+owns the delivery boundary can enforce a held review state/i,
   );
   assert.match(evidence, /No host currently holds that tier/i);
   assert.doesNotMatch(evidence, /What this is not|RateLoop never claims|26\(1\)/);

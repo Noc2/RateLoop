@@ -45,6 +45,7 @@ test("privacy notice explains subscription processor data and retention", async 
   assert.match(html, /blockchain-specific DPIA/i);
   assert.match(html, /current provider, subprocessor, and international-transfer inventory/i);
   assert.match(html, /does not claim launch-level GDPR compliance/i);
+  assert.match(html, /customers can test the release posture against a dated requirement/i);
   assert.match(html, /current isolated deployment.*server-only application keyrings/i);
   assert.match(html, /application-managed encryption/i);
   assert.match(html, /not a customer-held-key or non-exportable hardware-security-module boundary/i);

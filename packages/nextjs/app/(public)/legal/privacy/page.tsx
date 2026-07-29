@@ -155,7 +155,9 @@ export default function PrivacyPage() {
         </a>{" "}
         of 7 July 2026. Before a hosted launch accepts real customer material, RateLoop must complete and approve a
         blockchain-specific DPIA and a current provider, subprocessor, and international-transfer inventory. Until both
-        release gates are complete, RateLoop does not claim launch-level GDPR compliance.
+        release gates are complete, RateLoop does not claim launch-level GDPR compliance. Publishing that unmet gate is
+        the control: customers can test the release posture against a dated requirement instead of relying on a broad
+        privacy claim.
       </p>
       <h2 id="paid-eligibility">Paid eligibility</h2>
       <p>
