@@ -912,10 +912,6 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
 
   return (
     <div className="space-y-5">
-      <Card as="section" className="rounded-2xl p-6">
-        <h2 className="text-2xl font-semibold">Human review results</h2>
-      </Card>
-
       {error ? (
         <div className="rounded-xl border border-red-300/20 bg-red-300/[0.06] p-4 text-sm text-red-100" role="alert">
           {error}
@@ -944,7 +940,7 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
         <>
           <section className="space-y-3" aria-labelledby="evaluation-runs-heading">
             <h2 id="evaluation-runs-heading" className="text-xl font-semibold">
-              Results
+              Review runs
             </h2>
             <Card as="div" className="rounded-2xl p-4">
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">

@@ -13,7 +13,6 @@ import { ProfileSectionFocus } from "~~/components/tokenless/human/ProfileSectio
 import { ReviewerNotificationInbox } from "~~/components/tokenless/human/ReviewerNotificationInbox";
 import type { HumanNavigation, HumanTab } from "~~/components/tokenless/human/humanNavigation";
 import { humanAccountReturnTo, resolveHumanProfileSection } from "~~/components/tokenless/human/humanProfileNavigation";
-import { PageHeading } from "~~/components/tokenless/ui/PageHeading";
 import { AUTH_SESSION_COOKIE, findAuthSession } from "~~/lib/auth/session";
 import { isWorldIdAssuranceEnabled } from "~~/lib/tokenless/worldIdAssurance";
 
@@ -78,11 +77,6 @@ export async function HumanSectionPage({
 
   return (
     <AppPageShell outerClassName="pb-8" contentClassName="space-y-5">
-      <PageHeading
-        heading={
-          tab === "inbox" ? "Reviewer notifications" : tab === "profile" ? "Reviewer profile" : "Account settings"
-        }
-      />
       <HumanTabs active={tab} />
       {tab === "inbox" ? (
         <ReviewerNotificationInbox />

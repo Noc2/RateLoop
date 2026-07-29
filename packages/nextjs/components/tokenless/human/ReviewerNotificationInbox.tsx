@@ -195,11 +195,8 @@ export function ReviewerNotificationInbox() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 id="reviewer-notifications-heading" className="text-2xl font-semibold">
-            Reviewer notifications
+            Assignments, outcomes, and deadlines
           </h2>
-          <p className="mt-2 text-sm leading-6 text-base-content/60">
-            Your assignments, review outcomes, and payment deadlines.
-          </p>
         </div>
         {unreadIds?.length ? (
           <Button

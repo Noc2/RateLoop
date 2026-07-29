@@ -70,7 +70,7 @@ test("signed-in routes derive metadata from the current tab and the root app app
   assert.match(agentSection, /generateMetadata[\s\S]*agentPageTitle\(tab \?\? "overview"\)/);
   assert.match(humanSection, /generateMetadata[\s\S]*routeSection: section/);
   assert.doesNotMatch(agentContent, /PageHeading|agentPageTitle/);
-  assert.match(humanContent, /<PageHeading[\s\S]*Reviewer notifications[\s\S]*Reviewer profile[\s\S]*Account settings/);
+  assert.doesNotMatch(humanContent, /PageHeading/);
   assert.doesNotMatch(agentContent, /<h1 className="sr-only">Agent workspace/);
   assert.doesNotMatch(humanContent, /<h1 className="sr-only">/);
   assert.match(metadata, /const titleTemplate = "%s \| RateLoop"/);
