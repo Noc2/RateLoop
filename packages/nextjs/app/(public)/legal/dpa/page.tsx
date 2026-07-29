@@ -73,6 +73,12 @@ export default function DataProcessingAddendumPage() {
         and incident response. These measures do not turn a public-chain record into private storage. RateLoop may
         update measures without materially reducing overall protection.
       </p>
+      <p>
+        RateLoop does not use Customer Personal Data or customer output text to train or improve any artificial
+        intelligence or machine-learning model, and the product review workflow does not send that material to a model
+        provider. A separate marketing tool may generate voiceover from RateLoop-authored promotional copy; it is not a
+        product-data path and does not receive Customer Personal Data.
+      </p>
 
       <h2>5. Subprocessors</h2>
       <p>

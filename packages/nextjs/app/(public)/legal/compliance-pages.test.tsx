@@ -22,6 +22,8 @@ test("DPA includes the Article 28 processing contract essentials", async () => {
   assert.match(html, /at least 30 days.*advance notice/i);
   assert.match(html, /assist.*access, correction, deletion, restriction, portability, and objection/i);
   assert.match(html, /notify Customer without undue delay/i);
+  assert.match(html, /does not use Customer Personal Data or customer output text to train or improve/i);
+  assert.match(html, /marketing tool may generate voiceover from RateLoop-authored promotional copy/i);
   assert.match(html, /return an available export and delete or anonymize/i);
   assert.match(html, /allow an audit by Customer or an independent auditor/i);
   assert.match(html, /funds are not silently forfeited/i);
