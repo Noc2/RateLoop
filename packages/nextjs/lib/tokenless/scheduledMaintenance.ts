@@ -83,15 +83,20 @@ const NON_COUNTING_NONCE_RECOVERY_CODES = new Set([
   "managed_signer_timeout",
   "rater_broadcast_unconfirmed",
 ]);
-const NONCE_INTEGRITY_CODES = new Set([
+export const SCHEDULED_WORK_NONCE_INTEGRITY_CODES = new Set([
   "chain_transaction_reconciliation_required",
   "rater_signed_transaction_mismatch",
   "rater_transaction_reconciliation_required",
   "signed_transaction_mismatch",
 ]);
 const NONCE_ALREADY_CONSUMED_CODES = new Set(["prepaid_approval_failed", "round_submission_failed"]);
-const OPERATOR_ACTION_CODES = new Set(["evm_transaction_fee_policy_exhausted"]);
-const IMMEDIATE_DEAD_LETTER_CODES = new Set(["x402_authorization_used_reconciliation_required"]);
+export const SCHEDULED_WORK_OPERATOR_ACTION_CODES = new Set(["evm_transaction_fee_policy_exhausted"]);
+export const SCHEDULED_WORK_IMMEDIATE_DEAD_LETTER_CODES = new Set(["x402_authorization_used_reconciliation_required"]);
+const SCHEDULED_WORK_TERMINAL_CODES = new Set([
+  ...SCHEDULED_WORK_NONCE_INTEGRITY_CODES,
+  ...SCHEDULED_WORK_OPERATOR_ACTION_CODES,
+  ...SCHEDULED_WORK_IMMEDIATE_DEAD_LETTER_CODES,
+]);
 
 function rowString(row: Row | undefined, key: string) {
   const value = row?.[key];
@@ -127,10 +132,10 @@ function retryAt(now: Date, attempt: number) {
 // seeding slot until new work stopped being seeded at all.
 //
 // The wait keeps a genuinely unservable subject from cycling: it can retry at most once per window
-// rather than continuously. A terminal reason is excluded by its recorded error rather than by a low
-// attempt count, because a chain-integrity or operator-action failure can land on the final attempt
-// and would otherwise look identical to plain exhaustion. That error is also preserved across the
-// revival, so the operator signal it feeds survives a retry.
+// rather than continuously. A terminal reason is excluded by its structured code rather than by a
+// low attempt count or a human-readable error prefix, because any terminal failure can land on the
+// final attempt and would otherwise look identical to plain exhaustion. The diagnostic error is
+// preserved separately so the operator signal it feeds remains useful.
 const DEAD_WORK_REVIVAL_DELAY_MS = 6 * 60 * 60 * 1000;
 
 async function insertWorkItem(kind: WorkKind, subjectKey: string, now: Date) {
@@ -140,12 +145,11 @@ async function insertWorkItem(kind: WorkKind, subjectKey: string, now: Date) {
           VALUES (?, ?, ?, 'pending', 0, ?, ?, ?)
           ON CONFLICT (kind, subject_key) DO UPDATE
           SET state = 'pending', attempt_count = 0, next_attempt_at = ?,
-              dead_at = NULL, updated_at = ?
+              terminal_reason_code = NULL, dead_at = NULL, updated_at = ?
           WHERE tokenless_scheduled_work_items.state = 'dead'
             AND tokenless_scheduled_work_items.attempt_count >= ?
             AND tokenless_scheduled_work_items.dead_at <= ?
-            AND COALESCE(tokenless_scheduled_work_items.last_error, '') NOT LIKE 'nonce_integrity:%'
-            AND COALESCE(tokenless_scheduled_work_items.last_error, '') NOT LIKE 'operator_action:%'`,
+            AND tokenless_scheduled_work_items.terminal_reason_code IS NULL`,
     args: [
       tokenlessScheduledWorkItemId(kind, subjectKey),
       kind,
@@ -651,8 +655,10 @@ async function processClaimedWork(input: {
         }
       }
     } catch (error) {
-      const nonceIntegrityFailure = error instanceof TokenlessServiceError && NONCE_INTEGRITY_CODES.has(error.code);
-      const operatorActionFailure = error instanceof TokenlessServiceError && OPERATOR_ACTION_CODES.has(error.code);
+      const nonceIntegrityFailure =
+        error instanceof TokenlessServiceError && SCHEDULED_WORK_NONCE_INTEGRITY_CODES.has(error.code);
+      const operatorActionFailure =
+        error instanceof TokenlessServiceError && SCHEDULED_WORK_OPERATOR_ACTION_CODES.has(error.code);
       const nonceAlreadyConsumed =
         error instanceof TokenlessServiceError && NONCE_ALREADY_CONSUMED_CODES.has(error.code);
       const reservedNonceMustProgress =
@@ -670,10 +676,12 @@ async function processClaimedWork(input: {
       const immediatelyDead =
         nonceIntegrityFailure ||
         operatorActionFailure ||
-        (error instanceof TokenlessServiceError && IMMEDIATE_DEAD_LETTER_CODES.has(error.code));
+        (error instanceof TokenlessServiceError && SCHEDULED_WORK_IMMEDIATE_DEAD_LETTER_CODES.has(error.code));
       const maximumAttempts =
         kind === "project_private_review_evidence" ? PRIVATE_REVIEW_EVIDENCE_MAX_ATTEMPTS : MAX_ATTEMPTS;
       const dead = !deferred && (immediatelyDead || recordedAttempt >= maximumAttempts);
+      const terminalReasonCode =
+        error instanceof TokenlessServiceError && SCHEDULED_WORK_TERMINAL_CODES.has(error.code) ? error.code : null;
       const rawMessage = error instanceof Error ? error.message : "Scheduled work failed";
       const diagnosticPrefix = nonceIntegrityFailure
         ? `nonce_integrity:${error.code}: `
@@ -683,7 +691,8 @@ async function processClaimedWork(input: {
       const message = `${diagnosticPrefix}${rawMessage}`.slice(0, 500);
       const failed = await dbClient.execute({
         sql: `UPDATE tokenless_scheduled_work_items
-              SET state = ?, attempt_count = ?, next_attempt_at = ?, last_error = ?, dead_at = ?, updated_at = ?
+              SET state = ?, attempt_count = ?, next_attempt_at = ?, last_error = ?,
+                  terminal_reason_code = ?, dead_at = ?, updated_at = ?
               WHERE item_id = ? AND state = 'processing' AND claim_generation = ?
               RETURNING item_id`,
         args: [
@@ -691,6 +700,7 @@ async function processClaimedWork(input: {
           recordedAttempt,
           retryAt(input.now, deferred ? 1 : recordedAttempt),
           message,
+          terminalReasonCode,
           dead ? input.now : null,
           input.now,
           itemId,

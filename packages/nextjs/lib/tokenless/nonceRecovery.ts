@@ -127,10 +127,10 @@ async function reopenIntent(intent: ReservedIntent, now: Date) {
           VALUES (?, ?, ?, 'pending', 0, ?, ?, ?)
           ON CONFLICT (kind, subject_key) DO UPDATE
           SET state = 'pending', attempt_count = 0, next_attempt_at = EXCLUDED.next_attempt_at,
-              completed_at = NULL, dead_at = NULL, updated_at = EXCLUDED.updated_at
+              terminal_reason_code = NULL, completed_at = NULL, dead_at = NULL,
+              updated_at = EXCLUDED.updated_at
           WHERE tokenless_scheduled_work_items.state IN ('completed', 'dead')
-            AND COALESCE(tokenless_scheduled_work_items.last_error, '') NOT LIKE 'nonce_integrity:%'
-            AND COALESCE(tokenless_scheduled_work_items.last_error, '') NOT LIKE 'operator_action:%'`,
+            AND tokenless_scheduled_work_items.terminal_reason_code IS NULL`,
     args: [itemId, kind, intent.businessKey, now, now, now],
   });
   return reopened.rowCount === 1;
@@ -142,7 +142,7 @@ async function blockedByOperatorFinding(intent: ReservedIntent) {
   const result = await dbClient.execute({
     sql: `SELECT item_id FROM tokenless_scheduled_work_items
           WHERE kind = ? AND subject_key = ? AND state = 'dead'
-            AND (last_error LIKE 'nonce_integrity:%' OR last_error LIKE 'operator_action:%') LIMIT 1`,
+            AND terminal_reason_code IS NOT NULL LIMIT 1`,
     args: [kind, intent.businessKey],
   });
   return result.rows.length === 1;

@@ -6,6 +6,9 @@ import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { reconcileNetworkAssignmentSettlements } from "~~/lib/tokenless/networkAssignmentSettlement";
 import { sweepManagedEvmNonceDrift, unresolvedManagedEvmNonceFindings } from "~~/lib/tokenless/nonceRecovery";
 import {
+  SCHEDULED_WORK_IMMEDIATE_DEAD_LETTER_CODES,
+  SCHEDULED_WORK_NONCE_INTEGRITY_CODES,
+  SCHEDULED_WORK_OPERATOR_ACTION_CODES,
   authorizeTokenlessCron,
   runTokenlessScheduledMaintenance,
   seedTokenlessScheduledWork,
@@ -1379,71 +1382,60 @@ test("work that died on an outage is reseeded once the revival delay has passed"
   assert.equal((await state())?.attempt_count, 0);
 });
 
-test("work dead-lettered for a terminal reason is never revived by reseeding", async () => {
-  await seedRecoverableExecution("operation_terminal_dead_letter", {
-    claimExpiresAt: new Date(NOW.getTime() - 1),
-    state: "signed",
-  });
-  await seedTokenlessScheduledWork(NOW);
-  const died = await runTokenlessScheduledMaintenance({
-    appOrigin: "https://tokenless.example.test",
-    now: NOW,
-    processors: {
-      ...processors(async () => undefined),
-      async recoverChainExecution() {
-        throw new TokenlessServiceError(
-          "authorization already used",
-          409,
-          "x402_authorization_used_reconciliation_required",
-        );
+test("every exported terminal code dead-letters on the final attempt and is structurally non-revivable", async () => {
+  const terminalCodes = [
+    ...SCHEDULED_WORK_NONCE_INTEGRITY_CODES,
+    ...SCHEDULED_WORK_OPERATOR_ACTION_CODES,
+    ...SCHEDULED_WORK_IMMEDIATE_DEAD_LETTER_CODES,
+  ];
+  assert.ok(terminalCodes.length > 0);
+  assert.equal(new Set(terminalCodes).size, terminalCodes.length);
+
+  for (const [index, code] of terminalCodes.entries()) {
+    __setDatabaseResourcesForTests(createMemoryDatabaseResources());
+    const operationKey = `operation_terminal_${index}`;
+    await seedRecoverableExecution(operationKey, {
+      claimExpiresAt: new Date(NOW.getTime() - 1),
+      state: "signed",
+    });
+    await seedTokenlessScheduledWork(NOW);
+    await dbClient.execute({
+      sql: `UPDATE tokenless_scheduled_work_items SET attempt_count = 19
+            WHERE kind = 'recover_chain_execution' AND subject_key = ?`,
+      args: [operationKey],
+    });
+    const died = await runTokenlessScheduledMaintenance({
+      appOrigin: "https://tokenless.example.test",
+      now: NOW,
+      processors: {
+        ...processors(async () => undefined),
+        async recoverChainExecution() {
+          throw new TokenlessServiceError(`terminal failure: ${code}`, 409, code);
+        },
       },
-    },
-  });
-  if (died.status === "duplicate") assert.fail("first invocation cannot be duplicate");
-  assert.equal(died.status, "degraded");
-  assert.equal(died.summary.work.dead, 1);
+    });
+    if (died.status === "duplicate") assert.fail(`first invocation for ${code} cannot be duplicate`);
+    assert.equal(died.status, "degraded", code);
+    assert.equal(died.summary.work.completed, 0, code);
+    assert.equal(died.summary.work.dead, 1, code);
+    assert.equal(died.summary.work.deferred, 0, code);
+    assert.equal(died.summary.work.retry, 0, code);
 
-  // It died on its first attempt, so another attempt cannot help; only an operator can.
-  await seedTokenlessScheduledWork(new Date(NOW.getTime() + 30 * 24 * 60 * 60_000));
-  const item = await dbClient.execute({
-    sql: `SELECT state FROM tokenless_scheduled_work_items
-          WHERE kind = 'recover_chain_execution' AND subject_key = 'operation_terminal_dead_letter'`,
-  });
-  assert.equal(item.rows[0]?.state, "dead");
-});
+    const beforeRevival = await dbClient.execute({
+      sql: `SELECT state, attempt_count, terminal_reason_code
+            FROM tokenless_scheduled_work_items
+            WHERE kind = 'recover_chain_execution' AND subject_key = ?`,
+      args: [operationKey],
+    });
+    assert.deepEqual(beforeRevival.rows[0], { attempt_count: 20, state: "dead", terminal_reason_code: code }, code);
 
-test("work dead-lettered for chain integrity on its final attempt is never revived", async () => {
-  await seedRecoverableExecution("operation_terminal_on_last_attempt", {
-    claimExpiresAt: new Date(NOW.getTime() - 1),
-    state: "signed",
-  });
-  await seedTokenlessScheduledWork(NOW);
-  // The terminal failure lands on the attempt that would also have exhausted the retry budget, so
-  // the attempt count alone cannot tell it apart from an ordinary outage.
-  await dbClient.execute({
-    sql: `UPDATE tokenless_scheduled_work_items SET attempt_count = 19
-          WHERE kind = 'recover_chain_execution' AND subject_key = 'operation_terminal_on_last_attempt'`,
-  });
-  const died = await runTokenlessScheduledMaintenance({
-    appOrigin: "https://tokenless.example.test",
-    now: NOW,
-    processors: {
-      ...processors(async () => undefined),
-      async recoverChainExecution() {
-        throw new TokenlessServiceError("signed transaction mismatch", 409, "signed_transaction_mismatch");
-      },
-    },
-  });
-  if (died.status === "duplicate") assert.fail("first invocation cannot be duplicate");
-  assert.equal(died.status, "degraded");
-  assert.equal(died.summary.work.dead, 1);
-
-  await seedTokenlessScheduledWork(new Date(NOW.getTime() + 7 * 60 * 60_000));
-  const item = await dbClient.execute({
-    sql: `SELECT state, last_error FROM tokenless_scheduled_work_items
-          WHERE kind = 'recover_chain_execution' AND subject_key = 'operation_terminal_on_last_attempt'`,
-  });
-  assert.equal(item.rows[0]?.state, "dead");
-  // The reason has to survive, because the nonce sweep reads it to keep the intent parked.
-  assert.match(String(item.rows[0]?.last_error), /nonce_integrity:/u);
+    await seedTokenlessScheduledWork(new Date(NOW.getTime() + 30 * 24 * 60 * 60_000));
+    const afterRevival = await dbClient.execute({
+      sql: `SELECT state, attempt_count, terminal_reason_code
+            FROM tokenless_scheduled_work_items
+            WHERE kind = 'recover_chain_execution' AND subject_key = ?`,
+      args: [operationKey],
+    });
+    assert.deepEqual(afterRevival.rows[0], { attempt_count: 20, state: "dead", terminal_reason_code: code }, code);
+  }
 });
