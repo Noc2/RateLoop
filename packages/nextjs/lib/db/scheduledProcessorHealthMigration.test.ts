@@ -15,7 +15,9 @@ test("0161 distinguishes processor configuration from execution failure without 
   assert.match(migration, /"configuration_state" = 'disabled'[\s\S]*"disabled_reason" IS NOT NULL/u);
   assert.match(migration, /"configuration_state" = 'broken'[\s\S]*"operator_alert_state" = 'pending'/u);
   assert.doesNotMatch(migration, /throughput|produced|processed_count/u);
-  assert.deepEqual(journal.entries.at(-1), {
+  const entries = journal.entries.filter(entry => entry.tag === "0161_scheduled_processor_health");
+  assert.equal(entries.length, 1);
+  assert.deepEqual(entries[0], {
     idx: 161,
     version: "7",
     when: 1785229200000,

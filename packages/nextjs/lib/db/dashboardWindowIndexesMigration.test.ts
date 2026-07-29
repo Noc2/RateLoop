@@ -20,7 +20,9 @@ test("dashboard time windows use workspace-first indexes on every high-volume so
     migration,
     /tokenless_agent_review_opportunities_workspace_created_idx"[\s\S]*\("workspace_id","created_at"\)/u,
   );
-  assert.deepEqual(journal.entries.at(-1), {
+  const entries = journal.entries.filter(entry => entry.tag === "0159_dashboard_window_indexes");
+  assert.equal(entries.length, 1);
+  assert.deepEqual(entries[0], {
     idx: 159,
     version: "7",
     when: 1785222000000,
