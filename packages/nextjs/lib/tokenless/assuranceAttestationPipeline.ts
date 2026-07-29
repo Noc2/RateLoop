@@ -334,6 +334,16 @@ function validateRekorReceipt(receipt: {
   };
 }
 
+async function attestationClaimIsCurrent(input: { jobId: string; leaseGeneration: number; signerKeyId: string }) {
+  const fence = await dbClient.execute({
+    sql: `SELECT job_id FROM tokenless_assurance_attestation_jobs
+          WHERE job_id=? AND state='processing' AND lease_generation=? AND claim_signer_key_id=?
+          LIMIT 1`,
+    args: [input.jobId, input.leaseGeneration, input.signerKeyId],
+  });
+  return fence.rows.length === 1;
+}
+
 async function publishClaimedAttestation(input: {
   row: Row;
   signerKeyId: string;
@@ -345,9 +355,33 @@ async function publishClaimedAttestation(input: {
 }) {
   const jobId = text(input.row, "job_id")!;
   const leaseGeneration = storedInteger(input.row, "lease_generation");
+  const claim = { jobId, leaseGeneration, signerKeyId: input.signerKeyId };
+  if (!(await attestationClaimIsCurrent(claim))) return false;
+
+  // Provider calls can outlive the claim lease, so they must never retain a
+  // checked-out connection or row lock. Rekor publication is content-addressed
+  // and its adapter resolves an existing-entry conflict as the same receipt.
+  const rekor = validateRekorReceipt(
+    await input.rekor.publish({ envelope: input.envelope, statement: input.statement }),
+  );
+  if (!(await attestationClaimIsCurrent(claim))) return false;
+
+  const isExport = text(input.row, "artifact_kind") !== "decision_packet";
+  const timestamp = isExport
+    ? await input.tsa.timestamp({
+        artifactDigest: text(input.row, "artifact_digest")!,
+        boundaryAt: new Date(String(input.row.boundary_at)).toISOString(),
+      })
+    : null;
+  if (timestamp && (!Buffer.isBuffer(timestamp.token) || timestamp.token.byteLength < 32)) {
+    throw new TokenlessServiceError("RFC 3161 token is invalid.", 502, "invalid_external_attestation_receipt");
+  }
+
   const client = await dbPool.connect();
+  let transactionOpen = false;
   try {
     await client.query("BEGIN");
+    transactionOpen = true;
     const fence = await client.query(
       `SELECT job_id FROM tokenless_assurance_attestation_jobs
        WHERE job_id=$1 AND state='processing' AND lease_generation=$2 AND claim_signer_key_id=$3
@@ -356,23 +390,8 @@ async function publishClaimedAttestation(input: {
     );
     if (fence.rows.length !== 1) {
       await client.query("COMMIT");
+      transactionOpen = false;
       return false;
-    }
-    // Keep the exact job generation locked through public witness calls. An
-    // expired worker can finish signing, but it cannot publish after a newer
-    // generation has reclaimed the job.
-    const rekor = validateRekorReceipt(
-      await input.rekor.publish({ envelope: input.envelope, statement: input.statement }),
-    );
-    const isExport = text(input.row, "artifact_kind") !== "decision_packet";
-    const timestamp = isExport
-      ? await input.tsa.timestamp({
-          artifactDigest: text(input.row, "artifact_digest")!,
-          boundaryAt: new Date(String(input.row.boundary_at)).toISOString(),
-        })
-      : null;
-    if (timestamp && (!Buffer.isBuffer(timestamp.token) || timestamp.token.byteLength < 32)) {
-      throw new TokenlessServiceError("RFC 3161 token is invalid.", 502, "invalid_external_attestation_receipt");
     }
     const updated = await client.query(
       `UPDATE tokenless_assurance_attestation_jobs
@@ -395,9 +414,10 @@ async function publishClaimedAttestation(input: {
     );
     if (updated.rows.length !== 1) throw new Error("Attestation job lease was lost.");
     await client.query("COMMIT");
+    transactionOpen = false;
     return true;
   } catch (error) {
-    await client.query("ROLLBACK");
+    if (transactionOpen) await client.query("ROLLBACK");
     throw error;
   } finally {
     client.release();

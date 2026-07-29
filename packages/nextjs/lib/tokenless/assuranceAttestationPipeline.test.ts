@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { generateKeyPairSync, sign } from "node:crypto";
 import { afterEach, beforeEach, test } from "node:test";
-import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
+import { type DatabaseResources, __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import {
   countDueAssuranceAttestationJobs,
@@ -59,6 +59,35 @@ function deferred() {
     resolve = completed;
   });
   return { promise, resolve };
+}
+
+function trackOpenTransactions(resources: DatabaseResources) {
+  let openTransactions = 0;
+  const connect = resources.pool.connect.bind(resources.pool);
+  resources.pool.connect = (async () => {
+    const client = await connect();
+    const query = client.query.bind(client);
+    return new Proxy(client, {
+      get(target, property) {
+        if (property === "query") {
+          return async (...args: Parameters<typeof query>) => {
+            const sql = typeof args[0] === "string" ? args[0].trim().toUpperCase() : "";
+            const result = await query(...args);
+            if (sql === "BEGIN") openTransactions += 1;
+            if (sql === "COMMIT" || sql === "ROLLBACK") openTransactions -= 1;
+            return result;
+          };
+        }
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+  }) as typeof resources.pool.connect;
+  return {
+    assertNoneOpen() {
+      assert.equal(openTransactions, 0, "provider I/O must run without an open database transaction");
+    },
+  };
 }
 
 test("digest-only export jobs are idempotent and require Rekor plus RFC 3161 receipts", async () => {
@@ -238,6 +267,114 @@ test("a reclaimed attestation lease fences the stale signer before external publ
     ["completed", 2, 2, null, "kms:rateloop:evidence:current", "rekor-current", "41", null],
   );
   assert.equal(stored.rows[0]?.tsa_token_base64, Buffer.alloc(64, 5).toString("base64"));
+});
+
+test("provider calls do not hold transactions and a generation reclaimed during timestamping cannot persist", async () => {
+  const resources = createMemoryDatabaseResources();
+  const transactions = trackOpenTransactions(resources);
+  __setDatabaseResourcesForTests(resources);
+  const { workspaceId } = await createWorkspace({ name: "Transaction-free attestation", ownerAddress: OWNER });
+  const enqueued = await enqueueAssuranceAttestation({
+    workspaceId,
+    kind: "audit_export_head",
+    artifactDigest: DIGEST,
+    artifactSchemaVersion: "rateloop-audit-v1",
+    boundaryAt: NOW,
+    now: NOW,
+  });
+
+  const stale = processor({
+    keyId: "kms:rateloop:evidence:shared-provider",
+    rekorEntryUuid: "rekor-shared-provider",
+    rekorLogIndex: "51",
+    timestampByte: 8,
+  });
+  const staleTimestampStarted = deferred();
+  const releaseStaleTimestamp = deferred();
+  const staleRekor = stale.rekor.publish;
+  const staleTimestamp = stale.tsa.timestamp;
+  stale.rekor.publish = async () => {
+    transactions.assertNoneOpen();
+    const receipt = await staleRekor();
+    transactions.assertNoneOpen();
+    return receipt;
+  };
+  stale.tsa.timestamp = async () => {
+    transactions.assertNoneOpen();
+    staleTimestampStarted.resolve();
+    await releaseStaleTimestamp.promise;
+    transactions.assertNoneOpen();
+    return staleTimestamp();
+  };
+
+  const staleWorker = processAssuranceAttestationJobs({ ...stale, now: NOW, workspaceId });
+  await staleTimestampStarted.promise;
+
+  const current = processor({
+    keyId: "kms:rateloop:evidence:shared-provider",
+    rekorEntryUuid: "rekor-shared-provider",
+    rekorLogIndex: "51",
+    timestampByte: 9,
+  });
+  // A reclaim normally reuses the configured managed signer, so Rekor resolves
+  // the second publication to the content-addressed entry created by the stale
+  // worker while the TSA may issue another valid token for the same imprint.
+  current.signer = stale.signer;
+  const currentRekor = current.rekor.publish;
+  current.rekor.publish = async () => {
+    transactions.assertNoneOpen();
+    const receipt = await currentRekor();
+    transactions.assertNoneOpen();
+    return receipt;
+  };
+  const currentTimestamp = current.tsa.timestamp;
+  current.tsa.timestamp = async () => {
+    transactions.assertNoneOpen();
+    const receipt = await currentTimestamp();
+    transactions.assertNoneOpen();
+    return receipt;
+  };
+  assert.deepEqual(
+    await processAssuranceAttestationJobs({
+      ...current,
+      now: new Date(NOW.getTime() + 61_000),
+      workspaceId,
+    }),
+    [{ jobId: enqueued.jobId, state: "completed" }],
+  );
+
+  releaseStaleTimestamp.resolve();
+  assert.deepEqual(await staleWorker, []);
+  transactions.assertNoneOpen();
+  assert.deepEqual(stale.calls, { rekor: 1, tsa: 1 });
+  assert.deepEqual(current.calls, { rekor: 1, tsa: 1 });
+
+  const stored = await dbClient.execute({
+    sql: `SELECT state,attempt_count,lease_generation,signer_key_id,rekor_entry_uuid,
+                 rekor_log_index,tsa_token_base64
+          FROM tokenless_assurance_attestation_jobs WHERE job_id=?`,
+    args: [enqueued.jobId],
+  });
+  assert.deepEqual(
+    [
+      stored.rows[0]?.state,
+      stored.rows[0]?.attempt_count,
+      stored.rows[0]?.lease_generation,
+      stored.rows[0]?.signer_key_id,
+      stored.rows[0]?.rekor_entry_uuid,
+      stored.rows[0]?.rekor_log_index,
+      stored.rows[0]?.tsa_token_base64,
+    ],
+    [
+      "completed",
+      2,
+      2,
+      "kms:rateloop:evidence:shared-provider",
+      "rekor-shared-provider",
+      "51",
+      Buffer.alloc(64, 9).toString("base64"),
+    ],
+  );
 });
 
 test("a job abandoned on its final attempt is retired instead of counted as due forever", async () => {
