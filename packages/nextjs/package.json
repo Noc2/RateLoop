@@ -33,7 +33,8 @@
     "oscal:generate": "node scripts/generate-oscal-component-definition.mjs",
     "audit:verify": "node scripts/verify-audit-export.mjs",
     "auth:check": "node scripts/check-identity-deployment.mjs --production",
-    "test": "node ../../scripts/with-workspace-dist-lock.mjs \"yarn build:workspace-deps && node ../../scripts/run-node-tests.mjs app components config lib utils scripts\""
+    "test": "node ../../scripts/with-workspace-dist-lock.mjs \"yarn build:workspace-deps && node ../../scripts/run-node-tests.mjs app components config lib utils scripts\"",
+    "test:postgres-invariants": "node scripts/test-postgres-invariants.mjs"
   },
   "dependencies": {
     "@better-auth/passkey": "1.6.23",

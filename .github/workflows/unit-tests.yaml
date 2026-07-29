@@ -155,6 +155,8 @@ jobs:
         run: yarn install --immutable
       - name: Migrate the isolated MCP database
         run: yarn workspace @rateloop/nextjs exec drizzle-kit migrate
+      - name: Verify PostgreSQL rollback and uniqueness invariants
+        run: yarn workspace @rateloop/nextjs test:postgres-invariants
       - name: Start the public MCP server
         run: |
           yarn workspace @rateloop/nextjs exec next dev --hostname 127.0.0.1 --port 3200 > /tmp/rateloop-mcp.log 2>&1 &

@@ -274,6 +274,18 @@ function createDatabaseClient(pool: Pool): DatabaseClient {
   };
 }
 
+/**
+ * Fast service-test database only.
+ *
+ * This harness cannot prove PostgreSQL transaction or constraint behavior:
+ *
+ * - Drizzle `transaction()` is a passthrough, and pg-mem does not reliably undo writes after
+ *   `ROLLBACK`.
+ * - production migrations omit or relax unsupported CHECK constraints and partial unique indexes.
+ *
+ * Tests for rollback atomicity, CHECK enforcement, or partial/conditional uniqueness belong in
+ * `scripts/test-postgres-invariants.mjs`, which CI runs against migrated PostgreSQL.
+ */
 export function createMemoryDatabaseResources(): DatabaseResources {
   const migrationDirectory = getMigrationDirectory();
   const memoryDb = newDb();
