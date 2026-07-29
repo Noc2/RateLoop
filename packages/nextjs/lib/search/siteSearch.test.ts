@@ -22,6 +22,7 @@ test("site search finds documentation by title and topic", () => {
   assert.equal(searchSite("Evidence reference")[0]?.href, "/docs/evidence");
   assert.equal(searchSite("OSCAL")[0]?.href, "/docs/evidence");
   assert.equal(searchSite("RFC 3161")[0]?.href, "/docs/evidence#verify");
+  assert.equal(searchSite("approval privacy")[0]?.href, "/docs/ai#public-browser-handoff");
 });
 
 test("site search includes canonical tasks and core pages", () => {

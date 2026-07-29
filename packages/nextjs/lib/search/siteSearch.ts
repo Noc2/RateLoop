@@ -255,7 +255,7 @@ export const SITE_SEARCH_INDEX: readonly SiteSearchEntry[] = [
   },
   {
     title: "Agent approval and privacy",
-    href: "/docs/ai#approval-and-privacy-boundary",
+    href: "/docs/ai#public-browser-handoff",
     area: "Docs",
     description: "Review exactly what leaves the workspace before creating a public browser handoff.",
     keywords: ["sensitive data", "redaction", "explicit approval", "handoff"],
