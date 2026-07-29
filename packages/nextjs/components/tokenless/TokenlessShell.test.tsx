@@ -20,7 +20,7 @@ test("tokenless shell exposes Humans, Agents, and Docs without the legacy produc
   assert.match(source, /w-52/);
   assert.match(source, /border-t[^\n]+px-2\.5 pt-4/);
   assert.match(source, /import \{ SiteSearch \}/);
-  assert.match(source, /import \{ Suspense \} from "react"/);
+  assert.match(source, /import \{ Suspense/);
   assert.match(source, /<Suspense fallback=.*?>\s*<SiteSearch mobile \/>/s);
   assert.match(source, /<Suspense fallback=.*?>\s*<SiteSearch \/>/s);
   assert.match(source, /<SiteSearch mobile \/>/);
@@ -55,6 +55,15 @@ test("Docs sub-navigation uses the longest matching route", () => {
   assert.match(shellSource, /const activeDocsHref = resolveActiveDocsHref\(pathname\)/);
   assert.match(shellSource, /const linkActive = activeDocsHref === link\.href/);
   assert.doesNotMatch(shellSource, /const linkActive = pathname === link\.href/);
+  assert.match(shellSource, /aria-current=\{active \? "location" : undefined\}/);
+  assert.match(shellSource, /aria-current=\{linkActive \? "page" : undefined\}/);
+});
+
+test("mobile navigation describes and closes its current state", () => {
+  assert.match(shellSource, /const \[mobileNavOpen, setMobileNavOpen\] = useState\(false\)/);
+  assert.match(shellSource, /useEffect\(\(\) => setMobileNavOpen\(false\), \[pathname\]\)/);
+  assert.match(shellSource, /aria-label=\{mobileNavOpen \? "Close navigation" : "Open navigation"\}/);
+  assert.match(shellSource, /<NavLinks mobile onNavigate=\{\(\) => setMobileNavOpen\(false\)\} \/>/);
 });
 
 test("tokenless routes expose one main landmark and a keyboard skip link", () => {

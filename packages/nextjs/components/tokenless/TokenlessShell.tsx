@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -126,7 +126,7 @@ function WorkspaceReturnLink() {
   );
 }
 
-function NavLinks({ mobile = false }: { mobile?: boolean }) {
+function NavLinks({ mobile = false, onNavigate }: { mobile?: boolean; onNavigate?: () => void }) {
   const pathname = usePathname() ?? "";
   const searchParams = useSearchParams();
   const activeDocsHref = resolveActiveDocsHref(pathname);
@@ -145,6 +145,8 @@ function NavLinks({ mobile = false }: { mobile?: boolean }) {
             <Link
               href={href === "/docs" ? publicHref(href) : href}
               prefetch={false}
+              aria-current={active ? "location" : undefined}
+              onClick={onNavigate}
               className={`group relative flex w-full items-center gap-3 overflow-hidden rounded-xl px-4 py-3 transition-colors duration-200 ${
                 active
                   ? "text-base-content"
@@ -172,6 +174,8 @@ function NavLinks({ mobile = false }: { mobile?: boolean }) {
                           <Link
                             key={link.href}
                             href={publicHref(link.href)}
+                            aria-current={linkActive ? "page" : undefined}
+                            onClick={onNavigate}
                             className={`block rounded-lg px-3 py-1.5 text-base transition-colors ${
                               linkActive
                                 ? "bg-base-content font-semibold text-base-100"
@@ -196,13 +200,21 @@ function NavLinks({ mobile = false }: { mobile?: boolean }) {
             <ShellSessionButton />
           </Suspense>
           <div className="mt-3 flex items-center gap-3 px-2 text-sm text-base-content/60">
-            <Link href={publicHref("/pricing")} className="transition-colors hover:text-base-content">
+            <Link
+              href={publicHref("/pricing")}
+              className="transition-colors hover:text-base-content"
+              onClick={onNavigate}
+            >
               Pricing
             </Link>
             <span aria-hidden="true" className="text-base-content/55">
               ·
             </span>
-            <Link href={publicHref("/legal")} className="transition-colors hover:text-base-content">
+            <Link
+              href={publicHref("/legal")}
+              className="transition-colors hover:text-base-content"
+              onClick={onNavigate}
+            >
               Legal
             </Link>
           </div>
@@ -258,6 +270,11 @@ function Footer() {
 }
 
 export function TokenlessShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  useEffect(() => setMobileNavOpen(false), [pathname]);
+
   return (
     <div className="flex min-h-screen flex-col bg-base-100 text-base-content">
       <a
@@ -278,15 +295,22 @@ export function TokenlessShell({ children }: { children: React.ReactNode }) {
             <Suspense fallback={<div aria-hidden="true" className="h-9 w-[min(10rem,38vw)] sm:w-52" />}>
               <SiteSearch mobile />
             </Suspense>
-            <details className="dropdown dropdown-end">
-              <summary className="btn btn-ghost btn-sm list-none px-2" aria-label="Open navigation">
+            <details
+              className="dropdown dropdown-end"
+              open={mobileNavOpen}
+              onToggle={event => setMobileNavOpen(event.currentTarget.open)}
+            >
+              <summary
+                className="btn btn-ghost btn-sm list-none px-2"
+                aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"}
+              >
                 <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                   <path d="M4 7h16M4 12h16M4 17h16" />
                 </svg>
               </summary>
               <nav className="dropdown-content z-40 mt-3 max-h-[calc(100vh-5rem)] w-64 overflow-y-auto rounded-xl border border-[color:var(--rateloop-shell-border-strong)] bg-base-200 p-2 shadow-2xl">
                 <Suspense fallback={null}>
-                  <NavLinks mobile />
+                  <NavLinks mobile onNavigate={() => setMobileNavOpen(false)} />
                 </Suspense>
               </nav>
             </details>
