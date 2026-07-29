@@ -109,7 +109,7 @@ export function WorkspacePlanCards({
               rel="noopener noreferrer"
               className="rateloop-gradient-action min-h-12 w-full justify-center px-5"
             >
-              Book demo
+              Request a demo
             </a>
           ) : (
             <Link

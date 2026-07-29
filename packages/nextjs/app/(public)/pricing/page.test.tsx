@@ -34,7 +34,7 @@ test("pricing page shows three tiers and discloses costs progressively", async (
   assert.match(html, /Evidence export support/);
   assert.match(
     html,
-    /class="rateloop-gradient-action min-h-12 w-full justify-center px-5" href="mailto:hawigxyz@proton\.me\?subject=RateLoop%20Enterprise">Book demo<\/a>/,
+    /class="rateloop-gradient-action min-h-12 w-full justify-center px-5" href="mailto:hawigxyz@proton\.me\?subject=RateLoop%20Enterprise">Request a demo<\/a>/,
   );
   assert.doesNotMatch(html, /target="_blank"/);
   assert.match(html, /<s[^>]*>\$99/);
