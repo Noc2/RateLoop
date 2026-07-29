@@ -50,6 +50,7 @@ import {
   requestPrivateUnpaidHumanReview,
 } from "~~/lib/tokenless/privateUnpaidReviewAdapter";
 import { createAgentPublishingPolicy, createWorkspace } from "~~/lib/tokenless/productCore";
+import { createProjectOwnerAssignment } from "~~/lib/tokenless/projectAccess";
 import { createReviewRequestProfile } from "~~/lib/tokenless/reviewRequestProfiles";
 import { attestInvitedReviewerExpertise } from "~~/lib/tokenless/reviewerExpertise";
 import { replacePrivateGroupMemberExpertise } from "~~/lib/tokenless/reviewerExpertiseAssignments";
@@ -1606,6 +1607,12 @@ async function fixture(
     name: "Confidential suggestions",
     dataClassification: "confidential",
     retentionDays: 30,
+  });
+  await createProjectOwnerAssignment({
+    accountAddress: OWNER,
+    projectId: project.projectId,
+    workspaceId,
+    now: foundationNow,
   });
   await dbClient.execute({
     sql: `UPDATE tokenless_assurance_projects

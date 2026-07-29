@@ -11,6 +11,7 @@ import { enqueueAssuranceEvent } from "~~/lib/tokenless/assuranceEventStreaming"
 import { recordAssuranceOverrideDecision } from "~~/lib/tokenless/evidencePackets";
 import { buildIncidentReportExport, exportOversightConfiguration } from "~~/lib/tokenless/incidentReportExport";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
+import { createProjectOwnerAssignment } from "~~/lib/tokenless/projectAccess";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import { engageWorkspaceStop } from "~~/lib/tokenless/workspaceStopControl";
 
@@ -55,6 +56,12 @@ async function fixture(label: string) {
           (project_id, workspace_id, name, data_classification, status, retention_days, created_by, created_at, updated_at)
           VALUES (?, ?, 'Incident evidence', 'confidential', 'active', 30, ?, ?, ?)`,
     args: [projectId, workspaceId, identity.principalId, NOW, NOW],
+  });
+  await createProjectOwnerAssignment({
+    accountAddress: identity.principalId,
+    projectId,
+    workspaceId,
+    now: NOW,
   });
   await dbClient.execute({
     sql: `INSERT INTO tokenless_assurance_rubrics

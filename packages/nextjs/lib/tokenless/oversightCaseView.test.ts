@@ -25,6 +25,7 @@ import {
 } from "~~/lib/tokenless/humanAssurance";
 import { getOversightRunCaseView } from "~~/lib/tokenless/oversightCaseView";
 import { type ProductPrincipal, createWorkspace, createWorkspaceApiKey } from "~~/lib/tokenless/productCore";
+import { createProjectOwnerAssignment } from "~~/lib/tokenless/projectAccess";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
@@ -74,6 +75,8 @@ async function fixture() {
     dataClassification: "confidential",
     retentionDays: 30,
   });
+  await createProjectOwnerAssignment({ accountAddress: OWNER, projectId, workspaceId });
+  await createProjectOwnerAssignment({ accountAddress: MEMBER, projectId, workspaceId });
   const suite = await createAssuranceSuite({
     principal,
     projectId,
