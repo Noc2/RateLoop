@@ -10,7 +10,7 @@ const DOCS_PATHS = [
     title: "Connect an agent",
     description: "Add RateLoop to the agent host your team already uses.",
     href: "/agents/connections",
-    label: "Connect",
+    label: "Connections",
     color: "var(--rateloop-blue)",
   },
   {
@@ -18,7 +18,7 @@ const DOCS_PATHS = [
     title: "Set review policy",
     description: "Choose when the agent asks for review and who can respond.",
     href: "/agents/review-setup",
-    label: "Open Reviews",
+    label: "Review setup",
     color: "var(--rateloop-green)",
   },
   {
@@ -34,7 +34,7 @@ const DOCS_PATHS = [
     title: "Verify evidence",
     description: "Inspect completed review records and export the evidence you need.",
     href: "/agents/results#evidence-packets-heading",
-    label: "Open Evidence",
+    label: "View evidence in Results",
     color: "var(--rateloop-yellow)",
   },
 ] as const;

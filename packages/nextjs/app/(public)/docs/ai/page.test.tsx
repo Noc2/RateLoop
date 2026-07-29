@@ -19,6 +19,7 @@ test("agent docs lead with the hosted connected-workspace path", async () => {
   assert.match(html, /current hosted path requests private, unpaid review from invited workspace reviewers/i);
   assert.match(html, /Available now/i);
   assert.match(html, /href="\/agents\/connections"/);
+  assert.match(html, /href="\/agents\/connections">Connections<\/a>/);
   assert.match(
     html,
     /codex plugin marketplace add Noc2\/RateLoop@tokenless --sparse \.agents\/plugins --sparse plugins\/rateloop --sparse plugins\/rateloop-workspace/,

@@ -25,5 +25,6 @@ test("documentation introduction presents the hosted task paths", async () => {
   assert.match(html, /href="\/docs\/evidence"/i);
   assert.match(html, /href="\/docs\/how-it-works"/i);
   assert.match(html, /href="\/docs\/human-oversight"/i);
+  assert.match(html, /Connections.*Review setup.*View evidence in Results/i);
   assert.doesNotMatch(html, /guaranteed pay|bonus|USDC|settlement|budget/i);
 });

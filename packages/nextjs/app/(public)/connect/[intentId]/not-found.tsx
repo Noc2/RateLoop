@@ -10,11 +10,11 @@ export default function AgentConnectionNotFound() {
           This connection link is no longer available
         </h1>
         <p className="mt-3 max-w-2xl text-base leading-7 text-base-content/70">
-          The link may be invalid, expired, or replaced. Open Connection in your workspace to create a new connection
+          The link may be invalid, expired, or replaced. Open Connections in your workspace to create a new connection
           message.
         </p>
         <Link href="/agents/connections" className="btn btn-primary mt-6">
-          Open Connection
+          Open Connections
         </Link>
       </Card>
     </div>

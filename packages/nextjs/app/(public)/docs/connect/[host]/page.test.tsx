@@ -51,6 +51,7 @@ test("every host guide is a pure projection of its registry entry", async () => 
     includes(escapeHtml(message), `${host.id} must render its exact connection message`);
     includes(escapeHtml(CONNECTION_MESSAGE_URL_PLACEHOLDER), `${host.id} must keep the placeholder link shape`);
     assert.doesNotMatch(html, /aci_[a-f0-9]/, `${host.id} must not fabricate a live connection link`);
+    assert.match(html, /href="\/agents\/connections">Connections<\/a>/);
 
     assert.match(html, /Host-native setup/);
     if (host.installAffordances.length === 0) {

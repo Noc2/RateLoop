@@ -21,6 +21,8 @@ test("how-it-works follows the hosted invited-review path", async () => {
   assert.match(html, /hosted service connects an agent to invited workspace reviewers/i);
   assert.match(html, /Reviews are private and unpaid/i);
   assert.match(html, /At a glance/i);
+  assert.match(html, /href="\/agents\/review-setup">Review setup<\/a>/i);
+  assert.match(html, /completed work and supporting records together in Results/i);
   assert.match(html, /agent version, policy version, workflow, risk tier, and reviewer audience/i);
   assert.match(html, /owner controls the question, response window, reviewer audience, and data boundary/i);
   assert.match(html, /requests one review and waits for the same operation instead of creating a duplicate/i);

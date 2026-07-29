@@ -34,8 +34,8 @@ export default function HowTokenlessWorksPage() {
       </p>
       <p>
         The workspace owner controls the question, response window, reviewer audience, and data boundary in{" "}
-        <Link href="/agents/review-setup">Reviews</Link>. Evidence from a different scope cannot silently lower review
-        coverage.
+        <Link href="/agents/review-setup">Review setup</Link>. Evidence from a different scope cannot silently lower
+        review coverage.
       </p>
 
       <h2 id="agent-flow">2. The agent requests a review</h2>
@@ -63,7 +63,7 @@ export default function HowTokenlessWorksPage() {
       <h2 id="decision-evidence">4. RateLoop returns a result and evidence</h2>
       <p>
         The result keeps the review question, policy scope, verdict, reasons, agreement or disagreement, and available
-        evidence together. Workspace members can inspect completed work in Results and supporting records in Evidence.
+        evidence together. Workspace members can inspect completed work and supporting records together in Results.
       </p>
       <p>
         The evidence records what the review process observed. It does not prove that the source material was correct,

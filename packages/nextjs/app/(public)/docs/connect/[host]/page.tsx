@@ -85,9 +85,9 @@ function HostGuide({ host }: { host: TokenlessHostCapability }) {
 
       <h2>The connection message</h2>
       <p>
-        Copy the real message from your workspace&apos;s <Link href="/agents/connections">Agents tab</Link>. It ends
-        with a single-use link in the <code>{CONNECTION_MESSAGE_URL_PLACEHOLDER}</code> shape shown below; only that
-        link differs from the exact wording this host receives:
+        Copy the real message from <Link href="/agents/connections">Connections</Link>. It ends with a single-use link
+        in the <code>{CONNECTION_MESSAGE_URL_PLACEHOLDER}</code> shape shown below; only that link differs from the
+        exact wording this host receives:
       </p>
       <HostGuideCodeBlock>{message}</HostGuideCodeBlock>
 

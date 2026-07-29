@@ -16,7 +16,7 @@ test("the connect index lists every registry host with the plugin hosts first", 
 
   assert.match(html, /Connect Your.*rateloop-text-gradient.*Agent Host/);
   assert.match(html, /generated from the same host-capability registry/);
-  assert.match(html, /href="\/agents\/connections"/);
+  assert.match(html, /href="\/agents\/connections">Connections<\/a>/);
   assert.match(html, /Primary path/);
   assert.match(html, /Other hosts/);
   assert.match(html, /href="\/docs\/ai"/);

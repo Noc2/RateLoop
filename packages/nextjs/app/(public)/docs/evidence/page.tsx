@@ -260,8 +260,8 @@ export default function EvidencePage() {
       <ol>
         <li>
           <strong>Signature and key pin.</strong> Export the packet and obtain the expected key ID and public-key pin
-          from the authenticated workspace key history. In the Evidence Center, select the packet and download its
-          matching SPKI pin. Never treat the public key embedded in the same packet as its own trust anchor. Then run:
+          from the authenticated workspace key history. In Results, select the packet and download its matching SPKI
+          pin. Never treat the public key embedded in the same packet as its own trust anchor. Then run:
           <pre>
             <code>{`yarn workspace @rateloop/nextjs evidence:verify ./packet.json \\
   --public-key ./evidence-public-key.txt \\

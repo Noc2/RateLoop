@@ -72,8 +72,8 @@ export default function TokenlessAgentDocsPage() {
 
       <h2>Connect with Codex</h2>
       <p>
-        Open <Link href="/agents/connections">Connection</Link> and copy the workspace connection message. If the public
-        plugin is not installed yet, pin the marketplace to the isolated tokenless branch and add it first:
+        Open <Link href="/agents/connections">Connections</Link> and copy the workspace connection message. If the
+        public plugin is not installed yet, pin the marketplace to the isolated tokenless branch and add it first:
       </p>
       <CodeBlock>{`codex plugin marketplace add Noc2/RateLoop@tokenless --sparse .agents/plugins --sparse plugins/rateloop --sparse plugins/rateloop-workspace
 codex plugin add rateloop@rateloop`}</CodeBlock>
