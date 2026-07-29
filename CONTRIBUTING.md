@@ -40,7 +40,7 @@ Thank you for your interest in contributing to RateLoop's tokenless, immutable h
 3. Run linting and tests before submitting:
    ```bash
    yarn lint
-   yarn test:ts
+   yarn test
    yarn foundry:test
    ```
 4. Write a clear PR description explaining what changed and why
@@ -51,15 +51,16 @@ Thank you for your interest in contributing to RateLoop's tokenless, immutable h
 - Follow existing patterns in the codebase
 - Smart contract changes should include corresponding tests
 
-### Advisory CI lanes
+### Additional local checks
 
-Some static-analysis jobs are intentionally advisory and do not block merges:
+These optional commands provide extra cleanup and coverage signal but are not
+separate CI jobs:
 
-- **Knip dead-code scan** (`yarn dead-code:scan`, CI job `dead-code`) runs with `--no-exit-code` so unused-export findings surface without failing PRs.
-- **Forge coverage** (CI job `coverage`) runs with `continue-on-error: true` because instrumentation can hit Yul stack-depth limits even when normal builds pass.
-- **Slither SARIF upload** uses `continue-on-error: true` for CodeQL ingestion; high-severity Slither findings still fail the `slither` job itself.
+- `yarn dead-code:scan` reports Knip unused-export findings without failing.
+- `yarn foundry:coverage` runs Forge coverage with the repository's coverage profile.
 
-Treat these lanes as signal for cleanup work, not release gates.
+The CI `slither` job is blocking for high-severity findings and uploads SARIF when
+Slither produces it.
 
 ## Questions?
 

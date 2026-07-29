@@ -3,6 +3,7 @@
 - After a requested change is verified, commit it without waiting for a separate prompt unless the user explicitly asks not to commit.
 - Commit independent fixes separately. Before pushing, review the changed files and group commits by concern instead of bundling unrelated fixes together.
 - When the user asks to publish finished work, commit the intended fixes and push the current branch after verification passes.
+- When a fix changes a rule, find every other site that re-derives that rule, prefer one shared implementation, and add a test that imports the consumers together and binds them to the same invariant across representative boundary cases. A test of only the changed call site is not sufficient.
 
 ## Product design and UX standard
 
