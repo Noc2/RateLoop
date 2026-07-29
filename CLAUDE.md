@@ -4,6 +4,13 @@ Claude should use [`AGENTS.md`](AGENTS.md) as the source of truth for repository
 workflow, product design and UX, tokenless implementation boundaries, redeploy
 policy, cleanup order, image handoff, and trust-model guidance.
 
+For every UI change, treat an active navigation tab or route label as the page
+heading when it already names the destination. Do not repeat it with a separate
+heading or nearby explanatory sentence that says the same thing in slightly
+different words. Retain visible text only when it adds information needed to
+decide, act, understand essential state, recover, or satisfy a real safety or
+legal requirement.
+
 ## Non-negotiable tokenless isolation
 
 While working on `tokenless`, a request to push, publish, or deploy means the
