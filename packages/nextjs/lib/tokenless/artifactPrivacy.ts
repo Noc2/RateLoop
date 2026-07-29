@@ -13,6 +13,7 @@ import {
   validateVaultEnvironment,
 } from "~~/lib/privacy/vault";
 import { createConfiguredPlatformSecretKeyWrappingProvider } from "~~/lib/privacy/vault/platformSecret";
+import { artifactDeletionAuditKey } from "~~/lib/tokenless/idempotencyKeys";
 import { authorizeProjectAccount, projectAccountReference } from "~~/lib/tokenless/projectAccess";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -870,10 +871,6 @@ export async function requestProjectDeletion(input: {
   return { requestId, executeAfter: executeAfter.toISOString() };
 }
 
-function artifactDeletionCorrelation(objectId: string) {
-  return `artifact-retention:${objectId}`;
-}
-
 function artifactDeletionError(error: unknown) {
   return (error instanceof Error ? error.message : String(error)).slice(0, 2_000);
 }
@@ -1210,7 +1207,7 @@ async function completeArtifactDeletionAudit(objectId: string, now: Date, runtim
       actorKind: "system",
       actorReference: "system:retention_worker",
       assuranceMethod: "scheduled_worker",
-      idempotencyKey: artifactDeletionCorrelation(objectId),
+      idempotencyKey: artifactDeletionAuditKey(objectId),
       metadata: {
         basisKind: rowString(job, "authorization_kind"),
         policyVersion: rowString(job, "retention_policy_version") ? Number(job.retention_policy_version) : null,
@@ -1222,7 +1219,7 @@ async function completeArtifactDeletionAudit(objectId: string, now: Date, runtim
         rowString(job, "authorization_kind") === "deletion_request"
           ? "authorized_deletion_request"
           : "retention_period_elapsed",
-      requestCorrelation: artifactDeletionCorrelation(objectId),
+      requestCorrelation: artifactDeletionAuditKey(objectId),
       result: "success",
       targetId: rowString(job, "artifact_id")!,
       targetKind: "artifact",

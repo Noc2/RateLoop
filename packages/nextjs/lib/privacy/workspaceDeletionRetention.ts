@@ -3,6 +3,7 @@ import type { PoolClient } from "pg";
 import "server-only";
 import { dbPool } from "~~/lib/db";
 import { recordPrivacyWorkerFailure, resolvePrivacyWorkerFailure } from "~~/lib/privacy/privacyWorkerFailures";
+import { workspaceDeletionRetentionWorkItemKey } from "~~/lib/tokenless/idempotencyKeys";
 
 const HOLD_RECHECK_MS = 30 * 86_400_000;
 const POST_HOLD_AUDIT_RETENTION_MS = 365 * 86_400_000;
@@ -426,7 +427,7 @@ export async function expireWorkspaceDeletionRetentionCategories(now = new Date(
   let releasedHoldSchedules = 0;
   for (const value of releasedHoldRows.rows as Row[]) {
     const jobId = text(value, "job_id")!;
-    const workItemKey = `${jobId}:legal_hold_schedule`;
+    const workItemKey = workspaceDeletionRetentionWorkItemKey(jobId, "legal_hold_schedule");
     try {
       const released = await dbPool.query(
         `UPDATE tokenless_deletion_job_categories
@@ -470,7 +471,7 @@ export async function expireWorkspaceDeletionRetentionCategories(now = new Date(
     const category = text(value, "category")!;
     const workspaceId = text(value, "scope_id")!;
     const requestId = text(value, "subject_request_id");
-    const workItemKey = `${jobId}:${category}`;
+    const workItemKey = workspaceDeletionRetentionWorkItemKey(jobId, category);
     const client = await dbPool.connect();
     try {
       await client.query("BEGIN");

@@ -11,6 +11,7 @@ import type { PoolClient } from "pg";
 import "server-only";
 import Stripe from "stripe";
 import { dbPool } from "~~/lib/db";
+import { stripeRefundReversalKey } from "~~/lib/tokenless/idempotencyKeys";
 
 const HANDLED_EVENTS = new Set([
   "checkout.session.completed",
@@ -230,7 +231,13 @@ async function resolveReversalTarget(event: Stripe.Event): Promise<ReversalTarge
       grossMinor: refund?.amount ?? charge.amount_refunded,
       invoiceId,
       reinstate: false,
-      reversalId: refund?.id ?? `${charge.id}:${charge.amount_refunded}`,
+      reversalId: refund?.id
+        ? stripeRefundReversalKey({ kind: "refund", refundId: refund.id })
+        : stripeRefundReversalKey({
+            amountRefundedMinor: charge.amount_refunded,
+            chargeId: charge.id,
+            kind: "charge_running_total",
+          }),
     };
   }
   if (event.type === "charge.dispute.created" || event.type === "charge.dispute.closed") {

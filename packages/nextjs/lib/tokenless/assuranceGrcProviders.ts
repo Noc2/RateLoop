@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import "server-only";
+import { drataGrcSessionId, vantaGrcDocumentFileName } from "~~/lib/tokenless/idempotencyKeys";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 export type GrcProvider = "drata" | "vanta";
@@ -278,7 +279,7 @@ export function createDrataGrcAdapter(fetchImpl: Fetch = fetch): GrcProviderAdap
     provider: "drata",
     async deliver(input) {
       const config = parseGrcProviderConfig("drata", input.providerConfig) as DrataProviderConfig;
-      const sessionId = `rl_${createHash("sha256").update(input.idempotencyKey).digest("hex").slice(0, 40)}`;
+      const sessionId = drataGrcSessionId(input.idempotencyKey);
       const base = `https://public-api.drata.com/public/v2/custom-connections/${config.connectionId}/resources/${config.resourceId}`;
       const headers = { Authorization: `Bearer ${input.credential}`, Accept: "application/json" };
       const sessionsResponse = await providerRequest(fetchImpl, "drata", "session lookup", `${base}/sessions`, {
@@ -322,7 +323,7 @@ export function createVantaGrcAdapter(fetchImpl: Fetch = fetch): GrcProviderAdap
     provider: "vanta",
     async deliver(input) {
       const config = parseGrcProviderConfig("vanta", input.providerConfig) as VantaProviderConfig;
-      const fileName = `rateloop-assurance-${input.bundle.bundleId}.json`;
+      const fileName = vantaGrcDocumentFileName(input.bundle.bundleId);
       const base = `https://api.vanta.com/v1/documents/${encodeURIComponent(config.documentId)}`;
       const headers = { Authorization: `Bearer ${input.credential}`, Accept: "application/json" };
       const uploadsResponse = await providerRequest(

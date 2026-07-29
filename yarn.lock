@@ -4109,6 +4109,7 @@ __metadata:
     eslint-config-prettier: ~10.1.1
     eslint-plugin-jsx-a11y: 6.10.2
     eslint-plugin-prettier: ~5.2.4
+    fast-check: ^4.9.0
     gsap: ^3.14.2
     jsdom: 29.1.1
     next: ~15.5.18
@@ -11869,6 +11870,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"fast-check@npm:^4.9.0":
+  version: 4.9.0
+  resolution: "fast-check@npm:4.9.0"
+  dependencies:
+    pure-rand: ^8.0.0
+  checksum: bc4d08979abce4c5cce78f8a16af35aa759c3928b7df12f8d3b4dab389d872d50f6ce823f4953a9fe47056875423df0e55e5b74a17e4edf813b49300dca5b5c1
+  languageName: node
+  linkType: hard
+
 "fast-deep-equal@npm:^3.1.1, fast-deep-equal@npm:^3.1.3":
   version: 3.1.3
   resolution: "fast-deep-equal@npm:3.1.3"
@@ -16317,6 +16327,13 @@ __metadata:
   version: 2.3.1
   resolution: "punycode@npm:2.3.1"
   checksum: bb0a0ceedca4c3c57a9b981b90601579058903c62be23c5e8e843d2c2d4148a3ecf029d5133486fb0e1822b098ba8bba09e89d6b21742d02fa26bda6441a6fb2
+  languageName: node
+  linkType: hard
+
+"pure-rand@npm:^8.0.0":
+  version: 8.4.2
+  resolution: "pure-rand@npm:8.4.2"
+  checksum: 84bb2d24e817539eb65a44a2ffb76c8e097d97e14275e59abdf3e86a69784c7bee7fc258f9a12222acd5699772ffdfaa5272bce37526713483e508eebd0c4b23
   languageName: node
   linkType: hard
 

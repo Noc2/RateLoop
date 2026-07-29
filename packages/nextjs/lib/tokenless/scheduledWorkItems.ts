@@ -1,6 +1,8 @@
-import { createHash } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
+import { tokenlessScheduledWorkItemId } from "~~/lib/tokenless/idempotencyKeys";
+
+export { tokenlessScheduledWorkItemId } from "~~/lib/tokenless/idempotencyKeys";
 
 export type TokenlessScheduledWorkKind =
   | "publish_finalized_round"
@@ -11,10 +13,6 @@ export type TokenlessScheduledWorkKind =
   | "prepare_public_network_audience"
   | "cleanup_public_network_foundation"
   | "project_private_review_evidence";
-
-export function tokenlessScheduledWorkItemId(kind: TokenlessScheduledWorkKind, subjectKey: string) {
-  return `swi_${createHash("sha256").update(`${kind}:${subjectKey}`).digest("hex").slice(0, 40)}`;
-}
 
 export async function enqueueTokenlessScheduledWorkInTransaction(
   client: PoolClient,
