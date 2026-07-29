@@ -2,7 +2,7 @@
 
 **Status:** Current architecture and product baseline for the `tokenless` branch. This document contains current
 decisions only. Superseded research, review notes, and implementation sequences remain available in Git history.
-Concrete release evidence and blockers live in the [production-readiness register](tokenless-production-readiness-2026-07.md).
+Concrete release evidence and blockers live in the production-readiness register.
 Legal and revenue obligations live in the [legal and revenue reference](tokenless-legal-revenue-reference-2026-07.md).
 
 If another document conflicts with this one, this document controls unless the decision is explicitly reopened here.
@@ -246,11 +246,11 @@ scoring version, and content commitments. `revealDeadline` must be at least five
 the immutable panel floor. The funder cannot cancel or edit a paid round after the first accepted commit.
 
 Every valid reveal earns fixed base compensation. The current binary
-[RBTS v1 specification](tokenless-rbts-v1-spec.md) adds a bounded, non-negative reporting bonus without changing the
-majority verdict. The separately funded [Surprisingly Popular bounty](tokenless-surprise-bounty-v1-spec.md) may reward
+RBTS v1 specification adds a bounded, non-negative reporting bonus without changing the
+majority verdict. The separately funded Surprisingly Popular bounty may reward
 useful minority signal after finalization; it cannot alter customer-funded settlement or contract state.
 
-The optional [Feedback Bonus](tokenless-feedback-bonus-v1-spec.md) is also separate from those mechanisms and from the
+The optional Feedback Bonus is also separate from those mechanisms and from the
 guaranteed review bounty. It may be configured with or without guaranteed compensation, is prefunded before delivery,
 and can be awarded afterward only by the requester or another designated human to selected eligible written feedback.
 The agent, automatic scoring, moderation, and operator cannot select an award. When either guaranteed compensation or a
@@ -292,10 +292,10 @@ key; mixed address bundles are invalid.
 Operational instructions are intentionally separate from product design:
 
 - [environment parity](tokenless-environment-parity.md);
-- [EU deployment](tokenless-eu-deployment-runbook.md);
-- [identity and optional wallet provisioning](tokenless-identity-and-wallet-runbook-2026-07.md);
-- [privacy operations](tokenless-privacy-operations-runbook-2026-07.md); and
-- [supply-chain controls](tokenless-supply-chain-controls.md).
+- EU deployment;
+- identity and optional wallet provisioning;
+- privacy operations; and
+- supply-chain controls.
 
 ## Remaining release phases
 
@@ -307,5 +307,5 @@ Operational instructions are intentionally separate from product design:
 3. **Hardening at traction:** audit the small immutable core, run a public bounty and soak period, deploy the final
    adminless-funds mainnet bundle, and publish verified addresses plus recomputation and keeper instructions.
 
-The [production-readiness register](tokenless-production-readiness-2026-07.md) is the only current release checklist.
+The production-readiness register is the only current release checklist.
 A successful build or push is never release approval.

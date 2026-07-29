@@ -53,7 +53,7 @@ Services must fail closed if their chain, addresses, start block, or deployment 
 The hosted production target has one immutable home region, `eu`. Application functions are pinned to Vercel
 `fra1`; Ponder and keeper are pinned to Railway `europe-west4-drams3a`. The machine-readable resource inventory,
 integrity digest, signature boundary, and exact readiness procedure are in
-[`tokenless-eu-deployment-runbook.md`](tokenless-eu-deployment-runbook.md).
+`tokenless-eu-deployment-runbook.md`.
 
 Every hosted startup is refused unless the signed manifest identifies matching EU Postgres, private Blob,
 Vercel/Railway platform-secret inventory, logs,

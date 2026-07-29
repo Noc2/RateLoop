@@ -586,7 +586,7 @@ position the rest of this plan depends on.
 | Order | Items       | Why here                                                                   |
 | ----- | ----------- | -------------------------------------------------------------------------- |
 | 1     | 0.1 – 0.7   | Every day a false claim ships is exposure. Cheap, and all copy plus tests. |
-| 2     | 2.1         | The evidence gap is the worst defect found. It is one change.              |
+| 2     | 2.1, 2.1b   | Worst defect found, plus a live sampling bug. Both are one change each.    |
 | 3     | 3b.4        | Costs nothing while the network lane is inert. It stops being free later.  |
 | 4     | 4.1 – 4.3   | Do these before other fixes, so the fixes below inherit the discipline.    |
 | 5     | 3b.1 – 3b.3 | Enterprise identity is a boolean; the DPA items are drafting.              |

@@ -2,7 +2,7 @@
 
 **Status:** Current internal issue-spotting reference, not legal advice. The
 [design of record](tokenless-immutable-implementation-plan-2026-07.md) controls architecture and the
-[production-readiness register](tokenless-production-readiness-2026-07.md) controls release approval. Counsel questions
+production-readiness register controls release approval. Counsel questions
 and regulatory operations remain real-money gates where the readiness register says they are required.
 
 ## Revenue model
