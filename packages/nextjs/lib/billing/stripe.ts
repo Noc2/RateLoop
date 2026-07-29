@@ -237,7 +237,7 @@ export async function createAndSendPrepaidInvoice(input: {
       currency: "usd",
       customer: input.customerId,
       days_until_due: 30,
-      description: `RateLoop prepaid review funding for ${input.legalName}`,
+      description: `RateLoop prepaid panel funding for ${input.legalName}`,
       metadata: {
         rateloop_purpose: "prepaid_topup",
         rateloop_topup_id: input.topupId,
@@ -260,7 +260,7 @@ export async function createAndSendPrepaidInvoice(input: {
       amount: input.amountMinor,
       currency: "usd",
       customer: input.customerId,
-      description: "Prepaid human-assurance balance",
+      description: "Commissioned human-assurance panel balance",
       discountable: false,
       invoice: invoice.id,
       metadata: { rateloop_topup_id: input.topupId, rateloop_workspace_id: input.workspaceId },
