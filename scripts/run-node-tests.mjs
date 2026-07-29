@@ -10,6 +10,7 @@ const IGNORED_DIRS = new Set(["node_modules", ".next"]);
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = dirname(scriptDir);
 const preloadModule = join(scriptDir, "register-node-test-env.mjs");
+const literalTestRunner = join(scriptDir, "run-node-test-group.mjs");
 const configuredTestConcurrency =
   process.env.RATELOOP_NODE_TEST_CONCURRENCY ?? "4";
 
@@ -98,6 +99,12 @@ function groupTestsByCwd(files) {
   return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
 }
 
+function getTestRunnerEnv() {
+  const env = { ...process.env };
+  delete env.NODE_TEST_CONTEXT;
+  return env;
+}
+
 const roots = process.argv.slice(2);
 if (roots.length === 0) {
   console.error(
@@ -123,20 +130,20 @@ let exitCode = 0;
 for (const [cwd, groupFiles] of groupTestsByCwd(files)) {
   groupFiles.sort();
 
-  const nodeArgs = [
-    "--experimental-test-coverage",
-    "--import",
-    preloadModule,
-    `--test-concurrency=${configuredTestConcurrency}`,
-  ];
+  const nodeArgs = ["--import", preloadModule];
   if (groupFiles.some((file) => TS_TEST_FILE_RE.test(file))) {
     nodeArgs.push("--import", resolveImportModule("tsx", groupFiles, cwd));
   }
-  nodeArgs.push("--test", ...groupFiles.map((file) => relative(cwd, file)));
+  nodeArgs.push(
+    literalTestRunner,
+    configuredTestConcurrency,
+    ...groupFiles.map((file) => relative(cwd, file)),
+  );
 
   const result = spawnSync(process.execPath, nodeArgs, {
     stdio: "inherit",
     cwd,
+    env: getTestRunnerEnv(),
   });
 
   if (result.error) {
