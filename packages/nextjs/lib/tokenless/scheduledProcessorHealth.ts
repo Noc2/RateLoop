@@ -3,6 +3,7 @@ import "server-only";
 import { dbPool } from "~~/lib/db";
 
 export type ScheduledProcessorConfigurationState = "broken" | "disabled" | "enabled";
+export const SCHEDULED_PROCESSOR_FAILURE_STATUS_THRESHOLD = 3;
 
 export type ScheduledProcessorHealthObservation = {
   configurationState: ScheduledProcessorConfigurationState;
@@ -137,6 +138,23 @@ export async function persistScheduledProcessorHealth(
   } finally {
     client.release();
   }
+}
+
+/**
+ * The cron status gate is based only on repeated execution failure. A processor that is
+ * deliberately disabled never qualifies, and successful recovery resets the consecutive count.
+ * Return only a boolean so HTTP responses cannot expose processor names or error evidence.
+ */
+export async function hasRepeatedScheduledProcessorFailure() {
+  const result = await dbPool.query(
+    `SELECT 1 FROM tokenless_scheduled_processor_health
+     WHERE configuration_state='broken'
+       AND operator_alert_state='pending'
+       AND consecutive_failures >= $1
+     LIMIT 1`,
+    [SCHEDULED_PROCESSOR_FAILURE_STATUS_THRESHOLD],
+  );
+  return (result.rowCount ?? result.rows.length) > 0;
 }
 
 export const __scheduledProcessorHealthTestUtils = { validateObservation };

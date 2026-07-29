@@ -3,7 +3,9 @@ import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import {
+  SCHEDULED_PROCESSOR_FAILURE_STATUS_THRESHOLD,
   __scheduledProcessorHealthTestUtils,
+  hasRepeatedScheduledProcessorFailure,
   persistScheduledProcessorHealth,
 } from "~~/lib/tokenless/scheduledProcessorHealth";
 
@@ -106,4 +108,48 @@ test("health declarations reject ambiguous or unsafe states", () => {
       }),
     /requires bounded error evidence/u,
   );
+});
+
+test("the status gate trips only at three consecutive enabled-processor failures and clears on recovery", async () => {
+  assert.equal(SCHEDULED_PROCESSOR_FAILURE_STATUS_THRESHOLD, 3);
+  const broken = {
+    configurationState: "broken" as const,
+    errorCode: "upstream_timeout",
+    errorDigest: DIGEST,
+    processor: "deliverWebhooks",
+  };
+  for (let attempt = 1; attempt < SCHEDULED_PROCESSOR_FAILURE_STATUS_THRESHOLD; attempt += 1) {
+    await persistScheduledProcessorHealth([broken], new Date(FIRST.getTime() + attempt * 60_000));
+    assert.equal(await hasRepeatedScheduledProcessorFailure(), false, `attempt ${attempt}`);
+  }
+  await persistScheduledProcessorHealth(
+    [broken],
+    new Date(FIRST.getTime() + SCHEDULED_PROCESSOR_FAILURE_STATUS_THRESHOLD * 60_000),
+  );
+  assert.equal(await hasRepeatedScheduledProcessorFailure(), true);
+
+  await persistScheduledProcessorHealth(
+    [{ configurationState: "enabled", processor: "deliverWebhooks" }],
+    new Date(FIRST.getTime() + 4 * 60_000),
+  );
+  assert.equal(await hasRepeatedScheduledProcessorFailure(), false);
+});
+
+test("deliberately disabled processors never trip the repeated-failure status gate", async () => {
+  for (let run = 1; run <= SCHEDULED_PROCESSOR_FAILURE_STATUS_THRESHOLD + 1; run += 1) {
+    await persistScheduledProcessorHealth(
+      [
+        {
+          configurationState: "disabled",
+          disabledReason: "TOKENLESS_PREPAID_TOPUP_ENABLED is not true",
+          processor: "reconcilePrepaidTopups",
+        },
+      ],
+      new Date(FIRST.getTime() + run * 60_000),
+    );
+  }
+  assert.equal(await hasRepeatedScheduledProcessorFailure(), false);
+  const disabled = await row("reconcilePrepaidTopups");
+  assert.equal(disabled?.configuration_state, "disabled");
+  assert.equal(Number(disabled?.consecutive_failures), 0);
 });

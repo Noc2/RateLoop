@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { GET } from "./route";
+import { GET, scheduledMaintenanceResponse } from "./route";
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 
@@ -22,4 +22,35 @@ test("scheduled maintenance route fails closed when CRON_SECRET is not configure
   const response = await GET(new NextRequest("https://tokenless.example.test/api/cron/tokenless-maintenance"));
   assert.equal(response.status, 503);
   assert.equal((await response.json()).code, "cron_unavailable");
+});
+
+test("repeated processor failure returns a privacy-safe distinct non-2xx response", async () => {
+  const privateResult = {
+    runId: "swr_private",
+    status: "degraded",
+    summary: {
+      processorFailures: [
+        {
+          processor: "deliverWebhooks",
+          errorCode: "private_error",
+          errorDigest: `sha256:${"a".repeat(64)}`,
+        },
+      ],
+    },
+  };
+  const response = scheduledMaintenanceResponse(privateResult, true);
+  assert.equal(response.status, 503);
+  const body = await response.text();
+  assert.deepEqual(JSON.parse(body), {
+    code: "scheduled_processor_repeated_failure",
+    message: "Scheduled maintenance requires operator attention.",
+  });
+  assert.doesNotMatch(body, /deliverWebhooks|private_error|sha256|swr_private/u);
+});
+
+test("transient or recovered processor health keeps the normal cron response", async () => {
+  const result = { runId: "swr_public", status: "degraded" };
+  const response = scheduledMaintenanceResponse(result, false);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), result);
 });
