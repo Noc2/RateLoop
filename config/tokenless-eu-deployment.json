@@ -1,9 +1,20 @@
 {
-  "schemaVersion": "rateloop-eu-deployment-v1",
-  "policyVersion": "2026-07-15",
+  "schemaVersion": "rateloop-processing-region-v2",
+  "policyVersion": "2026-07-29",
   "deploymentLine": "tokenless",
   "homeRegion": "eu",
-  "mode": "verified-eu",
+  "mode": "eu-processing-region",
+  "claimBoundary": {
+    "statement": "Application workloads and the listed primary data stores are configured for the declared EU processing regions.",
+    "excluded": [
+      "provider control-plane and account data",
+      "provider-managed and globally replicated backups",
+      "approved external processors and their subprocessors"
+    ],
+    "transferSafeguard": "standard-contractual-clauses",
+    "validation": "signed-static-configuration-only",
+    "providerStateQueried": false
+  },
   "resources": {
     "webCompute": {
       "provider": "vercel",
@@ -16,8 +27,7 @@
     "railwayProject": {
       "provider": "railway",
       "dataScope": "tokenless-service-control-plane",
-      "region": "europe-west4-drams3a",
-      "regionEnv": "TOKENLESS_RAILWAY_REGION",
+      "locationScope": "provider-control-plane-outside-processing-region-claim",
       "resourceIdEnv": "TOKENLESS_RAILWAY_PROJECT_ID"
     },
     "postgres": {
@@ -41,8 +51,7 @@
       "providerEnv": "TOKENLESS_PLATFORM_SECRET_PROVIDER",
       "allowedProviders": ["vercel-and-railway"],
       "dataScope": "server-only-signing-and-wrapping-keys",
-      "region": "eu",
-      "regionEnv": "TOKENLESS_PLATFORM_SECRET_RUNTIME_REGION",
+      "locationScope": "provider-control-plane-outside-processing-region-claim",
       "resourceIdEnv": "TOKENLESS_PLATFORM_SECRET_INVENTORY_ID"
     },
     "keeperWorker": {
@@ -69,8 +78,7 @@
     "backups": {
       "provider": "configured-backup",
       "dataScope": "encrypted-database-and-artifact-backups",
-      "region": "eu",
-      "regionEnv": "TOKENLESS_BACKUP_REGION",
+      "locationScope": "provider-managed-or-globally-replicated-outside-processing-region-claim",
       "resourceIdEnv": "TOKENLESS_EU_BACKUP_POLICY_ID"
     },
     "auth": {
@@ -79,13 +87,6 @@
       "region": "eu",
       "regionEnv": "TOKENLESS_AUTH_REGION",
       "resourceIdEnv": "TOKENLESS_AUTH_DEPLOYMENT_ID"
-    },
-    "supportAccess": {
-      "provider": "rateloop",
-      "dataScope": "approved-break-glass-support-access",
-      "region": "eu",
-      "regionEnv": "TOKENLESS_SUPPORT_ACCESS_REGION",
-      "resourceIdEnv": "TOKENLESS_SUPPORT_ACCESS_POLICY_ID"
     }
   },
   "externalProcessors": {
@@ -100,10 +101,6 @@
     "billing": {
       "dataScope": "billing-contact-and-payment-metadata",
       "evidenceEnv": "TOKENLESS_BILLING_PROCESSOR_EVIDENCE_ID"
-    },
-    "analytics": {
-      "dataScope": "public-site-aggregate-analytics-only",
-      "evidenceEnv": "TOKENLESS_ANALYTICS_PROCESSOR_EVIDENCE_ID"
     },
     "rpc": {
       "dataScope": "public-chain-requests-without-private-artifacts",
@@ -125,6 +122,6 @@
   },
   "integrity": {
     "algorithm": "SHA-256",
-    "canonicalContentSha256": "e224fc76d88ed1dde576f8b1ecec9e5ec1ba82bbe748995124cb7eb23ae92263"
+    "canonicalContentSha256": "aa2fe3055e523b7faa90e4c3276b762ed6581fe6f0682a6836139ce2c02cf038"
   }
 }

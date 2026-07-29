@@ -111,7 +111,6 @@ export const REQUIRED_TOKENLESS_PRODUCTION_VARIABLES = [
   "TOKENLESS_THIRDWEB_WALLET_ENABLED",
   "BLOB_READ_WRITE_TOKEN",
   "TOKENLESS_PLATFORM_SECRET_PROVIDER",
-  "TOKENLESS_PLATFORM_SECRET_RUNTIME_REGION",
   "TOKENLESS_PLATFORM_SECRET_INVENTORY_ID",
   "TOKENLESS_ARTIFACT_WRAPPING_KEY_VERSION",
   "TOKENLESS_ARTIFACT_WRAPPING_KEYS",
@@ -383,9 +382,6 @@ function validatePlatformSecretInventory(env, errors) {
   }
   if (!inventory.allowedProviders.includes(value(env, inventory.providerEnv))) {
     errors.push(`${inventory.providerEnv} must select Vercel and Railway platform-secret custody.`);
-  }
-  if (value(env, inventory.regionEnv) !== inventory.region) {
-    errors.push(`${inventory.regionEnv} must be ${inventory.region}.`);
   }
 }
 

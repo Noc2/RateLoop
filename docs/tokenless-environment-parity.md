@@ -48,17 +48,17 @@ Services must fail closed if their chain, addresses, start block, or deployment 
   boundary than non-exportable HSM keys and therefore require low balances, narrow allowances, explicit spend
   ceilings, rapid rotation and recovery runbooks, and append-only signing audit records.
 
-## EU-first deployment contract
+## EU processing-region contract
 
-The hosted production target has one immutable home region, `eu`. Application functions are pinned to Vercel
-`fra1`; Ponder and keeper are pinned to Railway `europe-west4-drams3a`. The machine-readable resource inventory,
-integrity digest, signature boundary, and exact readiness procedure are in
-`tokenless-eu-deployment-runbook.md`.
+Application functions are configured for Vercel `fra1`; Ponder, keeper, and primary Postgres workloads are configured
+for Railway `europe-west4-drams3a`. This is an EU **processing-region** statement, not an EU-residency attestation.
+Vercel and Railway control-plane or account data, provider-managed or globally replicated backups, and approved
+external processors may be processed outside the EU. Relevant transfers rely on standard contractual clauses.
 
-Every hosted startup is refused unless the signed manifest identifies matching EU Postgres, private Blob,
-Vercel/Railway platform-secret inventory, logs,
-backups, auth, support-access, worker, and approved external-processor evidence. Region settings alone are not release
-evidence; the deployment must also pass the dated runtime and operational checks in the runbook.
+Every hosted startup is refused unless the signed manifest identifies the configured primary stores, private Blob,
+Vercel/Railway platform-secret inventory, logs, backup policy, auth, workers, and approved external processors. The
+validator checks declared configuration and its signature; it does not query providers or establish the actual
+location of provider control planes, subprocessors, or backups. Region settings alone are not release evidence.
 
 ## Required production variables
 

@@ -11,28 +11,35 @@ const railwayConfigPaths = [
   path.join(root, "packages/ponder/railway.toml"),
 ];
 
-export const TOKENLESS_EU_MANIFEST_SCHEMA = "rateloop-eu-deployment-v1";
+export const TOKENLESS_EU_MANIFEST_SCHEMA = "rateloop-processing-region-v2";
 export const TOKENLESS_HOME_REGION = "eu";
 export const TOKENLESS_VERCEL_REGION = "fra1";
 export const TOKENLESS_RAILWAY_REGION = "europe-west4-drams3a";
 export const TOKENLESS_VERCEL_PROJECT_ID = "prj_H6C2pfWKEAupFroHbLfzhquaNCLm";
 const EXPECTED_RESOURCE_REGIONS = Object.freeze({
   webCompute: TOKENLESS_VERCEL_REGION,
-  railwayProject: TOKENLESS_RAILWAY_REGION,
   postgres: TOKENLESS_RAILWAY_REGION,
   objectStorage: TOKENLESS_VERCEL_REGION,
-  platformSecrets: TOKENLESS_HOME_REGION,
   keeperWorker: TOKENLESS_RAILWAY_REGION,
   ponderWorker: TOKENLESS_RAILWAY_REGION,
   logs: TOKENLESS_HOME_REGION,
-  backups: TOKENLESS_HOME_REGION,
   auth: TOKENLESS_HOME_REGION,
-  supportAccess: TOKENLESS_HOME_REGION,
 });
+const REQUIRED_RESOURCES = Object.freeze([
+  "webCompute",
+  "railwayProject",
+  "postgres",
+  "objectStorage",
+  "platformSecrets",
+  "keeperWorker",
+  "ponderWorker",
+  "logs",
+  "backups",
+  "auth",
+]);
 const REQUIRED_PROCESSORS = Object.freeze([
   "email",
   "billing",
-  "analytics",
   "rpc",
 ]);
 
@@ -106,11 +113,34 @@ export function validateTokenlessEuDeployment({
   if (
     manifest.deploymentLine !== "tokenless" ||
     manifest.homeRegion !== TOKENLESS_HOME_REGION ||
-    manifest.mode !== "verified-eu"
+    manifest.mode !== "eu-processing-region"
   ) {
     errors.push(
-      "EU deployment manifest must describe only the tokenless EU deployment line.",
+      "Processing-region manifest must describe only the tokenless EU processing line.",
     );
+  }
+  if (
+    manifest.claimBoundary?.transferSafeguard !== "standard-contractual-clauses" ||
+    manifest.claimBoundary?.validation !== "signed-static-configuration-only" ||
+    manifest.claimBoundary?.providerStateQueried !== false ||
+    !Array.isArray(manifest.claimBoundary?.excluded) ||
+    !manifest.claimBoundary.excluded.some(value => /control-plane/iu.test(value)) ||
+    !manifest.claimBoundary.excluded.some(value => /backups/iu.test(value))
+  ) {
+    errors.push(
+      "Processing-region manifest must disclose control-plane and backup exclusions, SCC safeguards, and its static-validation boundary.",
+    );
+  }
+  if (manifest.resources?.supportAccess) {
+    errors.push("Processing-region manifest must not claim unimplemented support-access controls.");
+  }
+  if (manifest.externalProcessors?.analytics) {
+    errors.push("Processing-region manifest must not inventory an analytics processor that is not used.");
+  }
+  for (const resource of REQUIRED_RESOURCES) {
+    if (!manifest.resources?.[resource]?.resourceIdEnv) {
+      errors.push(`Processing-region manifest must inventory the ${resource} resource.`);
+    }
   }
   for (const [name, expectedRegion] of Object.entries(
     EXPECTED_RESOURCE_REGIONS,
@@ -180,8 +210,8 @@ export function validateTokenlessEuDeployment({
       );
     }
   }
-  if (value(env, "TOKENLESS_DATA_PLANE_MODE") !== "verified-eu") {
-    errors.push("TOKENLESS_DATA_PLANE_MODE must be verified-eu.");
+  if (value(env, "TOKENLESS_DATA_PLANE_MODE") !== "eu-processing-region") {
+    errors.push("TOKENLESS_DATA_PLANE_MODE must be eu-processing-region.");
   }
   if (value(env, "TOKENLESS_HOME_REGION") !== TOKENLESS_HOME_REGION) {
     errors.push(`TOKENLESS_HOME_REGION must be ${TOKENLESS_HOME_REGION}.`);
@@ -196,7 +226,7 @@ export function validateTokenlessEuDeployment({
     const resourceId = value(env, resource.resourceIdEnv);
     if (!safeResourceId(resourceId)) {
       errors.push(
-        `${resource.resourceIdEnv} must identify the verified EU ${name} resource.`,
+        `${resource.resourceIdEnv} must identify the configured ${name} resource.`,
       );
     }
     if (
@@ -207,7 +237,7 @@ export function validateTokenlessEuDeployment({
         `${resource.resourceIdEnv} must match the isolated tokenless resource.`,
       );
     }
-    if (value(env, resource.regionEnv) !== resource.region) {
+    if (resource.regionEnv && value(env, resource.regionEnv) !== resource.region) {
       errors.push(`${resource.regionEnv} must be ${resource.region}.`);
     }
     if (
@@ -280,7 +310,7 @@ function main() {
     throw new Error(
       `Tokenless EU deployment validation refused:\n- ${errors.join("\n- ")}`,
     );
-  console.log("Tokenless verified EU deployment passed.");
+  console.log("Tokenless EU processing-region configuration passed.");
 }
 
 if (

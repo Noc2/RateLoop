@@ -64,7 +64,6 @@ const tokenlessTestPlatformSecrets = () => {
   const platformSecrets = tokenlessEuDeploymentManifest.resources.platformSecrets;
   return {
     [platformSecrets.providerEnv]: platformSecrets.allowedProviders[0],
-    [platformSecrets.regionEnv]: platformSecrets.region,
     [platformSecrets.resourceIdEnv]: "platform-secret-inventory-v1",
     TOKENLESS_ARTIFACT_WRAPPING_KEY_VERSION: "artifact-v1",
     TOKENLESS_ARTIFACT_WRAPPING_KEYS: JSON.stringify({ "artifact-v1": encodedKey(19) }),
@@ -89,7 +88,7 @@ function validFixture() {
   Object.assign(env, {
     VERCEL_ENV: "production",
     VERCEL_GIT_COMMIT_REF: "main",
-    TOKENLESS_DATA_PLANE_MODE: "verified-eu",
+    TOKENLESS_DATA_PLANE_MODE: "eu-processing-region",
     TOKENLESS_HOME_REGION: "eu",
     TOKENLESS_EU_MANIFEST_SHA256: euManifestDigest,
     TOKENLESS_EU_MANIFEST_SIGNING_PUBLIC_KEY: deploymentManifestSigner.publicKey
@@ -187,7 +186,7 @@ function validFixture() {
   });
   for (const [name, resource] of Object.entries(tokenlessEuDeploymentManifest.resources)) {
     env[resource.resourceIdEnv] = resource.expectedResourceId ?? `eu-${name}-resource`;
-    env[resource.regionEnv] = resource.region;
+    if (resource.regionEnv) env[resource.regionEnv] = resource.region;
     if (resource.accessEnv) env[resource.accessEnv] = resource.expectedAccess;
     if (resource.providerEnv) env[resource.providerEnv] = resource.allowedProviders[0];
   }
@@ -515,7 +514,7 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
   assert.match(mainErrors, /APP_URL is required for a hosted release|TOKENLESS_DATA_PLANE_MODE/u);
 });
 
-test("the tokenless hosted gate pins platform-secret custody to the signed EU manifest", () => {
+test("the tokenless hosted gate inventories platform-secret custody without a residency claim", () => {
   const platformSecrets = tokenlessEuDeploymentManifest.resources.platformSecrets;
   const env = {
     VERCEL: "1",
@@ -546,17 +545,9 @@ test("the tokenless hosted gate pins platform-secret custody to the signed EU ma
     }).join("\n"),
     new RegExp(`${platformSecrets.providerEnv} must select Vercel and Railway platform-secret custody`),
   );
-  assert.match(
-    validateTokenlessProductionReadiness({
-      env: {
-        ...env,
-        [platformSecrets.regionEnv]: "us",
-        [platformSecrets.resourceIdEnv]: "platform-secret-inventory-us",
-      },
-      activeRegistry: {},
-    }).join("\n"),
-    new RegExp(`${platformSecrets.regionEnv} must be ${platformSecrets.region}`),
-  );
+  assert.equal(platformSecrets.regionEnv, undefined);
+  assert.equal(platformSecrets.region, undefined);
+  assert.match(platformSecrets.locationScope, /outside-processing-region-claim/);
 });
 
 test("the isolated review deployment may retain its existing local vault without weakening the main release gate", () => {

@@ -17,11 +17,11 @@ function staticConfigs() {
   };
 }
 
-async function verifiedFixture() {
+async function processingRegionFixture() {
   const digest = await manifestDigest();
   const keys = generateKeyPairSync("ed25519");
   const env = {
-    TOKENLESS_DATA_PLANE_MODE: "verified-eu",
+    TOKENLESS_DATA_PLANE_MODE: "eu-processing-region",
     TOKENLESS_HOME_REGION: "eu",
     TOKENLESS_EU_MANIFEST_SHA256: digest,
     TOKENLESS_EU_MANIFEST_SIGNING_PUBLIC_KEY: keys.publicKey
@@ -38,7 +38,7 @@ async function verifiedFixture() {
   )) {
     env[resource.resourceIdEnv] =
       resource.expectedResourceId ?? `eu-${name}-resource`;
-    env[resource.regionEnv] = resource.region;
+    if (resource.regionEnv) env[resource.regionEnv] = resource.region;
     if (resource.accessEnv) env[resource.accessEnv] = resource.expectedAccess;
     if (resource.providerEnv)
       env[resource.providerEnv] = resource.allowedProviders[0];
@@ -53,18 +53,18 @@ async function verifiedFixture() {
   return env;
 }
 
-test("the checked deployment controls and verified resource evidence are valid together", async () => {
+test("the signed processing-region configuration is valid within its disclosed boundary", async () => {
   assert.deepEqual(
     await validateTokenlessEuDeployment({
-      env: await verifiedFixture(),
+      env: await processingRegionFixture(),
       ...staticConfigs(),
     }),
     [],
   );
 });
 
-test("verified production requires EU email dispatch while disclosing the processor transfer", async () => {
-  const env = await verifiedFixture();
+test("processing-region configuration requires EU email dispatch while disclosing the processor transfer", async () => {
+  const env = await processingRegionFixture();
   env.TOKENLESS_EMAIL_DELIVERY_REGION = "us-east-1";
   assert.match(
     (await validateTokenlessEuDeployment({ env, ...staticConfigs() })).join(
@@ -82,8 +82,8 @@ test("verified production requires EU email dispatch while disclosing the proces
   );
 });
 
-test("verified production requires the exact regional resource bundle and signed manifest", async () => {
-  const env = await verifiedFixture();
+test("processing-region configuration requires the exact resource bundle and signed manifest", async () => {
+  const env = await processingRegionFixture();
   assert.deepEqual(
     await validateTokenlessEuDeployment({ env, ...staticConfigs() }),
     [],
@@ -101,14 +101,14 @@ test("verified production requires the exact regional resource bundle and signed
   );
   assert.match(
     output,
-    /TOKENLESS_EU_BLOB_STORE_ID must identify the verified EU objectStorage resource/,
+    /TOKENLESS_EU_BLOB_STORE_ID must identify the configured objectStorage resource/,
   );
   assert.match(output, /SIGNATURE must verify/i);
 });
 
 test("static configuration rejects unpinned or mixed compute regions", async () => {
   const errors = await validateTokenlessEuDeployment({
-    env: await verifiedFixture(),
+    env: await processingRegionFixture(),
     vercelConfig: {},
     railwayConfigs: [
       '[deploy.multiRegionConfig]\n"us-east4-eqdc4a" = { numReplicas = 1 }\n',
@@ -132,12 +132,21 @@ test("the manifest cannot omit governed resources, processors, or public-chain l
   manifest.publicChainExceptions[0].customerContentAllowed = true;
   const output = (
     await validateTokenlessEuDeployment({
-      env: await verifiedFixture(),
+      env: await processingRegionFixture(),
       manifest,
       ...staticConfigs(),
     })
   ).join("\n");
-  assert.match(output, /platformSecrets region must be eu/);
+  assert.match(output, /inventory the platformSecrets resource/);
   assert.match(output, /inventory the email processor/);
   assert.match(output, /exact Base Sepolia public-chain exception/);
+});
+
+test("the manifest excludes control planes and backups from the region claim and inventories only used processors", () => {
+  assert.equal(tokenlessEuDeploymentManifest.claimBoundary.providerStateQueried, false);
+  assert.equal(tokenlessEuDeploymentManifest.claimBoundary.transferSafeguard, "standard-contractual-clauses");
+  assert.match(tokenlessEuDeploymentManifest.claimBoundary.excluded.join(" "), /control-plane/);
+  assert.match(tokenlessEuDeploymentManifest.claimBoundary.excluded.join(" "), /backups/);
+  assert.equal(tokenlessEuDeploymentManifest.resources.supportAccess, undefined);
+  assert.equal(tokenlessEuDeploymentManifest.externalProcessors.analytics, undefined);
 });
