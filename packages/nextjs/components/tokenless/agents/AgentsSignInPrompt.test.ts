@@ -13,7 +13,8 @@ test("anonymous visitors see the Agents sign-in prompt without exposing workspac
   assert.match(pageSource, /returnTo=\{agentSignInReturnTo/);
   assert.ok(pageSource.indexOf("if (!session)") < pageSource.indexOf("<AgentWorkspacePanels"));
   assert.match(promptSource, /<SignedOutGate/);
-  assert.match(promptSource, /returnTo=\{returnTo\}/);
+  assert.match(promptSource, /returnTo=\{browserReturnTo\}/);
+  assert.match(promptSource, /agentSignInReturnToWithHash\(returnTo, window\.location\.hash\)/);
   assert.match(promptSource, /title="Agents"/);
   assert.doesNotMatch(promptSource, /For Agents/);
   assert.match(promptSource, /Sign in to connect an agent/);

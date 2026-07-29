@@ -160,3 +160,7 @@ export function agentSignInReturnTo(input: {
     tab === "evaluations" && input.evidence ? updateEvidenceUrlSearch(params, input.evidence) : params.toString();
   return agentTabHref(tab, undefined, new URLSearchParams(search));
 }
+
+export function agentSignInReturnToWithHash(returnTo: string, hash: string) {
+  return hash === "#evidence-packets-heading" ? `${returnTo}${hash}` : returnTo;
+}

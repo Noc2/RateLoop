@@ -1,12 +1,22 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { SignedOutGate } from "~~/components/auth/SignedOutGate";
+import { agentSignInReturnToWithHash } from "~~/components/tokenless/agents/agentWorkspaceState";
 import { Button } from "~~/components/tokenless/ui/Button";
 
 export function AgentsSignInPrompt({ returnTo }: { returnTo: string }) {
+  const [browserReturnTo, setBrowserReturnTo] = useState(returnTo);
+
+  useEffect(() => {
+    setBrowserReturnTo(agentSignInReturnToWithHash(returnTo, window.location.hash));
+  }, [returnTo]);
+
   return (
     <SignedOutGate
       description="Sign in to connect an agent, configure human review, manage reviewers, and evaluate performance."
-      returnTo={returnTo}
+      returnTo={browserReturnTo}
       secondaryAction={
         <Button
           as={Link}

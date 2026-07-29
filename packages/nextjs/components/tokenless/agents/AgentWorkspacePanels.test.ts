@@ -1,5 +1,6 @@
 import {
   agentSignInReturnTo,
+  agentSignInReturnToWithHash,
   agentTabForSection,
   agentTabHref,
   canStartAgentConnection,
@@ -164,6 +165,14 @@ test("connected navigation splits the owner stack into URL-backed task tabs", ()
       },
     }),
     "/agents/connections?workspace=workspace+one&agent=agent+one&version=version+one",
+  );
+  assert.equal(
+    agentSignInReturnToWithHash("/agents/results?workspace=workspace+one", "#evidence-packets-heading"),
+    "/agents/results?workspace=workspace+one#evidence-packets-heading",
+  );
+  assert.equal(
+    agentSignInReturnToWithHash("/agents/results?workspace=workspace+one", "#private-fragment"),
+    "/agents/results?workspace=workspace+one",
   );
   assert.equal(
     legacyAgentRouteHref({
