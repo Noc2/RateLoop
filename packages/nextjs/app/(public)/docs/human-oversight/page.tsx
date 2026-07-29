@@ -51,9 +51,9 @@ export default function HumanOversightPage() {
     <article className="prose max-w-none">
       <DocsTitle gradientText="Accountable Oversight">Configure</DocsTitle>
       <p className="lead text-base-content/60 text-lg">
-        RateLoop can support a deployer&apos;s configured human oversight of AI agent outputs: monitor, interpret,
-        override, and stop, with records of each step. This page maps Article 14(4) measures to relevant RateLoop
-        capabilities and the duties that remain with the deployer.
+        Article 26(2) requires deployers of high-risk AI systems to assign oversight to people with the necessary
+        competence, training, authority, and support. RateLoop can support that configured workflow and record its
+        operation; your organization selects, authorizes, and supports the people who perform it.
       </p>
 
       <aside className="not-prose my-8 rounded-2xl border-l-2 border-[var(--rateloop-yellow)] bg-amber-300/[0.06] p-5 sm:p-6">
@@ -69,6 +69,22 @@ export default function HumanOversightPage() {
           host integration can enforce its review state at the output boundary. No host currently holds that tier.
         </p>
       </aside>
+
+      <h2 id="deployer-duty">The deployer&apos;s people and process</h2>
+      <p>
+        RateLoop records oversight designations with competence basis, training completed, authority scope, and expiry.
+        It records the reviews, decisions, overrides, and stops those people make. These records can support your
+        evidence of how oversight was organized; they do not decide whether the Act applies or establish that the people
+        or process meet Article 26(2).
+      </p>
+
+      <h2 id="provider-design-duty">If you also provide the AI system</h2>
+      <p>
+        Article 14 binds the provider of a high-risk AI system. It requires the system to be designed and developed so
+        that natural persons can effectively oversee it. RateLoop operates around the customer&apos;s system and does
+        not by itself satisfy that provider design duty. The capabilities below may support an oversight process for a
+        system that was designed to expose the necessary controls and information.
+      </p>
 
       <h2 id="article-14-4">The five Article 14(4) measures</h2>
       <div className="not-prose my-8 grid gap-4">

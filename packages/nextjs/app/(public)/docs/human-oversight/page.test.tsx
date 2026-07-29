@@ -16,7 +16,9 @@ test("human-oversight docs map each Article 14(4) measure to a capability and a 
   const html = renderToStaticMarkup(<HumanOversightPage />).replace(/\s+/g, " ");
 
   assert.match(html, /Configure.*rateloop-text-gradient.*Accountable Oversight/i);
-  assert.match(html, /support a deployer&#x27;s configured human oversight/i);
+  assert.match(html, /Article 26\(2\) requires deployers of high-risk AI systems/i);
+  assert.match(html, /competence, training, authority, and support/i);
+  assert.match(html, /your organization selects, authorizes, and supports the people/i);
   assert.match(
     html,
     /Your people provide oversight\. RateLoop supports the configured workflow and records its evidence\./,
@@ -25,6 +27,11 @@ test("human-oversight docs map each Article 14(4) measure to a capability and a 
   assert.match(html, /only a verified host integration can enforce its review state at the output boundary\./);
   assert.match(html, /No host currently holds that tier/i);
   assert.doesNotMatch(html, /primary verified path|verified hosts honor/i);
+  assert.match(html, /id="deployer-duty"/);
+  assert.match(html, /competence basis, training completed, authority scope, and expiry/i);
+  assert.match(html, /id="provider-design-duty"/);
+  assert.match(html, /Article 14 binds the provider of a high-risk AI system/i);
+  assert.match(html, /does not by itself satisfy that provider design duty/i);
 
   for (const [requirement, capability, responsibility] of [
     ["Article 14\\(4\\)\\(a\\)", "oversight dashboard", "watching those surfaces"],
@@ -80,6 +87,10 @@ test("machine human-oversight doc mirrors the page and is cross-linked with evid
     oversight,
     /Your people provide oversight\. RateLoop supports the configured workflow and records its evidence\./,
   );
+  assert.match(oversight, /Article 26\(2\) requires deployers of high-risk AI systems/i);
+  assert.match(oversight, /## The deployer's people and process/);
+  assert.match(oversight, /## If you also provide the AI system/);
+  assert.match(oversight, /Article 14 binds the provider of a high-risk AI system/i);
   assert.match(oversight, /only a verified host integration can\s+enforce its review state at the output boundary\./);
   assert.match(oversight, /No host currently holds that tier/i);
   for (const heading of [

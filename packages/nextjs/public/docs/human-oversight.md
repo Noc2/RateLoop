@@ -1,8 +1,8 @@
 # Human Oversight
 
-RateLoop can support a deployer's configured human oversight of AI agent outputs: monitor, interpret, override, and
-stop, with records of each step. This page maps Article 14(4) measures to relevant RateLoop capabilities and the duties
-that remain with the deployer.
+Article 26(2) requires deployers of high-risk AI systems to assign oversight to people with the necessary competence,
+training, authority, and support. RateLoop can support that configured workflow and record its operation; your
+organization selects, authorizes, and supports the people who perform it.
 
 ## Shared responsibility
 
@@ -11,6 +11,20 @@ Your people provide oversight. RateLoop supports the configured workflow and rec
 RateLoop does not determine whether the EU AI Act applies or establish compliance. That depends on your system, role,
 context, organization, and operation. RateLoop operates around your AI system; only a verified host integration can
 enforce its review state at the output boundary. No host currently holds that tier.
+
+## The deployer's people and process
+
+RateLoop records oversight designations with competence basis, training completed, authority scope, and expiry. It
+records the reviews, decisions, overrides, and stops those people make. These records can support your evidence of how
+oversight was organized; they do not decide whether the Act applies or establish that the people or process meet
+Article 26(2).
+
+## If you also provide the AI system
+
+Article 14 binds the provider of a high-risk AI system. It requires the system to be designed and developed so that
+natural persons can effectively oversee it. RateLoop operates around the customer's system and does not by itself
+satisfy that provider design duty. The capabilities below may support an oversight process for a system that was
+designed to expose the necessary controls and information.
 
 ## The five Article 14(4) measures
 
