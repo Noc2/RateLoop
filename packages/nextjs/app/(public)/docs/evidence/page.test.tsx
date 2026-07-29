@@ -19,7 +19,14 @@ test("evidence docs explain exact artifacts, checks, mappings, and boundaries", 
   assert.match(html, /Evidence.*rateloop-text-gradient.*Reference/i);
   assert.match(html, /At a glance/i);
   assert.match(html, /aria-label="On this page"/i);
-  for (const href of ["#shared-responsibility", "#packet", "#verify", "#exports", "#compliance-map"]) {
+  for (const href of [
+    "#shared-responsibility",
+    "#packet",
+    "#commissioned-paid-panels",
+    "#verify",
+    "#exports",
+    "#compliance-map",
+  ]) {
     assert.match(html, new RegExp(`href="${href}"`));
   }
   assert.doesNotMatch(html, /What this is not|RateLoop never claims/i);
@@ -67,6 +74,10 @@ test("evidence docs explain exact artifacts, checks, mappings, and boundaries", 
   assert.match(html, /rateloop\.human-assurance\.evidence\.v3/i);
   assert.match(html, /Frozen scope.*Review context.*Judgment evidence.*Available references and limits/i);
   assert.match(html, /reviewer identities and raw or decryptable rationales are excluded/i);
+  assert.match(html, /Commissioned paid-panel methodology/i);
+  assert.match(html, /not organic consumer feedback, a customer testimonial, an endorsement/i);
+  assert.match(html, /does not infer a view held by non-participants/i);
+  assert.match(html, /must not relabel paid reviewer feedback as unsolicited customer or consumer feedback/i);
   assert.match(html, /evidence:verify.*--public-key.*--key-id/i);
   assert.match(html, /audit:verify.*--expected-head/i);
   assert.match(html, /attestation:verify.*--signer-public-key.*--signer-key-id.*--rekor-public-key.*--tsa-ca/is);
@@ -112,6 +123,9 @@ test("machine docs mirror evidence boundaries and are linked from agent setup", 
   );
 
   assert.match(evidence, /rateloop\.human-assurance\.evidence\.v3/);
+  assert.match(evidence, /Commissioned paid-panel methodology/i);
+  assert.match(evidence, /not organic consumer feedback, a customer testimonial, an\s+endorsement/i);
+  assert.match(evidence, /must not relabel paid reviewer feedback as unsolicited customer or consumer feedback/i);
   assert.match(evidence, /Model identity is\s+labelled host-reported/i);
   assert.match(evidence, /does not independently verify which model produced an output/i);
   assert.match(evidence, /evidence:verify.*--public-key.*--key-id/is);

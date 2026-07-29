@@ -52,10 +52,10 @@ export default function TermsPage() {
       </p>
       <h2 id="who-may-use">Who may use it</h2>
       <p>
-        You must be at least 18 and legally permitted to use the service. Real-money funder flows are intended for
-        approved business customers whose workspace trader details have been verified. Paid assignments require an exact
-        frozen assignment policy and all applicable capability, tax, sanctions, payout, voucher, settlement, and receipt
-        checks.
+        You must be at least 18 and legally permitted to use the service. Real-money funder flows and workspace
+        subscriptions are available only to approved business customers whose legal identity RateLoop has independently
+        verified. Paid assignments require an exact frozen assignment policy and all applicable capability, tax,
+        sanctions, payout, voucher, settlement, and receipt checks.
       </p>
       <h2 id="customer-material">Customer material and reviewers</h2>
       <p>
@@ -138,6 +138,13 @@ export default function TermsPage() {
         RateLoop supplies decision evidence, limitations, and settlement records. The customer remains responsible for
         the final go, revise, or stop decision. RateLoop results are not financial, legal, medical, or investment advice
         and must not be used as an automatic approval for regulated or safety-critical decisions.
+      </p>
+      <p>
+        A funded panel result is commissioned business-to-business research. It is not an organic consumer review,
+        testimonial, endorsement, or measure of general public opinion. The customer must disclose that commissioned
+        status whenever it publishes or shares the result and must not present paid reviewer feedback as unsolicited
+        customer or consumer feedback. The applicable{" "}
+        <Link href="/docs/evidence#commissioned-paid-panels">paid-panel methodology</Link> forms part of these terms.
       </p>
       <h2>Operator</h2>
       <p>

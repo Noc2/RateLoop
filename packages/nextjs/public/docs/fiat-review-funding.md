@@ -1,8 +1,9 @@
-# Fiat review funding
+# Fiat panel funding
 
 **Status:** available only when `TOKENLESS_PREPAID_TOPUP_ENABLED=true`; production use remains subject to the billing and legal readiness gates.
 
-RateLoop uses Stripe Invoicing as a bridge into the existing prepaid review ledger. It does not treat Stripe Billing credits as RateLoop review credit and it does not credit tax.
+RateLoop uses Stripe Invoicing as a bridge into the existing prepaid panel ledger. It does not treat Stripe Billing
+credits as RateLoop panel credit and it does not credit tax.
 
 ## Current funding rail
 
@@ -20,9 +21,13 @@ Stripe documents the customer-balance virtual-account and reconciliation model i
 
 ## Fail-closed settlement
 
-Paid-out-of-band invoices and invoices paid using a pre-existing Stripe customer balance do not create review credit. Partial payment, overpayment, underpayment, currency or amount drift, wrong customer/workspace metadata, payment-method drift, and test/live-mode mismatch also do not credit the ledger. Webhook projection and scheduled reconciliation share the same validation and exactly-once ledger reference.
+Paid-out-of-band invoices and invoices paid using a pre-existing Stripe customer balance do not create panel credit.
+Partial payment, overpayment, underpayment, currency or amount drift, wrong customer/workspace metadata, payment-method
+drift, and test/live-mode mismatch also do not credit the ledger. Webhook projection and scheduled reconciliation share
+the same validation and exactly-once ledger reference.
 
-A voided unpaid invoice becomes failed. A credited invoice can never be silently reversed by this bridge; any later provider dispute is an operator reconciliation incident rather than a mutation of accepted review funding.
+A voided unpaid invoice becomes failed. A credited invoice can never be silently reversed by this bridge; any later
+provider dispute is an operator reconciliation incident rather than a mutation of accepted panel funding.
 
 ## Billing profile and tax
 

@@ -710,6 +710,7 @@ test("evidence waits for the configured confirmation depth, then publishes idemp
   });
   assert.match(appended.eventId, /^tpe_/);
   assert.match(published.publicationId ?? "", /^pub_/);
+  assert.equal(published.result.methodologyUrl, "https://app.example.test/docs/evidence#commissioned-paid-panels");
   assert.equal(replay.publicationId, published.publicationId);
   const counts = await dbClient.execute({
     sql: `SELECT

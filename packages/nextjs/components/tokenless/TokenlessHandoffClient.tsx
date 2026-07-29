@@ -1299,6 +1299,13 @@ export function TokenlessHandoffClient() {
 
           {result ? (
             <>
+              <div className="mt-6 rounded-xl border border-[var(--rateloop-blue)]/25 bg-[var(--rateloop-blue)]/[0.06] p-4 text-sm leading-6 text-base-content/70">
+                <p className="font-semibold text-base-content">Commissioned paid panel</p>
+                <p className="mt-1">
+                  The customer funded this business research panel and its reviewers. This is not organic consumer
+                  feedback, a testimonial, or a measure of general public opinion.
+                </p>
+              </div>
               <dl className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
                 <SummaryItem label="Status" value={result.verdictStatus.replaceAll("_", " ")} />
                 <SummaryItem label="Selected" value={displaySelected(result, request.question)} />

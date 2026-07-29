@@ -1774,7 +1774,7 @@ export async function reviewAndPublishResult(input: { operationKey: string; appO
           }
         : null,
     feedback,
-    methodologyUrl: `${input.appOrigin.replace(/\/$/, "")}/docs/how-it-works`,
+    methodologyUrl: `${input.appOrigin.replace(/\/$/, "")}/docs/evidence#commissioned-paid-panels`,
     updatedAt: now.toISOString(),
   });
   if (existingReview.rows.length === 0) {

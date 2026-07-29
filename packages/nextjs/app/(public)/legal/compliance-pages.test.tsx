@@ -62,3 +62,15 @@ test("cookie policy discloses every first-party storage category and no analytic
   assert.match(html, /youtube-nocookie.com/i);
   assert.match(html, /does not show a consent banner/i);
 });
+
+test("terms restrict paid services and require commissioned-panel disclosure", async () => {
+  const html = await render("./terms/page");
+  assert.match(
+    html,
+    /available only to approved business customers whose legal identity RateLoop has independently verified/i,
+  );
+  assert.match(html, /funded panel result is commissioned business-to-business research/i);
+  assert.match(html, /not an organic consumer review, testimonial, endorsement, or measure of general public opinion/i);
+  assert.match(html, /must not present paid reviewer feedback as unsolicited customer or consumer feedback/i);
+  assert.match(html, /href="\/docs\/evidence#commissioned-paid-panels"/i);
+});

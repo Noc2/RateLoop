@@ -286,6 +286,8 @@ test("handoff content cleanup preserves consent and consequence safeguards", () 
     handoffSource,
     /This panel is decision support, not an automatic release, safety, legal, or compliance approval\. The[\s\S]{0,40}accountable person remains responsible for the final action\./,
   );
+  assert.match(handoffSource, /Commissioned paid panel/);
+  assert.match(handoffSource, /This is not organic consumer[\s\S]{0,40}feedback, a testimonial/);
 
   assert.equal(handoffSource.match(/variant="marketing"/g)?.length, 7);
   assert.doesNotMatch(handoffSource, /className="rateloop-surface-card/);

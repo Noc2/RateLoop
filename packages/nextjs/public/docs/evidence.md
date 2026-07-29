@@ -79,6 +79,24 @@ Redacted shape:
 }
 ```
 
+## Commissioned paid-panel methodology
+
+Where this separately gated path is offered, the customer commissions a business-to-business research panel and funds
+the disclosed reviewer bounty and fees. The result is not organic consumer feedback, a customer testimonial, an
+endorsement, or a representative public-opinion poll.
+
+1. The question, choices, reviewer source, panel size, economics, deadlines, and eligibility policy are frozen before
+   assignments begin.
+2. Eligible reviewers accept the exact assignment terms and answer independently without seeing other responses.
+   Reviewers are compensated under the frozen terms for accepted work.
+3. The result reports the responding panel size, preference share, uncertainty interval, integrity status, settlement
+   evidence, refunds, and limitations. It does not infer a view held by non-participants.
+4. A public paid commit schedules its encrypted vote details and payout link to become publicly decryptable at the
+   disclosed drand round. The customer's private source material remains outside that public record.
+
+Anyone sharing a result must identify it as a commissioned paid panel, preserve its methodology and limitations link,
+and must not relabel paid reviewer feedback as unsolicited customer or consumer feedback.
+
 ## How to check the evidence
 
 1. Export the packet and obtain the expected key ID and public-key pin from the cacheable, unauthenticated

@@ -155,6 +155,7 @@ export default function EvidencePage() {
           {[
             ["Responsibilities", "#shared-responsibility"],
             ["Packet contents", "#packet"],
+            ["Paid panels", "#commissioned-paid-panels"],
             ["Verification", "#verify"],
             ["Exports", "#exports"],
             ["Framework cross-reference", "#compliance-map"],
@@ -238,6 +239,35 @@ export default function EvidencePage() {
           <code>{REDACTED_PACKET}</code>
         </pre>
       </details>
+
+      <h2 id="commissioned-paid-panels">Commissioned paid-panel methodology</h2>
+      <p>
+        Where this separately gated path is offered, the customer commissions a business-to-business research panel and
+        funds the disclosed reviewer bounty and fees. The result is not organic consumer feedback, a customer
+        testimonial, an endorsement, or a representative public-opinion poll.
+      </p>
+      <ol>
+        <li>
+          The question, response choices, reviewer source, panel size, economics, deadlines, and eligibility policy are
+          frozen before assignments begin.
+        </li>
+        <li>
+          Eligible reviewers accept the exact assignment terms and answer independently without seeing other responses.
+          Reviewers are compensated under the frozen terms for accepted work.
+        </li>
+        <li>
+          The result reports the responding panel size, preference share, uncertainty interval, integrity status,
+          settlement evidence, refunds, and explicit limitations. It does not infer a view held by non-participants.
+        </li>
+        <li>
+          A public paid commit schedules its encrypted vote details and payout link to become publicly decryptable at
+          the disclosed drand round. The customer&apos;s private source material remains outside that public record.
+        </li>
+      </ol>
+      <p>
+        Anyone sharing a result must identify it as a commissioned paid panel, preserve its methodology and limitations
+        link, and must not relabel paid reviewer feedback as unsolicited customer or consumer feedback.
+      </p>
 
       <h2 id="verify">How to check the evidence</h2>
       <p>
