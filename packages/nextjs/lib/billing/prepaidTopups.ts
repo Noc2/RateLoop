@@ -1,3 +1,4 @@
+import { requireVerifiedBusinessCustomer } from "./businessCustomerEligibility";
 import {
   assertPrepaidTopupConfiguration,
   createAndSendPrepaidInvoice,
@@ -203,6 +204,7 @@ export async function createPrepaidTopup(input: {
   const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey);
   const now = input.now ?? new Date();
   const { profile } = await requireWorkspaceTopupAccess(input);
+  await requireVerifiedBusinessCustomer({ workspaceId: input.workspaceId, now });
   if (!profile.complete || !profile.legalName) {
     throw new TokenlessServiceError(
       "Complete the business billing profile before requesting an invoice.",

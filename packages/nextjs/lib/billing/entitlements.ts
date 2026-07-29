@@ -1,3 +1,4 @@
+import { requireVerifiedBusinessCustomer } from "./businessCustomerEligibility";
 import {
   DEFAULT_FREE_PRICE_VERSION,
   TOKENLESS_BILLING_PLANS,
@@ -214,6 +215,7 @@ export async function assertPaidPanelsAllowed(client: PoolClient, workspaceId: s
       planKey: entitlement.plan.key,
     });
   }
+  await requireVerifiedBusinessCustomer({ workspaceId, now, client });
   return entitlement;
 }
 
@@ -237,9 +239,9 @@ export async function reserveWorkspaceUsageAllocations(
   input: { workspaceId: string; runId: string; caseIds: string[]; requiresPaidPanels?: boolean; now?: Date },
 ) {
   const now = input.now ?? new Date();
-  const entitlement = await resolveWorkspaceEntitlement(client, input.workspaceId, now);
-  if (input.requiresPaidPanels && !entitlement.plan.paidPanels)
-    throw new PlanLimitReachedError({ limitType: "paid_panels", limit: 0, current: 0, planKey: entitlement.plan.key });
+  const entitlement = input.requiresPaidPanels
+    ? await assertPaidPanelsAllowed(client, input.workspaceId, now)
+    : await resolveWorkspaceEntitlement(client, input.workspaceId, now);
   const uniqueCaseIds = [...new Set(input.caseIds)];
   if (uniqueCaseIds.length !== input.caseIds.length || uniqueCaseIds.length === 0) {
     throw new Error("Usage allocations require a non-empty unique case set.");

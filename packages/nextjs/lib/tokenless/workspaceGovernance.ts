@@ -2,6 +2,10 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
 import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/accountSubject";
+import {
+  type BusinessVerificationStatus,
+  insertBusinessVerificationEvent,
+} from "~~/lib/billing/businessCustomerEligibility";
 import { dbClient, dbPool } from "~~/lib/db";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -15,7 +19,7 @@ export type WorkspaceInviteAccessRole = (typeof WORKSPACE_INVITE_ACCESS_ROLES)[n
 export const WORKSPACE_DPA_STATUSES = ["not_started", "pending", "signed", "not_required"] as const;
 export type WorkspaceDpaStatus = (typeof WORKSPACE_DPA_STATUSES)[number];
 
-export const WORKSPACE_TRADER_STATUSES = ["unverified", "verified", "not_applicable"] as const;
+export const WORKSPACE_TRADER_STATUSES = ["unverified", "self_declared", "verified", "not_applicable"] as const;
 export type WorkspaceTraderStatus = (typeof WORKSPACE_TRADER_STATUSES)[number];
 
 const GOVERNANCE_ROLE_SET = new Set<string>(WORKSPACE_GOVERNANCE_ROLES);
@@ -324,46 +328,79 @@ export async function updateWorkspaceGovernance(input: {
       "invalid_governance",
     );
   }
-  if (input.traderStatus === "verified" && (!traderLegalName || !traderRegisteredAddress)) {
+  if (input.traderStatus === "verified") {
     throw new TokenlessServiceError(
-      "Verified trader status requires a legal name and registered address.",
-      400,
-      "invalid_governance",
+      "Workspace members cannot grant independent business verification.",
+      403,
+      "business_verification_operator_required",
     );
   }
   const now = new Date();
-  const result = await dbClient.execute({
-    sql: `INSERT INTO tokenless_workspace_governance
-          (workspace_id, default_retention_days, trader_status, trader_legal_name,
-           trader_registration_number, trader_registered_address, vat_country_code, vat_id,
-           updated_by, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT (workspace_id) DO UPDATE SET
-            default_retention_days = EXCLUDED.default_retention_days,
-            trader_status = EXCLUDED.trader_status,
-            trader_legal_name = EXCLUDED.trader_legal_name,
-            trader_registration_number = EXCLUDED.trader_registration_number,
-            trader_registered_address = EXCLUDED.trader_registered_address,
-            vat_country_code = EXCLUDED.vat_country_code,
-            vat_id = EXCLUDED.vat_id,
-            updated_by = EXCLUDED.updated_by,
-            updated_at = EXCLUDED.updated_at
-          RETURNING *`,
-    args: [
-      input.workspaceId,
-      defaultDays,
-      input.traderStatus,
-      traderLegalName,
-      traderRegistrationNumber,
-      traderRegisteredAddress,
-      vatCountryCode,
-      vatId,
-      manager.accountAddress,
-      now,
-      now,
-    ],
-  });
-  return governanceProfileFromRow(result.rows[0] as QueryRow | undefined);
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    const prior = await client.query(
+      "SELECT trader_status FROM tokenless_workspace_governance WHERE workspace_id=$1 FOR UPDATE",
+      [input.workspaceId],
+    );
+    const priorStatus = rowString(
+      prior.rows[0] as QueryRow | undefined,
+      "trader_status",
+    ) as BusinessVerificationStatus | null;
+    const result = await client.query(
+      `INSERT INTO tokenless_workspace_governance
+         (workspace_id, default_retention_days, trader_status, trader_legal_name,
+          trader_registration_number, trader_registered_address, vat_country_code, vat_id,
+          updated_by, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$10)
+       ON CONFLICT (workspace_id) DO UPDATE SET
+         default_retention_days = EXCLUDED.default_retention_days,
+         trader_status = EXCLUDED.trader_status,
+         trader_legal_name = EXCLUDED.trader_legal_name,
+         trader_registration_number = EXCLUDED.trader_registration_number,
+         trader_registered_address = EXCLUDED.trader_registered_address,
+         vat_country_code = EXCLUDED.vat_country_code,
+         vat_id = EXCLUDED.vat_id,
+         trader_verification_method = NULL,
+         trader_verification_reference_hash = NULL,
+         trader_verified_at = NULL,
+         trader_verification_expires_at = NULL,
+         trader_verified_by = NULL,
+         updated_by = EXCLUDED.updated_by,
+         updated_at = EXCLUDED.updated_at
+       RETURNING *`,
+      [
+        input.workspaceId,
+        defaultDays,
+        input.traderStatus,
+        traderLegalName,
+        traderRegistrationNumber,
+        traderRegisteredAddress,
+        vatCountryCode,
+        vatId,
+        manager.accountAddress,
+        now,
+      ],
+    );
+    if (priorStatus === "verified") {
+      await insertBusinessVerificationEvent(client, {
+        workspaceId: input.workspaceId,
+        priorStatus,
+        nextStatus: input.traderStatus,
+        action: "profile_changed",
+        actorReference: manager.accountAddress,
+        reason: "Workspace governance changed the verified business profile.",
+        createdAt: now,
+      });
+    }
+    await client.query("COMMIT");
+    return governanceProfileFromRow(result.rows[0] as QueryRow | undefined);
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function getWorkspaceGovernance(input: {

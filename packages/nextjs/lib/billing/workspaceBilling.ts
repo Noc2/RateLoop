@@ -1,3 +1,8 @@
+import {
+  type BusinessVerificationStatus,
+  insertBusinessVerificationEvent,
+  requireVerifiedBusinessCustomer,
+} from "./businessCustomerEligibility";
 import { TOKENLESS_BILLING_PLANS, getPlanByPriceVersion } from "./plans";
 import {
   createEarlyAccessCheckout,
@@ -11,7 +16,7 @@ import {
 import type { WorkspaceBillingSummary, WorkspaceCheckoutBlockedReason } from "./workspaceBillingTypes";
 import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
-import { dbClient } from "~~/lib/db";
+import { dbClient, dbPool } from "~~/lib/db";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type QueryRow = Record<string, unknown> | undefined;
@@ -88,7 +93,8 @@ function billingProfileFromRow(row: QueryRow) {
   const legalName = rowString(row, "trader_legal_name");
   const registeredAddress = rowString(row, "trader_registered_address");
   return {
-    complete: rowString(row, "trader_status") === "verified" && Boolean(legalName && registeredAddress),
+    complete: Boolean(legalName && registeredAddress),
+    verificationStatus: (rowString(row, "trader_status") ?? "unverified") as BusinessVerificationStatus,
     legalName,
     registeredAddress,
     registrationNumber: rowString(row, "trader_registration_number"),
@@ -197,52 +203,82 @@ export async function updateWorkspaceBillingProfile(input: {
     );
   }
   const now = new Date();
-  const result = await dbClient.execute({
-    sql: `INSERT INTO tokenless_workspace_governance
-            (workspace_id, default_retention_days, trader_status, trader_legal_name,
-             trader_registration_number, trader_registered_address, vat_country_code, vat_id,
-             billing_country_code, billing_address_line1, billing_address_line2, billing_city,
-             billing_postal_code, billing_state,
-             updated_by, created_at, updated_at)
-          VALUES (?, 30, 'verified', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT (workspace_id) DO UPDATE SET
-            trader_status = 'verified',
-            trader_legal_name = EXCLUDED.trader_legal_name,
-            trader_registration_number = EXCLUDED.trader_registration_number,
-            trader_registered_address = EXCLUDED.trader_registered_address,
-            vat_country_code = EXCLUDED.vat_country_code,
-            vat_id = EXCLUDED.vat_id,
-            billing_country_code = EXCLUDED.billing_country_code,
-            billing_address_line1 = EXCLUDED.billing_address_line1,
-            billing_address_line2 = EXCLUDED.billing_address_line2,
-            billing_city = EXCLUDED.billing_city,
-            billing_postal_code = EXCLUDED.billing_postal_code,
-            billing_state = EXCLUDED.billing_state,
-            updated_by = EXCLUDED.updated_by,
-            updated_at = EXCLUDED.updated_at
-          RETURNING trader_status, trader_legal_name, trader_registration_number,
-                    trader_registered_address, vat_country_code, vat_id,
-                    billing_country_code, billing_address_line1, billing_address_line2,
-                    billing_city, billing_postal_code, billing_state`,
-    args: [
-      input.workspaceId,
-      legalName,
-      registrationNumber,
-      registeredAddress,
-      vatCountryCode,
-      vatId,
-      billingCountryCode,
-      billingAddressLine1,
-      billingAddressLine2,
-      billingCity,
-      billingPostalCode,
-      billingState,
-      normalizeAccountSubject(input.accountAddress),
-      now,
-      now,
-    ],
-  });
-  return billingProfileFromRow(result.rows[0] as QueryRow);
+  const actor = normalizeAccountSubject(input.accountAddress);
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    const prior = await client.query(
+      "SELECT trader_status FROM tokenless_workspace_governance WHERE workspace_id=$1 FOR UPDATE",
+      [input.workspaceId],
+    );
+    const priorStatus = rowString(prior.rows[0] as QueryRow, "trader_status") as BusinessVerificationStatus | null;
+    const result = await client.query(
+      `INSERT INTO tokenless_workspace_governance
+         (workspace_id, default_retention_days, trader_status, trader_legal_name,
+          trader_registration_number, trader_registered_address, vat_country_code, vat_id,
+          billing_country_code, billing_address_line1, billing_address_line2, billing_city,
+          billing_postal_code, billing_state, updated_by, created_at, updated_at)
+       VALUES ($1, 30, 'self_declared', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $14)
+       ON CONFLICT (workspace_id) DO UPDATE SET
+         trader_status = 'self_declared',
+         trader_legal_name = EXCLUDED.trader_legal_name,
+         trader_registration_number = EXCLUDED.trader_registration_number,
+         trader_registered_address = EXCLUDED.trader_registered_address,
+         vat_country_code = EXCLUDED.vat_country_code,
+         vat_id = EXCLUDED.vat_id,
+         billing_country_code = EXCLUDED.billing_country_code,
+         billing_address_line1 = EXCLUDED.billing_address_line1,
+         billing_address_line2 = EXCLUDED.billing_address_line2,
+         billing_city = EXCLUDED.billing_city,
+         billing_postal_code = EXCLUDED.billing_postal_code,
+         billing_state = EXCLUDED.billing_state,
+         trader_verification_method = NULL,
+         trader_verification_reference_hash = NULL,
+         trader_verified_at = NULL,
+         trader_verification_expires_at = NULL,
+         trader_verified_by = NULL,
+         updated_by = EXCLUDED.updated_by,
+         updated_at = EXCLUDED.updated_at
+       RETURNING trader_status, trader_legal_name, trader_registration_number,
+                 trader_registered_address, vat_country_code, vat_id,
+                 billing_country_code, billing_address_line1, billing_address_line2,
+                 billing_city, billing_postal_code, billing_state`,
+      [
+        input.workspaceId,
+        legalName,
+        registrationNumber,
+        registeredAddress,
+        vatCountryCode,
+        vatId,
+        billingCountryCode,
+        billingAddressLine1,
+        billingAddressLine2,
+        billingCity,
+        billingPostalCode,
+        billingState,
+        actor,
+        now,
+      ],
+    );
+    if (priorStatus === "verified") {
+      await insertBusinessVerificationEvent(client, {
+        workspaceId: input.workspaceId,
+        priorStatus,
+        nextStatus: "self_declared",
+        action: "profile_changed",
+        actorReference: actor,
+        reason: "Customer-edited billing identity requires independent re-verification.",
+        createdAt: now,
+      });
+    }
+    await client.query("COMMIT");
+    return billingProfileFromRow(result.rows[0] as QueryRow);
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 function currentFreePeriod(now = new Date()) {
@@ -415,13 +451,7 @@ export async function startWorkspaceCheckout(input: { accountAddress: string; pl
   }
   const access = await requireWorkspaceAccess(input.accountAddress, input.workspaceId);
   requireBillingManager(access);
-  if (access.traderStatus !== "verified" || !access.legalName || !access.registeredAddress) {
-    throw new TokenlessServiceError(
-      "Complete the self-declared business billing profile before Checkout.",
-      409,
-      "billing_profile_required",
-    );
-  }
+  const verifiedBusiness = await requireVerifiedBusinessCustomer({ workspaceId: input.workspaceId });
   const subscription = await readSubscription(input.workspaceId);
   const status = rowString(subscription, "provider_status") ?? "free";
   const periodEnd = rowString(subscription, "current_period_end")
@@ -435,7 +465,10 @@ export async function startWorkspaceCheckout(input: { accountAddress: string; pl
     );
   }
   getEarlyAccessPriceId();
-  const customerId = await getOrCreateBillingCustomer({ legalName: access.legalName, workspaceId: input.workspaceId });
+  const customerId = await getOrCreateBillingCustomer({
+    legalName: verifiedBusiness.legalName,
+    workspaceId: input.workspaceId,
+  });
   const blockingSubscription = await findBlockingStripeSubscription(customerId);
   if (blockingSubscription) {
     throw new TokenlessServiceError(
@@ -447,7 +480,7 @@ export async function startWorkspaceCheckout(input: { accountAddress: string; pl
   return {
     url: await createEarlyAccessCheckout({
       customerId,
-      legalName: access.legalName,
+      legalName: verifiedBusiness.legalName,
       workspaceId: input.workspaceId,
     }),
   };

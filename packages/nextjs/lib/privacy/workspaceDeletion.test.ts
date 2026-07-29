@@ -400,7 +400,7 @@ test("workspace deletion requires exact DELETE confirmation and atomically erase
            trader_registration_number, trader_registered_address, vat_country_code, vat_id,
            billing_country_code, billing_address_line1, billing_address_line2, billing_city,
            billing_postal_code, billing_state, updated_by, created_at, updated_at)
-          VALUES (?, 30, 'verified', 'Delete Exactly GmbH', 'HRB 12345',
+          VALUES (?, 30, 'self_declared', 'Delete Exactly GmbH', 'HRB 12345',
                   'Beispielweg 1, 10115 Berlin', 'DE', 'DE123456789',
                   'DE', 'Beispielweg 1', 'Aufgang B', 'Berlin', '10115', 'Berlin', ?, ?, ?)`,
     args: [workspaceId, OWNER, NOW, NOW],

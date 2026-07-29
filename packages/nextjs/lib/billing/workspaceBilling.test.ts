@@ -1,6 +1,7 @@
 import {
   getWorkspaceBillingProfile,
   getWorkspaceBillingSummary,
+  startWorkspaceCheckout,
   updateWorkspaceBillingProfile,
 } from "./workspaceBilling";
 import assert from "node:assert/strict";
@@ -128,6 +129,7 @@ test("billing members can self-declare a business profile without changing reten
       state: null,
     },
     complete: true,
+    verificationStatus: "self_declared",
     legalName: "Acme GmbH",
     registeredAddress: "Example Street 1, Berlin",
     registrationNumber: "HRB 123",
@@ -139,7 +141,13 @@ test("billing members can self-declare a business profile without changing reten
     "SELECT default_retention_days, trader_status FROM tokenless_workspace_governance WHERE workspace_id = 'ws_acme'",
   );
   assert.equal(Number(stored.rows[0]?.default_retention_days), 90);
-  assert.equal(stored.rows[0]?.trader_status, "verified");
+  assert.equal(stored.rows[0]?.trader_status, "self_declared");
+  process.env.TOKENLESS_SUBSCRIPTIONS_ENABLED = "true";
+  await assert.rejects(
+    () => startWorkspaceCheckout({ accountAddress: OWNER, plan: "early_access", workspaceId: "ws_acme" }),
+    (error: unknown) =>
+      error instanceof TokenlessServiceError && error.status === 403 && error.code === "business_verification_required",
+  );
 });
 
 test("billing profile requires legal identity and paired VAT fields", async () => {

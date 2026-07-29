@@ -56,11 +56,24 @@ test("workspace governance persists trader and VAT data while applying retention
   assert.equal(initial.defaultRetentionDays, 30);
   assert.equal(initial.traderStatus, "unverified");
 
+  await assert.rejects(
+    () =>
+      updateWorkspaceGovernance({
+        accountAddress: OWNER_A,
+        workspaceId,
+        defaultRetentionDays: 45,
+        traderStatus: "verified",
+        traderLegalName: "Assurance Consulting GmbH",
+        traderRegisteredAddress: "Example Street 1, 10115 Berlin",
+      }),
+    (error: unknown) =>
+      error instanceof TokenlessServiceError && error.code === "business_verification_operator_required",
+  );
   const profile = await updateWorkspaceGovernance({
     accountAddress: OWNER_A,
     workspaceId,
     defaultRetentionDays: 45,
-    traderStatus: "verified",
+    traderStatus: "self_declared",
     traderLegalName: "Assurance Consulting GmbH",
     traderRegistrationNumber: "HRB 12345",
     traderRegisteredAddress: "Example Street 1, 10115 Berlin",
@@ -70,7 +83,7 @@ test("workspace governance persists trader and VAT data while applying retention
   assert.deepEqual(profile, {
     workspaceId,
     defaultRetentionDays: 45,
-    traderStatus: "verified",
+    traderStatus: "self_declared",
     traderLegalName: "Assurance Consulting GmbH",
     traderRegistrationNumber: "HRB 12345",
     traderRegisteredAddress: "Example Street 1, 10115 Berlin",
@@ -134,7 +147,7 @@ test("workspace governance persists trader and VAT data while applying retention
     args: [workspaceId, inherited.clientId],
   });
   assert.equal(Number(stored.rows[0]?.default_retention_days), 45);
-  assert.equal(stored.rows[0]?.trader_status, "verified");
+  assert.equal(stored.rows[0]?.trader_status, "self_declared");
   assert.equal(stored.rows[0]?.vat_country_code, "DE");
   assert.equal(stored.rows[0]?.vat_id, "DE123456789");
   assert.equal(stored.rows[0]?.dpa_status, "signed");
