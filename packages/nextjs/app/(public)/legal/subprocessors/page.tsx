@@ -43,14 +43,14 @@ const conditionalProviders = [
     condition: "Only when Rekor witnessing is configured for the customer's evidence pipeline.",
   },
   {
-    provider: "Customer-approved RFC 3161 timestamp authority",
-    purpose: "Optional timestamp token over an evidence digest; customer record contents are not submitted.",
-    condition: "Only when a timestamp authority and its trust policy are configured.",
-  },
-  {
     provider: "Drata, Inc. or Vanta Inc.",
     purpose: "Optional delivery of selected governance, risk, and compliance evidence.",
     condition: "Only when the customer connects and selects one of these GRC destinations.",
+  },
+  {
+    provider: "Customer-approved RFC 3161 timestamp authority",
+    purpose: "Optional timestamp token over an evidence digest; customer record contents are not submitted.",
+    condition: "Only when a timestamp authority and its trust policy are configured.",
   },
   {
     provider: "Customer-designated S3-compatible storage provider",

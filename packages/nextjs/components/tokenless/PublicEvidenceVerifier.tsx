@@ -1,6 +1,7 @@
 "use client";
 
 import { type ChangeEvent, type FormEvent, useState } from "react";
+import { Field, TextareaField } from "~~/components/tokenless/forms/Field";
 import {
   MAX_PUBLIC_EVIDENCE_PACKET_BYTES,
   type PublicEvidenceVerificationResult,
@@ -27,13 +28,13 @@ function CheckResult({ check }: { check: PublicEvidenceVerificationResult["check
         <dl className="mt-3 space-y-2 text-xs">
           {check.expected ? (
             <div>
-              <dt className="text-base-content/50">Packet / trusted value</dt>
+              <dt className="text-base-content/60">Packet / trusted value</dt>
               <dd className="mt-1 break-all font-mono text-base-content/75">{check.expected}</dd>
             </div>
           ) : null}
           {check.actual && check.actual !== check.expected ? (
             <div>
-              <dt className="text-base-content/50">Recomputed / packet value</dt>
+              <dt className="text-base-content/60">Recomputed / packet value</dt>
               <dd className="mt-1 break-all font-mono text-base-content/75">{check.actual}</dd>
             </div>
           ) : null}
@@ -91,12 +92,11 @@ export function PublicEvidenceVerifier({ initialPacketJson = "" }: { initialPack
   return (
     <form className="mt-8" onSubmit={verify}>
       <div className="rounded-3xl border border-base-content/10 bg-base-content/[0.025] p-5 sm:p-7">
-        <label className="block font-semibold text-base-content" htmlFor="evidence-packet">
-          Packet JSON
-        </label>
-        <textarea
+        <TextareaField
           id="evidence-packet"
-          className="textarea mt-3 min-h-64 w-full resize-y rounded-2xl border-base-content/15 bg-base-300/40 font-mono text-xs leading-6"
+          label="Packet JSON"
+          labelClassName="font-semibold text-base-content"
+          className="min-h-64 resize-y rounded-2xl border-base-content/15 bg-base-300/40 font-mono text-xs leading-6"
           value={packetJson}
           maxLength={MAX_PUBLIC_EVIDENCE_PACKET_BYTES}
           onChange={event => changePacket(event.target.value)}
@@ -105,15 +105,12 @@ export function PublicEvidenceVerifier({ initialPacketJson = "" }: { initialPack
         />
         <div className="mt-4 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <label
-              className="btn rateloop-secondary-action min-h-11 cursor-pointer px-4"
-              htmlFor="evidence-packet-file"
-            >
-              Choose JSON file
-            </label>
-            <input
+            <Field
               id="evidence-packet-file"
+              containerClassName="btn rateloop-secondary-action min-h-11 cursor-pointer px-4"
               className="sr-only"
+              label="Choose JSON file"
+              labelClassName="m-0 inline font-normal text-inherit"
               type="file"
               accept=".json,application/json"
               onChange={selectFile}

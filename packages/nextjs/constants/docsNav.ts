@@ -12,6 +12,7 @@ export const DOCS_NAV = [
     links: [
       { label: "Human Oversight", href: "/docs/human-oversight" },
       { label: "Evidence", href: "/docs/evidence" },
+      { label: "Verify Evidence", href: "/docs/evidence/verify" },
       { label: "Connect a Host", href: "/docs/connect" },
       { label: "Agents & MCP", href: "/docs/ai" },
       { label: "Tech Stack", href: "/docs/tech-stack" },

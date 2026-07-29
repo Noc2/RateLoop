@@ -327,7 +327,7 @@ function ProjectAuditorAccess({ workspaceId }: { workspaceId: string }) {
           ))}
         </SelectField>
         <Field
-          label="Auditor account or principal ID"
+          label="Auditor account ID"
           value={subjectReference}
           onChange={event => setSubjectReference(event.target.value)}
           maxLength={255}
@@ -1053,7 +1053,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                     </button>
                   </div>
                 </div>
-                <p className="mt-3 text-xs leading-5 text-base-content/50" id={`share-note-${packet.payload.packetId}`}>
+                <p className="mt-3 text-xs leading-5 text-base-content/60" id={`share-note-${packet.payload.packetId}`}>
                   Anyone with the link can open this packet for 7 days. The secret is shown once.
                 </p>
                 {shares.some(share => share.status === "active") ? (
@@ -1070,9 +1070,11 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                           </p>
                           {shareUrls[share.grantId] ? (
                             <div className="flex flex-col gap-2 sm:flex-row">
-                              <input
-                                aria-label="Share link"
-                                className="input input-sm min-w-0 flex-1 border-white/10 bg-[var(--rateloop-field)] font-mono text-xs"
+                              <Field
+                                label="Share link"
+                                labelClassName="sr-only"
+                                containerClassName="min-w-0 flex-1"
+                                className="input input-sm border-white/10 bg-[var(--rateloop-field)] font-mono text-xs"
                                 readOnly
                                 value={shareUrls[share.grantId]}
                                 onFocus={event => event.currentTarget.select()}
@@ -1095,7 +1097,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                               </button>
                             </div>
                           ) : (
-                            <p className="text-xs text-base-content/50">
+                            <p className="text-xs text-base-content/60">
                               The link secret was shown once. Revoke this link if it is no longer controlled.
                             </p>
                           )}

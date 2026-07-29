@@ -40,7 +40,18 @@ test("documentation uses the shared application sidebar instead of a second rail
     DOCS_NAV.map(group => [group.section, group.links.map(link => link.label)]),
     [
       ["Start Here", ["Introduction", "How It Works", "Use Cases"]],
-      ["Platform", ["Human Oversight", "Evidence", "Connect a Host", "Agents & MCP", "Tech Stack", "Smart Contracts"]],
+      [
+        "Platform",
+        [
+          "Human Oversight",
+          "Evidence",
+          "Verify Evidence",
+          "Connect a Host",
+          "Agents & MCP",
+          "Tech Stack",
+          "Smart Contracts",
+        ],
+      ],
       ["Build", ["SDK", "API Errors"]],
     ],
   );
