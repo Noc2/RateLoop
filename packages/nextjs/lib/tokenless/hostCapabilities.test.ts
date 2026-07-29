@@ -10,12 +10,30 @@ import {
   tokenlessHostMessageVariant,
 } from "./hostCapabilities";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
+import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const KEBAB_CASE_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const HOSTS: readonly TokenlessHostCapability[] = TOKENLESS_HOST_CAPABILITIES;
+const NEXTJS_DIRECTORY = fileURLToPath(new URL("../..", import.meta.url));
+
+function publicSurfaceFiles(directory: string, extensions: readonly string[]): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+    const absolutePath = path.join(directory, entry.name);
+    if (entry.isDirectory()) return publicSurfaceFiles(absolutePath, extensions);
+    if (
+      !entry.isFile() ||
+      entry.name.includes(".test.") ||
+      !extensions.some(extension => entry.name.endsWith(extension))
+    ) {
+      return [];
+    }
+    return [absolutePath];
+  });
+}
 
 test("verified tier requires evidence and no host is verified today", () => {
   for (const host of HOSTS) {
@@ -33,6 +51,26 @@ test("verified tier requires evidence and no host is verified today", () => {
 
   // No pinned-version smoke run exists yet, so nothing may claim the tier.
   assert.equal(HOSTS.filter(host => host.supportTier === "verified").length, 0);
+});
+
+test("every public page and machine-doc mirror derives verified-host capability claims from the registry", () => {
+  const hasVerifiedHost = HOSTS.some(host => host.supportTier === "verified");
+  if (hasVerifiedHost) return;
+
+  const files = [
+    ...publicSurfaceFiles(path.join(NEXTJS_DIRECTORY, "app", "(public)"), [".tsx"]),
+    ...publicSurfaceFiles(path.join(NEXTJS_DIRECTORY, "public", "docs"), [".md"]),
+  ];
+  assert.ok(files.some(file => file.endsWith(`${path.sep}app${path.sep}(public)${path.sep}page.tsx`)));
+  assert.ok(files.some(file => file.endsWith(`${path.sep}public${path.sep}docs${path.sep}evidence.md`)));
+
+  const unearnedCapabilityClaim =
+    /\b(?:verified host enforcement|verified hosts?)\s+(?:can|will|does|do|honors?|holds?|blocks?|keeps?)\b|\b(?:is|remains)\s+(?:the\s+)?(?:primary|preferred)\s+verified\s+(?:path|host|integration)\b|\buse a verified host-enforced integration\b/giu;
+  const failures = files.flatMap(file => {
+    const matches = [...readFileSync(file, "utf8").matchAll(unearnedCapabilityClaim)];
+    return matches.map(match => `${path.relative(NEXTJS_DIRECTORY, file)}: ${match[0]}`);
+  });
+  assert.deepEqual(failures, []);
 });
 
 test("every install affordance carries its own freshness evidence", () => {
