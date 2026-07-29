@@ -8,10 +8,16 @@
 | [target-audience.md](target-audience.md)       | Who it is for. What the quotas and pricing imply about the assumed customer, and which segment the evidence actually supports.                |
 | [legal-position.md](legal-position.md)         | Where it sits under the EU AI Act, the DSA, data-protection law and the US regimes landing in 2027 — including which obligations do not bite. |
 | [design-assessment.md](design-assessment.md)   | Strengths and weaknesses, and the three strategic questions the assessment cannot settle.                                                     |
+| [remediation-plan.md](remediation-plan.md)     | What to do about the weaknesses, in commit-sized items, ordered by what is urgent rather than by what is large.                               |
 
-These four were written on 29 July 2026 to replace twenty-five documents that had
-drifted from the code. Read them as a set: the first is descriptive, the other
-three are arguments built on it.
+The first four were written on 29 July 2026 to replace twenty-five documents that
+had drifted from the code. Read them as a set: the first is descriptive, the next
+three are arguments built on it, and the plan acts on the last of those.
+
+The assessment was revised the same day after a second research pass checked each
+weakness against the code. Six of eight were wrong in some respect and the
+corrections are recorded in place, because the pattern of error — describing a survey
+instead of the code — is itself the finding.
 
 ## Working references
 
