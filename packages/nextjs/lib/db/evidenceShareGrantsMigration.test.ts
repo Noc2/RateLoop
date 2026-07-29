@@ -33,11 +33,14 @@ test("0162 narrows hash-only evidence shares through every tenant and record bou
   assert.match(model, /projectRunFk: foreignKey/u);
   assert.match(model, /runPacketFk: foreignKey/u);
   assert.match(model, /tokenHash: text\("token_hash"\)\.notNull\(\)\.unique\(\)/u);
-  assert.deepEqual(journal.entries.at(-1), {
-    idx: 162,
-    version: "7",
-    when: 1785232800000,
-    tag: "0162_evidence_share_grants",
-    breakpoints: true,
-  });
+  assert.deepEqual(
+    journal.entries.find(entry => entry.tag === "0162_evidence_share_grants"),
+    {
+      idx: 162,
+      version: "7",
+      when: 1785232800000,
+      tag: "0162_evidence_share_grants",
+      breakpoints: true,
+    },
+  );
 });
