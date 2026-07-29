@@ -112,6 +112,24 @@ test("encodes versioned hash-bound non-claim mappings and framework namespaces",
   );
 });
 
+test("excludes provider-only and system-level recordkeeping citations", () => {
+  assert.equal(
+    assuranceComplianceMap.frameworks.some(framework => framework.id === "sec-exchange-act-records"),
+    false,
+  );
+  assert.equal(
+    assuranceComplianceMap.mappings.some(mapping =>
+      ["eu-ai-act-article-12", "eu-ai-act-article-72", "sec-rule-17a-4-f"].includes(mapping.id),
+    ),
+    false,
+  );
+
+  const definition = JSON.stringify(buildOscalComponentDefinition());
+  assert.doesNotMatch(definition, /Article (?:12|72)|17a-4/iu);
+  assert.match(definition, /six-month floor applies to RateLoop review records/iu);
+  assert.match(definition, /does not satisfy Article 26\(6\)/iu);
+});
+
 test("keeps authoritative sources in back matter and exposes no unnamespaced mapping properties", () => {
   const definition = buildOscalComponentDefinition()["component-definition"];
   const resources = definition["back-matter"].resources;

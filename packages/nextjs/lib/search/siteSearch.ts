@@ -219,9 +219,8 @@ export const SITE_SEARCH_INDEX: readonly SiteSearchEntry[] = [
     title: "Evidence framework cross-reference",
     href: "/docs/evidence#compliance-map",
     area: "Docs",
-    description:
-      "Map RateLoop artifacts to ISO 42001, the EU AI Act, NIST AI RMF, FINRA, and SEC recordkeeping references.",
-    keywords: ["A.6", "A.9.2", "Article 12", "Article 26", "MEASURE", "MANAGE", "17a-4"],
+    description: "Map RateLoop artifacts to ISO 42001, the EU AI Act, NIST AI RMF, and FINRA references.",
+    keywords: ["A.6", "A.9.2", "Article 26", "Article 73", "MEASURE", "MANAGE"],
   },
   {
     title: "Connect a Host",
