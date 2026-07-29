@@ -4149,9 +4149,7 @@ __metadata:
   resolution: "@rateloop/ponder@workspace:packages/ponder"
   dependencies:
     "@types/node": ^24.0.0
-    "@types/pg": ^8.15.6
     hono: 4.12.25
-    pg: ^8.20.0
     ponder: ^1.0.0
     typescript: ~5.8.2
     viem: 2.39.0
