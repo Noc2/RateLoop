@@ -1,3 +1,4 @@
+import { TOKENLESS_HOST_CAPABILITIES, type TokenlessHostDeliveryEnforcement } from "~~/lib/tokenless/hostCapabilities";
 import { type HumanReviewLaneReadiness, humanReviewLaneImplementation } from "~~/lib/tokenless/reviewCapabilities";
 
 export const PUBLIC_EVIDENCE_CAPABILITIES = [
@@ -236,6 +237,62 @@ export type PublicEvidenceClaimViolation = {
   phrase: string;
   policy: PublicEvidenceClaimRule["policy"];
 };
+
+const UNEARNED_VERIFIED_HOST_CLAIMS = [
+  /\bverified host enforcement can\b/giu,
+  /\bverified hosts? honors?\b/giu,
+  /\b(?:is|remains)\s+(?:the\s+)?(?:primary|preferred)\s+verified\s+(?:path|host|integration)\b/giu,
+  /\buse a verified host-enforced integration\b/giu,
+] as const;
+
+const VERIFIED_HOST_NECESSARY_CONDITIONS = [
+  /\b(?:the active agent or |only )?a verified host (?:adapter|integration)[^.]{0,240}\b(?:can|must|may|owns?|controls?|enforces?|honors?|holds?|blocks?|keeps?)\b[^.]*\./giu,
+  /\b(?:only )?a verified adapter[^.]{0,240}\b(?:is required|may be described)\b[^.]*\./giu,
+  /\bhost-enforced\b[^.]{0,160}\bseparately verified adapter\b[^.]*\./giu,
+] as const;
+
+/**
+ * Registry-driven guard for the delivery-control meaning of "verified".
+ * Necessary-condition disclaimers remain useful, but while no adapter has
+ * verification evidence they must state current unavailability beside the
+ * claim. Unearned affirmative capability statements are always rejected.
+ */
+export function findVerifiedHostTierClaimViolations(source: string): PublicEvidenceClaimViolation[] {
+  if (
+    TOKENLESS_HOST_CAPABILITIES.some(
+      host => (host.deliveryEnforcement as TokenlessHostDeliveryEnforcement) === "verified",
+    )
+  ) {
+    return [];
+  }
+
+  const searchableSource = source.replace(/\s+/gu, " ");
+  const violations: PublicEvidenceClaimViolation[] = [];
+  const record = (matchedText: string) => {
+    violations.push({
+      claimId: "verified_host_delivery_enforcement",
+      matchedText,
+      missingCapabilities: [],
+      phrase: "Verified host delivery enforcement is currently available",
+      policy: "forbidden",
+    });
+  };
+
+  for (const pattern of UNEARNED_VERIFIED_HOST_CLAIMS) {
+    for (const match of searchableSource.matchAll(pattern)) record(match[0]);
+  }
+
+  const caveat = /\bno (?:available )?host currently (?:holds that tier|provides verified delivery enforcement)\b/iu;
+  for (const pattern of VERIFIED_HOST_NECESSARY_CONDITIONS) {
+    for (const match of searchableSource.matchAll(pattern)) {
+      const index = match.index ?? 0;
+      const nearby = searchableSource.slice(Math.max(0, index - 420), index + match[0].length + 420);
+      if (!caveat.test(nearby)) record(match[0]);
+    }
+  }
+
+  return violations;
+}
 
 export function findPublicEvidenceClaimViolations(
   source: string,

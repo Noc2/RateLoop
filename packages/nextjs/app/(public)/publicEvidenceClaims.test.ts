@@ -10,6 +10,7 @@ import {
   type PublicEvidenceCapabilityState,
   derivePublicEvidenceCapabilityState,
   findPublicEvidenceClaimViolations,
+  findVerifiedHostTierClaimViolations,
 } from "~~/lib/tokenless/publicEvidenceClaims";
 
 const PUBLIC_APP_DIRECTORY = fileURLToPath(new URL(".", import.meta.url));
@@ -186,6 +187,24 @@ test("forbidden compliance and provenance claims cannot be enabled by capability
   assert.deepEqual(findPublicEvidenceClaimViolations("RateLoop is not ISO/IEC 42001-certified."), []);
 });
 
+test("verified-host delivery claims follow the host registry and require an availability caveat", () => {
+  assert.equal(
+    findVerifiedHostTierClaimViolations(
+      "Only a verified host adapter that owns delivery can enforce waiting. No host currently holds that tier.",
+    ).length,
+    0,
+  );
+  assert.equal(
+    findVerifiedHostTierClaimViolations("Only a verified host adapter that owns delivery can enforce waiting.")[0]
+      ?.claimId,
+    "verified_host_delivery_enforcement",
+  );
+  assert.equal(
+    findVerifiedHostTierClaimViolations("Verified host enforcement can hold an output.")[0]?.claimId,
+    "verified_host_delivery_enforcement",
+  );
+});
+
 test("paid/public lanes and launch GDPR claims require their exact shipped capabilities", () => {
   assert.equal(
     findPublicEvidenceClaimViolations("Public RateLoop network review is USDC-paid.")[0]?.claimId,
@@ -235,7 +254,10 @@ test("all public TSX, tokenless components, machine docs, and plugin copy obey c
   assert.ok(publicFiles.some(file => file.endsWith("/rateloop-human-review-loop/SKILL.md")));
 
   const failures = publicFiles.flatMap(file =>
-    findPublicEvidenceClaimViolations(readFileSync(file, "utf8")).map(violation => ({
+    [
+      ...findPublicEvidenceClaimViolations(readFileSync(file, "utf8")),
+      ...findVerifiedHostTierClaimViolations(readFileSync(file, "utf8")),
+    ].map(violation => ({
       file: path.relative(NEXTJS_DIRECTORY, file),
       ...violation,
     })),
