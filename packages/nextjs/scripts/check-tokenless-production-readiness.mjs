@@ -710,10 +710,9 @@ export function validateTokenlessProductionReadiness({
     }
   }
   const enterpriseIdentityEnabled = value(env, "TOKENLESS_ENTERPRISE_IDENTITY_ENABLED");
-  if (enterpriseIdentityEnabled !== "true" && enterpriseIdentityEnabled !== "false") {
-    errors.push("TOKENLESS_ENTERPRISE_IDENTITY_ENABLED must be explicitly true or false in production.");
-  }
-  if (enterpriseIdentityEnabled === "true") {
+  if (enterpriseIdentityEnabled !== "true") {
+    errors.push("TOKENLESS_ENTERPRISE_IDENTITY_ENABLED must be true in production.");
+  } else {
     const issuers = value(env, "TOKENLESS_SSO_TRUSTED_ISSUERS").split(",").filter(Boolean);
     if (issuers.length === 0)
       errors.push("TOKENLESS_SSO_TRUSTED_ISSUERS is required when enterprise identity is enabled.");

@@ -148,7 +148,8 @@ function validFixture() {
     TOKENLESS_PAID_LANES_COMPLIANCE_APPROVED_AT: "2026-07-20T12:00:00.000Z",
     TOKENLESS_SUBSCRIPTIONS_ENABLED: "false",
     TOKENLESS_PREPAID_TOPUP_ENABLED: "false",
-    TOKENLESS_ENTERPRISE_IDENTITY_ENABLED: "false",
+    TOKENLESS_ENTERPRISE_IDENTITY_ENABLED: "true",
+    TOKENLESS_SSO_TRUSTED_ISSUERS: "https://identity.example.test",
     TOKENLESS_EVIDENCE_FINALITY_BLOCK_TAG: "safe",
     TOKENLESS_DAC7_POLICY: "eu",
     TOKENLESS_SANCTIONS_MATCH_RETENTION_DAYS: "1825",
@@ -1055,7 +1056,15 @@ test("prepaid top-ups require the live USD invoice rail when enabled", () => {
 test("enterprise identity requires explicit HTTPS OIDC issuer origins", () => {
   const missing = validFixture();
   missing.env.TOKENLESS_ENTERPRISE_IDENTITY_ENABLED = "true";
+  delete missing.env.TOKENLESS_SSO_TRUSTED_ISSUERS;
   assert.match(validateTokenlessProductionReadiness(missing).join("\n"), /TOKENLESS_SSO_TRUSTED_ISSUERS is required/);
+
+  const disabled = validFixture();
+  disabled.env.TOKENLESS_ENTERPRISE_IDENTITY_ENABLED = "false";
+  assert.match(
+    validateTokenlessProductionReadiness(disabled).join("\n"),
+    /TOKENLESS_ENTERPRISE_IDENTITY_ENABLED must be true in production/,
+  );
 
   const valid = validFixture();
   valid.env.TOKENLESS_ENTERPRISE_IDENTITY_ENABLED = "true";
