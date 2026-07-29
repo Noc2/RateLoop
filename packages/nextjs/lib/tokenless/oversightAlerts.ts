@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient } from "~~/lib/db";
+import { ADAPTIVE_REVIEW_STAGE_RATE_BPS, type AdaptiveReviewStage } from "~~/lib/tokenless/adaptiveReview";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Row = Record<string, unknown>;
@@ -46,12 +47,6 @@ const MINIMUM_SPIKE_COMPARABLE_SAMPLE = 10;
 const SPIKE_WINDOW_MS = 30 * 86_400_000;
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
-const STAGE_RATE_BPS: Record<string, number> = {
-  calibrating: 10_000,
-  high_coverage: 5_000,
-  medium_coverage: 2_500,
-  monitoring: 1_000,
-};
 
 function text(row: Row | undefined, key: string) {
   const value = row?.[key];
@@ -367,9 +362,9 @@ async function loadCoverageFloorCandidates(now: Date, limit: number): Promise<Al
     const principalAddress = text(row, "principal_address");
     const workspaceId = text(row, "workspace_id");
     const scopeId = text(row, "scope_id");
-    const stage = text(row, "stage") ?? "";
+    const stage = (text(row, "stage") ?? "") as AdaptiveReviewStage;
     const floorBps = Number(row.production_floor_bps ?? 0);
-    const stageRate = STAGE_RATE_BPS[stage];
+    const stageRate = ADAPTIVE_REVIEW_STAGE_RATE_BPS[stage];
     if (!principalAddress || !workspaceId || !scopeId || stageRate === undefined || stageRate > floorBps) return [];
     const workspaceName = text(row, "workspace_name") ?? "your workspace";
     return [

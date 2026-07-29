@@ -94,7 +94,7 @@ async function seedAdaptiveScope(input: { workspaceId: string; owner: string; la
           (policy_id, version, workspace_id, agent_id, agent_version_id, mode, enabled,
            agreement_threshold_bps, production_floor_bps, maximum_unreviewed_gap, rules_json,
            audience_policy_json, created_by, approved_by, created_at)
-          VALUES (?, 1, ?, ?, ?, 'adaptive', true, 7000, 1000, 20, '{}', ?, ?, ?, ?)`,
+          VALUES (?, 1, ?, ?, ?, 'adaptive', true, 7000, 2500, 20, '{}', ?, ?, ?, ?)`,
     args: [
       policyId,
       input.workspaceId,
@@ -310,7 +310,7 @@ test("workspace stop, disagreement spikes, and coverage floors alert with thresh
   const types = alerts.map(row => row.source_type);
   assert.ok(types.includes("oversight.workspace_stopped"));
   assert.ok(types.includes("oversight.disagreement_spike"));
-  // Stage rate (monitoring, 10%) is at the configured production floor (10%).
+  // Stage rate (monitoring, 25%) is at the configured production floor (25%).
   assert.ok(types.includes("oversight.coverage_floor_hit"));
 
   // Threshold alerts fire at most once per UTC day.

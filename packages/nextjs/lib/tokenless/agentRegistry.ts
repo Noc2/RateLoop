@@ -4,7 +4,7 @@ import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { assertCanCreateWorkspaceAgent } from "~~/lib/billing/entitlements";
 import { dbClient, dbPool } from "~~/lib/db";
 import type { TokenlessWorkspaceRole } from "~~/lib/db/productSchema";
-import type { AdaptiveReviewStage } from "~~/lib/tokenless/adaptiveReview";
+import { ADAPTIVE_REVIEW_STAGE_RATE_BPS, type AdaptiveReviewStage } from "~~/lib/tokenless/adaptiveReview";
 import {
   type AgentConnectionLane,
   connectionLaneFromClientCapabilitiesJson,
@@ -217,12 +217,6 @@ type QueryRow = Record<string, unknown>;
 
 const MANAGEMENT_ROLES = new Set<TokenlessWorkspaceRole>(["owner", "admin"]);
 const EXTERNAL_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/;
-const ASSURANCE_STAGE_RATES: Record<AdaptiveReviewStage, number> = {
-  calibrating: 10_000,
-  high_coverage: 5_000,
-  medium_coverage: 2_500,
-  monitoring: 1_000,
-};
 
 function rowString(row: QueryRow | undefined, key: string) {
   const value = row?.[key];
@@ -1067,7 +1061,7 @@ async function loadWorkspaceAssuranceScopes(workspaceId: string) {
       !workflowKey ||
       !riskTier ||
       !stage ||
-      !(stage in ASSURANCE_STAGE_RATES) ||
+      !(stage in ADAPTIVE_REVIEW_STAGE_RATE_BPS) ||
       !mode ||
       !executionProfileHash
     ) {
@@ -1103,7 +1097,7 @@ async function loadWorkspaceAssuranceScopes(workspaceId: string) {
         mode === "always"
           ? 10_000
           : mode === "adaptive"
-            ? Math.max(ASSURANCE_STAGE_RATES[stage], productionFloorBps)
+            ? Math.max(ADAPTIVE_REVIEW_STAGE_RATE_BPS[stage], productionFloorBps)
             : mode === "fixed"
               ? (fixedRateBps ?? 0)
               : 0,

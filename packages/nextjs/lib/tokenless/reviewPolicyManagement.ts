@@ -3,7 +3,7 @@ import type { PoolClient } from "pg";
 import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient, dbPool } from "~~/lib/db";
-import type { AdaptiveReviewStage } from "~~/lib/tokenless/adaptiveReview";
+import { ADAPTIVE_REVIEW_STAGE_RATE_BPS, type AdaptiveReviewStage } from "~~/lib/tokenless/adaptiveReview";
 import { listWorkspaceAgents } from "~~/lib/tokenless/agentRegistry";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -77,12 +77,6 @@ export type ManagedReviewPolicy = {
 };
 
 const RISK_TIER_PATTERN = /^[a-z][a-z0-9_-]{0,63}$/;
-const STAGE_RATE_BPS: Record<AdaptiveReviewStage, number> = {
-  calibrating: 10_000,
-  high_coverage: 5_000,
-  medium_coverage: 2_500,
-  monitoring: 1_000,
-};
 
 function rowString(row: QueryRow | undefined, key: string) {
   const value = row?.[key];
@@ -318,7 +312,7 @@ function scopeFromRow(
   const scopeId = rowString(row, "scope_id");
   const workflowKey = rowString(row, "workflow_key");
   const riskTier = rowString(row, "risk_tier");
-  if (!stage || !scopeId || !workflowKey || !riskTier || !(stage in STAGE_RATE_BPS)) {
+  if (!stage || !scopeId || !workflowKey || !riskTier || !(stage in ADAPTIVE_REVIEW_STAGE_RATE_BPS)) {
     throw new Error("Database returned an invalid adaptive review scope.");
   }
   return {
@@ -336,7 +330,7 @@ function scopeFromRow(
           : mode === "fixed"
             ? (fixedRateBps ?? 0)
             : mode === "adaptive"
-              ? Math.max(STAGE_RATE_BPS[stage], floorBps)
+              ? Math.max(ADAPTIVE_REVIEW_STAGE_RATE_BPS[stage], floorBps)
               : 0,
     updatedAt: iso(row.updated_at, "scope update timestamp"),
   };
