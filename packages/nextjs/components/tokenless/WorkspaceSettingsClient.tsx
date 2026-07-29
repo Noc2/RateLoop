@@ -1,13 +1,13 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { InfoPopover } from "~~/components/tokenless/InfoPopover";
 import { WorkspaceApiKeysPanel } from "~~/components/tokenless/WorkspaceApiKeysPanel";
 import { WorkspaceDangerZone } from "~~/components/tokenless/WorkspaceDangerZone";
 import { WorkspaceMembersPanel } from "~~/components/tokenless/WorkspaceMembersPanel";
 import { ChoiceInput, Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import { WorkspacePublicContentLink } from "~~/components/tokenless/navigation/WorkspacePublicContentLink";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { ConfirmDialog } from "~~/components/tokenless/ui/ConfirmDialog";
 import { TOKENLESS_BILLING_PLANS, formatUsdPrice } from "~~/lib/billing/plans";
@@ -1299,9 +1299,12 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                       Panel funding
                     </h2>
                   </div>
-                  <Link href="/pricing" className="text-xs text-base-content/55 underline underline-offset-4">
-                    How panel costs work
-                  </Link>
+                  <WorkspacePublicContentLink
+                    href="/pricing"
+                    className="text-xs text-base-content/55 underline underline-offset-4"
+                  >
+                    Compare workspace plans
+                  </WorkspacePublicContentLink>
                 </div>
                 <div className="mt-5 grid gap-3 border-t border-white/10 pt-4 text-center sm:grid-cols-3">
                   <div>

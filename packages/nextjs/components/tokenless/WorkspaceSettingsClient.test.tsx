@@ -34,6 +34,8 @@ test("workspace settings keeps subscription and panel funding separate", () => {
   assert.match(source, /plan: "early_access"/);
   assert.match(source, /showPanelFunding/);
   assert.match(source, /const showPanelFunding = Boolean\(selected\)/);
+  assert.match(source, /<WorkspacePublicContentLink[\s\S]*href="\/pricing"[\s\S]*Compare workspace plans/);
+  assert.doesNotMatch(source, /How panel costs work/);
 });
 
 test("workspace settings focuses the funding hash after its async panel renders", () => {
