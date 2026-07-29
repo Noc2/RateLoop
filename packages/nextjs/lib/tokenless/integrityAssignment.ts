@@ -1,6 +1,7 @@
 import type { HumanAssuranceAudiencePolicy } from "@rateloop/sdk";
 import { createHash } from "node:crypto";
 import "server-only";
+import { effectiveClusterMemberCap } from "~~/lib/tokenless/clusterShareCap";
 import { isOpaqueSubjectReference } from "~~/lib/tokenless/opaqueReferences";
 
 export type IntegrityAssignmentConstraints = NonNullable<HumanAssuranceAudiencePolicy["integrity"]>;
@@ -63,10 +64,7 @@ export function selectDiversifiedIntegrityPanel<T extends IntegrityAssignmentCan
   // one reviewer per correlation cluster — not an unsatisfiable panel. Rounding down to zero
   // rejected every network panel of four or fewer seats under the standard 2000 bps cap, at a
   // minimum panel size of three.
-  const maximumClusterMembers = Math.max(
-    1,
-    Math.floor((input.targetCount * input.constraints.maxClusterShareBps) / 10_000),
-  );
+  const maximumClusterMembers = effectiveClusterMemberCap(input.targetCount, input.constraints.maxClusterShareBps);
   const seenReviewers = new Set<string>();
   const ranked = input.candidates
     .map(candidate => {

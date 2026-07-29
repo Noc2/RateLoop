@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { effectiveClusterMemberCap } from "~~/lib/tokenless/clusterShareCap";
 import { isOpaqueSubjectReference } from "~~/lib/tokenless/opaqueReferences";
 
 export const POST_ROUND_INTEGRITY_VERSION = "rateloop.post-round-integrity.v1" as const;
@@ -185,7 +186,7 @@ export function evaluatePostRoundIntegrity(input: {
   // single reviewer means one per cluster — the strictest diversification available — so comparing
   // the reported share against the raw basis points would delist exactly the small panels that
   // selection is required to admit, after the round has been reviewed and paid for.
-  const maximumClusterMembers = Math.max(1, Math.floor((reportCount * policy.maximumClusterShareBps) / BPS));
+  const maximumClusterMembers = effectiveClusterMemberCap(reportCount, policy.maximumClusterShareBps);
   if (clusterGroups.largestCount > maximumClusterMembers) reasonCodes.push("identity_cluster_dominance");
   if (fingerprintsGroups.shareBps > policy.maximumAnswerFingerprintShareBps) {
     reasonCodes.push("answer_fingerprint_concentration");
