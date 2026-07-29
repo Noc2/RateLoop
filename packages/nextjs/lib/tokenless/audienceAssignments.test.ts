@@ -755,6 +755,7 @@ test("network selection rejects manual collisions and invited-only supply before
       subject_reference_hash: `hmac-sha256:v1:${"9".repeat(64)}`,
       capabilities_json: JSON.stringify(["minimum_age", "unique_human"]),
       assertion_minimum_age_verified: 18,
+      assertion_verified_residence_country: "DE",
       provider_evidence_ciphertext: "ciphertext",
       provider_evidence_key_version: "v1",
       provider_evidence_key_domain: "provider_evidence",

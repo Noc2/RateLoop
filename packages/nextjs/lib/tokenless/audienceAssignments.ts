@@ -19,6 +19,10 @@ import {
 } from "~~/lib/tokenless/networkAssignmentSettlement";
 import { requirePaidLaneComplianceApproval } from "~~/lib/tokenless/paidLaneCompliance";
 import { requirePaidReviewEligibilityInTransaction } from "~~/lib/tokenless/paidReviewEligibilityPreflight";
+import {
+  type FrozenPublicNetworkLegalResidence,
+  isFrozenPublicNetworkLegalResidence,
+} from "~~/lib/tokenless/publicNetworkLegalResidence";
 import { exactReviewerExpertiseDefinitionKey } from "~~/lib/tokenless/reviewerExpertiseAssignments";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -92,6 +96,19 @@ function rowDate(row: QueryRow | undefined, key: string) {
   if (value === null || value === undefined) return null;
   const result = new Date(String(value));
   return Number.isNaN(result.getTime()) ? null : result;
+}
+
+function requireFrozenPublicNetworkLegalResidence(row: QueryRow, now: Date): FrozenPublicNetworkLegalResidence {
+  const snapshot = parseJson<Record<string, unknown>>(row.assurance_snapshot_json, "assignment assurance snapshot");
+  const residence = snapshot.publicNetworkLegalResidence;
+  if (!isFrozenPublicNetworkLegalResidence(residence, now)) {
+    throw new TokenlessServiceError(
+      "A current, provider-verified EEA legal residence is required for RateLoop-network review work.",
+      403,
+      "public_network_legal_residence_required",
+    );
+  }
+  return residence;
 }
 
 function normalizeAddress(value: string, field = "accountAddress") {
@@ -1650,6 +1667,7 @@ export async function reserveDiversifiedNetworkSubpanel(input: {
           reviewerSource: "rateloop_network",
           assertions: usedAssertions,
           qualifications: provenance.filter(item => admission.usedQualificationKeys.includes(item.key)),
+          publicNetworkLegalResidence: eligibility.preflight.publicNetworkLegalResidence,
           capturedAt: now.toISOString(),
         },
         provenance,
@@ -2140,6 +2158,9 @@ export async function reserveAudienceAssignment(input: {
             ]
           : []),
       qualifications: chosen.provenance,
+      ...(source === "rateloop_network"
+        ? { publicNetworkLegalResidence: chosen.paidEligibility?.preflight.publicNetworkLegalResidence }
+        : {}),
       ...(rowString(subpanel, "private_group_id")
         ? {
             privateGroup: {
@@ -2587,6 +2608,7 @@ export async function acceptAudienceAssignment(input: {
         throw new TokenlessServiceError("Assignment reservation expired.", 410, "assignment_expired");
       }
       if (rowString(row, "source") === "rateloop_network") {
+        const frozenResidence = requireFrozenPublicNetworkLegalResidence(row, now);
         const live = await client.query(
           `SELECT reachability.binding_id
            FROM tokenless_network_assignment_settlements settlement
@@ -2626,20 +2648,32 @@ export async function acceptAudienceAssignment(input: {
             "public_network_opportunity_not_live",
           );
         }
+        const currentEligibility = await paidEligibility(client, reviewer, now, {
+          reviewerSource: "rateloop_network",
+        });
+        if (
+          !currentEligibility.preflight.publicNetworkLegalResidence ||
+          currentEligibility.preflight.publicNetworkLegalResidence.policyHash !== frozenResidence.policyHash
+        ) {
+          throw new TokenlessServiceError(
+            "A current, provider-verified EEA legal residence is required for RateLoop-network review work.",
+            403,
+            "public_network_legal_residence_required",
+          );
+        }
       }
       let voucherMarker: string | null = null;
-      if (row.paid_assignment === true) {
+      if (row.paid_assignment === true && rowString(row, "source") !== "rateloop_network") {
         const source = rowString(row, "source") as CohortSource;
         const eligibility = await paidEligibility(client, reviewer, now, {
           reviewerSource: source,
           ...(source === "customer_invited" ? { workspaceId: rowString(row, "workspace_id") } : {}),
         });
-        voucherMarker =
-          source === "rateloop_network"
-            ? rowString(row, "voucher_marker")
-            : `eligibility:${eligibility.raterId}:${createHash("sha256")
-                .update(`${input.assignmentId}:${reviewer}`)
-                .digest("hex")}`;
+        voucherMarker = `eligibility:${eligibility.raterId}:${createHash("sha256")
+          .update(`${input.assignmentId}:${reviewer}`)
+          .digest("hex")}`;
+      } else if (rowString(row, "source") === "rateloop_network") {
+        voucherMarker = rowString(row, "voucher_marker");
       }
       await client.query(
         `UPDATE tokenless_assurance_assignments

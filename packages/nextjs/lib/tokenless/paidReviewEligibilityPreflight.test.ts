@@ -33,6 +33,12 @@ function eligibleRow(overrides: Record<string, unknown> = {}) {
     dac7_record_ciphertext: "v1.tax",
     dac7_record_key_version: "tax-v1",
     dac7_record_key_domain: "tax_records",
+    dac7_joined_record_id: `dac7_${"1".repeat(32)}`,
+    dac7_record_rater_id: "rater_preflight_01",
+    dac7_source_scope_reference: "pes_preflight_01",
+    dac7_reviewer_source: "rateloop_network",
+    dac7_workspace_reference: null,
+    dac7_collected_at: new Date(NOW.getTime() - 86_400_000),
     dac7_retention_basis: "psttg_dac7_ao_147",
     dac7_retained_until: new Date(NOW.getTime() + 365 * 86_400_000),
     risk_geoblock_status: "clear",
@@ -75,6 +81,7 @@ function identityRow(overrides: Record<string, unknown> = {}) {
     provider_namespace: "identity:v1",
     capabilities_json: JSON.stringify(["account_control", "minimum_age", "live_human"]),
     assertion_minimum_age_verified: 18,
+    assertion_verified_residence_country: "DE",
     provider_evidence_ciphertext: "v1.evidence",
     provider_evidence_key_version: "evidence-v1",
     provider_evidence_key_domain: "provider_evidence",
@@ -134,6 +141,22 @@ test("paid-review preflight freezes current identity, legal, sanctions, tax, and
       },
     ],
     payoutAccount: ACCOUNT,
+    publicNetworkLegalResidence: {
+      schemaVersion: "rateloop.public-network-legal-residence-policy.v1",
+      policyHash: first.publicNetworkLegalResidence?.policyHash,
+      predicate: "provider_verified_legal_residence_in_eea",
+      countryCode: "DE",
+      providerAssertionId: "assertion_preflight_01",
+      evidenceVerifiedAt: new Date(NOW.getTime() - 60_000).toISOString(),
+      validUntil: new Date(NOW.getTime() + 86_400_000).toISOString(),
+      taxEvidence: {
+        kind: "dac7",
+        dac7Status: "complete",
+        recordId: `dac7_${"1".repeat(32)}`,
+        collectedAt: new Date(NOW.getTime() - 86_400_000).toISOString(),
+        retainedUntil: new Date(NOW.getTime() + 365 * 86_400_000).toISOString(),
+      },
+    },
     checkedAt: NOW.toISOString(),
     validUntil: new Date(NOW.getTime() + 43_200_000).toISOString(),
     eligibilityCommitment: first.eligibilityCommitment,
@@ -160,6 +183,7 @@ test("paid-review preflight uses the current age assertion without coupling it t
     provider_id: "age-provider",
     provider_namespace: "age:test",
     capabilities_json: JSON.stringify(["minimum_age"]),
+    assertion_verified_residence_country: null,
   });
   const preflight = await requirePaidReviewEligibilityInTransaction(
     client(eligibleRow({ adulthood_assertion_id: "assertion_age" }), [accountControl, minimumAge]),
@@ -170,6 +194,7 @@ test("paid-review preflight uses the current age assertion without coupling it t
     preflight.identityAssertions.map(value => ({ assertionId: value.assertionId, providerId: value.providerId })),
     [{ assertionId: "assertion_age", providerId: "age-provider" }],
   );
+  assert.equal(preflight.publicNetworkLegalResidence?.providerAssertionId, "assertion_control");
 });
 
 test("paid-review preflight chooses the minimal assertion set with deterministic ties", async () => {
@@ -296,15 +321,15 @@ test("paid-review preflight requires a live identity assertion bound to the same
   }
 });
 
-test("durable identity enrollment still requires current age, sanctions, and payout evidence", async () => {
+test("durable identity enrollment cannot make network residence evidence non-expiring", async () => {
   const durable = identityRow({
     assurance_validity_model: "durable_enrollment",
     evidence_expires_at: new Date(NOW.getTime() - 1),
   });
-  const ready = await requirePaidReviewEligibilityInTransaction(client(eligibleRow(), [durable]), PRINCIPAL, NOW);
-  assert.deepEqual(
-    ready.identityAssertions.map(value => value.assertionId),
-    ["assertion_preflight_01"],
+  await assert.rejects(
+    () => requirePaidReviewEligibilityInTransaction(client(eligibleRow(), [durable]), PRINCIPAL, NOW),
+    (error: unknown) =>
+      error instanceof TokenlessServiceError && error.code === "public_network_legal_residence_required",
   );
   await rejectsEligibility(eligibleRow({ sanctions_expires_at: NOW }), [durable]);
 });

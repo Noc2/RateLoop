@@ -3,6 +3,10 @@ import type { PoolClient } from "pg";
 import "server-only";
 import { getAddress } from "viem";
 import { dbPool } from "~~/lib/db";
+import {
+  type FrozenPublicNetworkLegalResidence,
+  evaluatePublicNetworkLegalResidence,
+} from "~~/lib/tokenless/publicNetworkLegalResidence";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const COUNTRY = /^[A-Z]{2}$/u;
@@ -26,6 +30,7 @@ export type PaidReviewEligibilityPreflight = {
     capabilities: string[];
   }>;
   payoutAccount: string;
+  publicNetworkLegalResidence?: FrozenPublicNetworkLegalResidence | null;
   checkedAt: string;
   validUntil: string;
   eligibilityCommitment: `sha256:${string}`;
@@ -83,6 +88,14 @@ function rejectEligibility(): never {
     "Paid-task identity, tax, sanctions, and payout eligibility must be complete before paid work is offered.",
     403,
     "paid_eligibility_required",
+  );
+}
+
+function rejectPublicNetworkResidence(): never {
+  throw new TokenlessServiceError(
+    "A current, provider-verified EEA legal residence is required for RateLoop-network review work.",
+    403,
+    "public_network_legal_residence_required",
   );
 }
 
@@ -218,6 +231,33 @@ function selectCurrentIdentityAssertions(
   return minimumAge ? [minimumAge] : null;
 }
 
+function selectCurrentResidenceAssertion(rows: Row[], now: Date, verifiedResidenceCountry: string | null) {
+  if (!verifiedResidenceCountry) return null;
+  return (
+    rows
+      .filter(row => {
+        const verifiedAt = date(row, "evidence_verified_at");
+        const expiresAt = date(row, "evidence_expires_at");
+        const lastBindingVerification = date(row, "last_verified_at");
+        return (
+          text(row, "assertion_status") === "active" &&
+          text(row, "binding_status") === "active" &&
+          text(row, "assertion_verified_residence_country") === verifiedResidenceCountry &&
+          verifiedAt !== null &&
+          verifiedAt.getTime() <= now.getTime() + MAX_CLOCK_SKEW_MS &&
+          expiresAt !== null &&
+          expiresAt > now &&
+          lastBindingVerification !== null &&
+          lastBindingVerification.getTime() <= now.getTime() + MAX_CLOCK_SKEW_MS &&
+          text(row, "provider_evidence_key_domain") === "provider_evidence" &&
+          Boolean(text(row, "provider_evidence_ciphertext")) &&
+          Boolean(text(row, "provider_evidence_key_version"))
+        );
+      })
+      .sort(compareIdentityRows)[0] ?? null
+  );
+}
+
 function snapshot(input: { row: Row; identities: Row[]; principalId: string; checkedAt: Date; validUntil: Date }) {
   const payoutAccount = normalizeAddress(text(input.row, "active_payout_account"))!;
   return {
@@ -257,6 +297,12 @@ export async function requirePaidReviewEligibilityInTransaction(
             dac7.tax_vault_ciphertext AS dac7_record_ciphertext,
             dac7.tax_vault_key_version AS dac7_record_key_version,
             dac7.tax_vault_key_domain AS dac7_record_key_domain,
+            dac7.record_id AS dac7_joined_record_id,
+            dac7.rater_id AS dac7_record_rater_id,
+            dac7.source_scope_reference AS dac7_source_scope_reference,
+            dac7.reviewer_source AS dac7_reviewer_source,
+            dac7.workspace_reference AS dac7_workspace_reference,
+            dac7.collected_at AS dac7_collected_at,
             dac7.retention_basis AS dac7_retention_basis,
             dac7.retained_until AS dac7_retained_until,
             risk.geoblock_status AS risk_geoblock_status,
@@ -312,6 +358,7 @@ export async function requirePaidReviewEligibilityInTransaction(
   const identities = await client.query(
     `SELECT a.assertion_id, a.binding_id, a.provider_id, a.provider_namespace,
             a.capabilities_json, a.minimum_age_verified AS assertion_minimum_age_verified,
+            a.verified_residence_country AS assertion_verified_residence_country,
             a.provider_evidence_ciphertext, a.provider_evidence_key_version,
             a.provider_evidence_key_domain, a.evidence_verified_at, a.evidence_expires_at,
             a.assurance_validity_model, a.status AS assertion_status,
@@ -329,8 +376,43 @@ export async function requirePaidReviewEligibilityInTransaction(
     text(row, "adulthood_assertion_id")!,
   );
   if (!selectedIdentities) rejectEligibility();
+  const residenceAssertion =
+    requirement.reviewerSource === "rateloop_network"
+      ? selectCurrentResidenceAssertion(identities.rows as Row[], now, text(row, "verified_residence_country"))
+      : null;
+
+  const publicNetworkLegalResidence =
+    requirement.reviewerSource === "rateloop_network" && residenceAssertion
+      ? evaluatePublicNetworkLegalResidence(
+          {
+            raterId: text(row, "rater_id"),
+            scopeId: text(row, "scope_id"),
+            verifiedResidenceCountry: text(row, "verified_residence_country"),
+            declaredResidenceCountry: text(row, "declared_residence_country"),
+            taxResidenceCountry: text(row, "tax_residence_country"),
+            residenceTaxStatus: text(row, "residence_tax_status"),
+            providerAssertionId: text(residenceAssertion, "assertion_id"),
+            providerVerifiedResidenceCountry: text(residenceAssertion, "assertion_verified_residence_country"),
+            providerEvidenceVerifiedAt: date(residenceAssertion, "evidence_verified_at"),
+            providerEvidenceExpiresAt: date(residenceAssertion, "evidence_expires_at"),
+            dac7Status: text(row, "dac7_status"),
+            dac7RecordId: text(row, "dac7_joined_record_id"),
+            dac7RecordRaterId: text(row, "dac7_record_rater_id"),
+            dac7SourceScopeReference: text(row, "dac7_source_scope_reference"),
+            dac7ReviewerSource: text(row, "dac7_reviewer_source"),
+            dac7WorkspaceReference: text(row, "dac7_workspace_reference"),
+            dac7CollectedAt: date(row, "dac7_collected_at"),
+            dac7RetainedUntil: date(row, "dac7_retained_until"),
+          },
+          now,
+        )
+      : null;
+  if (requirement.reviewerSource === "rateloop_network" && !publicNetworkLegalResidence) {
+    rejectPublicNetworkResidence();
+  }
 
   const expiries = [date(row, "scope_valid_until")!, date(row, "sanctions_expires_at")!];
+  if (publicNetworkLegalResidence) expiries.push(new Date(publicNetworkLegalResidence.validUntil));
   const payoutExpiry = date(row, "payout_expires_at");
   if (payoutExpiry) expiries.push(payoutExpiry);
   for (const identity of selectedIdentities) {
@@ -340,7 +422,10 @@ export async function requirePaidReviewEligibilityInTransaction(
   }
   const validUntil = new Date(Math.min(...expiries.map(value => value.getTime())));
   if (validUntil <= now) rejectEligibility();
-  const value = snapshot({ row, identities: selectedIdentities, principalId, checkedAt: now, validUntil });
+  const value = {
+    ...snapshot({ row, identities: selectedIdentities, principalId, checkedAt: now, validUntil }),
+    publicNetworkLegalResidence,
+  };
   const commitmentProjection = {
     schemaVersion: value.schemaVersion,
     raterId: value.raterId,
@@ -365,9 +450,9 @@ export async function requirePaidReviewEligibilityInTransaction(
       residenceTaxStatus: text(row, "residence_tax_status"),
       taxProfileStatus: text(row, "tax_profile_status"),
       dac7Status: text(row, "dac7_status"),
-      taxVaultPresent: Boolean(text(row, "tax_vault_ciphertext")),
-      taxVaultKeyPresent: Boolean(text(row, "tax_vault_key_version")),
-      taxVaultKeyDomain: text(row, "tax_vault_key_domain"),
+      taxVaultPresent: Boolean(text(row, "dac7_record_ciphertext")),
+      taxVaultKeyPresent: Boolean(text(row, "dac7_record_key_version")),
+      taxVaultKeyDomain: text(row, "dac7_record_key_domain"),
       sanctionsConsentAt: date(row, "sanctions_consent_at")?.toISOString() ?? null,
       sanctionsStatus: text(row, "sanctions_status"),
       sanctionsReferenceHash: text(row, "sanctions_reference_hash"),
@@ -417,6 +502,7 @@ export async function requirePaidReviewEligibilityInTransaction(
       bindingLastVerifiedAt: date(identity, "last_verified_at")?.toISOString() ?? null,
       bindingUpdatedAt: date(identity, "binding_updated_at")?.toISOString() ?? null,
     })),
+    publicNetworkLegalResidence,
   };
   const digest = createHash("sha256").update(stableJson(commitmentProjection)).digest("hex");
   return {
