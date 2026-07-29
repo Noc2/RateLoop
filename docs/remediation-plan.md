@@ -424,17 +424,22 @@ fix **now**, while the lane is inert and no reviewer exists to be affected: refu
 network audience above a configurable classification ceiling, and add an EEA-residency
 predicate to the audience policy.
 
-### 3b.5 Ship a trust page
+### 3b.5 Consolidate procurement evidence in the existing legal and evidence surfaces
 
-No security attestation exists, and the honest disclaimers about that are scattered
-across legal pages where they read as apology. A single `/trust` page carrying the
-completed security questionnaire, the subprocessor list, the region statement from
-0.7, the no-training commitment, and a dated roadmap converts a hard procurement "no"
-into a conditional "yes" in days rather than months.
+No security attestation exists, so procurement readers need one consistent, dated
+answer rather than a marketing badge. The tokenless design of record does not permit a
+separate limitations or trust-status product page: incomplete capabilities and release
+blockers belong in internal engineering readiness records. Keep the customer-facing
+facts in the task where they are needed instead — the DPA and its technical and
+organizational measures, the subprocessor and transfer notice, the privacy notice, and
+the evidence documentation.
 
-Complete the subprocessor list while here: the transparency log, the timestamp
-authority, the GRC connectors and customer-directed object-storage exports are all
-absent from it.
+Those surfaces carry the standard security-questionnaire response, the processing
+region and transfer boundary from 0.7, the no-training commitment, the absence of
+unheld certifications, and the exact evidence-verification boundary. The subprocessor
+list includes conditional transparency logging, timestamp authorities, GRC connectors,
+and customer-directed object-storage exports. Keep the list and dated legal material
+current; do not turn an unmet release gate into a public roadmap claim.
 
 ### 3b.6 Buy qualified timestamps
 
@@ -592,7 +597,7 @@ position the rest of this plan depends on.
 | 4     | 4.1 – 4.3   | Do these before other fixes, so the fixes below inherit the discipline.    |
 | 5     | 3b.1 – 3b.3 | Enterprise identity is a boolean; the DPA items are drafting.              |
 | 6     | 1.1 – 1.5   | Routing finished parts. Highest value per hour in the plan.                |
-| 7     | 3b.5 – 3b.6 | The trust page needs 0.7's wording; timestamps are a purchase order.       |
+| 7     | 3b.5 – 3b.6 | Procurement disclosures need 0.7's wording; timestamps require a purchase. |
 | 8     | 2.2 – 2.7   | Observability, cheapest first. 2.5 waits on 2.4 having run a while.        |
 | 9     | 3.1 – 3.6   | Needs Tier 0 to have landed, or it re-aims copy that is still false.       |
 | 10    | 1.6         | Wants 1.4 first, so a shared record is verifiable where it opens.          |
