@@ -10,6 +10,8 @@ type Health = {
   signals: Array<{ key: string; label: string; count: number }>;
 };
 
+type PanelState = { status: "loading" } | { status: "ready"; health: Health } | { status: "error" };
+
 const CONTENT: Record<Health["state"], { label: string; description: string; tone: string }> = {
   healthy: {
     label: "Maintenance healthy",
@@ -40,28 +42,38 @@ function completedLabel(value: string | null) {
 }
 
 export function ScheduledWorkerHealthPanel({ workspaceId }: { workspaceId: string }) {
-  const [health, setHealth] = useState<Health | null>(null);
+  const [panelState, setPanelState] = useState<PanelState>({ status: "loading" });
   useEffect(() => {
     const controller = new AbortController();
+    setPanelState({ status: "loading" });
     void fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/operations/health`, {
       cache: "no-store",
       credentials: "same-origin",
       signal: controller.signal,
     })
       .then(async response => {
-        if (!response.ok) return null;
+        if (!response.ok) throw new Error("Scheduled maintenance health request failed.");
         return (await response.json()) as Health;
       })
-      .then(value => {
-        if (!controller.signal.aborted) setHealth(value);
+      .then(health => {
+        if (!controller.signal.aborted) setPanelState({ status: "ready", health });
       })
       .catch(() => {
-        // Workspace management remains usable when health telemetry is unavailable.
+        if (!controller.signal.aborted) setPanelState({ status: "error" });
       });
     return () => controller.abort();
   }, [workspaceId]);
 
-  if (!health) return null;
+  if (panelState.status === "loading") return null;
+  if (panelState.status === "error") {
+    return (
+      <Card as="section" aria-live="polite" className="p-5">
+        <h2 className="text-base font-semibold text-amber-200">Maintenance status unavailable</h2>
+        <p className="mt-1 text-sm text-base-content/65">Health telemetry could not be loaded. Try again later.</p>
+      </Card>
+    );
+  }
+  const { health } = panelState;
   const content = CONTENT[health.state];
   return (
     <Card as="section" aria-live="polite" className="p-5">

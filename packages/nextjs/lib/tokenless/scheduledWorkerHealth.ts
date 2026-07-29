@@ -1,6 +1,7 @@
 import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient } from "~~/lib/db";
+import { scheduledMaintenanceSignals } from "~~/lib/tokenless/scheduledMaintenanceSignals";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Row = Record<string, unknown>;
@@ -34,80 +35,8 @@ function parsedSummary(row: Row | undefined) {
   }
 }
 
-function nestedNumber(source: Record<string, unknown>, path: string) {
-  let value: unknown = source;
-  for (const segment of path.split(".")) value = object(value)[segment];
-  const number = Number(value ?? 0);
-  return Number.isSafeInteger(number) && number > 0 ? number : 0;
-}
-
-const SIGNALS = [
-  [
-    "processorFailures",
-    "Processor failures",
-    (summary: Record<string, unknown>) => {
-      const value = summary.processorFailures;
-      return Array.isArray(value) ? value.length : 0;
-    },
-  ],
-  ["deadWorkItems", "Dead work items", (summary: Record<string, unknown>) => nestedNumber(summary, "deadWorkItems")],
-  ["work.retry", "Work retries", (summary: Record<string, unknown>) => nestedNumber(summary, "work.retry")],
-  ["work.dead", "Dead work", (summary: Record<string, unknown>) => nestedNumber(summary, "work.dead")],
-  [
-    "notifications.retry",
-    "Notification retries",
-    (summary: Record<string, unknown>) => nestedNumber(summary, "notifications.retry"),
-  ],
-  [
-    "notifications.parked",
-    "Parked notifications",
-    (summary: Record<string, unknown>) => nestedNumber(summary, "notifications.parked"),
-  ],
-  [
-    "notifications.dead",
-    "Dead notifications",
-    (summary: Record<string, unknown>) => nestedNumber(summary, "notifications.dead"),
-  ],
-  ["webhooks.retry", "Webhook retries", (summary: Record<string, unknown>) => nestedNumber(summary, "webhooks.retry")],
-  ["webhooks.dead", "Dead webhooks", (summary: Record<string, unknown>) => nestedNumber(summary, "webhooks.dead")],
-  [
-    "attestations.retry",
-    "Evidence anchor retries",
-    (summary: Record<string, unknown>) => nestedNumber(summary, "attestations.retry"),
-  ],
-  [
-    "attestations.dead",
-    "Dead evidence anchors",
-    (summary: Record<string, unknown>) => nestedNumber(summary, "attestations.dead"),
-  ],
-  [
-    "attestations.unavailable",
-    "Pending evidence anchors",
-    (summary: Record<string, unknown>) => nestedNumber(summary, "attestations.unavailable"),
-  ],
-  [
-    "directPrivateReviewDeadlines.retry",
-    "Review deadline retries",
-    (summary: Record<string, unknown>) => nestedNumber(summary, "directPrivateReviewDeadlines.retry"),
-  ],
-  [
-    "directPrivateReviewEvidence.retry",
-    "Evidence retries",
-    (summary: Record<string, unknown>) => nestedNumber(summary, "directPrivateReviewEvidence.retry"),
-  ],
-  [
-    "directPrivateReviewEvidence.dead",
-    "Dead evidence projections",
-    (summary: Record<string, unknown>) => nestedNumber(summary, "directPrivateReviewEvidence.dead"),
-  ],
-] as const;
-
 function signals(row: Row | undefined) {
-  const summary = parsedSummary(row);
-  return SIGNALS.flatMap(([key, label, read]) => {
-    const count = read(summary);
-    return count > 0 ? [{ key, label, count }] : [];
-  });
+  return scheduledMaintenanceSignals(parsedSummary(row));
 }
 
 async function requireWorkspaceManager(accountAddress: string, workspaceId: string) {
@@ -171,4 +100,4 @@ export async function getScheduledWorkerHealth(input: { accountAddress: string; 
   };
 }
 
-export const __scheduledWorkerHealthTestUtils = { nestedNumber, parsedSummary, signals };
+export const __scheduledWorkerHealthTestUtils = { parsedSummary, signals };

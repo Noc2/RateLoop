@@ -57,8 +57,8 @@ test("workspace owners can reach redacted degraded scheduled-worker health", asy
     health.signals.map(signal => [signal.key, signal.count]),
     [
       ["processorFailures", 1],
-      ["notifications.retry", 1],
       ["notifications.parked", 2],
+      ["notifications.retry", 1],
       ["attestations.unavailable", 1],
       ["directPrivateReviewDeadlines.retry", 4],
       ["directPrivateReviewEvidence.dead", 1],
