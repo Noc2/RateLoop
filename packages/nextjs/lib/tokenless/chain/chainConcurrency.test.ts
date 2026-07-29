@@ -27,6 +27,7 @@ import { EVM_TRANSACTION_FEE_POLICY } from "~~/lib/tokenless/chain/evmTransactio
 import { derivePaidLaneActivationReference } from "~~/lib/tokenless/paidLaneActivation";
 import { attachProductAsk, createWorkspace, prepareProductAsk } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError, createTokenlessAsk, createTokenlessQuote } from "~~/lib/tokenless/server";
+import { verifyBusinessWorkspaceForTest } from "~~/test/helpers/verifiedBusinessWorkspace";
 
 const PANEL = getAddress("0x1111111111111111111111111111111111111111");
 const ISSUER = getAddress("0x2222222222222222222222222222222222222222");
@@ -161,6 +162,7 @@ async function prepaidAsk() {
           WHERE workspace_id = ?`,
     args: [new Date(now.getTime() - 60_000), new Date(now.getTime() + 86_400_000), now, workspaceId],
   });
+  await verifyBusinessWorkspaceForTest({ accountAddress: FUNDER, workspaceId, now });
   await dbClient.execute({
     sql: `INSERT INTO tokenless_prepaid_ledger_entries
           (entry_id, workspace_id, delta_atomic, settlement_status, source, external_reference, created_at, settled_at)
