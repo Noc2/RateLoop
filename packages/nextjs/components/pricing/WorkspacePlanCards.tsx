@@ -109,14 +109,14 @@ export function WorkspacePlanCards({
               rel="noopener noreferrer"
               className="rateloop-gradient-action min-h-12 w-full justify-center px-5"
             >
-              Request a demo
+              Book demo
             </a>
           ) : (
             <Link
               href="mailto:hawigxyz@proton.me?subject=RateLoop%20Enterprise"
               className="rateloop-gradient-action min-h-12 w-full justify-center px-5"
             >
-              Book demo
+              Request a demo
             </Link>
           )
         }
