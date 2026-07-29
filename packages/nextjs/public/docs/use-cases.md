@@ -37,8 +37,10 @@ appropriate for this situation. Three worked examples:
   [Article 6](https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-6),
   [Article 14](https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-14) requires effective human oversight and
   [Article 26](https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-26) requires deployers to assign people with
-  the necessary competence, training, and authority. The Commission currently says the employment rules apply from
-  2 December 2027 in its [current timeline](https://digital-strategy.ec.europa.eu/en/policies/guidelines-ai-high-risk-systems).
+  the necessary competence, training, and authority.
+  [Regulation (EU) 2026/1744](https://eur-lex.europa.eu/eli/reg/2026/1744/oj/eng) fixes 2 December 2027 as the
+  application date for these Annex III rules and has been in force since 27 July 2026. That runway is a reason to
+  establish and test the workflow now.
   RateLoop can support the review workflow and its evidence; it does not determine legal classification, perform the
   provider's [Article 43](https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-43) conformity assessment, or make
   a system compliant.

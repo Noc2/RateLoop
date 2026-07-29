@@ -99,7 +99,7 @@ const useCases: readonly UseCase[] = [
     },
     legalContext: {
       label: "EU AI Act · high-risk context",
-      body: "AI used to analyse applications or evaluate candidates is listed in Annex III. For systems that qualify as high-risk under Article 6, the Act requires effective human oversight, and deployers must assign people with the necessary competence, training, and authority. The Commission currently says the employment rules apply from 2 December 2027. RateLoop can support the review workflow and its evidence; it does not determine legal classification, perform the provider's conformity assessment, or make a system compliant.",
+      body: "AI used to analyse applications or evaluate candidates is listed in Annex III. For systems that qualify as high-risk under Article 6, the Act requires effective human oversight, and deployers must assign people with the necessary competence, training, and authority. Regulation (EU) 2026/1744 fixes 2 December 2027 as the application date for these Annex III rules and has been in force since 27 July 2026. That runway is a reason to establish and test the workflow now. RateLoop can support the review workflow and its evidence; it does not determine legal classification, perform the provider's conformity assessment, or make a system compliant.",
       sources: [
         { label: "Annex III", href: "https://ai-act-service-desk.ec.europa.eu/en/ai-act/annex-3" },
         { label: "Article 6", href: "https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-6" },
@@ -107,8 +107,8 @@ const useCases: readonly UseCase[] = [
         { label: "Article 26", href: "https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-26" },
         { label: "Article 43", href: "https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-43" },
         {
-          label: "Current EU timeline",
-          href: "https://digital-strategy.ec.europa.eu/en/policies/guidelines-ai-high-risk-systems",
+          label: "Regulation (EU) 2026/1744",
+          href: "https://eur-lex.europa.eu/eli/reg/2026/1744/oj/eng",
         },
       ],
     },

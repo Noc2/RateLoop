@@ -77,7 +77,7 @@ const OVERSIGHT_MATRIX = [
   {
     requirement: "Art 4 · AI literacy",
     provides: "Exportable training and calibration records for reviewers and oversight persons.",
-    yours: "Ensuring sufficient AI literacy across the staff who operate the system.",
+    yours: "Taking measures to support the development of sufficient AI literacy among relevant staff.",
   },
 ] as const;
 

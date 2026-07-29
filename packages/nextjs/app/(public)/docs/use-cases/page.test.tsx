@@ -52,7 +52,10 @@ test("use cases show three worked examples with bounded human-assurance decision
   assert.match(html, /For systems that qualify as high-risk under Article 6/i);
   assert.match(html, /requires effective human oversight/i);
   assert.match(html, /necessary competence, training, and authority/i);
-  assert.match(html, /employment rules apply from 2 December 2027/i);
+  assert.match(html, /fixes 2 December 2027 as the application date/i);
+  assert.match(html, /in force since 27 July 2026/i);
+  assert.match(html, /reason to establish and test the workflow now/i);
+  assert.doesNotMatch(html, /Commission currently says/i);
   assert.match(
     html,
     /does not determine legal classification, perform the provider&#x27;s conformity assessment, or make a system compliant/i,
@@ -63,7 +66,7 @@ test("use cases show three worked examples with bounded human-assurance decision
     "https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-14",
     "https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-26",
     "https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-43",
-    "https://digital-strategy.ec.europa.eu/en/policies/guidelines-ai-high-risk-systems",
+    "https://eur-lex.europa.eu/eli/reg/2026/1744/oj/eng",
   ]) {
     assert.match(html, new RegExp(`href="${href.replace(/[./-]/g, "\\$&")}"`));
   }
