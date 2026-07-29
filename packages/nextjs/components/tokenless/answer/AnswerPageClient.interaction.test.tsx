@@ -103,13 +103,15 @@ test("a selected private scope with no assignments left still renders the public
     const screen = within(document.body);
     await waitFor(() => assert.ok(screen.getByText(publicTask.question.prompt)));
 
-    const pills = screen.getAllByRole<HTMLButtonElement>("tab");
+    const pills = within(screen.getByRole("group", { name: "Review sources" })).getAllByRole<HTMLButtonElement>(
+      "button",
+    );
     assert.deepEqual(
       pills.map(pill => pill.textContent),
       ["all", "public", "private"],
     );
     assert.deepEqual(
-      pills.map(pill => pill.getAttribute("aria-selected")),
+      pills.map(pill => pill.getAttribute("aria-pressed")),
       ["true", "false", "false"],
     );
     assert.equal(screen.queryByText(/No review work is available right now/iu), null);
@@ -142,7 +144,9 @@ test("a selected public scope with no tasks left still renders the private revie
     assert.equal(screen.queryByText("Private assignment"), null);
     assert.equal(screen.queryByText("Data handling"), null);
     assert.deepEqual(
-      screen.getAllByRole("tab").map(pill => pill.getAttribute("aria-selected")),
+      within(screen.getByRole("group", { name: "Review sources" }))
+        .getAllByRole("button")
+        .map(pill => pill.getAttribute("aria-pressed")),
       ["true", "false", "false"],
     );
     assert.equal(screen.queryByText(/No review work is available right now/iu), null);
@@ -172,7 +176,9 @@ test("a selected scope still filters out the other kind of review work while bot
 
     assert.equal(screen.queryByText(privateAssignment.projectName), null);
     assert.deepEqual(
-      screen.getAllByRole("tab").map(pill => pill.getAttribute("aria-selected")),
+      within(screen.getByRole("group", { name: "Review sources" }))
+        .getAllByRole("button")
+        .map(pill => pill.getAttribute("aria-pressed")),
       ["false", "true", "false"],
     );
   } finally {
@@ -198,7 +204,7 @@ test("an empty review queue keeps its empty state and hides the scope pills", as
     );
     const screen = within(document.body);
     await waitFor(() => assert.ok(screen.getByText(/No review work is available right now/iu)));
-    assert.deepEqual(screen.queryAllByRole("tab"), []);
+    assert.equal(screen.queryByRole("group", { name: "Review sources" }), null);
     assert.ok(screen.getByRole("button", { name: "Use an invitation" }));
     assert.equal(screen.queryByRole("button", { name: "Check again" }), null);
   } finally {
@@ -224,6 +230,7 @@ test("an empty history uses history-specific copy without an invitation action",
     );
     const screen = within(document.body);
     await waitFor(() => assert.ok(screen.getByText("No review history yet.")));
+    assert.ok(screen.getByRole("heading", { name: "Review history", level: 1 }));
     assert.equal(screen.queryByRole("button", { name: "Use an invitation" }), null);
   } finally {
     cleanup();

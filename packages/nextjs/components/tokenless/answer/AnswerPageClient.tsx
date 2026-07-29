@@ -174,7 +174,7 @@ export function AnswerPageClient({
 
   return (
     <AppPageShell outerClassName="pb-8" contentClassName="space-y-4">
-      <h1 className="sr-only">Review work</h1>
+      <h1 className="sr-only">{view === "history" ? "Review history" : "Review work"}</h1>
       <HumanTabs
         active={view === "history" ? "history" : "discover"}
         endAction={
@@ -201,13 +201,12 @@ export function AnswerPageClient({
       {showScopeControls || query ? (
         <div className="flex flex-wrap items-center gap-2">
           {showScopeControls ? (
-            <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Review sources">
+            <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Review sources">
               {(["all", "public", "private"] as const).map(value => (
                 <button
                   key={value}
                   type="button"
-                  role="tab"
-                  aria-selected={visibleScope === value}
+                  aria-pressed={visibleScope === value}
                   onClick={() => changeScope(value)}
                   className={`tab-control px-4 py-1.5 text-base font-medium capitalize transition-colors ${
                     visibleScope === value ? "pill-active" : "pill-inactive"
@@ -231,12 +230,12 @@ export function AnswerPageClient({
           {null}
         </AsyncSection>
         {!loading && !signedOut && visibleScope !== "public" && view === "active" && assignments.length > 1 ? (
-          <Card as="nav" className="flex flex-wrap gap-2 rounded-lg p-3" aria-label="Private assignments">
+          <Card as="div" role="group" className="flex flex-wrap gap-2 rounded-lg p-3" aria-label="Private assignments">
             {assignments.map((assignment, index) => (
               <button
                 key={assignment.assignmentId}
                 type="button"
-                aria-current={focusedAssignmentId === assignment.assignmentId ? "page" : undefined}
+                aria-pressed={focusedAssignmentId === assignment.assignmentId}
                 onClick={() => setFocusedAssignmentId(assignment.assignmentId)}
                 className={`rounded-lg px-3 py-2 text-sm font-medium ${
                   focusedAssignmentId === assignment.assignmentId
