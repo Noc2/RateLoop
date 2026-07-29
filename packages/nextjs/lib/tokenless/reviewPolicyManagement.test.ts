@@ -86,7 +86,6 @@ test("policy edits append immutable versions and reset future adaptive scopes wi
     policyId: initial.policyId,
     policy: {
       ...adaptivePolicy(agent.agentId, agent.currentVersion.versionId),
-      enforcementMode: "host_enforced",
       agreementThresholdBps: 9_500,
       productionFloorBps: 2_500,
     },
@@ -94,7 +93,7 @@ test("policy edits append immutable versions and reset future adaptive scopes wi
 
   assert.equal(updated.policyId, initial.policyId);
   assert.equal(updated.version, 2);
-  assert.equal(updated.enforcementMode, "host_enforced");
+  assert.equal(updated.enforcementMode, "advisory");
   assert.equal(updated.productionFloorBps, 2_500);
   const stored = await dbClient.execute({
     sql: `SELECT version, enabled, superseded_at FROM tokenless_agent_review_policies
@@ -125,9 +124,9 @@ test("unsafe or misleading policy combinations fail closed", async () => {
       createManagedReviewPolicy({
         accountAddress: OWNER,
         workspaceId,
-        policy: { ...policy, mode: "manual", enforcementMode: "host_enforced" },
+        policy: { ...policy, enforcementMode: "host_enforced" },
       }),
-    /Manual handoffs are advisory/,
+    /reserved and cannot be enabled/,
   );
   await createManagedReviewPolicy({ accountAddress: OWNER, workspaceId, policy });
   await assert.rejects(

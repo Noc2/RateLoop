@@ -11,6 +11,7 @@ export const REVIEW_POLICY_MODES = ["manual", "always", "rules", "adaptive", "fi
 export type ReviewPolicyMode = (typeof REVIEW_POLICY_MODES)[number];
 export const REVIEW_ENFORCEMENT_MODES = ["advisory", "host_enforced"] as const;
 export type ReviewEnforcementMode = (typeof REVIEW_ENFORCEMENT_MODES)[number];
+export const HOST_ENFORCED_REVIEW_AVAILABLE = false;
 export const REVIEW_AUDIENCES = ["private_invited", "public_network", "hybrid"] as const;
 export type ReviewAudience = (typeof REVIEW_AUDIENCES)[number];
 
@@ -176,15 +177,15 @@ export function normalizeManagedReviewPolicyInput(value: unknown): ManagedReview
   if (!REVIEW_ENFORCEMENT_MODES.includes(enforcementMode)) {
     throw new TokenlessServiceError("Review enforcement mode is invalid.", 400, "invalid_review_policy");
   }
+  if (enforcementMode === "host_enforced") {
+    throw new TokenlessServiceError(
+      "Host-enforced review is reserved and cannot be enabled until a verified host adapter supplies enforcement evidence.",
+      409,
+      "host_enforcement_unavailable",
+    );
+  }
   if (!REVIEW_AUDIENCES.includes(audience)) {
     throw new TokenlessServiceError("Review audience is invalid.", 400, "invalid_review_policy");
-  }
-  if (mode === "manual" && enforcementMode === "host_enforced") {
-    throw new TokenlessServiceError(
-      "Manual handoffs are advisory. Choose always, rules, fixed, or adaptive for host enforcement.",
-      400,
-      "invalid_review_policy",
-    );
   }
   if (typeof input.agentId !== "string" || !input.agentId || typeof input.agentVersionId !== "string") {
     throw new TokenlessServiceError("An exact agent version is required.", 400, "invalid_review_policy");

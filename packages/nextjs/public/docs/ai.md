@@ -6,6 +6,9 @@ The protected workspace MCP connects an approved agent version to invited, unpai
 connection can read the owner-approved policy, evaluate eligible outputs, request review, wait for the same operation,
 and return the result. It cannot spend, publish, read private artifacts, or administer the workspace.
 
+Host-enforced review is a reserved, planned mode and cannot be enabled. Its activation gate remains fail-closed until
+a separately verified adapter supplies the required enforcement evidence. Current workspace integrations are advisory.
+
 ## Fund-backed settlement API reference
 
 The versioned API below is a separately gated architecture reference, not the ordinary hosted review path. Automate

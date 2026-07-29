@@ -69,6 +69,10 @@ export default function TokenlessAgentDocsPage() {
         Generic MCP is advisory: RateLoop records when review is required, but cannot establish that every host blocks
         its output. No available host integration currently provides verified delivery enforcement.
       </p>
+      <p>
+        Host-enforced review is a reserved, planned mode and cannot be enabled. Its activation gate remains fail-closed
+        until a separately verified adapter supplies the required enforcement evidence.
+      </p>
 
       <h2>Connect with Codex</h2>
       <p>
