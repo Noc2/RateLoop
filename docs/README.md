@@ -2,13 +2,14 @@
 
 ## Start here
 
-| Document                                       | What it answers                                                                                                                               |
-| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| [rateloop-tokenless.md](rateloop-tokenless.md) | What the tokenless version is and how it works — identity, review policy, evidence, settlement, and what is switched off.                     |
-| [target-audience.md](target-audience.md)       | Who it is for. What the quotas and pricing imply about the assumed customer, and which segment the evidence actually supports.                |
-| [legal-position.md](legal-position.md)         | Where it sits under the EU AI Act, the DSA, data-protection law and the US regimes landing in 2027 — including which obligations do not bite. |
-| [design-assessment.md](design-assessment.md)   | Strengths and weaknesses, and the three strategic questions the assessment cannot settle.                                                     |
-| [remediation-plan.md](remediation-plan.md)     | What to do about the weaknesses, in commit-sized items, ordered by what is urgent rather than by what is large.                               |
+| Document                                                   | What it answers                                                                                                                               |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| [rateloop-tokenless.md](rateloop-tokenless.md)             | What the tokenless version is and how it works — identity, review policy, evidence, settlement, and what is switched off.                     |
+| [target-audience.md](target-audience.md)                   | Who it is for. What the quotas and pricing imply about the assumed customer, and which segment the evidence actually supports.                |
+| [legal-position.md](legal-position.md)                     | Where it sits under the EU AI Act, the DSA, data-protection law and the US regimes landing in 2027 — including which obligations do not bite. |
+| [design-assessment.md](design-assessment.md)               | Strengths and weaknesses, and the three strategic questions the assessment cannot settle.                                                     |
+| [remediation-plan.md](remediation-plan.md)                 | What to do about the weaknesses, in commit-sized items, ordered by what is urgent rather than by what is large.                               |
+| [evaluation-platform-gaps.md](evaluation-platform-gaps.md) | What the product lacks as an evaluation platform, read against Humanloop — and the one feature that would regulate RateLoop itself.           |
 
 The first four were written on 29 July 2026 to replace twenty-five documents that
 had drifted from the code. Read them as a set: the first is descriptive, the next
