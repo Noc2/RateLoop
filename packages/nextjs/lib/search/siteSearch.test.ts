@@ -21,7 +21,7 @@ test("site search finds documentation by title and topic", () => {
   assert.ok(searchSite("adaptive review").some(result => result.href === "/docs/how-it-works#adaptive-review"));
   assert.equal(searchSite("Evidence reference")[0]?.href, "/docs/evidence");
   assert.equal(searchSite("OSCAL")[0]?.href, "/docs/evidence");
-  assert.equal(searchSite("RFC 3161")[0]?.href, "/docs/evidence#verify");
+  assert.equal(searchSite("browser verification")[0]?.href, "/docs/evidence/verify");
   assert.equal(searchSite("approval privacy")[0]?.href, "/docs/ai#public-browser-handoff");
 });
 

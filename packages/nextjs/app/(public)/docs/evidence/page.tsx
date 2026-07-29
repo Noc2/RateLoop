@@ -239,6 +239,10 @@ export default function EvidencePage() {
       </details>
 
       <h2 id="verify">How to check the evidence</h2>
+      <p>
+        Use the public <Link href="/docs/evidence/verify">browser verifier</Link> to check an exported packet without
+        uploading it, or use the command-line verifier below.
+      </p>
       <ol>
         <li>
           <strong>Signature and key pin.</strong> Export the packet and obtain the expected key ID and public-key pin

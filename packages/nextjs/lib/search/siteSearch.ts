@@ -210,10 +210,10 @@ export const SITE_SEARCH_INDEX: readonly SiteSearchEntry[] = [
   },
   {
     title: "Check assurance evidence",
-    href: "/docs/evidence#verify",
+    href: "/docs/evidence/verify",
     area: "Docs",
-    description: "Check packet signatures, recomputation roots, chain references, and optional external receipts.",
-    keywords: ["evidence verify", "audit verify", "public key pin", "Rekor", "RFC 3161"],
+    description: "Check a packet digest, Merkle roots, recomputed aggregation, and signature in the browser.",
+    keywords: ["evidence verify", "public key pin", "decision packet", "browser verification"],
   },
   {
     title: "Evidence framework cross-reference",
