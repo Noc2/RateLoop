@@ -6,6 +6,9 @@ import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 let stripeClient: Stripe | null = null;
 
+export const STRIPE_NETWORK_RETRY_LIMIT = 2;
+export const STRIPE_REQUEST_TIMEOUT_MS = 10_000;
+
 function readEnv(name: string) {
   return process.env[name]?.trim() || undefined;
 }
@@ -90,7 +93,8 @@ export function getStripe() {
   if (!stripeClient) {
     stripeClient = new Stripe(requiredEnv("STRIPE_SECRET_KEY"), {
       appInfo: { name: "RateLoop tokenless" },
-      maxNetworkRetries: 2,
+      maxNetworkRetries: STRIPE_NETWORK_RETRY_LIMIT,
+      timeout: STRIPE_REQUEST_TIMEOUT_MS,
     });
   }
   return stripeClient;

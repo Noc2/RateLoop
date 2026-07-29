@@ -1,8 +1,11 @@
 import { EARLY_ACCESS_PRICE_VERSION } from "./plans";
 import {
+  STRIPE_NETWORK_RETRY_LIMIT,
+  STRIPE_REQUEST_TIMEOUT_MS,
   __resetStripeForTests,
   __setStripeForTests,
   checkoutIdempotencyKey,
+  getStripe,
   isBlockingSubscriptionStatus,
   isExpectedEarlyAccessStripePrice,
   preparePrepaidInvoiceCustomer,
@@ -46,6 +49,13 @@ test("checkout retries use one server-owned key per workspace price version", ()
   const retry = checkoutIdempotencyKey("ws_test");
   assert.equal(first, retry);
   assert.match(first, new RegExp(EARLY_ACCESS_PRICE_VERSION));
+});
+
+test("Stripe requests and retries are explicitly bounded", () => {
+  process.env.STRIPE_SECRET_KEY = "sk_test_rateloop_fixture";
+  const stripe = getStripe();
+  assert.equal(stripe.getApiField("timeout"), STRIPE_REQUEST_TIMEOUT_MS);
+  assert.equal(stripe.getApiField("maxNetworkRetries"), STRIPE_NETWORK_RETRY_LIMIT);
 });
 
 test("billing providers return to the workspace that initiated billing", () => {
@@ -137,7 +147,6 @@ test("Stripe webhook construction accepts only a signature for the exact raw bod
     request: null,
     type: "customer.subscription.updated",
   });
-  const { getStripe } = await import("./stripe");
   const signature = getStripe().webhooks.generateTestHeaderString({
     payload,
     secret: process.env.STRIPE_WEBHOOK_SECRET,
