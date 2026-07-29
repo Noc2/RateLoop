@@ -16,6 +16,8 @@ type DatabaseResources = {
   pool: Pool;
 };
 
+export const POSTGRES_CONNECTION_TIMEOUT_MS = 10_000;
+
 function normalizeQuery(input: QueryInput) {
   const text = typeof input === "string" ? input : input.sql;
   const values = typeof input === "string" ? [] : (input.args ?? []);
@@ -31,6 +33,7 @@ function normalizeQuery(input: QueryInput) {
 
 function createPool(config: { url: string }): Pool {
   const poolConfig: PoolConfig = {
+    connectionTimeoutMillis: POSTGRES_CONNECTION_TIMEOUT_MS,
     connectionString: config.url,
   };
 

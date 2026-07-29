@@ -5,6 +5,8 @@ import type {
 } from "@rateloop/node-utils/evm-signing-audit";
 import { Pool, type QueryResult } from "pg";
 
+export const KEEPER_POSTGRES_CONNECTION_TIMEOUT_MS = 10_000;
+
 type LedgerExecutor = Readonly<{
   query(text: string, values: readonly unknown[]): Promise<QueryResult>;
 }>;
@@ -88,7 +90,11 @@ export function createKeeperEvmSigningLedger(
 }
 
 export function createKeeperEvmSigningLedgerPool(databaseUrl: string) {
-  const pool = new Pool({ connectionString: databaseUrl, max: 2 });
+  const pool = new Pool({
+    connectionString: databaseUrl,
+    connectionTimeoutMillis: KEEPER_POSTGRES_CONNECTION_TIMEOUT_MS,
+    max: 2,
+  });
   return {
     ledger: createKeeperEvmSigningLedger(pool),
     close: () => pool.end(),

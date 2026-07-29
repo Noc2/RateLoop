@@ -185,7 +185,11 @@ async function signingLedgerTerminalPartialUniqueness(client) {
 }
 
 export async function runPostgresInvariantTests(databaseUrl = process.env.DATABASE_URL) {
-  const pool = new Pool({ connectionString: localTestDatabaseUrl(databaseUrl), max: 1 });
+  const pool = new Pool({
+    connectionString: localTestDatabaseUrl(databaseUrl),
+    connectionTimeoutMillis: 10_000,
+    max: 1,
+  });
   const client = await pool.connect();
   try {
     await prepaidReferenceUniquenessAndRollback(client);

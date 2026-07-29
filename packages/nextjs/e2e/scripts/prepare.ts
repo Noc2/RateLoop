@@ -43,7 +43,7 @@ function isolatedDatabaseUrl() {
 }
 
 async function resetAndMigrate(databaseUrl: string) {
-  const pool = new Pool({ connectionString: databaseUrl, max: 1 });
+  const pool = new Pool({ connectionString: databaseUrl, connectionTimeoutMillis: 10_000, max: 1 });
   try {
     await pool.query("DROP SCHEMA public CASCADE");
     await pool.query("DROP SCHEMA IF EXISTS drizzle CASCADE");

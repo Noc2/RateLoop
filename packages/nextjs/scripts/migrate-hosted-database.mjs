@@ -136,7 +136,7 @@ async function main() {
   const expectedLatest = migrations.at(-1);
   if (!expectedLatest) throw new Error("The checked-in migration journal is empty.");
 
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 10_000, max: 1 });
   let migrationLockAcquired = false;
   try {
     await acquireHostedMigrationLock(pool);
