@@ -403,6 +403,62 @@ test("one processor failure degrades the run, retains safe evidence, and logs on
     errorCode: "Error",
     errorDigest,
   });
+  const health = await dbClient.execute({
+    sql: `SELECT processor_name,configuration_state,consecutive_failures,last_error_code,
+                 last_error_digest,disabled_reason,operator_alert_state
+          FROM tokenless_scheduled_processor_health
+          WHERE processor_name IN
+            ('sweepExpiredQuotes','processNotifications','produceIntegrityEpoch',
+             'processAttestations','reconcilePrepaidTopups')
+          ORDER BY processor_name`,
+  });
+  assert.deepEqual(health.rows, [
+    {
+      configuration_state: "disabled",
+      consecutive_failures: 0,
+      disabled_reason: "managed RFC 3161 attestation runtime is not configured",
+      last_error_code: null,
+      last_error_digest: null,
+      operator_alert_state: "resolved",
+      processor_name: "processAttestations",
+    },
+    {
+      configuration_state: "enabled",
+      consecutive_failures: 0,
+      disabled_reason: null,
+      last_error_code: null,
+      last_error_digest: null,
+      operator_alert_state: "resolved",
+      processor_name: "processNotifications",
+    },
+    {
+      configuration_state: "disabled",
+      consecutive_failures: 0,
+      disabled_reason: "TOKENLESS_INTEGRITY_EPOCH_PRODUCER_ENABLED is not true",
+      last_error_code: null,
+      last_error_digest: null,
+      operator_alert_state: "resolved",
+      processor_name: "produceIntegrityEpoch",
+    },
+    {
+      configuration_state: "disabled",
+      consecutive_failures: 0,
+      disabled_reason: "TOKENLESS_PREPAID_TOPUP_ENABLED is not true",
+      last_error_code: null,
+      last_error_digest: null,
+      operator_alert_state: "resolved",
+      processor_name: "reconcilePrepaidTopups",
+    },
+    {
+      configuration_state: "broken",
+      consecutive_failures: 1,
+      disabled_reason: null,
+      last_error_code: "Error",
+      last_error_digest: errorDigest,
+      operator_alert_state: "pending",
+      processor_name: "sweepExpiredQuotes",
+    },
+  ]);
 });
 
 test("expired public question media is swept by the cron rather than by upload traffic", async () => {
@@ -1257,6 +1313,15 @@ test("scheduled maintenance reports attestation retry, dead-letter, and adapter-
     retry: 0,
     dead: 0,
     unavailable: 2,
+  });
+  const health = await dbClient.execute({
+    sql: `SELECT configuration_state,last_error_code,operator_alert_state
+          FROM tokenless_scheduled_processor_health WHERE processor_name='processAttestations'`,
+  });
+  assert.deepEqual(health.rows[0], {
+    configuration_state: "broken",
+    last_error_code: "attestation_configuration_unavailable",
+    operator_alert_state: "pending",
   });
 });
 

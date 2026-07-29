@@ -5,6 +5,7 @@ import {
   reconcileEnterpriseIdentityAuditReservations,
 } from "~~/lib/auth/enterpriseIdentityAudit";
 import { drainPrepaidTopupAuditOutbox, reconcilePrepaidTopups } from "~~/lib/billing/prepaidTopups";
+import { prepaidTopupsEnabled } from "~~/lib/billing/stripe";
 import { dbClient } from "~~/lib/db";
 import { runTokenlessNotificationCycle } from "~~/lib/notifications/delivery";
 import {
@@ -48,6 +49,10 @@ import {
   sweepExpiredPublicQuestionMedia,
 } from "~~/lib/tokenless/publicQuestionMedia";
 import { reconcilePaidRaterCommit } from "~~/lib/tokenless/raterService";
+import {
+  type ScheduledProcessorHealthObservation,
+  persistScheduledProcessorHealth,
+} from "~~/lib/tokenless/scheduledProcessorHealth";
 import { type TokenlessScheduledWorkKind, tokenlessScheduledWorkItemId } from "~~/lib/tokenless/scheduledWorkItems";
 import { TokenlessServiceError, sweepExpiredTokenlessQuotes } from "~~/lib/tokenless/server";
 import { processSurpriseBountyPayments } from "~~/lib/tokenless/surpriseBountyService";
@@ -397,6 +402,17 @@ type MaintenanceProcessorFailure = {
   errorDigest: `sha256:${string}`;
 };
 
+type MaintenanceProcessorConfiguration = Omit<ScheduledProcessorHealthObservation, "processor">;
+
+type IsolatedMaintenanceProcessorInput<T> = {
+  failures: MaintenanceProcessorFailure[];
+  processor: keyof MaintenanceProcessors | MaintenanceStage;
+  run: () => Promise<T>;
+  fallback: T;
+  configuration?: (result: T) => MaintenanceProcessorConfiguration;
+  observe?: (observation: ScheduledProcessorHealthObservation) => void;
+};
+
 function maintenanceProcessorErrorCode(error: unknown) {
   if (error instanceof TokenlessServiceError) return error.code;
   if (error instanceof Error && /^[A-Za-z][A-Za-z0-9_]{0,79}$/u.test(error.name)) {
@@ -420,20 +436,21 @@ function maintenanceProcessorErrorEvidence(
   };
 }
 
-async function runIsolatedMaintenanceProcessor<T>(input: {
-  failures: MaintenanceProcessorFailure[];
-  processor: keyof MaintenanceProcessors | MaintenanceStage;
-  run: () => Promise<T>;
-  fallback: T;
-}) {
+async function runIsolatedMaintenanceProcessor<T>(input: IsolatedMaintenanceProcessorInput<T>) {
   try {
-    return await input.run();
+    const result = await input.run();
+    input.observe?.({
+      processor: input.processor,
+      ...(input.configuration?.(result) ?? { configurationState: "enabled" }),
+    });
+    return result;
   } catch (error) {
     const failure = {
       processor: input.processor,
       ...maintenanceProcessorErrorEvidence(error, input.processor),
     };
     input.failures.push(failure);
+    input.observe?.({ configurationState: "broken", ...failure });
     console.error(
       JSON.stringify({
         event: "tokenless_scheduled_maintenance_processor_failure",
@@ -807,35 +824,37 @@ export async function runTokenlessScheduledMaintenance(input: {
   try {
     const processors: MaintenanceProcessors = { ...defaultProcessors, ...input.processors };
     const processorFailures: MaintenanceProcessorFailure[] = [];
-    const expiredQuotes = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
+    const processorHealth = new Map<string, ScheduledProcessorHealthObservation>();
+    const runProcessor = <T>(processorInput: Omit<IsolatedMaintenanceProcessorInput<T>, "failures" | "observe">) =>
+      runIsolatedMaintenanceProcessor({
+        ...processorInput,
+        failures: processorFailures,
+        observe: observation => processorHealth.set(observation.processor, observation),
+      });
+    const expiredQuotes = await runProcessor({
       processor: "sweepExpiredQuotes",
       run: () => processors.sweepExpiredQuotes({ now, limit: workLimit }),
       fallback: { deleted: 0, scanned: 0 } as Awaited<ReturnType<MaintenanceProcessors["sweepExpiredQuotes"]>>,
     });
     // Unattached public media used to be swept only by the two upload routes, so a workspace that
     // stopped uploading never expired its own media. It belongs on the schedule with its siblings.
-    const expiredPublicMedia = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
+    const expiredPublicMedia = await runProcessor({
       processor: "sweepExpiredPublicMedia",
       run: () => processors.sweepExpiredPublicMedia({ now, limit: workLimit }),
       fallback: { deleted: 0, failed: [] } as Awaited<ReturnType<MaintenanceProcessors["sweepExpiredPublicMedia"]>>,
     });
     // Runs before both privacy queues so work revived this tick is picked up immediately.
-    const revivedPrivacyWork = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
+    const revivedPrivacyWork = await runProcessor({
       processor: "revivePrivacyWorkerFailures",
       run: () => processors.revivePrivacyWorkerFailures(now),
       fallback: { revived: 0 } as Awaited<ReturnType<MaintenanceProcessors["revivePrivacyWorkerFailures"]>>,
     });
-    const subjectRequests = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
+    const subjectRequests = await runProcessor({
       processor: "processSubjectRequests",
       run: () => processors.processSubjectRequests(now, workLimit),
       fallback: { completed: 0, queued: 0 } as Awaited<ReturnType<MaintenanceProcessors["processSubjectRequests"]>>,
     });
-    const privacyRetention = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
+    const privacyRetention = await runProcessor({
       processor: "purgePrivacyOperations",
       run: () => processors.purgePrivacyOperations(now),
       fallback: {
@@ -849,24 +868,21 @@ export async function runTokenlessScheduledMaintenance(input: {
         verifications: 0,
       } as Awaited<ReturnType<MaintenanceProcessors["purgePrivacyOperations"]>>,
     });
-    const workspaceDeletionRetention = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
+    const workspaceDeletionRetention = await runProcessor({
       processor: "expireWorkspaceDeletionRetention",
       run: () => processors.expireWorkspaceDeletionRetention(now, workLimit),
       fallback: { completed: 0, deferredByHold: 0, releasedHoldSchedules: 0 } as Awaited<
         ReturnType<MaintenanceProcessors["expireWorkspaceDeletionRetention"]>
       >,
     });
-    const directPrivateReviewDeadlines = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
+    const directPrivateReviewDeadlines = await runProcessor({
       processor: "reconcileDirectPrivateReviewDeadlines",
       run: () => processors.reconcileDirectPrivateReviewDeadlines({ now, limit: workLimit }),
       fallback: { scanned: 0, finalized: 0, pending: 0, retry: 0, retryOpportunityIds: [] } as Awaited<
         ReturnType<MaintenanceProcessors["reconcileDirectPrivateReviewDeadlines"]>
       >,
     });
-    const paidAssignmentSettlements = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
+    const paidAssignmentSettlements = await runProcessor({
       processor: "reconcilePaidAssignmentSettlements",
       run: () => processors.reconcilePaidAssignmentSettlements({ now, limit: workLimit }),
       fallback: {
@@ -877,30 +893,33 @@ export async function runTokenlessScheduledMaintenance(input: {
         retryOperationIds: [],
       } as Awaited<ReturnType<MaintenanceProcessors["reconcilePaidAssignmentSettlements"]>>,
     });
-    const networkAssignmentSettlements = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
+    const networkAssignmentSettlements = await runProcessor({
       processor: "reconcileNetworkAssignmentSettlements",
       run: () => processors.reconcileNetworkAssignmentSettlements({ now, limit: workLimit }),
       fallback: { scanned: 0, terminal: 0, retry: 0 } as Awaited<
         ReturnType<MaintenanceProcessors["reconcileNetworkAssignmentSettlements"]>
       >,
     });
-    const expiredAudienceAssignments = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
+    const expiredAudienceAssignments = await runProcessor({
       processor: "expireAudienceAssignments",
       run: () => processors.expireAudienceAssignments(now),
       fallback: { expired: 0 } as Awaited<ReturnType<MaintenanceProcessors["expireAudienceAssignments"]>>,
     });
-    const expiredPrivateReviewReservations = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
+    const expiredPrivateReviewReservations = await runProcessor({
       processor: "expirePrivateReviewReservations",
       run: () => processors.expirePrivateReviewReservations(now),
       fallback: 0 as Awaited<ReturnType<MaintenanceProcessors["expirePrivateReviewReservations"]>>,
     });
-    const integrityEpoch = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
+    const integrityEpoch = await runProcessor({
       processor: "produceIntegrityEpoch",
       run: () => processors.produceIntegrityEpoch({ now }),
+      configuration: result =>
+        result.status === "disabled"
+          ? {
+              configurationState: "disabled",
+              disabledReason: "TOKENLESS_INTEGRITY_EPOCH_PRODUCER_ENABLED is not true",
+            }
+          : { configurationState: "enabled" },
       fallback: {
         status: "failed" as const,
         epochId: `integrity:${now.toISOString().slice(0, 10)}`,
@@ -908,14 +927,12 @@ export async function runTokenlessScheduledMaintenance(input: {
         observations: 0,
       },
     });
-    const integrityPrivateFeatureRetention = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
+    const integrityPrivateFeatureRetention = await runProcessor({
       processor: "purgeIntegrityPrivateFeatures",
       run: () => processors.purgeIntegrityPrivateFeatures({ now, limit: workLimit * 100 }),
       fallback: { purged: 0 },
     });
-    const evidenceRetention = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
+    const evidenceRetention = await runProcessor({
       processor: "processEvidenceRetention",
       run: () =>
         processors.processEvidenceRetention({
@@ -939,8 +956,7 @@ export async function runTokenlessScheduledMaintenance(input: {
         retryRunIds: [],
       } as Awaited<ReturnType<MaintenanceProcessors["processEvidenceRetention"]>>,
     });
-    const nonceDriftSweep = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
+    const nonceDriftSweep = await runProcessor({
       processor: "sweepNonceDrift",
       run: () => processors.sweepNonceDrift({ now, limit: workLimit }),
       fallback: {
@@ -951,8 +967,7 @@ export async function runTokenlessScheduledMaintenance(input: {
         unavailable: 0,
       } as Awaited<ReturnType<MaintenanceProcessors["sweepNonceDrift"]>>,
     });
-    const seeded = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
+    const seeded = await runProcessor({
       processor: "seedScheduledWork",
       run: () => seedTokenlessScheduledWork(now),
       fallback: {
@@ -966,14 +981,12 @@ export async function runTokenlessScheduledMaintenance(input: {
         settlements: 0,
       } as Awaited<ReturnType<typeof seedTokenlessScheduledWork>>,
     });
-    const items = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
+    const items = await runProcessor({
       processor: "claimDueWork",
       run: () => claimDueWork(now, workLimit),
       fallback: [] as Row[],
     });
-    const processedWork = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
+    const processedWork = await runProcessor({
       processor: "processClaimedWork",
       run: () =>
         processClaimedWork({
@@ -1005,8 +1018,7 @@ export async function runTokenlessScheduledMaintenance(input: {
       deferred: processedWork.deferred,
       retry: processedWork.retry,
     };
-    const evidencePending = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
+    const evidencePending = await runProcessor({
       processor: "evidencePendingHealth",
       run: () => evidencePendingOperationalHealth(now),
       fallback: {
@@ -1025,30 +1037,26 @@ export async function runTokenlessScheduledMaintenance(input: {
       throw new Error("Database returned an invalid scheduled dead-letter count.");
     }
     const nonceDriftFindings = await unresolvedManagedEvmNonceFindings();
-    const deletionJobs = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
+    const deletionJobs = await runProcessor({
       processor: "reconcileDeletionJobs",
       run: () => processors.reconcileDeletionJobs(now, workLimit),
       fallback: { blocked: 0, completed: 0, pending: 0 } as Awaited<
         ReturnType<MaintenanceProcessors["reconcileDeletionJobs"]>
       >,
     });
-    const deletedAccountPaidAssignmentSeats = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
+    const deletedAccountPaidAssignmentSeats = await runProcessor({
       processor: "reconcileDeletedAccountPaidAssignmentSeats",
       run: () => processors.reconcileDeletedAccountPaidAssignmentSeats(now, workLimit),
       fallback: { accounts: 0, erasedSeats: 0 } as Awaited<
         ReturnType<MaintenanceProcessors["reconcileDeletedAccountPaidAssignmentSeats"]>
       >,
     });
-    const deletedAuthGuards = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
+    const deletedAuthGuards = await runProcessor({
       processor: "expireDeletedAuthGuards",
       run: () => processors.expireDeletedAuthGuards(now, workLimit),
       fallback: { expired: 0 } as Awaited<ReturnType<MaintenanceProcessors["expireDeletedAuthGuards"]>>,
     });
-    const surpriseBounties = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
+    const surpriseBounties = await runProcessor({
       processor: "processSurpriseBounties",
       run: () => processors.processSurpriseBounties({ now, limit: workLimit }),
       fallback: {
@@ -1058,68 +1066,84 @@ export async function runTokenlessScheduledMaintenance(input: {
         reconciliationRequired: 0,
       } as Awaited<ReturnType<MaintenanceProcessors["processSurpriseBounties"]>>,
     });
-    const grcReconciliations = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
+    const grcReconciliations = await runProcessor({
       processor: "processGrcReconciliations",
       run: () => processors.processGrcReconciliations({ now, limit: 1 }),
       fallback: { enqueued: 0, claimed: 0, succeeded: 0, retry: 0, failed: 0 } as Awaited<
         ReturnType<MaintenanceProcessors["processGrcReconciliations"]>
       >,
     });
-    const wormExports = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
+    const wormExports = await runProcessor({
       processor: "processWormExports",
       run: () => processors.processWormExports({ now, limit: workLimit }),
       fallback: { due: 0, delivered: 0, retry: 0, dead: 0, skipped: 0 } as Awaited<
         ReturnType<MaintenanceProcessors["processWormExports"]>
       >,
     });
-    const attestations = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
+    const attestations = await runProcessor({
       processor: "processAttestations",
       run: () => processors.processAttestations({ now, limit: workLimit }),
+      configuration: result => {
+        if (result.configured) return { configurationState: "enabled" };
+        if (result.unavailable > 0) {
+          const error = new TokenlessServiceError(
+            "Due assurance attestations cannot run with the current configuration.",
+            503,
+            "attestation_configuration_unavailable",
+          );
+          return {
+            configurationState: "broken",
+            ...maintenanceProcessorErrorEvidence(error, "processAttestations"),
+          };
+        }
+        return {
+          configurationState: "disabled",
+          disabledReason: "managed RFC 3161 attestation runtime is not configured",
+        };
+      },
       fallback: { configured: false, due: 0, completed: 0, retry: 0, dead: 0, unavailable: 0 } as Awaited<
         ReturnType<MaintenanceProcessors["processAttestations"]>
       >,
     });
-    const prepaidTopups = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
+    const prepaidTopups = await runProcessor({
       processor: "reconcilePrepaidTopups",
       run: () => processors.reconcilePrepaidTopups({ now, limit: workLimit }),
+      configuration: () =>
+        prepaidTopupsEnabled()
+          ? { configurationState: "enabled" }
+          : {
+              configurationState: "disabled",
+              disabledReason: "TOKENLESS_PREPAID_TOPUP_ENABLED is not true",
+            },
       fallback: { attempted: 0, credited: 0, failed: 0 } as Awaited<
         ReturnType<MaintenanceProcessors["reconcilePrepaidTopups"]>
       >,
     });
-    const prepaidTopupAudit = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
+    const prepaidTopupAudit = await runProcessor({
       processor: "drainPrepaidTopupAudit",
       run: () => processors.drainPrepaidTopupAudit({ limit: webhookLimit }),
       fallback: { attempted: 0, delivered: 0 } as Awaited<ReturnType<MaintenanceProcessors["drainPrepaidTopupAudit"]>>,
     });
-    const enterpriseIdentityAuditReservations = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
+    const enterpriseIdentityAuditReservations = await runProcessor({
       processor: "reconcileEnterpriseIdentityAudit",
       run: () => processors.reconcileEnterpriseIdentityAudit(webhookLimit),
       fallback: { activated: 0, inspected: 0 } as Awaited<
         ReturnType<MaintenanceProcessors["reconcileEnterpriseIdentityAudit"]>
       >,
     });
-    const enterpriseIdentityAudit = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
+    const enterpriseIdentityAudit = await runProcessor({
       processor: "drainEnterpriseIdentityAudit",
       run: () => processors.drainEnterpriseIdentityAudit(now, webhookLimit),
       fallback: { delivered: 0, retry: 0 } as Awaited<
         ReturnType<MaintenanceProcessors["drainEnterpriseIdentityAudit"]>
       >,
     });
-    const mechanismHealth = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
+    const mechanismHealth = await runProcessor({
       processor: "refreshMechanismHealth",
       run: () => processors.refreshMechanismHealth({ now, limit: workLimit }),
       fallback: { refreshed: 0 } as Awaited<ReturnType<MaintenanceProcessors["refreshMechanismHealth"]>>,
     });
-    const assuranceEventProjection = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
+    const assuranceEventProjection = await runProcessor({
       processor: "projectAssuranceEvents",
       run: () => processors.projectAssuranceEvents({ now, limit: webhookLimit }),
       fallback: {
@@ -1131,8 +1155,7 @@ export async function runTokenlessScheduledMaintenance(input: {
         retrySources: [],
       } as Awaited<ReturnType<MaintenanceProcessors["projectAssuranceEvents"]>>,
     });
-    const assuranceEventOutcomes = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
+    const assuranceEventOutcomes = await runProcessor({
       processor: "deliverAssuranceEvents",
       run: () => processors.deliverAssuranceEvents({ now, limit: webhookLimit }),
       fallback: [] as Awaited<ReturnType<MaintenanceProcessors["deliverAssuranceEvents"]>>,
@@ -1145,8 +1168,7 @@ export async function runTokenlessScheduledMaintenance(input: {
         retry: assuranceEventOutcomes.filter(value => value.state === "retry").length,
       },
     };
-    const webhookOutcomes = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
+    const webhookOutcomes = await runProcessor({
       processor: "deliverWebhooks",
       run: () => processors.deliverWebhooks({ now, limit: webhookLimit }),
       fallback: [] as Awaited<ReturnType<MaintenanceProcessors["deliverWebhooks"]>>,
@@ -1156,8 +1178,7 @@ export async function runTokenlessScheduledMaintenance(input: {
       delivered: webhookOutcomes.filter(value => value.state === "delivered").length,
       retry: webhookOutcomes.filter(value => value.state === "retry").length,
     };
-    const notifications = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
+    const notifications = await runProcessor({
       processor: "processNotifications",
       run: () =>
         processors.processNotifications({
@@ -1175,6 +1196,7 @@ export async function runTokenlessScheduledMaintenance(input: {
         suppressed: 0,
       } as Awaited<ReturnType<MaintenanceProcessors["processNotifications"]>>,
     });
+    await persistScheduledProcessorHealth(processorHealth.values(), now);
     const status =
       processorFailures.length > 0 ||
       deadWorkItems > 0 ||

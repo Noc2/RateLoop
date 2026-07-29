@@ -1121,6 +1121,13 @@
       "when": 1785225600000,
       "tag": "0160_scheduled_work_terminal_reasons",
       "breakpoints": true
+    },
+    {
+      "idx": 161,
+      "version": "7",
+      "when": 1785229200000,
+      "tag": "0161_scheduled_processor_health",
+      "breakpoints": true
     }
   ]
 }
