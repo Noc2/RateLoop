@@ -476,9 +476,11 @@ test("workspace owner inspects and exports a signed decision packet", async ({ p
   await page.route("**/assurance/grc-connectors", route => json(route, { connectors: [] }));
   await page.route("**/assurance/metrics/credentials", route => json(route, { credentials: [] }));
 
-  await page.goto(`/agents?tab=evidence&workspace=${browserState.workspaceId}`);
+  await page.goto(`/agents/results?workspace=${browserState.workspaceId}`);
   await expect(page.getByRole("heading", { name: "Decision records and exports" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Production readiness" })).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Decision packets" }).getByRole("heading", { name: "Production readiness" }),
+  ).toBeVisible();
   await expect(page.getByText("release gate")).toBeVisible();
   await expect(page.getByText("blocking")).toBeVisible();
   await expect(page.getByText(/3 of 3 assigned; 3 responded; 3 complete; 0 paid/iu)).toBeVisible();
