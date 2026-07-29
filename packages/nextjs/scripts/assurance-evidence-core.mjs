@@ -1,8 +1,89 @@
-import { createHash, createPublicKey, verify } from "node:crypto";
-
 export const EVIDENCE_SCHEMA_VERSION = "rateloop.human-assurance.evidence.v3";
 export const LEGACY_EVIDENCE_SCHEMA_VERSIONS = ["rateloop.human-assurance.evidence.v2"];
 export const EVIDENCE_AGGREGATION_VERSION = "rateloop.descriptive-case-quorum.v2";
+
+const UTF8 = new TextEncoder();
+
+function subtleCrypto() {
+  const subtle = globalThis.crypto?.subtle;
+  if (!subtle) throw new Error("WebCrypto is unavailable.");
+  return subtle;
+}
+
+function bytesToHex(bytes) {
+  return Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function base64UrlBytes(value) {
+  if (typeof value !== "string" || !/^[A-Za-z0-9_-]+={0,2}$/u.test(value)) {
+    throw new Error("Invalid base64url value.");
+  }
+  const unpadded = value.replace(/=+$/u, "");
+  if (unpadded.length % 4 === 1) throw new Error("Invalid base64url value.");
+  const encoded = unpadded
+    .replaceAll("-", "+")
+    .replaceAll("_", "/")
+    .padEnd(Math.ceil(unpadded.length / 4) * 4, "=");
+  const decoded = atob(encoded);
+  return Uint8Array.from(decoded, character => character.charCodeAt(0));
+}
+
+async function sha256Bytes(bytes) {
+  return new Uint8Array(await subtleCrypto().digest("SHA-256", bytes));
+}
+
+function readDerLength(bytes, offset) {
+  const first = bytes[offset];
+  if (first === undefined) throw new Error("Invalid ECDSA DER signature.");
+  if ((first & 0x80) === 0) return { length: first, offset: offset + 1 };
+  const octets = first & 0x7f;
+  if (octets === 0 || octets > 2 || offset + octets >= bytes.length) {
+    throw new Error("Invalid ECDSA DER signature.");
+  }
+  let length = 0;
+  for (let index = 0; index < octets; index += 1) {
+    length = (length << 8) | bytes[offset + 1 + index];
+  }
+  if (length < 128) throw new Error("Invalid ECDSA DER signature.");
+  return { length, offset: offset + 1 + octets };
+}
+
+function readDerInteger(bytes, offset) {
+  if (bytes[offset] !== 0x02) throw new Error("Invalid ECDSA DER signature.");
+  const encodedLength = readDerLength(bytes, offset + 1);
+  const end = encodedLength.offset + encodedLength.length;
+  if (encodedLength.length === 0 || end > bytes.length) throw new Error("Invalid ECDSA DER signature.");
+  let integer = bytes.subarray(encodedLength.offset, end);
+  if ((integer[0] & 0x80) !== 0) throw new Error("Invalid ECDSA DER signature.");
+  if (integer.length > 1 && integer[0] === 0) {
+    if ((integer[1] & 0x80) === 0) throw new Error("Invalid ECDSA DER signature.");
+    integer = integer.subarray(1);
+  }
+  if (integer.length > 32) throw new Error("Invalid ECDSA DER signature.");
+  const padded = new Uint8Array(32);
+  padded.set(integer, 32 - integer.length);
+  return { integer: padded, offset: end };
+}
+
+/**
+ * WebCrypto consumes the fixed-width IEEE P1363 representation for ECDSA.
+ * Historical RateLoop packets were signed by Node, whose default is ASN.1 DER.
+ * Accept both encodings, but normalize DER before calling the shared verifier.
+ */
+export function normalizeP256Signature(signature) {
+  if (!(signature instanceof Uint8Array)) throw new Error("Invalid ECDSA signature.");
+  if (signature.length === 64) return signature;
+  if (signature[0] !== 0x30) throw new Error("Invalid ECDSA DER signature.");
+  const sequence = readDerLength(signature, 1);
+  if (sequence.offset + sequence.length !== signature.length) throw new Error("Invalid ECDSA DER signature.");
+  const r = readDerInteger(signature, sequence.offset);
+  const s = readDerInteger(signature, r.offset);
+  if (s.offset !== signature.length) throw new Error("Invalid ECDSA DER signature.");
+  const raw = new Uint8Array(64);
+  raw.set(r.integer, 0);
+  raw.set(s.integer, 32);
+  return raw;
+}
 
 export function canonicalizeEvidenceValue(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalizeEvidenceValue).join(",")}]`;
@@ -17,25 +98,27 @@ export function canonicalizeEvidenceValue(value) {
   return encoded;
 }
 
-export function sha256EvidenceValue(value) {
-  return `sha256:${createHash("sha256").update(canonicalizeEvidenceValue(value)).digest("hex")}`;
+export async function sha256EvidenceValue(value) {
+  const digest = await sha256Bytes(UTF8.encode(canonicalizeEvidenceValue(value)));
+  return `sha256:${bytesToHex(digest)}`;
 }
 
-export function evidenceSigningKeyId(publicKey, algorithm = "Ed25519") {
+export async function evidenceSigningKeyId(publicKey, algorithm = "Ed25519") {
   const prefix = algorithm === "Ed25519" ? "ed25519" : algorithm === "ECDSA-SHA256" ? "p256" : null;
   if (!prefix) throw new Error("Unsupported evidence signature algorithm.");
-  return `${prefix}:${createHash("sha256").update(Buffer.from(publicKey, "base64url")).digest("hex").slice(0, 24)}`;
+  const digest = await sha256Bytes(base64UrlBytes(publicKey));
+  return `${prefix}:${bytesToHex(digest).slice(0, 24)}`;
 }
 
-export function evidenceMerkleRoot(leaves) {
+export async function evidenceMerkleRoot(leaves) {
   let level = [...leaves].sort();
-  if (level.length === 0) return sha256EvidenceValue([]);
+  if (level.length === 0) return await sha256EvidenceValue([]);
   while (level.length > 1) {
     const next = [];
     for (let index = 0; index < level.length; index += 2) {
       next.push(sha256EvidenceValue([level[index], level[index + 1] ?? level[index]]));
     }
-    level = next;
+    level = await Promise.all(next);
   }
   return level[0];
 }
@@ -331,7 +414,26 @@ function validEvidenceReviewContext(payload) {
   );
 }
 
-export function verifyEvidenceExport(packet, trust = {}) {
+async function verifyEvidenceSignature(packet, canonicalDocument) {
+  const publicKeyBytes = base64UrlBytes(packet.signing.publicKey);
+  const signatureBytes = base64UrlBytes(packet.signature);
+  const documentBytes = UTF8.encode(canonicalDocument);
+  if (packet.signing.algorithm === "Ed25519") {
+    const key = await subtleCrypto().importKey("spki", publicKeyBytes, { name: "Ed25519" }, false, ["verify"]);
+    return subtleCrypto().verify({ name: "Ed25519" }, key, signatureBytes, documentBytes);
+  }
+  const key = await subtleCrypto().importKey("spki", publicKeyBytes, { name: "ECDSA", namedCurve: "P-256" }, false, [
+    "verify",
+  ]);
+  return subtleCrypto().verify(
+    { name: "ECDSA", hash: "SHA-256" },
+    key,
+    normalizeP256Signature(signatureBytes),
+    documentBytes,
+  );
+}
+
+export async function verifyEvidenceExport(packet, trust = {}) {
   try {
     if (!packet || typeof packet !== "object" || !packet.payload || !packet.signing) {
       return { valid: false, errors: ["invalid_packet_shape"] };
@@ -349,7 +451,10 @@ export function verifyEvidenceExport(packet, trust = {}) {
     if (packet.signing.algorithm !== "Ed25519" && packet.signing.algorithm !== "ECDSA-SHA256") {
       errors.push("unsupported_signature_algorithm");
     }
-    const derivedKeyId = evidenceSigningKeyId(packet.signing.publicKey, packet.signing.algorithm);
+    if (errors.includes("unsupported_signature_algorithm")) {
+      return { valid: false, errors };
+    }
+    const derivedKeyId = await evidenceSigningKeyId(packet.signing.publicKey, packet.signing.algorithm);
     if (!trust.expectedPublicKey && !trust.expectedKeyId) errors.push("missing_trust_anchor");
     if (trust.expectedPublicKey && trust.expectedPublicKey !== packet.signing.publicKey) {
       errors.push("untrusted_signing_key");
@@ -366,12 +471,12 @@ export function verifyEvidenceExport(packet, trust = {}) {
     }
     const signedDocument = { payload: packet.payload, signing: packet.signing };
     const canonicalDocument = canonicalizeEvidenceValue(signedDocument);
-    const packetDigest = sha256EvidenceValue(signedDocument);
+    const packetDigest = await sha256EvidenceValue(signedDocument);
     if (packet.packetDigest !== packetDigest) errors.push("packet_digest_mismatch");
-    if (evidenceMerkleRoot(packet.payload.recomputation.caseLeaves) !== packet.payload.roots.caseRoot) {
+    if ((await evidenceMerkleRoot(packet.payload.recomputation.caseLeaves)) !== packet.payload.roots.caseRoot) {
       errors.push("case_root_mismatch");
     }
-    if (evidenceMerkleRoot(packet.payload.recomputation.responseLeaves) !== packet.payload.roots.responseRoot) {
+    if ((await evidenceMerkleRoot(packet.payload.recomputation.responseLeaves)) !== packet.payload.roots.responseRoot) {
       errors.push("response_root_mismatch");
     }
     const aggregation = computeEvidenceAggregation(
@@ -382,20 +487,7 @@ export function verifyEvidenceExport(packet, trust = {}) {
     if (canonicalizeEvidenceValue(aggregation) !== canonicalizeEvidenceValue(packet.payload.aggregation)) {
       errors.push("aggregation_mismatch");
     }
-    const publicKey = createPublicKey({
-      key: Buffer.from(packet.signing.publicKey, "base64url"),
-      format: "der",
-      type: "spki",
-    });
-    const verificationAlgorithm = packet.signing.algorithm === "ECDSA-SHA256" ? "sha256" : null;
-    if (
-      !verify(
-        verificationAlgorithm,
-        Buffer.from(canonicalDocument),
-        publicKey,
-        Buffer.from(packet.signature, "base64url"),
-      )
-    ) {
+    if (!(await verifyEvidenceSignature(packet, canonicalDocument))) {
       errors.push("signature_invalid");
     }
     return { valid: errors.length === 0, errors, packetDigest };

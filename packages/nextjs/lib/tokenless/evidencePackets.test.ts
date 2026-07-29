@@ -717,8 +717,8 @@ test("evidence derives private aggregates, verifies only against trusted pins, a
   assert.doesNotMatch(serialized, /ciphertext:private-rationale|key:0:0/);
   for (const reviewer of fixture.reviewerAddresses) assert.doesNotMatch(serialized, new RegExp(reviewer));
 
-  assert.deepEqual(verifyEvidenceExport(packet).errors, ["missing_trust_anchor"]);
-  const trusted = verifyEvidenceExport(packet, {
+  assert.deepEqual((await verifyEvidenceExport(packet)).errors, ["missing_trust_anchor"]);
+  const trusted = await verifyEvidenceExport(packet, {
     expectedPublicKey: packet.signing.publicKey,
     expectedKeyId: packet.signing.keyId,
   });
@@ -728,7 +728,7 @@ test("evidence derives private aggregates, verifies only against trusted pins, a
   const semanticallyInvalidDocument = { payload: semanticallyInvalidPayload, signing: packet.signing };
   const semanticallyInvalidPacket = {
     ...semanticallyInvalidDocument,
-    packetDigest: sha256EvidenceValue(semanticallyInvalidDocument),
+    packetDigest: await sha256EvidenceValue(semanticallyInvalidDocument),
     signature: sign(
       null,
       Buffer.from(canonicalizeEvidenceValue(semanticallyInvalidDocument)),
@@ -736,10 +736,12 @@ test("evidence derives private aggregates, verifies only against trusted pins, a
     ).toString("base64url"),
   };
   assert.ok(
-    verifyEvidenceExport(semanticallyInvalidPacket, {
-      expectedPublicKey: packet.signing.publicKey,
-      expectedKeyId: packet.signing.keyId,
-    }).errors.includes("review_context_invalid"),
+    (
+      await verifyEvidenceExport(semanticallyInvalidPacket, {
+        expectedPublicKey: packet.signing.publicKey,
+        expectedKeyId: packet.signing.keyId,
+      })
+    ).errors.includes("review_context_invalid"),
   );
   const legacyPayload: Record<string, any> = {
     ...packet.payload,
@@ -749,16 +751,18 @@ test("evidence derives private aggregates, verifies only against trusted pins, a
   const legacyDocument = { payload: legacyPayload, signing: packet.signing };
   const legacyPacket = {
     ...legacyDocument,
-    packetDigest: sha256EvidenceValue(legacyDocument),
+    packetDigest: await sha256EvidenceValue(legacyDocument),
     signature: sign(null, Buffer.from(canonicalizeEvidenceValue(legacyDocument)), signer.privateKey).toString(
       "base64url",
     ),
   };
   assert.equal(
-    verifyEvidenceExport(legacyPacket, {
-      expectedPublicKey: packet.signing.publicKey,
-      expectedKeyId: packet.signing.keyId,
-    }).valid,
+    (
+      await verifyEvidenceExport(legacyPacket, {
+        expectedPublicKey: packet.signing.publicKey,
+        expectedKeyId: packet.signing.keyId,
+      })
+    ).valid,
     true,
   );
   assert.equal(
@@ -772,28 +776,37 @@ test("evidence derives private aggregates, verifies only against trusted pins, a
     .toString("base64url");
   const forgedDocument = {
     payload: packet.payload,
-    signing: { algorithm: "Ed25519", keyId: evidenceSigningKeyId(attackerPublicKey), publicKey: attackerPublicKey },
+    signing: {
+      algorithm: "Ed25519",
+      keyId: await evidenceSigningKeyId(attackerPublicKey),
+      publicKey: attackerPublicKey,
+    },
   };
   const forged = {
     ...forgedDocument,
-    packetDigest: sha256EvidenceValue(forgedDocument),
+    packetDigest: await sha256EvidenceValue(forgedDocument),
     signature: sign(null, Buffer.from(canonicalizeEvidenceValue(forgedDocument)), attacker.privateKey).toString(
       "base64url",
     ),
   };
-  assert.ok(verifyEvidenceExport(forged).errors.includes("missing_trust_anchor"));
-  assert.equal(verifyEvidenceExport(forged, { expectedPublicKey: packet.signing.publicKey }).valid, false);
+  assert.ok((await verifyEvidenceExport(forged)).errors.includes("missing_trust_anchor"));
+  assert.equal((await verifyEvidenceExport(forged, { expectedPublicKey: packet.signing.publicKey })).valid, false);
   assert.ok(
-    verifyEvidenceExport(forged, { expectedPublicKey: packet.signing.publicKey }).errors.includes(
+    (await verifyEvidenceExport(forged, { expectedPublicKey: packet.signing.publicKey })).errors.includes(
       "untrusted_signing_key",
     ),
   );
-  assert.equal(verifyEvidenceExport(packet, { expectedKeyId: "ed25519:000000000000000000000000" }).valid, false);
   assert.equal(
-    verifyEvidenceExport(packet, {
-      expectedPublicKey: packet.signing.publicKey,
-      expectedKeyId: "ed25519:000000000000000000000000",
-    }).valid,
+    (await verifyEvidenceExport(packet, { expectedKeyId: "ed25519:000000000000000000000000" })).valid,
+    false,
+  );
+  assert.equal(
+    (
+      await verifyEvidenceExport(packet, {
+        expectedPublicKey: packet.signing.publicKey,
+        expectedKeyId: "ed25519:000000000000000000000000",
+      })
+    ).valid,
     false,
   );
 

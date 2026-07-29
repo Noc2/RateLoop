@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url";
 
 export async function verifyEvidenceFile(path, trust) {
   const packet = JSON.parse(await readFile(path, "utf8"));
-  return verifyEvidenceExport(packet, trust);
+  return await verifyEvidenceExport(packet, trust);
 }
 
 async function publicKeyPin(value) {

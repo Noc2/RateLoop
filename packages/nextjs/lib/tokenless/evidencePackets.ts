@@ -196,7 +196,7 @@ async function signingMetadata(signer: EvidenceSigner) {
     );
   }
   const publicKey = createPublicKey(signer.privateKey).export({ format: "der", type: "spki" }).toString("base64url");
-  const derivedKeyId = evidenceSigningKeyId(publicKey);
+  const derivedKeyId = await evidenceSigningKeyId(publicKey);
   if (signer.keyId && signer.keyId !== derivedKeyId) {
     throw new TokenlessServiceError(
       "Evidence signing key IDs must equal the public-key fingerprint.",
@@ -286,7 +286,7 @@ export async function loadRunAccess(
   return { row, address };
 }
 
-function requireFrozenSource(row: QueryRow) {
+async function requireFrozenSource(row: QueryRow) {
   const runManifestHash = rowString(row, "manifest_hash");
   const suiteManifestHash = rowString(row, "suite_manifest_hash");
   const policyHash = rowString(row, "policy_hash");
@@ -307,9 +307,9 @@ function requireFrozenSource(row: QueryRow) {
   const suiteManifest = parseJson<Record<string, any>>(row.suite_manifest_json, "Suite manifest");
   const policy = parseJson<Record<string, any>>(row.policy_json, "Audience policy");
   if (
-    sha256EvidenceValue(runManifest) !== runManifestHash ||
-    sha256EvidenceValue(suiteManifest) !== suiteManifestHash ||
-    sha256EvidenceValue(policy) !== policyHash
+    (await sha256EvidenceValue(runManifest)) !== runManifestHash ||
+    (await sha256EvidenceValue(suiteManifest)) !== suiteManifestHash ||
+    (await sha256EvidenceValue(policy)) !== policyHash
   ) {
     evidenceError("A frozen evidence source no longer matches its hash.", "assurance_evidence_hash_mismatch");
   }
@@ -475,8 +475,8 @@ function reviewerSource(value: unknown): ReviewerSource {
   return source;
 }
 
-function caseLeaf(row: QueryRow) {
-  return sha256EvidenceValue({
+async function caseLeaf(row: QueryRow) {
+  return await sha256EvidenceValue({
     admissionPolicyHash: rowString(row, "admission_policy_hash"),
     caseId: rowString(row, "case_id"),
     contentId: rowString(row, "content_id"),
@@ -488,8 +488,8 @@ function caseLeaf(row: QueryRow) {
   });
 }
 
-function responseLeaf(row: QueryRow) {
-  return sha256EvidenceValue({
+async function responseLeaf(row: QueryRow) {
+  return await sha256EvidenceValue({
     caseId: rowString(row, "case_id"),
     choice: rowString(row, "choice"),
     failureTagKeys: parseJson<string[]>(row.failure_tag_keys_json, "Failure tags"),
@@ -501,10 +501,10 @@ function responseLeaf(row: QueryRow) {
   });
 }
 
-function rationaleDigest(row: QueryRow) {
+async function rationaleDigest(row: QueryRow) {
   const ciphertext = rowString(row, "rationale_ciphertext");
   if (!ciphertext) return null;
-  return sha256EvidenceValue({
+  return await sha256EvidenceValue({
     ciphertext,
     keyRef: rowString(row, "rationale_key_ref"),
     responseDigest: rowString(row, "response_digest"),
@@ -627,7 +627,7 @@ async function collectAggregationInputs(
     } else {
       evidenceError("A response has an unsupported validity state.", "assurance_evidence_source_invalid");
     }
-    const digest = rationaleDigest(row);
+    const digest = await rationaleDigest(row);
     if (digest) rationaleDigests.push(digest);
   }
   const publicReviewerCounts: ReviewerSourceCount[] = [...reviewerCounts.values()]
@@ -1057,16 +1057,16 @@ async function signPacket(payload: Record<string, any>, signer: EvidenceSigner):
   const canonical = canonicalizeEvidenceValue(signedDocument);
   return {
     ...signedDocument,
-    packetDigest: sha256EvidenceValue(signedDocument),
+    packetDigest: await sha256EvidenceValue(signedDocument),
     signature: sign(null, Buffer.from(canonical), signer.privateKey).toString("base64url"),
   };
 }
 
-function parseStoredPacket(row: QueryRow | undefined): EvidenceExport {
+async function parseStoredPacket(row: QueryRow | undefined): Promise<EvidenceExport> {
   const packetJson = rowString(row, "packet_json");
   if (!packetJson) evidenceError("Evidence packet not found.", "assurance_evidence_not_found", 404);
   const packet = parseJson<EvidenceExport>(packetJson, "Evidence packet");
-  const verification = verifyEvidenceExportCore(packet, {
+  const verification = await verifyEvidenceExportCore(packet, {
     expectedPublicKey: rowString(row, "signing_public_key"),
     expectedKeyId: rowString(row, "signing_key_id"),
   });
@@ -1085,7 +1085,10 @@ export function assertEvidenceGenerationRequest(value: unknown) {
   }
 }
 
-export function verifyEvidenceExport(packet: unknown, trust?: { expectedPublicKey?: string; expectedKeyId?: string }) {
+export async function verifyEvidenceExport(
+  packet: unknown,
+  trust?: { expectedPublicKey?: string; expectedKeyId?: string },
+) {
   return verifyEvidenceExportCore(packet, trust);
 }
 
@@ -1107,7 +1110,7 @@ export async function generateAssuranceEvidencePacket(input: {
       [input.runId],
     );
     if (existing.rows[0]) {
-      const packet = parseStoredPacket(existing.rows[0]);
+      const packet = await parseStoredPacket(existing.rows[0]);
       await client.query("COMMIT");
       await enqueueAssuranceAttestation({
         workspaceId: input.workspaceId,
@@ -1118,7 +1121,7 @@ export async function generateAssuranceEvidencePacket(input: {
       });
       return packet;
     }
-    const frozen = requireFrozenSource(row);
+    const frozen = await requireFrozenSource(row);
     const caseResult = await client.query(
       `SELECT case_id, position, content_id, admission_policy_hash, deterministic_checks_hash,
               deterministic_checks_status, round_id, round_status
@@ -1180,8 +1183,8 @@ export async function generateAssuranceEvidencePacket(input: {
       decisionCounts.minimumAggregationSize,
     );
     const aggregation = computeEvidenceAggregation(recomputation, decisionCounts.minimumAggregationSize, passRule);
-    const caseLeaves = caseResult.rows.map(caseLeaf).sort();
-    const responseLeaves = responseResult.rows.map(responseLeaf).sort();
+    const caseLeaves = (await Promise.all(caseResult.rows.map(caseLeaf))).sort();
+    const responseLeaves = (await Promise.all(responseResult.rows.map(responseLeaf))).sort();
     const chainEvidence = await collectChainEvidence(client, caseResult.rows);
     assertTerminalPacket({
       aggregation,
@@ -1249,7 +1252,10 @@ export async function generateAssuranceEvidencePacket(input: {
         ),
         period: periodCoverage(row, responseResult.rows, aggregation),
       },
-      roots: { caseRoot: evidenceMerkleRoot(caseLeaves), responseRoot: evidenceMerkleRoot(responseLeaves) },
+      roots: {
+        caseRoot: await evidenceMerkleRoot(caseLeaves),
+        responseRoot: await evidenceMerkleRoot(responseLeaves),
+      },
       aggregation,
       calibration: {
         itemCount: goldCaseIds.size,
@@ -1330,7 +1336,7 @@ export async function getAssuranceEvidencePacket(input: {
        FROM tokenless_assurance_evidence_packets WHERE run_id = $1 LIMIT 1`,
       [input.runId],
     );
-    return parseStoredPacket(result.rows[0]);
+    return await parseStoredPacket(result.rows[0]);
   } finally {
     client.release();
   }
@@ -1390,7 +1396,7 @@ export async function recordAssuranceClientDecision(input: {
       [input.runId],
     );
     const packetRow = packetResult.rows[0];
-    const packet = parseStoredPacket(packetRow);
+    const packet = await parseStoredPacket(packetRow);
     if (packet.packetDigest !== rowString(packetRow, "packet_digest")) {
       evidenceError("Evidence packet digest mismatch.", "assurance_evidence_invalid");
     }
@@ -1419,7 +1425,7 @@ export async function recordAssuranceClientDecision(input: {
       decidedBy: address,
       decidedAt: decidedAt.toISOString(),
     };
-    const decisionDigest = sha256EvidenceValue(decisionPayload);
+    const decisionDigest = await sha256EvidenceValue(decisionPayload);
     await client.query(
       `INSERT INTO tokenless_assurance_client_decisions
        (decision_id, run_id, evidence_packet_id, decision, note, decided_by, decided_at,
@@ -1614,7 +1620,7 @@ export async function recordAssuranceOverrideDecision(input: {
       decidedBy: address,
       decidedAt: decidedAt.toISOString(),
     };
-    const recordDigest = sha256EvidenceValue(payload);
+    const recordDigest = await sha256EvidenceValue(payload);
     await client.query(
       `INSERT INTO tokenless_assurance_override_decisions
        (record_id, workspace_id, project_id, run_id, supersedes_record_id, outcome, reasons,
