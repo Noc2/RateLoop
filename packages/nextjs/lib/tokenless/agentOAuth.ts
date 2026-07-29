@@ -24,6 +24,8 @@ export const AGENT_OAUTH_SAFE_SCOPES = [
 ] as const;
 
 export const AGENT_OAUTH_DEVICE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code" as const;
+export const AGENT_OAUTH_CLIENT_ID_MAX_LENGTH = 512;
+export const AGENT_OAUTH_CREDENTIAL_MAX_LENGTH = 512;
 
 export type AgentOAuthScope = (typeof AGENT_OAUTH_SAFE_SCOPES)[number];
 
@@ -329,7 +331,7 @@ export async function validateAgentOAuthAuthorizationRequest(
     if (Array.isArray(entry)) throw new AgentOAuthError("invalid_request", `${key} must not be repeated.`);
     return entry ?? null;
   };
-  const clientId = requiredString(get("client_id"), "client_id", 512);
+  const clientId = requiredString(get("client_id"), "client_id", AGENT_OAUTH_CLIENT_ID_MAX_LENGTH);
   const responseType = get("response_type");
   if (responseType !== "code") {
     throw new AgentOAuthError("unsupported_response_type", "response_type must be code.");
@@ -860,7 +862,14 @@ export async function revokeAgentOAuthToken(
   input: { clientId: string; token: string; tokenTypeHint?: string | null },
   now = new Date(),
 ) {
-  if (!input.clientId || !input.token || input.clientId.length > 512 || input.token.length > 512) return;
+  if (
+    !input.clientId ||
+    !input.token ||
+    input.clientId.length > AGENT_OAUTH_CLIENT_ID_MAX_LENGTH ||
+    input.token.length > AGENT_OAUTH_CREDENTIAL_MAX_LENGTH
+  ) {
+    return;
+  }
   if (input.tokenTypeHint && !["access_token", "refresh_token"].includes(input.tokenTypeHint)) {
     throw new AgentOAuthError("invalid_request", "token_type_hint is unsupported.");
   }

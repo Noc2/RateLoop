@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import "server-only";
 import { dbClient, dbPool } from "~~/lib/db";
 import {
+  AGENT_OAUTH_CLIENT_ID_MAX_LENGTH,
   AGENT_OAUTH_DEVICE_GRANT_TYPE,
   AGENT_OAUTH_SAFE_SCOPES,
   AgentOAuthError,
@@ -109,7 +110,7 @@ export async function createAgentOAuthDeviceAuthorization(
   input: { clientId: string; resource: string; scope?: string | null },
   now = new Date(),
 ) {
-  if (!input.clientId || input.clientId.length > 512) {
+  if (!input.clientId || input.clientId.length > AGENT_OAUTH_CLIENT_ID_MAX_LENGTH) {
     throw new AgentOAuthError("invalid_client", "A valid public client_id is required.", 401);
   }
   if (input.resource !== getCanonicalAgentMcpResource()) {

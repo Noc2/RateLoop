@@ -3,6 +3,15 @@ import { TokenlessMcpHttpError } from "~~/lib/mcp/errors";
 import { consumeMcpRateLimit } from "~~/lib/mcp/rateLimit";
 import { AgentOAuthError } from "~~/lib/tokenless/agentOAuth";
 
+export const AGENT_OAUTH_FORM_BODY_MAX_BYTES = 32 * 1_024;
+
+export function assertAgentOAuthFormContentType(headers: Headers) {
+  const mediaType = headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
+  if (mediaType !== "application/x-www-form-urlencoded") {
+    throw new AgentOAuthError("invalid_request", "Content-Type must be application/x-www-form-urlencoded.", 415);
+  }
+}
+
 export async function enforceAgentOAuthRateLimit(headers: Headers, now = new Date()) {
   try {
     const result = await consumeMcpRateLimit(headers, now);
@@ -16,6 +25,70 @@ export async function enforceAgentOAuthRateLimit(headers: Headers, now = new Dat
     }
     throw error;
   }
+}
+
+export async function readAgentOAuthFormBody(
+  request: Pick<Request, "body" | "headers">,
+  maxBytes = AGENT_OAUTH_FORM_BODY_MAX_BYTES,
+) {
+  const declared = request.headers.get("content-length");
+  if (declared !== null) {
+    const parsed = Number(declared);
+    if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > maxBytes) {
+      throw new AgentOAuthError("invalid_request", "The OAuth form body is too large.", 413);
+    }
+  }
+
+  if (!request.body) return new URLSearchParams();
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        try {
+          await reader.cancel();
+        } catch {
+          // The bounded rejection remains authoritative even if cancellation fails.
+        }
+        throw new AgentOAuthError("invalid_request", "The OAuth form body is too large.", 413);
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const body = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new URLSearchParams(new TextDecoder().decode(body));
+}
+
+export function readAgentOAuthFormField(
+  form: URLSearchParams,
+  key: string,
+  options: { max: number; required?: boolean },
+) {
+  const values = form.getAll(key);
+  const required = options.required !== false;
+  if (
+    values.length > 1 ||
+    (required && (values.length !== 1 || !values[0])) ||
+    (values[0]?.length ?? 0) > options.max
+  ) {
+    throw new AgentOAuthError(
+      "invalid_request",
+      required ? `${key} must appear exactly once.` : `${key} must not be repeated.`,
+    );
+  }
+  return values[0] || null;
 }
 
 export function readAgentOAuthResource(
