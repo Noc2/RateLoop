@@ -164,3 +164,20 @@ export function agentSignInReturnTo(input: {
 export function agentSignInReturnToWithHash(returnTo: string, hash: string) {
   return hash === "#evidence-packets-heading" ? `${returnTo}${hash}` : returnTo;
 }
+
+export function agentWorkspaceSwitchSearch(currentSearch: URLSearchParams | NavigationSearchParams) {
+  const params = navigationSearchParams(currentSearch);
+  for (const key of [
+    "agent",
+    "version",
+    "run",
+    "packet",
+    "resultRun",
+    "resultProject",
+    "resultAgent",
+    "resultWorkflow",
+  ]) {
+    params.delete(key);
+  }
+  return params;
+}

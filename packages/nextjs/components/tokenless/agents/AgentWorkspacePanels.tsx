@@ -18,7 +18,12 @@ import { HumanReviewApprovalInbox } from "./HumanReviewApprovalInbox";
 import { OversightAlertsPanel } from "./OversightAlertsPanel";
 import { ScheduledWorkerHealthPanel } from "./ScheduledWorkerHealthPanel";
 import type { AgentConnectionHistoryEntry } from "./agentAuditHistory";
-import { agentTabHref, connectedAgentTabs, resolveAvailableAgentTab } from "./agentWorkspaceState";
+import {
+  agentTabHref,
+  agentWorkspaceSwitchSearch,
+  connectedAgentTabs,
+  resolveAvailableAgentTab,
+} from "./agentWorkspaceState";
 import { AgentSetupFlow } from "./setup/AgentSetupFlow";
 import { WorkspaceSetupStart } from "./setup/WorkspaceSetupStart";
 import { Card } from "~~/components/tokenless/ui/Card";
@@ -106,7 +111,7 @@ export function AgentWorkspacePanels({
         workspaceId={workspaceId}
         workspaces={workspaces}
         onWorkspaceChange={nextWorkspaceId =>
-          router.push(agentTabHref(resolvedTab, nextWorkspaceId, new URLSearchParams(searchParams.toString())))
+          router.push(agentTabHref(resolvedTab, nextWorkspaceId, agentWorkspaceSwitchSearch(searchParams)))
         }
       />
       {/* Persistent across every agents tab while the workspace stop is engaged. */}

@@ -3,6 +3,7 @@ import {
   agentSignInReturnToWithHash,
   agentTabForSection,
   agentTabHref,
+  agentWorkspaceSwitchSearch,
   canStartAgentConnection,
   connectedAgentTabs,
   isUsableAgentConnection,
@@ -175,6 +176,14 @@ test("connected navigation splits the owner stack into URL-backed task tabs", ()
     "/agents/results?workspace=workspace+one",
   );
   assert.equal(
+    agentWorkspaceSwitchSearch(
+      new URLSearchParams(
+        "workspace=old&run=run-1&packet=packet-1&resultRun=run-1&resultProject=project-1&resultAgent=agent-1&resultWorkflow=checkout&q=release&outcome=fail&date=30",
+      ),
+    ).toString(),
+    "workspace=old&q=release&outcome=fail&date=30",
+  );
+  assert.equal(
     legacyAgentRouteHref({
       billing: "success",
       date: "30",
@@ -218,7 +227,7 @@ test("registered-agent search links open and focus the exact workflow version", 
   assert.match(registrySource, /Selected workflow version/);
 });
 
-test("the active workspace selector keeps a stable row and preserves the current tab", () => {
+test("the active workspace selector keeps a stable row and clears record-specific state", () => {
   assert.match(tabsSource, /<SelectField/);
   assert.match(tabsSource, /label="Active workspace"/);
   assert.match(tabsSource, /labelClassName="sr-only"/);
@@ -232,7 +241,7 @@ test("the active workspace selector keeps a stable row and preserves the current
   assert.match(panelsSource, /workspaces=\{workspaces\}/);
   assert.match(
     panelsSource,
-    /agentTabHref\(resolvedTab, nextWorkspaceId, new URLSearchParams\(searchParams\.toString\(\)\)\)/,
+    /agentTabHref\(resolvedTab, nextWorkspaceId, agentWorkspaceSwitchSearch\(searchParams\)\)/,
   );
   assert.equal(tabsSource.match(/<select/g)?.length, undefined);
 });
