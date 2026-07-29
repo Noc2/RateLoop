@@ -84,6 +84,7 @@ const FORBIDDEN_AWS_CONFIGURATION = [
 export const DEFAULT_HOSTED_RELEASE_CAPABILITIES = Object.freeze({
   platformSecretSigning: false,
   paidAssignmentSettlement: false,
+  qualifiedTimestamping: false,
   feedbackBonusLiveWiringVerification: false,
   feedbackBonusHumanAwardExecution: false,
   feedbackBonusReceiptReconciliation: false,
@@ -92,6 +93,8 @@ export const DEFAULT_HOSTED_RELEASE_CAPABILITIES = Object.freeze({
 const HOSTED_RELEASE_CAPABILITY_LABELS = Object.freeze({
   platformSecretSigning: "platform-secret signing for credential issuance and chain transactions",
   paidAssignmentSettlement: "paid assignment reservation, voucher, commit, and settlement orchestration",
+  qualifiedTimestamping:
+    "a contracted EU/EEA Trusted List-qualified timestamp service and issuance-time qualification validation",
   feedbackBonusLiveWiringVerification: "live Feedback Bonus USDC and credential-issuer immutable wiring verification",
   feedbackBonusHumanAwardExecution: "human-signed Feedback Bonus award execution without a server-held awarder key",
   feedbackBonusReceiptReconciliation:

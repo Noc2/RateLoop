@@ -280,6 +280,16 @@ test("production chain execution requires distinct HTTPS RPC fallbacks", () => {
   assert.match(validateTokenlessProductionReadiness(plaintext).join("\n"), /must contain HTTPS URLs/i);
 });
 
+test("hosted release stays blocked until qualified timestamp procurement and validation are complete", () => {
+  assert.equal(DEFAULT_HOSTED_RELEASE_CAPABILITIES.qualifiedTimestamping, false);
+  const fixture = validFixture();
+  fixture.releaseCapabilities.qualifiedTimestamping = false;
+  assert.match(
+    validateTokenlessProductionReadiness(fixture).join("\n"),
+    /contracted EU\/EEA Trusted List-qualified timestamp service and issuance-time qualification validation/i,
+  );
+});
+
 test("production chain execution enforces the contract beacon-failure grace floor", () => {
   const fixture = validFixture();
   fixture.env.TOKENLESS_BEACON_FAILURE_GRACE_SECONDS = "21599";
