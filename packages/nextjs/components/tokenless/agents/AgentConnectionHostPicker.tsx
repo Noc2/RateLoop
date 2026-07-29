@@ -58,10 +58,10 @@ export function saveAgentConnectionHostChoice(
   }
 }
 
-/** One honest line per tier. Verified renders only once a pinned smoke run grants it. */
+/** One honest line per tier. Release-tested renders only once a pinned smoke run grants it. */
 export function tokenlessSupportTierMeaning(tier: TokenlessHostSupportTier) {
   switch (tier) {
-    case "verified":
+    case "release-tested":
       return "Install, OAuth, and tool smoke tests pass at a pinned client version.";
     case "supported":
       return "Bundled plugin path with tested install and connection contracts.";
@@ -73,7 +73,7 @@ export function tokenlessSupportTierMeaning(tier: TokenlessHostSupportTier) {
 }
 
 const TIER_BADGE_VARIANT: Record<TokenlessHostSupportTier, BadgeVariant> = {
-  verified: "success",
+  "release-tested": "success",
   supported: "success",
   experimental: "warning",
   unsupported: "danger",

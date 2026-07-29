@@ -22,8 +22,8 @@ export const HOST_CATEGORY_LABELS: Record<TokenlessHostCategory, string> = {
 };
 
 export const HOST_TIER_BADGES: Record<TokenlessHostSupportTier, { label: string; meaning: string }> = {
-  verified: {
-    label: "Verified",
+  "release-tested": {
+    label: "Release-tested",
     meaning: "A release-gated install, authorization, lifecycle, and tool smoke test passed at a named client version.",
   },
   supported: {
@@ -43,7 +43,7 @@ export const HOST_TIER_BADGES: Record<TokenlessHostSupportTier, { label: string;
 };
 
 const TIER_BADGE_CLASSES: Record<TokenlessHostSupportTier, string> = {
-  verified: "bg-emerald-300/10 text-emerald-100",
+  "release-tested": "bg-emerald-300/10 text-emerald-100",
   supported: "bg-white/[0.08] text-base-content/80",
   experimental: "bg-white/[0.04] text-base-content/60",
   unsupported: "bg-white/[0.04] text-base-content/45",

@@ -35,27 +35,37 @@ function publicSurfaceFiles(directory: string, extensions: readonly string[]): s
   });
 }
 
-test("verified tier requires evidence and no host is verified today", () => {
+test("release-tested tier requires evidence and no host has passed it today", () => {
   for (const host of HOSTS) {
-    const isVerified = host.supportTier === "verified";
+    const isReleaseTested = host.supportTier === "release-tested";
     assert.equal(
-      host.verifiedAt !== undefined && host.verificationEvidence !== undefined,
-      isVerified,
-      `${host.id} must carry verifiedAt and verificationEvidence exactly when verified`,
+      host.releaseTestedAt !== undefined && host.releaseTestEvidence !== undefined,
+      isReleaseTested,
+      `${host.id} must carry releaseTestedAt and releaseTestEvidence exactly when release-tested`,
     );
-    if (isVerified) {
-      assert.match(host.verifiedAt, ISO_DATE_RE);
-      assert.ok(host.verificationEvidence.length > 0);
+    if (isReleaseTested) {
+      assert.match(host.releaseTestedAt, ISO_DATE_RE);
+      assert.ok(host.releaseTestEvidence.length > 0);
     }
   }
 
   // No pinned-version smoke run exists yet, so nothing may claim the tier.
-  assert.equal(HOSTS.filter(host => host.supportTier === "verified").length, 0);
+  assert.equal(HOSTS.filter(host => host.supportTier === "release-tested").length, 0);
+
+  for (const host of HOSTS) {
+    const hasVerifiedDelivery = host.deliveryEnforcement === "verified";
+    assert.equal(
+      host.deliveryEnforcementVerifiedAt !== undefined && host.deliveryEnforcementEvidence !== undefined,
+      hasVerifiedDelivery,
+      `${host.id} must carry delivery-control evidence exactly when verified`,
+    );
+  }
+  assert.equal(HOSTS.filter(host => host.deliveryEnforcement === "verified").length, 0);
 });
 
 test("every public page and machine-doc mirror derives verified-host capability claims from the registry", () => {
-  const hasVerifiedHost = HOSTS.some(host => host.supportTier === "verified");
-  if (hasVerifiedHost) return;
+  const hasVerifiedDeliveryHost = HOSTS.some(host => host.deliveryEnforcement === "verified");
+  if (hasVerifiedDeliveryHost) return;
 
   const files = [
     ...publicSurfaceFiles(path.join(NEXTJS_DIRECTORY, "app", "(public)"), [".tsx"]),

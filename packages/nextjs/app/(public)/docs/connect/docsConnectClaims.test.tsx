@@ -59,11 +59,11 @@ test("no connect docs page claims a support tier the registry does not grant", a
   ];
 
   for (const page of pages) {
-    // The case-sensitive tier label "Verified" may appear only when the registry
-    // grants tier "verified" on that page's host(s). Today no host is verified,
+    // The case-sensitive tier label "Release-tested" may appear only when the registry
+    // grants that tier on that page's host(s). Today no host is release-tested,
     // so this asserts the word appears nowhere in any rendered page.
-    if (!page.hosts.some(host => (host.supportTier as TokenlessHostSupportTier) === "verified")) {
-      assert.doesNotMatch(page.html, /Verified/, `${page.name} must not use the label of an ungranted tier`);
+    if (!page.hosts.some(host => (host.supportTier as TokenlessHostSupportTier) === "release-tested")) {
+      assert.doesNotMatch(page.html, /Release-tested/, `${page.name} must not use the label of an ungranted tier`);
     }
 
     const grantedTiers = new Set<TokenlessHostSupportTier>(page.hosts.map(host => host.supportTier));

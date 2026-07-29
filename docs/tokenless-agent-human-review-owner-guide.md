@@ -16,11 +16,11 @@ agent card is the durable place to inspect the effective values and reopen the c
 
 ## Choose who answers and what they can see
 
-| Audience          | What it means                                                        | Material boundary                                                     | Compensation                    |
-| ----------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------- | ------------------------------- |
-| Invited reviewers | People assigned by the workspace                                     | Private workspace material may use encrypted, assignment-bound access | Unpaid or paid in USDC          |
-| RateLoop network  | Eligible public raters                                               | Public, synthetic, or owner-confirmed redacted material only          | Guaranteed USDC bounty required |
-| Hybrid            | Reserved future schema; unavailable in this release                  | Public-safe material only                                             | Not activatable                  |
+| Audience          | What it means                                       | Material boundary                                                     | Compensation                    |
+| ----------------- | --------------------------------------------------- | --------------------------------------------------------------------- | ------------------------------- |
+| Invited reviewers | People assigned by the workspace                    | Private workspace material may use encrypted, assignment-bound access | Unpaid or paid in USDC          |
+| RateLoop network  | Eligible public raters                              | Public, synthetic, or owner-confirmed redacted material only          | Guaranteed USDC bounty required |
+| Hybrid            | Reserved future schema; unavailable in this release | Public-safe material only                                             | Not activatable                 |
 
 Choosing an audience never declassifies material. Private, internal, confidential, restricted, and regulated artifacts
 cannot be published to the network or converted into a public hybrid request by the agent.

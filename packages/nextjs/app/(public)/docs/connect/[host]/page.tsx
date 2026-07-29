@@ -70,7 +70,9 @@ function HostGuide({ host }: { host: TokenlessHostCapability }) {
         <HostTierBadge tier={host.supportTier} />
         <span className="text-sm leading-6 text-base-content/60">
           {HOST_TIER_BADGES[host.supportTier].meaning}
-          {host.supportTier === "verified" ? ` Tier granted ${host.verifiedAt} (${host.verificationEvidence}).` : null}
+          {host.supportTier === "release-tested"
+            ? ` Tier granted ${host.releaseTestedAt} (${host.releaseTestEvidence}).`
+            : null}
         </span>
       </p>
       {host.notes ? <p>{host.notes}</p> : null}

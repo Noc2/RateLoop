@@ -4,10 +4,11 @@
  * must all render from this registry so capability claims match code by
  * construction.
  *
- * Tier honesty is enforced structurally: a host may carry `supportTier: "verified"`
- * only together with `verifiedAt` and a `verificationEvidence` reference (a green
+ * Tier honesty is enforced structurally: a host may carry `supportTier: "release-tested"`
+ * only together with `releaseTestedAt` and a `releaseTestEvidence` reference (a green
  * pinned-version smoke run, per the smoke harness's acceptance criteria). Today
- * no host is verified. Install affordances exist only where they are factual now;
+ * no host is release-tested. "Verified" is reserved for delivery-control evidence,
+ * which no available host supplies. Install affordances exist only where they are factual now;
  * unverified deep links and config snippets are represented by their absence.
  */
 
@@ -20,8 +21,10 @@ export const TOKENLESS_HOST_CATEGORIES = [
 ] as const;
 export type TokenlessHostCategory = (typeof TOKENLESS_HOST_CATEGORIES)[number];
 
-export const TOKENLESS_HOST_SUPPORT_TIERS = ["verified", "supported", "experimental", "unsupported"] as const;
+export const TOKENLESS_HOST_SUPPORT_TIERS = ["release-tested", "supported", "experimental", "unsupported"] as const;
 export type TokenlessHostSupportTier = (typeof TOKENLESS_HOST_SUPPORT_TIERS)[number];
+export const TOKENLESS_HOST_DELIVERY_ENFORCEMENT_TIERS = ["verified", "advisory"] as const;
+export type TokenlessHostDeliveryEnforcement = (typeof TOKENLESS_HOST_DELIVERY_ENFORCEMENT_TIERS)[number];
 
 export const TOKENLESS_CONNECTION_LANES = [
   "plugin-with-hooks",
@@ -70,18 +73,30 @@ const WORKSPACE_MCP_URL = "https://rateloop-tokenless.vercel.app/api/agent/v1/mc
 const PROVIDER_DOCS_CHECKED_AT = "2026-07-17";
 const PROVIDER_DOCS_SNAPSHOT = "provider-docs-snapshot@2026-07-17";
 
-type TokenlessHostVerification =
+type TokenlessHostReleaseTest =
   | {
-      supportTier: "verified";
+      supportTier: "release-tested";
       /** ISO date of the green pinned-version smoke run that granted the tier. */
-      verifiedAt: string;
-      /** Evidence reference (CI run) for the verification; required with the tier. */
-      verificationEvidence: string;
+      releaseTestedAt: string;
+      /** Evidence reference (CI run) for the release test; required with the tier. */
+      releaseTestEvidence: string;
     }
   | {
-      supportTier: Exclude<TokenlessHostSupportTier, "verified">;
-      verifiedAt?: never;
-      verificationEvidence?: never;
+      supportTier: Exclude<TokenlessHostSupportTier, "release-tested">;
+      releaseTestedAt?: never;
+      releaseTestEvidence?: never;
+    };
+
+type TokenlessHostDeliveryControl =
+  | {
+      deliveryEnforcement: "verified";
+      deliveryEnforcementVerifiedAt: string;
+      deliveryEnforcementEvidence: string;
+    }
+  | {
+      deliveryEnforcement: "advisory";
+      deliveryEnforcementVerifiedAt?: never;
+      deliveryEnforcementEvidence?: never;
     };
 
 export type TokenlessHostCapability = {
@@ -99,7 +114,8 @@ export type TokenlessHostCapability = {
   notes?: string;
   /** Which connection-message template this host receives. */
   messageVariant: TokenlessHostMessageVariant;
-} & TokenlessHostVerification;
+} & TokenlessHostReleaseTest &
+  TokenlessHostDeliveryControl;
 
 export const TOKENLESS_HOST_CAPABILITIES = [
   {
@@ -107,6 +123,7 @@ export const TOKENLESS_HOST_CAPABILITIES = [
     displayName: "Codex desktop",
     category: "plugin-host",
     supportTier: "supported",
+    deliveryEnforcement: "advisory",
     lanes: ["plugin-with-hooks", "mcp-oauth"],
     installAffordances: [
       {
@@ -131,6 +148,7 @@ export const TOKENLESS_HOST_CAPABILITIES = [
     displayName: "Claude Code",
     category: "plugin-host",
     supportTier: "supported",
+    deliveryEnforcement: "advisory",
     lanes: ["plugin-with-hooks", "mcp-oauth", "mcp-config"],
     installAffordances: [
       {
@@ -163,6 +181,7 @@ export const TOKENLESS_HOST_CAPABILITIES = [
     displayName: "Claude Desktop",
     category: "chat-connector",
     supportTier: "experimental",
+    deliveryEnforcement: "advisory",
     lanes: ["mcp-oauth"],
     installAffordances: [
       {
@@ -184,6 +203,7 @@ export const TOKENLESS_HOST_CAPABILITIES = [
     displayName: "Copilot Chat in local VS Code",
     category: "mcp-ide",
     supportTier: "experimental",
+    deliveryEnforcement: "advisory",
     lanes: ["mcp-oauth", "mcp-config"],
     installAffordances: [
       {
@@ -208,6 +228,7 @@ export const TOKENLESS_HOST_CAPABILITIES = [
     displayName: "Cursor",
     category: "mcp-ide",
     supportTier: "experimental",
+    deliveryEnforcement: "advisory",
     lanes: ["mcp-oauth", "mcp-config"],
     installAffordances: [],
     humanActions: ["Add the server entry to the host's MCP settings", "Approve the RateLoop OAuth consent screen"],
@@ -220,6 +241,7 @@ export const TOKENLESS_HOST_CAPABILITIES = [
     displayName: "Gemini CLI",
     category: "mcp-cli",
     supportTier: "experimental",
+    deliveryEnforcement: "advisory",
     lanes: ["mcp-oauth", "mcp-config"],
     installAffordances: [
       {
@@ -251,6 +273,7 @@ export const TOKENLESS_HOST_CAPABILITIES = [
     displayName: "ChatGPT connectors",
     category: "chat-connector",
     supportTier: "experimental",
+    deliveryEnforcement: "advisory",
     lanes: ["mcp-oauth"],
     installAffordances: [
       {
@@ -272,6 +295,7 @@ export const TOKENLESS_HOST_CAPABILITIES = [
     displayName: "Other MCP client",
     category: "mcp-ide",
     supportTier: "experimental",
+    deliveryEnforcement: "advisory",
     lanes: ["mcp-oauth", "mcp-config"],
     installAffordances: [],
     humanActions: [
@@ -287,6 +311,7 @@ export const TOKENLESS_HOST_CAPABILITIES = [
     displayName: "Headless SDK or CI",
     category: "headless-sdk",
     supportTier: "experimental",
+    deliveryEnforcement: "advisory",
     lanes: ["device-flow", "cli"],
     installAffordances: [
       {

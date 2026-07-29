@@ -58,7 +58,7 @@ test("every support tier has one honest meaning line", () => {
   }
   assert.equal(tokenlessSupportTierMeaning("experimental"), "Protocol-compatible, not yet release-tested.");
   assert.match(tokenlessSupportTierMeaning("supported"), /plugin/i);
-  assert.match(tokenlessSupportTierMeaning("verified"), /pinned client version/);
+  assert.match(tokenlessSupportTierMeaning("release-tested"), /pinned client version/);
 });
 
 test("the host choice is remembered per workspace and validated against the registry", () => {

@@ -88,23 +88,23 @@ alive.
 
 RateLoop classifies the **host or integration** separately from the model. A model still needs reliable tool use, but the
 host owns MCP transport, OAuth, tool-result handling, approval UI, and session lifecycle. The syntax below was checked
-against the named vendors' documentation on 2026-07-17. Except where a row says **Verified**, that does not replace an
+against the named vendors' documentation on 2026-07-17. Except where a row says **Release-tested**, that does not replace an
 end-to-end RateLoop install, authorization, lifecycle, and tool smoke test against a named client version.
 
 | Tier                | Meaning                                                                                                               |
 | ------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Verified            | RateLoop runs release-gated install, authorization, lifecycle, and tool smoke tests against a named client version.   |
+| Release-tested      | RateLoop runs release-gated install, authorization, lifecycle, and tool smoke tests against a named client version.   |
 | Protocol-compatible | The client documents Streamable HTTP and compatible OAuth, but RateLoop has not completed that release smoke test.    |
 | Application-managed | An SDK or hosted API can connect only after the embedding application obtains, refreshes, and supplies authorization. |
 | Public MCP only     | The host can use the separate unauthenticated browser-handoff server but cannot complete protected workspace OAuth.   |
 | Unsupported         | The host lacks remote HTTP MCP, OAuth, tool calling, or a required policy control.                                    |
 
-No protected-workspace host is yet in the **Verified** tier. The official MCP conformance runner has verified the public
+No protected-workspace host is yet in the **Release-tested** tier. The official MCP conformance runner has tested the public
 server's initialize and four-tool discovery path; it did not exercise an authenticated workspace connection.
 
 | Host or integration                                  | Current tier                      | Notes                                                                                                                                         |
 | ---------------------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Codex desktop with the RateLoop Workspace plugin     | Protocol-compatible; primary path | Bundled plugin, skill, and local contracts are tested. Add an installed-host release smoke test before naming a Codex version Verified.       |
+| Codex desktop with the RateLoop Workspace plugin     | Protocol-compatible; primary path | Bundled plugin, skill, and local contracts are tested. Add an installed-host release smoke test before naming a Codex version Release-tested. |
 | Claude Code                                          | Protocol-compatible               | Remote HTTP OAuth is documented. Direct registration below does not install RateLoop's Claude hooks or make the host an enforcement boundary. |
 | GitHub Copilot Chat in local VS Code                 | Protocol-compatible               | This is the IDE client, not GitHub's cloud agent. RateLoop has not preregistered or guessed a VS Code OAuth client ID or redirect URI.        |
 | Gemini CLI                                           | Protocol-compatible               | Streamable HTTP, OAuth discovery, DCR, and server instructions are documented; its JSON transport field is `httpUrl`.                         |
