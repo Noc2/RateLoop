@@ -11,7 +11,7 @@ Use this skill after a RateLoop workspace connection is verified. It applies the
 
 Installing this skill, enabling its plugin, or connecting a workspace does not create a background process, scheduler, output interceptor, or automatic MCP call. The active agent or a verified host adapter must invoke this loop for each eligible output. If the workspace tools are unavailable, do not claim that RateLoop checked, approved, or enforced the output.
 
-Generic MCP and prompt instructions are advisory. Only a verified host adapter that owns the release boundary may claim that a required output remained blocked until review completed or an allowed owner override was signed.
+Generic MCP and prompt instructions are advisory. Only a verified host adapter that owns the release boundary may claim that a required output remained blocked until review completed or an allowed owner override was signed. No host currently holds that tier.
 
 ## Stable Workspace Tools
 

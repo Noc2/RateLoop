@@ -36,6 +36,7 @@ confidence, critical-risk flag, and metadata-completeness flag. RateLoop validat
 advisory MCP connection cannot independently detect a missing evaluation call or verify that the reported risk and
 confidence describe output the host never exposed. The maximum-unreviewed-gap counter therefore covers reported
 eligible outputs only. Use **host-enforced** wording only for a separately verified adapter that owns that boundary.
+No host currently holds that tier.
 
 - **Adaptive** starts at 100% and reduces only after the configured evidence windows pass; safety overrides can still
   require review.
@@ -132,4 +133,4 @@ Generic MCP instructions and ordinary Codex hooks are advisory. They improve com
 output remained hidden. A deployment may say **host-enforced** only when a verified host adapter exclusively owns the
 output boundary, binds signed evidence to the exact candidate and policy versions, blocks release while review is
 required, and resumes only from an allowed terminal or owner-authorized result. The agent card must state which boundary
-is actually active.
+is actually active. No host currently holds that tier.
