@@ -14,14 +14,6 @@ export default function HowTokenlessWorksPage() {
         decision stays with your team.
       </p>
 
-      <div className="not-prose my-8 rounded-xl border border-[var(--rateloop-blue)]/25 bg-[var(--rateloop-blue)]/5 p-5">
-        <h2 className="text-lg font-semibold text-base-content">At a glance</h2>
-        <p className="mt-2 text-sm leading-6 text-base-content/70">
-          Connect the agent, set its review policy, request a check, collect independent answers, and inspect the
-          result.
-        </p>
-      </div>
-
       <div className="not-prose my-8">
         <HumanAssuranceLoop />
       </div>
