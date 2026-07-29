@@ -2,8 +2,8 @@ import Link from "next/link";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { searchSite } from "~~/lib/search/siteSearch";
 
-export function SiteSearchResults({ query }: { query: string }) {
-  const results = searchSite(query);
+export function SiteSearchResults({ query, excludeHrefs = [] }: { query: string; excludeHrefs?: readonly string[] }) {
+  const results = searchSite(query).filter(result => !excludeHrefs.includes(result.href));
   const taskResults = results.filter(result => result.area === "Task");
   const pageResults = results.filter(result => result.area !== "Task");
   const groups = [

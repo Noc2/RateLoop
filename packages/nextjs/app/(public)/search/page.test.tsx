@@ -48,6 +48,17 @@ test("signed-in search renders authorized data beside the unchanged public index
   assert.match(html, /Review work/i);
 });
 
+test("search shows one query-aware review-work destination", async () => {
+  (globalThis as typeof globalThis & { React: typeof React }).React = React;
+  const { SearchPageContent } = await import("./page");
+  const page = SearchPageContent({ authorizedResults: [], query: "review" });
+  const html = renderToStaticMarkup(page).replace(/\s+/g, " ");
+
+  assert.equal(html.match(/>Review work</g)?.length, 1);
+  assert.doesNotMatch(html, /href="\/human\/review"/);
+  assert.match(html, /href="\/human\/review\?q=review"/);
+});
+
 test("the search route only loads private results after resolving a server session", () => {
   const source = readFileSync(new URL("./page.tsx", import.meta.url), "utf8");
   assert.match(source, /findAuthSession\(\(await cookies\(\)\)\.get\(AUTH_SESSION_COOKIE\)\?\.value\)/u);

@@ -43,7 +43,7 @@ export function SearchPageContent({
       {query ? (
         <>
           <AuthorizedSiteSearchResults results={authorizedResults} />
-          <SiteSearchResults query={query} />
+          <SiteSearchResults query={query} excludeHrefs={["/human/review"]} />
           <section aria-labelledby="review-work-heading" className="mt-10">
             <div className="flex items-center justify-between gap-4">
               <h2 id="review-work-heading" className="text-xl font-semibold text-base-content">
