@@ -103,10 +103,11 @@ export default function DataProcessingAddendumPage() {
 
       <h2>7. Personal data breaches</h2>
       <p>
-        RateLoop will notify Customer without undue delay after confirming a personal data breach affecting Customer
-        Personal Data and will provide available information about the nature of the breach, affected categories and
-        approximate scale, likely consequences, mitigation, and a contact point. Notice is not an admission of fault.
-        Customer remains responsible for notifications for which it is controller.
+        RateLoop will notify Customer without undue delay and no later than 48 hours after becoming aware of a personal
+        data breach affecting Customer Personal Data. RateLoop will provide information then available about the nature
+        of the breach, affected categories and approximate scale, likely consequences, mitigation, and a contact point,
+        and will supplement it as the investigation develops. Notice is not an admission of fault. Customer remains
+        responsible for notifications for which it is controller.
       </p>
 
       <h2>8. Return, deletion, and retention</h2>
@@ -123,8 +124,9 @@ export default function DataProcessingAddendumPage() {
       <h2>9. Information and audits</h2>
       <p>
         RateLoop will make available information reasonably necessary to demonstrate compliance with this DPA and allow
-        an audit by Customer or an independent auditor bound by confidentiality. Audits must normally use current
-        reports, questionnaires, and remote evidence first; on-site access requires reasonable advance notice, must not
+        an audit by Customer or an independent auditor bound by confidentiality. RateLoop does not currently hold a SOC
+        2 or ISO certification report. Audits must normally use the completed security questionnaire, architecture and
+        configuration evidence, and remote evidence first; on-site access requires reasonable advance notice, must not
         expose other customers or weaken security, and is limited to once per year unless a confirmed breach or
         supervisory authority requires more. Each party bears its own costs, except that Customer covers unusual
         assistance beyond RateLoop&apos;s standard evidence package.
@@ -152,6 +154,30 @@ export default function DataProcessingAddendumPage() {
         Data-protection instructions, security notices, audit requests, and subprocessor objections must be sent to
         hawigxyz@proton.me and identify the Customer workspace and an authorized contact.
       </p>
+
+      <h2>Annex 1 — Technical and organizational measures</h2>
+      <ul>
+        <li>
+          <strong>Access control:</strong> opaque principals, hashed HttpOnly sessions, scoped API credentials,
+          least-privilege workspace and project authorization, expiring reviewer access, and prompt deprovisioning.
+        </li>
+        <li>
+          <strong>Encryption:</strong> TLS in transit and authenticated envelope encryption at rest for designated
+          private fields and objects, using tenant- and purpose-separated wrapping keys and server-only key material.
+        </li>
+        <li>
+          <strong>Integrity and accountability:</strong> hash-chained audit records, signed evidence, access logging,
+          dependency controls, code review, and segregated production roles.
+        </li>
+        <li>
+          <strong>Availability and recovery:</strong> managed backups subject to the documented processing-region
+          boundary, bounded retry and dead-letter handling, deletion reconciliation, and tested recovery procedures.
+        </li>
+        <li>
+          <strong>Incident and vulnerability management:</strong> monitored operational failures, security triage,
+          dependency scanning, coordinated remediation, and the 48-hour contractual breach-notification ceiling above.
+        </li>
+      </ul>
     </article>
   );
 }
