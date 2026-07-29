@@ -1,4 +1,9 @@
-import { configuredDecisionPacketVerificationKeys, parseDecisionPacketVerificationKeys } from "./evidenceSigningKeys";
+import {
+  configuredDecisionPacketVerificationKeys,
+  parseDecisionPacketVerificationKeys,
+  projectPublicEvidenceTrustedKeyHistory,
+} from "./evidenceSigningKeys";
+import { __setHumanReviewGateEvidenceConfigForTests } from "./humanReviewGateEvidence";
 import assert from "node:assert/strict";
 import { createHash, generateKeyPairSync } from "node:crypto";
 import { test } from "node:test";
@@ -78,6 +83,33 @@ test("missing signer still requires a valid non-empty Ed25519 keyring", () => {
     }).map(key => key.keyId),
     [current.keyId],
   );
+});
+
+test("public trust history includes configured decision-packet pins without a workspace session", () => {
+  const current = ed25519Entry();
+  const retired = historicalP256Entry();
+  const gate = generateKeyPairSync("ed25519");
+  __setHumanReviewGateEvidenceConfigForTests({
+    signingPrivateKey: gate.privateKey,
+    verificationKeys: [{ publicKey: gate.publicKey, status: "current" }],
+  });
+  try {
+    const history = projectPublicEvidenceTrustedKeyHistory({
+      TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS: JSON.stringify([current, retired]),
+    });
+    assert.equal(history.schemaVersion, "rateloop.evidence-public-trusted-keys.v1");
+    assert.deepEqual(
+      history.keys
+        .filter(key => key.uses.includes("decision_packet"))
+        .map(key => ({ algorithm: key.algorithm, keyId: key.keyId, status: key.status })),
+      [
+        { algorithm: "Ed25519", keyId: current.keyId, status: "current" },
+        { algorithm: "ECDSA-SHA256", keyId: retired.keyId, status: "retired" },
+      ],
+    );
+  } finally {
+    __setHumanReviewGateEvidenceConfigForTests(null);
+  }
 });
 
 test("test signer does not hide a malformed configured keyring", () => {

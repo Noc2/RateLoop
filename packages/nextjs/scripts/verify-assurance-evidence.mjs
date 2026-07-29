@@ -34,7 +34,7 @@ async function main() {
   const path = args.find(value => !value.startsWith("--") && !optionValues.has(value));
   if (!path) {
     throw new Error(
-      "Usage: verify-assurance-evidence.mjs <packet.json> --public-key <base64url-or-file> [--key-id <fingerprint>]",
+      "Usage: verify-assurance-evidence.mjs <packet.json> --public-key <base64url-or-file> [--key-id <fingerprint>]\nPublic trust anchor: /api/evidence/trusted-keys (no account required)",
     );
   }
   const result = await verifyEvidenceFile(path, {

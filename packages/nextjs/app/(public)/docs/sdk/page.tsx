@@ -59,12 +59,15 @@ const result = state.status === "ready"
         <code>{`GET /api/account/workspaces/{workspaceId}/assurance/runs/{runId}/evidence
 GET /api/account/workspaces/{workspaceId}/assurance/coverage/export
 GET /api/account/workspaces/{workspaceId}/audit/export
+GET /api/evidence/trusted-keys
 GET /api/account/workspaces/{workspaceId}/assurance/trusted-keys
 GET /api/account/workspaces/{workspaceId}/assurance/trusted-keys?format=spki&keyId=ed25519:…`}</code>
       </pre>
       <p>
-        Download the matching SPKI pin from the authenticated workspace key history, then run the local checkers with an
-        explicit key ID instead of trusting keys or heads from the same export:
+        A packet reader needs no RateLoop account to obtain its current or retired SPKI pin from the public, cacheable{" "}
+        <a href="/api/evidence/trusted-keys">verification-key endpoint</a>. Workspace members can also download it from
+        the authenticated key history. Run the local checkers with an explicit key ID instead of trusting keys or heads
+        from the same export:
       </p>
       <pre>
         <code>{`yarn workspace @rateloop/nextjs evidence:verify ./packet.json --public-key ./key.txt --key-id ed25519:…

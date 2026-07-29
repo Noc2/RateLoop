@@ -13,9 +13,13 @@ const historyService = readFileSync(
 );
 
 test("the public trust anchor contains only configured verification keys", () => {
-  assert.match(route, /projectHumanReviewGateTrustedKeyHistory/);
+  assert.match(route, /projectPublicEvidenceTrustedKeyHistory/);
   assert.match(route, /Cache-Control.*public/);
   assert.doesNotMatch(route, /requireBrowserSession|workspaceId/);
+  assert.match(historyService, /projectHumanReviewGateTrustedKeyHistory\(\)\.keys/);
+  assert.match(historyService, /configuredDecisionPacketVerificationKeys\(env\)/);
+  assert.match(historyService, /uses: \["human_review_gate"\]/);
+  assert.match(historyService, /uses: \["decision_packet"\]/);
   assert.match(workspaceHistory, /listWorkspaceEvidenceSigningKeys/);
   assert.match(historyService, /keyIdentity\(text\(row, "signing_key_id"\)!, text\(row, "signing_public_key"\)!\)/);
   assert.match(historyService, /keyIdentity\(key\.keyId, publicKeySpki\)/);

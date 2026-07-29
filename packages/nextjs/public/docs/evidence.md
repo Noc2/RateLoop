@@ -80,9 +80,10 @@ Redacted shape:
 
 ## How to check the evidence
 
-1. Export the packet and obtain the expected key ID and public-key pin from the authenticated workspace key history.
-   In the Evidence Center, select the packet and download its matching SPKI pin. Do not use the public key embedded in
-   the same packet as its sole trust anchor.
+1. Export the packet and obtain the expected key ID and public-key pin from the cacheable, unauthenticated
+   [`/api/evidence/trusted-keys`](/api/evidence/trusted-keys) endpoint. A reader who already has a packet needs no
+   RateLoop account to obtain its matching current or retired pin. Workspace members can also download the pin from the
+   Evidence Center. Do not use the public key embedded in the same packet as its sole trust anchor.
 2. Check the Ed25519 signature, canonical packet digest, case and response roots, privacy-safe aggregation, and frozen
    pass rule:
 
@@ -132,6 +133,7 @@ yarn workspace @rateloop/nextjs audit:verify ./audit-export.json --expected-head
 GET /api/account/workspaces/{workspaceId}/assurance/runs/{runId}/evidence
 GET /api/account/workspaces/{workspaceId}/assurance/coverage/export
 GET /api/account/workspaces/{workspaceId}/audit/export
+GET /api/evidence/trusted-keys
 GET /api/account/workspaces/{workspaceId}/assurance/trusted-keys
 GET /api/account/workspaces/{workspaceId}/assurance/trusted-keys?format=spki&keyId=ed25519:...
 GET /api/public/assurance/attestations/{jobId}

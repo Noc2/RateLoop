@@ -36,12 +36,15 @@ audit chain, and trusted-key history:
 GET /api/account/workspaces/{workspaceId}/assurance/runs/{runId}/evidence
 GET /api/account/workspaces/{workspaceId}/assurance/coverage/export
 GET /api/account/workspaces/{workspaceId}/audit/export
+GET /api/evidence/trusted-keys
 GET /api/account/workspaces/{workspaceId}/assurance/trusted-keys
 GET /api/account/workspaces/{workspaceId}/assurance/trusted-keys?format=spki&keyId=ed25519:...
 ```
 
-Download the matching SPKI pin from the authenticated workspace key history, then run the local checkers with an
-explicit key ID instead of trusting keys or heads from the same export:
+A packet reader needs no RateLoop account to obtain its current or retired SPKI pin from the public, cacheable
+[`/api/evidence/trusted-keys`](/api/evidence/trusted-keys) endpoint. Workspace members can also download it from the
+authenticated key history. Run the local checkers with an explicit key ID instead of trusting keys or heads from the
+same export:
 
 ```sh
 yarn workspace @rateloop/nextjs evidence:verify ./packet.json --public-key ./key.txt --key-id ed25519:...

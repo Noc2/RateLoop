@@ -242,8 +242,10 @@ export default function EvidencePage() {
       <ol>
         <li>
           <strong>Signature and key pin.</strong> Export the packet and obtain the expected key ID and public-key pin
-          from the authenticated workspace key history. In Results, select the packet and download its matching SPKI
-          pin. Never treat the public key embedded in the same packet as its own trust anchor. Then run:
+          from the cacheable, unauthenticated <a href="/api/evidence/trusted-keys">public verification-key endpoint</a>.
+          A reader who already has a packet needs no RateLoop account to obtain the matching current or retired pin.
+          Workspace members can also download it from the key history in Results. Never treat the public key embedded in
+          the same packet as its own trust anchor. Then run:
           <pre>
             <code>{`yarn workspace @rateloop/nextjs evidence:verify ./packet.json \\
   --public-key ./evidence-public-key.txt \\
@@ -300,6 +302,7 @@ export default function EvidencePage() {
         <code>{`GET /api/account/workspaces/{workspaceId}/assurance/runs/{runId}/evidence
 GET /api/account/workspaces/{workspaceId}/assurance/coverage/export
 GET /api/account/workspaces/{workspaceId}/audit/export
+GET /api/evidence/trusted-keys
 GET /api/account/workspaces/{workspaceId}/assurance/trusted-keys
 GET /api/account/workspaces/{workspaceId}/assurance/trusted-keys?format=spki&keyId=ed25519:…
 GET /api/public/assurance/attestations/{jobId}`}</code>

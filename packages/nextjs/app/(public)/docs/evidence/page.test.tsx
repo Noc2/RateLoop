@@ -98,7 +98,8 @@ test("evidence docs explain exact artifacts, checks, mappings, and boundaries", 
   assert.match(html, /Rule 3110/i);
   assert.match(html, /supports evidence for/i);
   assert.match(html, /Framework cross-reference/i);
-  assert.match(html, /In Results, select the packet/i);
+  assert.match(html, /public verification-key endpoint/i);
+  assert.match(html, /needs no RateLoop account/i);
   assert.match(html, /rateloop-human-assurance-component-definition\.oscal\.json/i);
   assert.doesNotMatch(html, /trust status|compliance-ready|certified RateLoop/i);
   assert.doesNotMatch(html, /RateLoop provides the instrument — and the proof/i);

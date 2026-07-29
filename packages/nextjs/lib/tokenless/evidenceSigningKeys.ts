@@ -128,6 +128,49 @@ export function configuredDecisionPacketVerificationKeys(
   return parseDecisionPacketVerificationKeysWithOptions(encoded, { allowEmpty });
 }
 
+export function projectPublicEvidenceTrustedKeyHistory(env?: EvidenceSigningEnvironment) {
+  const byIdentity = new Map<
+    string,
+    {
+      algorithm: "ECDSA-SHA256" | "Ed25519";
+      keyId: string;
+      publicKeyJwk: JsonWebKey;
+      publicKeySpki: string;
+      status: "current" | "retired";
+      uses: Array<"decision_packet" | "human_review_gate">;
+    }
+  >();
+  for (const key of projectHumanReviewGateTrustedKeyHistory().keys) {
+    const publicKeySpki = encodeEd25519SpkiDerBase64url(key.publicKeyJwk);
+    byIdentity.set(keyIdentity(key.keyId, publicKeySpki), {
+      ...key,
+      publicKeySpki,
+      uses: ["human_review_gate"],
+    });
+  }
+  for (const key of configuredDecisionPacketVerificationKeys(env)) {
+    const identity = keyIdentity(key.keyId, key.publicKey);
+    const existing = byIdentity.get(identity);
+    if (existing) {
+      existing.uses.push("decision_packet");
+      if (key.status === "current") existing.status = "current";
+      continue;
+    }
+    byIdentity.set(identity, {
+      algorithm: key.algorithm,
+      keyId: key.keyId,
+      publicKeyJwk: key.publicKeyJwk,
+      publicKeySpki: key.publicKey,
+      status: key.status,
+      uses: ["decision_packet"],
+    });
+  }
+  return {
+    schemaVersion: "rateloop.evidence-public-trusted-keys.v1" as const,
+    keys: [...byIdentity.values()],
+  };
+}
+
 export async function listWorkspaceEvidenceSigningKeys(input: { accountAddress: string; workspaceId: string }) {
   await requireAssuranceAttestationManagement(input.accountAddress, input.workspaceId);
   const gateKeyring = projectHumanReviewGateTrustedKeyHistory();
