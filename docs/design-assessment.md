@@ -1,9 +1,14 @@
 # RateLoop tokenless — strengths and weaknesses
 
 Written 29 July 2026, drawing on a system survey, a legal review, market research,
-and several rounds of adversarial code audit. This is an assessment, not a plan.
-Claims are the ones that survived being checked; where something is a judgement
-rather than a fact, it says so.
+and several rounds of adversarial code audit. This is an assessment, not a plan; the
+plan is [remediation-plan.md](remediation-plan.md).
+
+Revised the same day after a second research pass verified each weakness against the
+code. Six of the eight were wrong in some respect, and two — the dashboard and the
+compliance reader — were wrong in their central claim. Those corrections are recorded
+in place rather than quietly removed, because the pattern of error is itself a
+finding: **every mistake came from describing a survey instead of the code.**
 
 ---
 
@@ -46,10 +51,14 @@ authority over another.
 This is the most unusual thing about the codebase and deserves to be named as a
 strength rather than a curiosity.
 
-There is a **machine-enforced claim gate**: a capability map hardcodes fourteen of
-seventeen capabilities to false, and a regex matrix blocks matching phrases across
-every public page, enforced by a test. Four claims are permanently forbidden,
-including "compliance-ready" and "guarantees compliance".
+There is a **machine-enforced claim gate**: a capability map lists eighteen
+capabilities and hardcodes sixteen to false, while the two it derives are false in
+practice because the paid lanes require a hash-bound activation reference nobody has
+issued. A fifteen-rule regex matrix then blocks matching phrases, enforced by a test
+that walks every public page, every component those pages transitively import, every
+machine-readable doc and every plugin markdown file. **Five claims are permanently
+forbidden** and no capability can ever unlock them, including "compliance-ready",
+"guarantees compliance", and "RateLoop verifies which model produced an output".
 
 Agent execution evidence is typed such that "independently verified" can only ever
 be false, and the parser rejects any other value. **There is no code path that can
@@ -108,18 +117,42 @@ match to the statutory language.
 
 ## Weaknesses
 
-### 1. The product's deepest asset is unreachable by the person who values it
+### 1. The compliance reader's machinery is built and left unrouted
 
-The compliance reader is **the only persona with no onboarding path**. Reaching the
-evidence means a tab inside an engineer's workspace; consuming it means running a
-verifier from a terminal with a pinned key.
+A first draft of this section called the compliance reader "the only persona with no
+onboarding path". Investigation showed that is too strong, and the truth is more
+useful: **this is a packaging problem, not a capability problem.** Three pieces of
+exactly what that persona needs exist, work, and are wired to nothing.
 
-Meanwhile the product **onboards an engineer and monetises an engineer** at a $99
-ceiling, while the evidence machinery is worth most to a buyer who cannot get into
-the product and, lacking any security attestation, could not clear procurement
-anyway.
+- **A project `auditor` role that no code path can create.** It grants read and
+  export, no write, no manage — precisely an auditor. It is CHECK-constrained,
+  supports expiry, and is enforced in two independent places including raw SQL. The
+  functions that would grant it are called only from tests. A finished door with no
+  handle fitted.
+- **The verification key is already published**, unauthenticated and cacheable, at a
+  public endpoint. The docs tell readers to get the pin from the authenticated
+  workspace key history instead, and the endpoint is linked from nowhere.
+- **The canonical framework map is imported by nothing at runtime.** It carries five
+  frameworks and twelve rows, each with an explicit non-claim. The public table is
+  hand-maintained prose — and has **already drifted**, citing AI Act articles the
+  canonical map does not.
 
-**This gap — not the competitive landscape — is the central problem.**
+Browser-side verification is likewise closer than it looks. The verifier does no
+network I/O, no chain reads and needs no exotic curve: it is four hundred lines with
+about seven `node:crypto` touch points, and Ed25519 became available in every major
+browser's WebCrypto in 2026. The one real friction is that its hash path is
+synchronous while the browser's is not.
+
+**What is genuinely missing is one thing:** a way to show a specific record to a
+specific person who has no account. There is no share table, no expiring read grant,
+and no token in the system that is not an authentication credential.
+
+Two real constraints remain. The evidence tab does not exist until an engineer has
+connected an agent, and reading a packet requires workspace `member` or above — so
+the surface is still gated behind someone else's onboarding. And the product holds no
+SOC 2, ISO or HIPAA attestation. That last one is smaller than it sounds: a Type 1
+runs roughly $12–40K over three to eight months, and the customary bridge is a
+written commitment to Type 2 by a date, plus a completed questionnaire.
 
 ### 2. Half the design is switched off, and one half assumes the other
 
@@ -138,37 +171,69 @@ strategic question in the whole picture.
 
 ### 3. Several failures are silent
 
-The pattern recurs often enough to be structural rather than incidental:
+The pattern is real, though a first draft of this section mislocated it. The
+transparency-log attestation is **not** an example — its unavailable count does force
+a degraded run and does reach the operator panel. What is true:
 
-- The transparency-log attestation counts jobs as unavailable **while the
-  maintenance tick reports success**.
-- The integrity-epoch producer returns a disabled result.
-- The top-up reconciler returns zeroes.
-- The maintenance runner catches every processor error into a failures array and
-  returns a zero-valued fallback, so **any of roughly twenty processors can be
-  permanently broken while the endpoint returns 200**. It is observable in the run
-  summary — but only if read.
+- **The worst instance is on the evidence path itself.** Evidence projection for a
+  _terminal_ private-review decision is called fire-and-forget with a catch that
+  discards everything. The review commits and returns success while its decision
+  evidence may never be projected. On a product whose proposition is evidence, this
+  outranks everything else in this document.
+- **The integrity-epoch producer's disabled result is invisible in both directions.**
+  It is absent from the degraded predicate and absent from the health panel's signal
+  list, so `disabled`, `empty`, `created` and `failed` are equally unobservable.
+- **The top-up reconciler returns `{0,0,0}` for three distinct states** — switched
+  off, ran and found nothing, and threw. The failing case is un-credited customer
+  money.
+- **The runner isolates thirty-six units, not twenty**, and returns **HTTP 200 for
+  any number of failures**. The run record is more honest than the transport: status
+  does flip to degraded and the failures are persisted. But only `error.name`
+  survives — message and stack are discarded, so a plain `Error` records as
+  `errorCode: "Error"`.
+- **The Stripe webhook logs "needs operator attention" and then returns 200** so
+  Stripe stops retrying. The only durable signal is an unadvanced row.
+- **The health panel renders `null` when its own fetch fails.** The surface built to
+  reveal silent failure fails silently.
 
-Repeated audits found the same shape elsewhere: work that dies and is never retried,
-a health signal that goes quiet exactly when a failure becomes permanent, and an
-attestation queue that reported pending work forever while reading as healthy.
+Underneath all of it is a reporting gap: the panel names fifteen signals while the
+degraded predicate has about thirty terms, so nine subsystems can degrade a run and
+produce an amber badge with **no chips saying why**.
 
 For a product whose value proposition is _evidence that something happened_, **a
 subsystem that silently does nothing is the worst available failure mode.**
 
 ### 4. The most exposed claim is one the code contradicts
 
-No host holds the "verified" tier — two are supported, seven experimental, and the
-type system pins the verified variant off. The module's own comment says so.
+No host holds the "verified" tier — two are supported, seven experimental. The type
+system does **not** pin the verified variant off, as a first draft of this section
+claimed; the union permits it and merely couples it to mandatory evidence fields.
+What holds the count at zero is a runtime test assertion and a comment. The
+distinction matters: promoting a host means deleting a test line, not defeating the
+type checker.
 
 The documentation nonetheless states that a verified host **can prove** an output
-stayed undelivered, and names a specific product as "the primary verified path".
+stayed undelivered, and names a specific product as "the primary verified path" — a
+sentence flatly contradicted by the support matrix two files away.
+
+**The capability is not merely unbuilt, it is structurally unreachable.**
+Host-enforced mode has a full schema, a database CHECK constraint and an activation
+gate that rejects any attempt to enable it without an evidence reference — and
+nothing in the repository ever writes that reference. The gate only ever refuses. A
+customer who asked for host enforcement and paid could not be given it.
+
+There is also a collision worth naming: **"verified" carries two incompatible
+definitions.** In the connection docs it is a QA smoke-test milestone. In the
+oversight and evidence pages it means _enforces withheld delivery_ — a regulatory
+capability. Even if a host passed the smoke test tomorrow, the oversight claims still
+would not be licensed.
 
 This is the one item worth treating as urgent. It offers an unavailable capability
 as the answer to the single oversight measure the product cannot otherwise support,
 using the verb _prove_, and it is exposed under misleading-advertising law as much
-as under the AI Act. The existing tier-honesty test covers only the connection
-pages, which is why the language survived elsewhere.
+as under the AI Act. The tier-honesty test covers only the two connection pages,
+which is why the language survived everywhere else — and four other test files
+currently assert the false copy as contract.
 
 ### 5. The regulatory story is aimed at the wrong article, and oversold
 
@@ -177,19 +242,39 @@ that oversight occurred — it requires that systems be designed so they _can_ b
 overseen. The per-decision human record the product emits maps to an article that
 applies only to one biometric category.
 
-Worse for the sales story: conformity assessment for most high-risk categories is
+Worse for the sales story: conformity assessment for Annex III points 2–8 is
 **internal control with no notified body**, and **zero harmonised standards are
-published**. So for most of the interesting market, no external party will ever ask
-to see the evidence, and no specification says what it should look like.
+published or cited in the Official Journal**. One qualification to a first draft of
+this section: "no external party will ever ask" is an overreach. No _ex ante
+gatekeeper_ will. Technical documentation and a quality management system are still
+required, market surveillance authorities can demand both, and customers, insurers
+and litigants ask regardless. The accurate version is narrower and still fatal to a
+checklist sales motion: **there is no gatekeeper and no published specification of
+what oversight evidence should look like, so there is nothing to sell against.**
 
 The product also structures pages as a requirement-citation checklist paired
-one-to-one with features. Each card is hedged; the _form_ is the claim.
+one-to-one with features — five numbered cards keyed to Article 14(4)(a)–(e), then a
+nine-row table. Each card is hedged; the _form_ is the claim. Nothing in the claim
+gate detects this, because the gate matches phrases and the problem is a structure.
 
-Two things are conversely **undersold**: the invited-versus-network distinction,
-which is the best legal argument available and sits in a footnote; and Article 25(4),
-which requires providers to hold written agreements with third-party service
-suppliers — a real, favourable provision describing exactly what RateLoop is, cited
-nowhere.
+Two things are conversely **undersold**. The invited-versus-network distinction is
+the best legal argument available and appears as the last section of one page.
+Article 26(3) — which preserves "the deployer's freedom to organise its own resources
+and activities", the strongest citation for performing oversight through a third
+party — appears **nowhere in the repository**.
+
+Article 25(4) is real and cited nowhere, but it needs more qualification than a first
+draft gave it. It binds RateLoop as much as the customer; it engages only where the
+customer is a _provider_, whereas the docs address deployers throughout; claiming it
+means claiming to be "integrated in" the high-risk system, which sits awkwardly
+beside the product's own line that it operates _around_ your AI system; and it lands
+on the same December 2027 date as the rest. It is a procurement artefact — "here is
+our Article 25(4)-ready supplier agreement" — not a badge.
+
+The correctly aimed story is **Article 26(2)**, which binds the actual buyer, is
+about people rather than system design, and matches shipped code field for field: the
+statute names competence, training and authority, and the attestation model stores
+competence basis, training records, authority scope and expiry.
 
 ### 6. Documentation drifted far enough to mislead
 
@@ -202,18 +287,36 @@ The four documents asserted by tests did not drift. **Everything not mechanicall
 checked did.** That is the lesson, and it is why this replacement set is deliberately
 small.
 
-### 7. The interface leads with the record and hides the summary
+### 7. Some dashboard state is served but never rendered
 
-The overview tab is an administration page. All three charts in the product sit
-inside a collapsed element labelled "operations and policy details" at the bottom of
-another tab. A per-agent performance rollup — endorsement rate with a confidence
-bound, review rate, latency, tokens — is computed, served over the wire, and
-**rendered by nothing**.
+A first draft of this section was substantially wrong, and the correction is worth
+recording because of _how_ it was wrong. It described an overview tab that was an
+administration page, three charts buried in a collapsed disclosure, a performance
+rollup rendered by nothing, two tabs with no link between them, and state that lived
+in React rather than the URL. **Four of those five had already been fixed before this
+document was written.** The overview leads with headline cards, a version table,
+trend charts and a review-quality panel; two of the three charts are top-level; the
+rollup renders with a Wilson lower bound and its sample size; the Results and
+Evidence tabs link both ways along the run identifier; and three hand-written modules
+keep filters and selection in the query string, with `pushState` for selection so
+Back undoes it.
 
-Two tabs share a primary key and expose no link along it. Selection and filter state
-lives in React rather than the URL, so **no view can be linked to** — which matters
-more here than in most products, because a record that cannot be cited is a poor
-evidence artefact.
+The lesson is the one in weakness 6, turned on this document: **an assessment written
+from a survey rather than from the code at hand will describe a state of the world
+that has passed.**
+
+What actually remains is narrow. The per-scope rollup is serialised in full to the
+browser on a second endpoint and consumed by no component — dead payload rather than
+a missing view. Three visualisations still sit inside a collapsed "operations and
+policy details" disclosure whose label and position a test pins. Overview filters are
+parsed only on the client, so a shared link renders the default view before hydration
+corrects it. And the scheduled-worker health panel is the last piece of operations
+plumbing on a performance tab.
+
+One constraint any future work inherits: **there is no charting library.** Every
+chart is hand-rolled inline SVG with `role="img"`, a title and description, and a
+redundant text summary. That convention is a genuine accessibility asset and should
+be followed rather than replaced.
 
 ### 8. Fixes have repeatedly introduced new defects
 
@@ -228,6 +331,27 @@ then delisted.
 Every one was caught by an adversarial pass rather than by the test suite. **The
 practice of reviewing fixes as hostilely as the original code is doing real work
 here and should continue.**
+
+The obvious remedy is not the right one. "Ship a test with every fix" was **already
+the practice** — each of those three commits shipped a behavioural test that
+correctly proved its own fix, and none of them constrained the consequence. All four
+failures share one shape: **an invariant that spans two call sites was asserted at
+only one of them.** The cluster cap is enforced in two modules that no single test
+file imports together, and the rule is now open-coded in both. The refund key was
+never tested for injectivity. The work-item guard excludes terminal reasons by string
+prefix while only two of three terminal code sets emit one — which is why a third
+instance of that same bug is still open today, on a possibly-paid payment
+authorisation.
+
+Two related facts are worth recording. The source-string test style is real but
+**concentrated where it matters least**: the evidence, billing and authentication
+modules are essentially free of it, and their weakness is case count rather than
+assertion style — five tests for nine hundred lines of OAuth, twelve for an
+eighteen-hundred-line authentication surface. And the pg-mem harness makes
+`transaction()` a passthrough while dropping CHECK constraints and partial unique
+indexes, so **no test in the repository can detect a missing rollback or a violated
+database-level uniqueness guard** — precisely the protection that would have caught
+the refund collision at the storage layer.
 
 ---
 
