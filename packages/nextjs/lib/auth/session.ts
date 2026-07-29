@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
+import type { PoolClient } from "pg";
 import "server-only";
 import { dbClient } from "~~/lib/db";
 import { resolveOptionalAppUrl } from "~~/lib/env/appUrl";
@@ -16,6 +17,8 @@ export type AuthProvider =
   | "better_auth:google"
   | "better_auth:passkey"
   | "better_auth:sso";
+
+export const ENTERPRISE_SSO_AUTH_PROVIDER: AuthProvider = "better_auth:sso";
 
 export type BrowserIdentity = {
   principalId: string;
@@ -138,6 +141,55 @@ export async function findAuthSession(token: string | undefined, now = new Date(
 export async function revokeAuthSession(token: string | undefined, now = new Date()) {
   if (!token || token.length > 256) return;
   await getAuthStore().revokeSession(digest(token), now);
+}
+
+export async function revokePrincipalAuthSessions(input: {
+  client: Pick<PoolClient, "query">;
+  now: Date;
+  principalId: string;
+}) {
+  const result = await input.client.query(
+    `UPDATE tokenless_auth_sessions
+     SET revoked_at=$1
+     WHERE principal_id=$2 AND revoked_at IS NULL
+     RETURNING session_hash`,
+    [input.now, input.principalId],
+  );
+  return result.rowCount ?? 0;
+}
+
+export async function revokeNonSsoWorkspaceMemberAuthSessions(input: {
+  client: Pick<PoolClient, "query">;
+  now: Date;
+  providerId: string;
+  workspaceId: string;
+}) {
+  const result = await input.client.query(
+    `UPDATE tokenless_auth_sessions
+     SET revoked_at=$1
+     WHERE tokenless_auth_sessions.revoked_at IS NULL
+       AND tokenless_auth_sessions.expires_at>$1
+       AND tokenless_auth_sessions.auth_provider<>$2
+       AND tokenless_auth_sessions.principal_id IN (
+         SELECT member.account_address
+         FROM tokenless_workspace_members AS member
+         JOIN tokenless_identity_bindings AS binding
+           ON binding.principal_id=member.account_address
+          AND binding.provider='better_auth'
+          AND binding.status='active'
+         JOIN tokenless_better_auth_users AS better_user
+           ON better_user.id=binding.provider_subject
+         JOIN tokenless_enterprise_identity_providers AS provider
+           ON provider.provider_id=$3
+          AND provider.workspace_id=member.workspace_id
+          AND provider.status='active'
+         WHERE member.workspace_id=$4
+           AND lower(better_user.email) LIKE ('%@' || provider.domain)
+       )
+     RETURNING session_hash`,
+    [input.now, ENTERPRISE_SSO_AUTH_PROVIDER, input.providerId, input.workspaceId],
+  );
+  return result.rowCount ?? 0;
 }
 
 export function assertAuthRequestOrigin(origin: string | null) {

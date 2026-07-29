@@ -14,7 +14,7 @@ import {
 } from "~~/lib/auth/enterpriseIdentityAudit";
 import { enterpriseIdentityEnabled } from "~~/lib/auth/enterpriseIdentityConfig";
 import { normalizeEnterpriseDomain } from "~~/lib/auth/enterpriseIdentityPolicy";
-import { getAuthOrigin } from "~~/lib/auth/session";
+import { getAuthOrigin, revokeNonSsoWorkspaceMemberAuthSessions } from "~~/lib/auth/session";
 import { dbClient, dbPool } from "~~/lib/db";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -561,6 +561,7 @@ export async function setWorkspaceSsoEnforcement(input: {
   accountAddress: string;
   enabled: unknown;
   headers: Headers;
+  now?: Date;
   providerId: string;
   workspaceId: string;
 }) {
@@ -577,15 +578,25 @@ export async function setWorkspaceSsoEnforcement(input: {
     );
   }
   const eventKey = `identity-admin:${randomUUID()}`;
+  const now = input.now ?? new Date();
   await identityTransaction(async client => {
     await client.query(
       "UPDATE tokenless_enterprise_identity_providers SET enforce_sso=$1,updated_at=$2 WHERE provider_id=$3",
-      [input.enabled, new Date(), input.providerId],
+      [input.enabled, now, input.providerId],
     );
+    const revokedNonSsoSessions = input.enabled
+      ? await revokeNonSsoWorkspaceMemberAuthSessions({
+          client,
+          now,
+          providerId: input.providerId,
+          workspaceId: input.workspaceId,
+        })
+      : 0;
     await auditIdentityAdmin(
       {
         action: input.enabled ? "identity.provider.sso_enforced" : "identity.provider.sso_enforcement_disabled",
         eventKey,
+        metadata: { revokedNonSsoSessions },
         principalId: admin.principalId,
         providerId: input.providerId,
         reason: input.enabled ? "workspace_admin_enabled_sso_only" : "workspace_admin_disabled_sso_only",

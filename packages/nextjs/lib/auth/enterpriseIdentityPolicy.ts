@@ -1,7 +1,7 @@
 import "server-only";
 import { enqueueEnterpriseIdentityAudit } from "~~/lib/auth/enterpriseIdentityAudit";
 import { resolveBetterAuthPrincipal } from "~~/lib/auth/principal";
-import { AuthError } from "~~/lib/auth/session";
+import { AuthError, revokePrincipalAuthSessions } from "~~/lib/auth/session";
 import { dbClient, dbPool } from "~~/lib/db";
 import { acquireTransactionAdvisoryLock } from "~~/lib/db/advisoryLocks";
 
@@ -257,10 +257,11 @@ export async function synchronizeScimUser(input: {
          RETURNING assignment_id`,
         [now, input.projection.workspaceId, input.projection.principalId],
       );
-      await client.query(
-        "UPDATE tokenless_auth_sessions SET revoked_at=$1 WHERE principal_id=$2 AND revoked_at IS NULL",
-        [now, input.projection.principalId],
-      );
+      await revokePrincipalAuthSessions({
+        client,
+        now,
+        principalId: input.projection.principalId,
+      });
       const revokedFamilies = await client.query(
         `UPDATE tokenless_agent_oauth_token_families
          SET status='revoked',revoked_at=$1,revoked_by='system:better_auth_scim',

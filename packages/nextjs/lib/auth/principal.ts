@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import "server-only";
-import { AuthError, type AuthProvider, type BrowserIdentity } from "~~/lib/auth/session";
+import { AuthError, type AuthProvider, type BrowserIdentity, ENTERPRISE_SSO_AUTH_PROVIDER } from "~~/lib/auth/session";
 import { dbClient, dbPool } from "~~/lib/db";
 
 const BETTER_AUTH_PROVIDER = "better_auth";
@@ -17,7 +17,7 @@ function newBindingId() {
 function authProvider(method: string | undefined): AuthProvider {
   if (method === "apple" || method === "google" || method === "passkey") return `better_auth:${method}`;
   if (method === "email-otp") return "better_auth:email-otp";
-  if (method === "sso" || method?.startsWith("sso:")) return "better_auth:sso";
+  if (method === "sso" || method?.startsWith("sso:")) return ENTERPRISE_SSO_AUTH_PROVIDER;
   return "better_auth";
 }
 
