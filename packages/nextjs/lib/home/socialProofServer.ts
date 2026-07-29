@@ -3,6 +3,7 @@ import "server-only";
 import { dbClient } from "~~/lib/db";
 
 const LANDING_STATS_REVALIDATE_SECONDS = 300;
+const LANDING_STATS_TIMEOUT_MS = 5_000;
 
 type QueryRow = Record<string, unknown>;
 
@@ -63,6 +64,7 @@ async function loadClaimedUsdc() {
   const response = await fetch(configuredPonderUrl(), {
     headers: { accept: "application/json" },
     next: { revalidate: LANDING_STATS_REVALIDATE_SECONDS },
+    signal: AbortSignal.timeout(LANDING_STATS_TIMEOUT_MS),
   });
   if (!response.ok) throw new Error(`Ponder stats returned ${response.status}.`);
 

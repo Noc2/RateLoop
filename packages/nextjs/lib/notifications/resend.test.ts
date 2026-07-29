@@ -47,6 +47,8 @@ test("sign-in email uses the branded RateLoop code design", async () => {
     assert.match(body.html, />\s*123456\s*</u);
     assert.match(body.html, /Use this one-time code to finish signing in/u);
     assert.doesNotMatch(body.html, /<a\b/iu);
+    assert.ok(request?.signal instanceof AbortSignal);
+    assert.equal(request.signal.aborted, false);
   } finally {
     globalThis.fetch = previousFetch;
     if (previousKey === undefined) delete process.env.RESEND_API_KEY;
@@ -82,6 +84,7 @@ test("notification verification email uses the branded RateLoop action design", 
     assert.match(body.html, />\s*Verify email\s*</u);
     assert.match(body.html, /token=test&amp;next=&lt;unsafe&gt;/u);
     assert.doesNotMatch(body.html, /next=<unsafe>/u);
+    assert.ok(request?.signal instanceof AbortSignal);
   } finally {
     globalThis.fetch = previousFetch;
     if (previousKey === undefined) delete process.env.RESEND_API_KEY;
@@ -117,6 +120,7 @@ test("lifecycle email uses the branded design and preserves delivery headers", a
     );
     assert.deepEqual(sent, { id: "resend-id" });
     assert.equal((request?.headers as Record<string, string>)["Idempotency-Key"], "delivery-id-1");
+    assert.ok(request?.signal instanceof AbortSignal);
     const body = JSON.parse(String(request?.body)) as { headers: Record<string, string>; html: string };
     assert.match(body.headers["List-Unsubscribe"]!, /^<https:\/\//u);
     assert.equal(body.headers["List-Unsubscribe-Post"], "List-Unsubscribe=One-Click");
@@ -157,6 +161,7 @@ test("workspace reviewer invitation email uses an idempotent personal action lin
       (request?.headers as Record<string, string>)["Idempotency-Key"],
       "workspace-reviewer-invitation:wri_0123456789abcdef",
     );
+    assert.ok(request?.signal instanceof AbortSignal);
     const body = JSON.parse(String(request?.body)) as { html: string; subject: string; text: string; to: string[] };
     assert.equal(body.to[0], "reviewer@example.test");
     assert.equal(body.subject, "You’re invited to review with RateLoop");

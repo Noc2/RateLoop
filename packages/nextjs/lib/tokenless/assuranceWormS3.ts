@@ -123,6 +123,7 @@ async function signedRequest(input: {
     body: input.method === "PUT" ? body : undefined,
     cache: "no-store",
     redirect: "error",
+    signal: AbortSignal.timeout(15_000),
   });
   const responseBody = input.method === "HEAD" ? "" : await response.text();
   if (!response.ok) {

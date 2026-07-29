@@ -75,6 +75,7 @@ test("S3 adapter signs preflight and locked PUT requests without exposing resolv
     const headers = request.init.headers as Record<string, string>;
     assert.match(headers.authorization, /^AWS4-HMAC-SHA256 /u);
     assert.doesNotMatch(JSON.stringify(request), /a-secret-value-that-stays-in-the-resolver/u);
+    assert.ok(request.init.signal instanceof AbortSignal);
   }
   const putHeaders = requests[2]!.init.headers as Record<string, string>;
   assert.equal(putHeaders["x-amz-object-lock-mode"], "COMPLIANCE");

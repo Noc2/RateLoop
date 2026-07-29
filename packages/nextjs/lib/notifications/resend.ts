@@ -3,6 +3,11 @@ import { getOptionalAppUrl, getResendConfig } from "~~/lib/env/server";
 import { buildRateLoopEmailHtml } from "~~/lib/notifications/emailTemplate";
 
 const EMAIL_PATTERN = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
+export const RESEND_REQUEST_TIMEOUT_MS = 10_000;
+
+function resendRequestSignal() {
+  return AbortSignal.timeout(RESEND_REQUEST_TIMEOUT_MS);
+}
 
 export function normalizeResendFromEmail(value: string | undefined) {
   const trimmed = value?.trim();
@@ -23,6 +28,7 @@ export async function sendTokenlessVerificationEmail(params: { email: string; ve
 
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
+    signal: resendRequestSignal(),
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       from: fromEmail,
@@ -54,6 +60,7 @@ export async function sendTokenlessLoginOtpEmail(params: { email: string; otp: s
 
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
+    signal: resendRequestSignal(),
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       from: fromEmail,
@@ -96,6 +103,7 @@ export async function sendTokenlessNotificationEmail(
 
   const response = await fetchImpl("https://api.resend.com/emails", {
     method: "POST",
+    signal: resendRequestSignal(),
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
@@ -145,6 +153,7 @@ export async function sendWorkspaceReviewerInvitationEmail(
   }
   const response = await fetchImpl("https://api.resend.com/emails", {
     method: "POST",
+    signal: resendRequestSignal(),
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
