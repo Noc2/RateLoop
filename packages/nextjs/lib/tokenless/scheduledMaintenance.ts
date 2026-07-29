@@ -26,7 +26,7 @@ import { processDueGrcReconciliations } from "~~/lib/tokenless/assuranceGrcConne
 import { processDueAssuranceWormExports } from "~~/lib/tokenless/assuranceWormExports";
 import { expireAudienceAssignments } from "~~/lib/tokenless/audienceAssignments";
 import { reconcileChainPayment } from "~~/lib/tokenless/chain/payments";
-import { projectDueDirectPrivateReviewDecisionEvidence } from "~~/lib/tokenless/directPrivateReviewEvidence";
+import { projectDirectPrivateReviewDecisionEvidence } from "~~/lib/tokenless/directPrivateReviewEvidence";
 import { processDueEvidenceRetentionEnforcement } from "~~/lib/tokenless/evidenceRetentionEnforcement";
 import {
   produceScheduledIntegrityEpoch,
@@ -48,6 +48,7 @@ import {
   sweepExpiredPublicQuestionMedia,
 } from "~~/lib/tokenless/publicQuestionMedia";
 import { reconcilePaidRaterCommit } from "~~/lib/tokenless/raterService";
+import { type TokenlessScheduledWorkKind, tokenlessScheduledWorkItemId } from "~~/lib/tokenless/scheduledWorkItems";
 import { TokenlessServiceError, sweepExpiredTokenlessQuotes } from "~~/lib/tokenless/server";
 import { processSurpriseBountyPayments } from "~~/lib/tokenless/surpriseBountyService";
 import {
@@ -57,18 +58,12 @@ import {
 } from "~~/lib/tokenless/transparency";
 
 type Row = Record<string, unknown>;
-type WorkKind =
-  | "publish_finalized_round"
-  | "recover_chain_execution"
-  | "recover_rater_commit"
-  | "delete_artifact"
-  | "delete_public_media"
-  | "prepare_public_network_audience"
-  | "cleanup_public_network_foundation";
+type WorkKind = TokenlessScheduledWorkKind;
 
 const RUN_BUCKET_MS = 5 * 60_000;
 const STALE_CLAIM_MS = 10 * 60_000;
 const MAX_ATTEMPTS = 20;
+const PRIVATE_REVIEW_EVIDENCE_MAX_ATTEMPTS = 8;
 const DEFAULT_WORK_LIMIT = 20;
 const DEFAULT_WEBHOOK_LIMIT = 50;
 const DEFAULT_NOTIFICATION_LIMIT = 20;
@@ -126,10 +121,6 @@ function retryAt(now: Date, attempt: number) {
   return new Date(now.getTime() + delayMs);
 }
 
-function workItemId(kind: WorkKind, subjectKey: string) {
-  return `swi_${digest(`${kind}:${subjectKey}`).slice(0, 40)}`;
-}
-
 // An item that exhausted MAX_ATTEMPTS gave up on an outage, not on the work itself: the seeding
 // query still selects its subject, so the work is still owed. Without this it stayed dead forever,
 // because nothing resets a dead row and nothing deletes one, and each dead row went on consuming a
@@ -156,7 +147,7 @@ async function insertWorkItem(kind: WorkKind, subjectKey: string, now: Date) {
             AND COALESCE(tokenless_scheduled_work_items.last_error, '') NOT LIKE 'nonce_integrity:%'
             AND COALESCE(tokenless_scheduled_work_items.last_error, '') NOT LIKE 'operator_action:%'`,
     args: [
-      workItemId(kind, subjectKey),
+      tokenlessScheduledWorkItemId(kind, subjectKey),
       kind,
       subjectKey,
       now,
@@ -201,6 +192,7 @@ export async function seedTokenlessScheduledWork(now = new Date(), scanLimit = 1
     publicMediaDeletions,
     publicNetworkAudiences,
     publicNetworkFoundations,
+    privateReviewEvidence,
   ] = await Promise.all([
     dbClient.execute({
       sql: `SELECT e.operation_key
@@ -280,6 +272,23 @@ export async function seedTokenlessScheduledWork(now = new Date(), scanLimit = 1
             ORDER BY created_at ASC,binding_id ASC LIMIT ?`,
       args: [new Date(now.getTime() - PUBLIC_NETWORK_FOUNDATION_ORPHAN_TTL_MS), limit],
     }),
+    dbClient.execute({
+      sql: `SELECT d.delivery_id
+            FROM tokenless_private_unpaid_review_deliveries d
+            JOIN tokenless_agent_review_opportunities opportunity
+              ON opportunity.workspace_id=d.workspace_id
+             AND opportunity.opportunity_id=d.opportunity_id
+            LEFT JOIN tokenless_assurance_evidence_packets packet ON packet.run_id=opportunity.run_id
+            LEFT JOIN tokenless_scheduled_work_items work
+              ON work.kind='project_private_review_evidence'
+             AND work.subject_key=d.delivery_id
+            WHERE d.result_envelope_json IS NOT NULL
+              AND d.status IN ('completed','inconclusive')
+              AND (opportunity.run_id IS NULL OR packet.packet_id IS NULL)
+              AND work.item_id IS NULL
+            ORDER BY d.completed_at ASC,d.delivery_id ASC LIMIT ?`,
+      args: [limit],
+    }),
   ]);
   for (const row of settlements.rows) {
     await insertWorkItem("publish_finalized_round", rowString(row as Row, "operation_key")!, now);
@@ -316,12 +325,16 @@ export async function seedTokenlessScheduledWork(now = new Date(), scanLimit = 1
   for (const row of publicNetworkFoundations.rows) {
     await insertWorkItem("cleanup_public_network_foundation", rowString(row as Row, "binding_id")!, now);
   }
+  for (const row of privateReviewEvidence.rows) {
+    await insertWorkItem("project_private_review_evidence", rowString(row as Row, "delivery_id")!, now);
+  }
   return {
     chainRecoveries: chainRecoveries.rows.length,
     deletions: deletions.rows.length,
     publicNetworkAudiences: publicNetworkAudiences.rows.length,
     publicNetworkFoundations: publicNetworkFoundations.rows.length,
     publicMediaDeletions: publicMediaDeletions.rows.length,
+    privateReviewEvidence: privateReviewEvidence.rows.length,
     raterCommitRecoveries: raterCommitRecoveries.rows.length,
     settlements: settlements.rows.length,
   };
@@ -362,7 +375,7 @@ type MaintenanceProcessors = {
   reconcileDirectPrivateReviewDeadlines: typeof reconcileDueDirectPrivateReviewDeadlines;
   reconcilePaidAssignmentSettlements: typeof reconcilePaidAssignmentSettlements;
   reconcileNetworkAssignmentSettlements: typeof reconcileNetworkAssignmentSettlements;
-  projectDirectPrivateReviewEvidence: typeof projectDueDirectPrivateReviewDecisionEvidence;
+  projectDirectPrivateReviewEvidence: typeof projectDirectPrivateReviewDecisionEvidence;
   expireAudienceAssignments: typeof expireAudienceAssignments;
   expirePrivateReviewReservations: typeof expirePrivateUnpaidReviewReservations;
   produceIntegrityEpoch: typeof produceScheduledIntegrityEpoch;
@@ -444,7 +457,7 @@ const defaultProcessors: MaintenanceProcessors = {
   reconcileDirectPrivateReviewDeadlines: reconcileDueDirectPrivateReviewDeadlines,
   reconcilePaidAssignmentSettlements,
   reconcileNetworkAssignmentSettlements,
-  projectDirectPrivateReviewEvidence: projectDueDirectPrivateReviewDecisionEvidence,
+  projectDirectPrivateReviewEvidence: projectDirectPrivateReviewDecisionEvidence,
   expireAudienceAssignments,
   expirePrivateReviewReservations: expirePrivateUnpaidReviewReservations,
   produceIntegrityEpoch: produceScheduledIntegrityEpoch,
@@ -457,6 +470,19 @@ async function claimDueWork(now: Date, limit: number) {
           SET state = 'retry', next_attempt_at = ?, last_error = 'stale worker claim recovered', updated_at = ?
           WHERE state = 'processing' AND updated_at <= ?`,
     args: [now, now, new Date(now.getTime() - STALE_CLAIM_MS)],
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_private_unpaid_review_deliveries
+          SET evidence_projection_state = 'retry',
+              evidence_projection_next_attempt_at = ?,
+              evidence_projection_last_error = 'stale worker claim recovered',
+              evidence_projection_claimed_at = NULL
+          WHERE evidence_projection_state = 'processing'
+            AND delivery_id IN (
+              SELECT subject_key FROM tokenless_scheduled_work_items
+              WHERE kind = 'project_private_review_evidence' AND state = 'retry'
+            )`,
+    args: [now],
   });
   const due = await dbClient.execute({
     sql: `SELECT item_id, claim_generation
@@ -476,7 +502,22 @@ async function claimDueWork(now: Date, limit: number) {
             RETURNING item_id, kind, subject_key, attempt_count, claim_generation`,
       args: [now, rowString(row, "item_id"), now, Number(row.claim_generation)],
     });
-    if (result.rows[0]) claimed.push(result.rows[0] as Row);
+    if (result.rows[0]) {
+      const claimedRow = result.rows[0] as Row;
+      claimed.push(claimedRow);
+      if (rowString(claimedRow, "kind") === "project_private_review_evidence") {
+        await dbClient.execute({
+          sql: `UPDATE tokenless_private_unpaid_review_deliveries
+                SET evidence_projection_state='processing',
+                    evidence_projection_next_attempt_at=NULL,
+                    evidence_projection_claimed_at=?,
+                    evidence_projection_claim_generation=?,
+                    evidence_projection_dead_at=NULL
+                WHERE delivery_id=?`,
+          args: [now, Number(claimedRow.claim_generation), rowString(claimedRow, "subject_key")],
+        });
+      }
+    }
   }
   return claimed;
 }
@@ -487,13 +528,30 @@ async function processClaimedWork(input: {
   now: Date;
   processors: MaintenanceProcessors;
 }) {
-  const summary = { completed: 0, dead: 0, deferred: 0, retry: 0 };
+  const summary = {
+    completed: 0,
+    dead: 0,
+    deferred: 0,
+    retry: 0,
+    privateReviewEvidence: {
+      scanned: 0,
+      projected: 0,
+      packetsReady: 0,
+      retry: 0,
+      retryDeliveryIds: [] as string[],
+      dead: 0,
+      deadDeliveryIds: [] as string[],
+    },
+  };
   for (const row of input.items) {
     const itemId = rowString(row, "item_id")!;
     const kind = rowString(row, "kind") as WorkKind;
     const subjectKey = rowString(row, "subject_key")!;
     const attempt = Number(row.attempt_count) + 1;
     const claimGeneration = Number(row.claim_generation);
+    if (kind === "project_private_review_evidence") {
+      summary.privateReviewEvidence.scanned += 1;
+    }
     try {
       if (kind === "publish_finalized_round") {
         await input.processors.publishFinalizedRound({
@@ -535,6 +593,13 @@ async function processClaimedWork(input: {
         await input.processors.preparePublicNetworkAudience(subjectKey, input.now);
       } else if (kind === "cleanup_public_network_foundation") {
         await input.processors.cleanupPublicNetworkFoundation(subjectKey, input.now);
+      } else if (kind === "project_private_review_evidence") {
+        const result = await input.processors.projectDirectPrivateReviewEvidence({
+          deliveryId: subjectKey,
+          now: input.now,
+        });
+        if (result.packet !== "ready") throw new Error(result.error);
+        if (result.projected) summary.privateReviewEvidence.projected += 1;
       } else {
         throw new Error(`Unsupported scheduled work kind: ${String(kind)}`);
       }
@@ -545,7 +610,23 @@ async function processClaimedWork(input: {
               RETURNING item_id`,
         args: [attempt, input.now, input.now, itemId, claimGeneration],
       });
-      if (completed.rows.length === 1) summary.completed += 1;
+      if (completed.rows.length === 1) {
+        summary.completed += 1;
+        if (kind === "project_private_review_evidence") {
+          await dbClient.execute({
+            sql: `UPDATE tokenless_private_unpaid_review_deliveries
+                  SET evidence_projection_state='completed',
+                      evidence_projection_attempt_count=?,
+                      evidence_projection_next_attempt_at=NULL,
+                      evidence_projection_last_error=NULL,
+                      evidence_projection_claimed_at=NULL,
+                      evidence_projection_dead_at=NULL
+                  WHERE delivery_id=?`,
+            args: [attempt, subjectKey],
+          });
+          summary.privateReviewEvidence.packetsReady += 1;
+        }
+      }
     } catch (error) {
       const nonceIntegrityFailure = error instanceof TokenlessServiceError && NONCE_INTEGRITY_CODES.has(error.code);
       const operatorActionFailure = error instanceof TokenlessServiceError && OPERATOR_ACTION_CODES.has(error.code);
@@ -567,7 +648,9 @@ async function processClaimedWork(input: {
         nonceIntegrityFailure ||
         operatorActionFailure ||
         (error instanceof TokenlessServiceError && IMMEDIATE_DEAD_LETTER_CODES.has(error.code));
-      const dead = !deferred && (immediatelyDead || recordedAttempt >= MAX_ATTEMPTS);
+      const maximumAttempts =
+        kind === "project_private_review_evidence" ? PRIVATE_REVIEW_EVIDENCE_MAX_ATTEMPTS : MAX_ATTEMPTS;
+      const dead = !deferred && (immediatelyDead || recordedAttempt >= maximumAttempts);
       const rawMessage = error instanceof Error ? error.message : "Scheduled work failed";
       const diagnosticPrefix = nonceIntegrityFailure
         ? `nonce_integrity:${error.code}: `
@@ -591,7 +674,34 @@ async function processClaimedWork(input: {
           claimGeneration,
         ],
       });
-      if (failed.rows.length === 1) summary[dead ? "dead" : deferred ? "deferred" : "retry"] += 1;
+      if (failed.rows.length === 1) {
+        summary[dead ? "dead" : deferred ? "deferred" : "retry"] += 1;
+        if (kind === "project_private_review_evidence") {
+          await dbClient.execute({
+            sql: `UPDATE tokenless_private_unpaid_review_deliveries
+                  SET evidence_projection_state=?,
+                      evidence_projection_attempt_count=?,
+                      evidence_projection_next_attempt_at=?,
+                      evidence_projection_last_error=?,
+                      evidence_projection_claimed_at=NULL,
+                      evidence_projection_dead_at=?
+                  WHERE delivery_id=?
+                    AND evidence_projection_state='processing'
+                    AND evidence_projection_claim_generation=?`,
+            args: [
+              dead ? "dead" : "retry",
+              recordedAttempt,
+              dead ? null : retryAt(input.now, deferred ? 1 : recordedAttempt),
+              message,
+              dead ? input.now : null,
+              subjectKey,
+              claimGeneration,
+            ],
+          });
+          summary.privateReviewEvidence[dead ? "dead" : "retry"] += 1;
+          summary.privateReviewEvidence[dead ? "deadDeliveryIds" : "retryDeliveryIds"].push(subjectKey);
+        }
+      }
     }
   }
   return summary;
@@ -742,20 +852,6 @@ export async function runTokenlessScheduledMaintenance(input: {
         ReturnType<MaintenanceProcessors["reconcileNetworkAssignmentSettlements"]>
       >,
     });
-    const directPrivateReviewEvidence = await runIsolatedMaintenanceProcessor({
-      failures: processorFailures,
-      processor: "projectDirectPrivateReviewEvidence",
-      run: () => processors.projectDirectPrivateReviewEvidence({ now, limit: workLimit }),
-      fallback: {
-        scanned: 0,
-        projected: 0,
-        packetsReady: 0,
-        retry: 0,
-        retryDeliveryIds: [],
-        dead: 0,
-        deadDeliveryIds: [],
-      } as Awaited<ReturnType<MaintenanceProcessors["projectDirectPrivateReviewEvidence"]>>,
-    });
     const expiredAudienceAssignments = await runIsolatedMaintenanceProcessor({
       failures: processorFailures,
       processor: "expireAudienceAssignments",
@@ -832,6 +928,7 @@ export async function runTokenlessScheduledMaintenance(input: {
         publicNetworkAudiences: 0,
         publicNetworkFoundations: 0,
         publicMediaDeletions: 0,
+        privateReviewEvidence: 0,
         raterCommitRecoveries: 0,
         settlements: 0,
       } as Awaited<ReturnType<typeof seedTokenlessScheduledWork>>,
@@ -842,7 +939,7 @@ export async function runTokenlessScheduledMaintenance(input: {
       run: () => claimDueWork(now, workLimit),
       fallback: [] as Row[],
     });
-    const work = await runIsolatedMaintenanceProcessor({
+    const processedWork = await runIsolatedMaintenanceProcessor({
       failures: processorFailures,
       processor: "processClaimedWork",
       run: () =>
@@ -852,8 +949,29 @@ export async function runTokenlessScheduledMaintenance(input: {
           now,
           processors,
         }),
-      fallback: { completed: 0, dead: 0, deferred: 0, retry: 0 },
+      fallback: {
+        completed: 0,
+        dead: 0,
+        deferred: 0,
+        retry: 0,
+        privateReviewEvidence: {
+          scanned: 0,
+          projected: 0,
+          packetsReady: 0,
+          retry: 0,
+          retryDeliveryIds: [],
+          dead: 0,
+          deadDeliveryIds: [],
+        },
+      },
     });
+    const directPrivateReviewEvidence = processedWork.privateReviewEvidence;
+    const work = {
+      completed: processedWork.completed,
+      dead: processedWork.dead,
+      deferred: processedWork.deferred,
+      retry: processedWork.retry,
+    };
     const evidencePending = await runIsolatedMaintenanceProcessor({
       failures: processorFailures,
       processor: "evidencePendingHealth",
@@ -1132,5 +1250,5 @@ export function authorizeTokenlessCron(authorization: string | null, cronSecret 
 export const __scheduledMaintenanceTestUtils = {
   evidencePendingOperationalHealth,
   retryAt,
-  workItemId,
+  workItemId: tokenlessScheduledWorkItemId,
 };

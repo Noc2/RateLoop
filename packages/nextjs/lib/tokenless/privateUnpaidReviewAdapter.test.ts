@@ -20,8 +20,8 @@ import {
 import { __setArtifactPrivacyRuntimeForTests, readEncryptedArtifact } from "~~/lib/tokenless/artifactPrivacy";
 import { __setAssuranceResponseKeyringsForTests } from "~~/lib/tokenless/assuranceResponses";
 import {
+  __directPrivateReviewEvidenceTestUtils,
   projectDirectPrivateReviewDecisionEvidence,
-  projectDueDirectPrivateReviewDecisionEvidence,
 } from "~~/lib/tokenless/directPrivateReviewEvidence";
 import { generateAssuranceEvidencePacket } from "~~/lib/tokenless/evidencePackets";
 import { createAssuranceProject } from "~~/lib/tokenless/humanAssurance";
@@ -54,6 +54,10 @@ import { createReviewRequestProfile } from "~~/lib/tokenless/reviewRequestProfil
 import { attestInvitedReviewerExpertise } from "~~/lib/tokenless/reviewerExpertise";
 import { replacePrivateGroupMemberExpertise } from "~~/lib/tokenless/reviewerExpertiseAssignments";
 import { createWorkspaceReviewerExpertiseDefinition } from "~~/lib/tokenless/reviewerExpertiseDefinitions";
+import {
+  __scheduledMaintenanceTestUtils,
+  runTokenlessScheduledMaintenance,
+} from "~~/lib/tokenless/scheduledMaintenance";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import {
   provisionWorkspacePrivateReviewRouting,
@@ -76,6 +80,15 @@ const originalIntegrityLookupVersion = process.env.TOKENLESS_INTEGRITY_REVIEWER_
 function hash(value: string): `sha256:${string}` {
   return `sha256:${createHash("sha256").update(value).digest("hex")}`;
 }
+
+test("private evidence producers share the scheduled-work identity invariant", () => {
+  for (const deliveryId of ["d", "hprd_boundary_".padEnd(160, "z")]) {
+    assert.equal(
+      __directPrivateReviewEvidenceTestUtils.workItemId(deliveryId),
+      __scheduledMaintenanceTestUtils.workItemId("project_private_review_evidence", deliveryId),
+    );
+  }
+});
 
 test("assignment locks only the non-nullable reviewer grant rows", () => {
   const source = readFileSync(new URL("./privateUnpaidReviewAdapter.ts", import.meta.url), "utf8");
@@ -363,6 +376,17 @@ test("direct private assignments surface in reviewer work and produce a terminal
   assert.equal(terminal?.lifecycle.state, "completed");
   assert.equal(terminal?.envelope?.panel.responseCount, 2);
   assert.equal(terminal?.envelope?.economics.guaranteedBase.mode, "off");
+  const queuedProjection = await dbClient.execute({
+    sql: `SELECT item_id,state FROM tokenless_scheduled_work_items
+          WHERE kind='project_private_review_evidence' AND subject_key=?`,
+    args: [terminal!.deliveryId],
+  });
+  assert.equal(queuedProjection.rows.length, 1);
+  assert.equal(
+    queuedProjection.rows[0]?.item_id,
+    __directPrivateReviewEvidenceTestUtils.workItemId(terminal!.deliveryId),
+  );
+  assert.equal(queuedProjection.rows[0]?.state, "pending");
   await projectDirectPrivateReviewDecisionEvidence({
     deliveryId: terminal!.deliveryId,
     packetGenerator: async () => ({}) as Awaited<ReturnType<typeof generateAssuranceEvidencePacket>>,
@@ -386,6 +410,13 @@ test("direct private assignments surface in reviewer work and produce a terminal
   });
   assert.equal(Number(projectedCounts.rows[0]?.assignment_count), 2);
   assert.equal(Number(projectedCounts.rows[0]?.response_count), 2);
+  const projectionState = await dbClient.execute({
+    sql: `SELECT evidence_projection_state,evidence_projection_next_attempt_at
+          FROM tokenless_private_unpaid_review_deliveries WHERE delivery_id=?`,
+    args: [terminal!.deliveryId],
+  });
+  assert.equal(projectionState.rows[0]?.evidence_projection_state, "completed");
+  assert.equal(projectionState.rows[0]?.evidence_projection_next_attempt_at, null);
   assert.match(String(projected.rows[0]?.policy_json), /deadline_terminal_inconclusive_allowed/u);
   assert.doesNotMatch(String(projected.rows[0]?.manifest_json), new RegExp(REVIEWER_A, "u"));
   assert.doesNotMatch(String(projected.rows[0]?.manifest_json), new RegExp(REVIEWER_B, "u"));
@@ -455,7 +486,7 @@ test("direct private assignments surface in reviewer work and produce a terminal
   assert.equal(Number(forecastReceipt.rows[0]?.aggregated_forecast_count), 2);
 });
 
-test("private evidence projection backs off poison rows and dead-letters them after bounded attempts", async () => {
+test("scheduled private evidence projection backs off poison rows and dead-letters them after bounded attempts", async () => {
   const setup = await fixture();
   const delivered = await deliverPrivateFixture(setup);
   await submitPositivePrivateResponse(setup, delivered, 0);
@@ -472,8 +503,16 @@ test("private evidence projection backs off poison rows and dead-letters them af
     args: [setup.workspaceId, setup.opportunityId],
   });
   await dbClient.execute({
+    sql: `UPDATE tokenless_scheduled_work_items
+          SET state='pending',attempt_count=0,next_attempt_at=?,updated_at=?
+          WHERE kind='project_private_review_evidence' AND subject_key=?`,
+    args: [now, now, deliveryId],
+  });
+  await dbClient.execute({
     sql: `UPDATE tokenless_private_unpaid_review_deliveries
-          SET evidence_projection_state='pending',evidence_projection_next_attempt_at=?
+          SET evidence_projection_state='pending',evidence_projection_attempt_count=0,
+              evidence_projection_next_attempt_at=?,evidence_projection_last_error=NULL,
+              evidence_projection_claimed_at=NULL,evidence_projection_dead_at=NULL
           WHERE delivery_id=?`,
     args: [now, deliveryId],
   });
@@ -484,11 +523,15 @@ test("private evidence projection backs off poison rows and dead-letters them af
     error: "poison packet",
   });
 
-  const first = await projectDueDirectPrivateReviewDecisionEvidence({
+  const firstRun = await runTokenlessScheduledMaintenance({
+    appOrigin: "https://tokenless.example.test",
     now,
-    projector: retryingProjector,
+    workLimit: 20,
+    processors: { projectDirectPrivateReviewEvidence: retryingProjector },
   });
-  assert.deepEqual(first, {
+  if (firstRun.status === "duplicate") assert.fail("first projection maintenance run cannot be duplicate");
+  assert.ok(firstRun.summary);
+  assert.deepEqual(firstRun.summary.directPrivateReviewEvidence, {
     scanned: 1,
     projected: 0,
     packetsReady: 0,
@@ -507,20 +550,39 @@ test("private evidence projection backs off poison rows and dead-letters them af
   assert.equal(Number(stored.rows[0]?.evidence_projection_attempt_count), 1);
   assert.ok(new Date(String(stored.rows[0]?.evidence_projection_next_attempt_at)) > now);
   assert.equal(stored.rows[0]?.evidence_projection_last_error, "poison packet");
-  assert.equal((await projectDueDirectPrivateReviewDecisionEvidence({ now, projector: retryingProjector })).scanned, 0);
+  const scheduledRetry = await dbClient.execute({
+    sql: `SELECT state,attempt_count,last_error FROM tokenless_scheduled_work_items
+          WHERE kind='project_private_review_evidence' AND subject_key=?`,
+    args: [deliveryId],
+  });
+  assert.equal(scheduledRetry.rows[0]?.state, "retry");
+  assert.equal(Number(scheduledRetry.rows[0]?.attempt_count), 1);
+  assert.equal(scheduledRetry.rows[0]?.last_error, "poison packet");
 
+  const terminalAttemptAt = new Date(now.getTime() + 5 * 60_000);
+  await dbClient.execute({
+    sql: `UPDATE tokenless_scheduled_work_items
+          SET state='retry',attempt_count=7,next_attempt_at=?,updated_at=?
+          WHERE kind='project_private_review_evidence' AND subject_key=?`,
+    args: [terminalAttemptAt, terminalAttemptAt, deliveryId],
+  });
   await dbClient.execute({
     sql: `UPDATE tokenless_private_unpaid_review_deliveries
-          SET evidence_projection_attempt_count=7,evidence_projection_next_attempt_at=?
+          SET evidence_projection_state='retry',evidence_projection_attempt_count=7,
+              evidence_projection_next_attempt_at=?,evidence_projection_claimed_at=NULL
           WHERE delivery_id=?`,
-    args: [now, deliveryId],
+    args: [terminalAttemptAt, deliveryId],
   });
-  const terminalAttempt = await projectDueDirectPrivateReviewDecisionEvidence({
-    now,
-    projector: retryingProjector,
+  const terminalRun = await runTokenlessScheduledMaintenance({
+    appOrigin: "https://tokenless.example.test",
+    now: terminalAttemptAt,
+    workLimit: 20,
+    processors: { projectDirectPrivateReviewEvidence: retryingProjector },
   });
-  assert.equal(terminalAttempt.dead, 1);
-  assert.deepEqual(terminalAttempt.deadDeliveryIds, [deliveryId]);
+  if (terminalRun.status === "duplicate") assert.fail("terminal projection maintenance run cannot be duplicate");
+  assert.ok(terminalRun.summary);
+  assert.equal(terminalRun.summary.directPrivateReviewEvidence.dead, 1);
+  assert.deepEqual(terminalRun.summary.directPrivateReviewEvidence.deadDeliveryIds, [deliveryId]);
   stored = await dbClient.execute({
     sql: `SELECT evidence_projection_state,evidence_projection_attempt_count,
                  evidence_projection_next_attempt_at,evidence_projection_dead_at
