@@ -56,6 +56,14 @@ export default function HumanOversightPage() {
         operation; your organization selects, authorizes, and supports the people who perform it.
       </p>
 
+      <h2 id="reviewer-lanes">Start with who has authority</h2>
+      <p>
+        Customer-invited reviewers can be people your organization designates and authorizes for its oversight workflow.
+        RateLoop records the scope you assign to them, but your organization remains responsible for their competence,
+        training, authority, and support. A RateLoop-network reviewer is not designated by your organization and has no
+        authority over your system. Network review is supplementary quality input, not your Article 26(2) oversight.
+      </p>
+
       <aside className="not-prose my-8 rounded-2xl border-l-2 border-[var(--rateloop-yellow)] bg-amber-300/[0.06] p-5 sm:p-6">
         <p className="font-mono text-xs font-semibold uppercase tracking-[0.16em] text-[var(--rateloop-yellow)]">
           Shared responsibility
@@ -121,13 +129,6 @@ export default function HumanOversightPage() {
         fundamental-rights impact assessment.
       </p>
 
-      <h2 id="reviewer-lanes">Which reviewer lane carries this</h2>
-      <p>
-        Invited reviewers are your personnel: the people your organization designates, whose competence, training, and
-        authority you attest. That lane can support your configured oversight workflow. The public network is
-        supplementary review capacity and an independent quality signal; neither lane by itself establishes that Article
-        14 or Article 26 duties are met.
-      </p>
       <p>
         The shared-responsibility matrix and the exportable evidence behind each capability live on{" "}
         <Link href="/docs/evidence">Evidence reference</Link>.

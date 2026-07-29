@@ -4,6 +4,13 @@ Article 26(2) requires deployers of high-risk AI systems to assign oversight to 
 training, authority, and support. RateLoop can support that configured workflow and record its operation; your
 organization selects, authorizes, and supports the people who perform it.
 
+## Start with who has authority
+
+Customer-invited reviewers can be people your organization designates and authorizes for its oversight workflow.
+RateLoop records the scope you assign to them, but your organization remains responsible for their competence,
+training, authority, and support. A RateLoop-network reviewer is not designated by your organization and has no
+authority over your system. Network review is supplementary quality input, not your Article 26(2) oversight.
+
 ## Shared responsibility
 
 Your people provide oversight. RateLoop supports the configured workflow and records its evidence.
@@ -97,13 +104,6 @@ Audit and evidence exports map to the Commission's draft Article 73 serious-inci
 draft-aligned until the template is final — and the workspace's oversight configuration exports as a factual
 description of the implemented oversight measures, usable as input for an Article 27 fundamental-rights impact
 assessment.
-
-## Which reviewer lane carries this
-
-Invited reviewers are your personnel: the people your organization designates, whose competence, training, and
-authority you attest. That lane can support your configured oversight workflow. The public network is supplementary
-review capacity and an independent quality signal; neither lane by itself establishes that Article 14 or Article 26
-duties are met.
 
 The shared-responsibility matrix and the exportable evidence behind each capability live in
 [`evidence.md`](./evidence.md). The browser version is [`/docs/human-oversight`](/docs/human-oversight).

@@ -80,9 +80,11 @@ test("human-oversight docs lead with capabilities and keep legal context seconda
   assert.match(html, /Article 27 fundamental-rights impact assessment/i);
 
   assert.match(html, /id="reviewer-lanes"/);
-  assert.match(html, /Invited reviewers are your personnel/i);
-  assert.match(html, /supplementary review capacity and an independent quality signal/i);
-  assert.match(html, /neither lane by itself establishes that Article 14 or Article 26 duties are met/i);
+  assert.match(html, /Start with who has authority/i);
+  assert.match(html, /Customer-invited reviewers can be people your organization designates and authorizes/i);
+  assert.match(html, /A RateLoop-network reviewer is not designated by your organization/i);
+  assert.match(html, /Network review is supplementary quality input, not your Article 26\(2\) oversight/i);
+  assert.ok(html.indexOf('id="reviewer-lanes"') < html.indexOf("Shared responsibility"));
   assert.match(html, /href="\/docs\/evidence"/);
 
   assert.doesNotMatch(html, /compliant|compliance-ready|certif|presumption of conformity|satisfies Article/i);
@@ -118,13 +120,14 @@ test("machine human-oversight doc mirrors the page and is cross-linked with evid
   assert.match(oversight, /## Controls the workflow exposes/);
   assert.doesNotMatch(oversight, /### [1-5]\\.|## The five Article 14/);
   assert.match(oversight, /## Designation, competence, and literacy/);
-  assert.match(oversight, /## Which reviewer lane carries this/);
+  assert.match(oversight, /## Start with who has authority/);
   assert.match(oversight, /Ordinary Codex, plugin, and MCP integrations are advisory/i);
   assert.match(oversight, /do not\s+verify interception or withheld delivery/i);
   assert.match(oversight, /draft Article 73 serious-incident reporting template/i);
   assert.match(oversight, /Article 27 fundamental-rights impact\s+assessment/i);
-  assert.match(oversight, /Invited reviewers are your personnel/);
-  assert.match(oversight, /neither lane by itself establishes that Article 14 or Article 26\s+duties are met/i);
+  assert.match(oversight, /Customer-invited reviewers can be people your organization designates and authorizes/i);
+  assert.match(oversight, /Network review is supplementary quality input, not your Article 26\(2\) oversight/i);
+  assert.ok(oversight.indexOf("## Start with who has authority") < oversight.indexOf("## Shared responsibility"));
   assert.match(oversight, /\[`evidence\.md`\]\(\.\/evidence\.md\)/);
   assert.match(evidence, /\[`human-oversight\.md`\]\(\.\/human-oversight\.md\)/);
   assert.match(evidence, /\[`\/docs\/human-oversight`\]\(\/docs\/human-oversight\)/);
