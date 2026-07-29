@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicAuthRouteError } from "~~/lib/auth/publicRouteError";
 import { requireBrowserSession } from "~~/lib/auth/request";
 import { AuthError } from "~~/lib/auth/session";
 import { completeWalletBinding } from "~~/lib/auth/walletBindings";
@@ -24,10 +25,14 @@ export async function POST(request: NextRequest) {
     });
     return NextResponse.json(binding, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    const status = error instanceof AuthError ? error.status : 400;
+    const failure = publicAuthRouteError(error, {
+      event: "wallet_binding_failed",
+      fallbackMessage: "Unable to bind this wallet.",
+      fallbackStatus: 500,
+    });
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unable to bind this wallet." },
-      { status, headers: { "Cache-Control": "no-store" } },
+      { error: failure.message },
+      { status: failure.status, headers: { "Cache-Control": "no-store" } },
     );
   }
 }

@@ -7,7 +7,7 @@ import {
   scimProviderIdForUser,
   synchronizeScimUser,
 } from "~~/lib/auth/enterpriseIdentityPolicy";
-import { AuthError } from "~~/lib/auth/session";
+import { publicAuthRouteError } from "~~/lib/auth/publicRouteError";
 import { appendSecurityAuditEvent } from "~~/lib/privacy/audit";
 
 export const runtime = "nodejs";
@@ -136,10 +136,14 @@ async function handler(
       targetId: "better_auth",
       targetKind: "identity_provider",
     }).catch(() => undefined);
-    const message = error instanceof Error ? error.message : "Better Auth is not configured.";
+    const failure = publicAuthRouteError(error, {
+      event: "better_auth_provider_unavailable",
+      fallbackMessage: "Authentication is temporarily unavailable.",
+      fallbackStatus: 503,
+    });
     return NextResponse.json(
-      { error: message },
-      { status: error instanceof AuthError ? error.status : 503, headers: { "Cache-Control": "no-store" } },
+      { error: failure.message },
+      { status: failure.status, headers: { "Cache-Control": "no-store" } },
     );
   }
 }

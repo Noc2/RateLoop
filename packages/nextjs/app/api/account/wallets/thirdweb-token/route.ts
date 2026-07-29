@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicAuthRouteError } from "~~/lib/auth/publicRouteError";
 import { requireBrowserSession } from "~~/lib/auth/request";
-import { AuthError } from "~~/lib/auth/session";
 import { issueThirdwebWalletJwt } from "~~/lib/auth/thirdwebWalletJwt";
 
 export const runtime = "nodejs";
@@ -14,10 +14,14 @@ export async function POST(request: NextRequest) {
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
-    const status = error instanceof AuthError ? error.status : 503;
+    const failure = publicAuthRouteError(error, {
+      event: "thirdweb_wallet_exchange_failed",
+      fallbackMessage: "Unable to create the optional wallet exchange.",
+      fallbackStatus: 503,
+    });
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unable to create the optional wallet exchange." },
-      { status, headers: { "Cache-Control": "no-store" } },
+      { error: failure.message },
+      { status: failure.status, headers: { "Cache-Control": "no-store" } },
     );
   }
 }

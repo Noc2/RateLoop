@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicAuthRouteError } from "~~/lib/auth/publicRouteError";
 import { requireBrowserSession } from "~~/lib/auth/request";
-import { AuthError } from "~~/lib/auth/session";
 import { revokeWalletBinding } from "~~/lib/auth/walletBindings";
 
 export const runtime = "nodejs";
@@ -12,10 +12,14 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     await revokeWalletBinding({ bindingId, principalId: session.principalId });
     return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    const status = error instanceof AuthError ? error.status : 400;
+    const failure = publicAuthRouteError(error, {
+      event: "wallet_binding_revoke_failed",
+      fallbackMessage: "Unable to revoke this wallet binding.",
+      fallbackStatus: 500,
+    });
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unable to revoke this wallet binding." },
-      { status, headers: { "Cache-Control": "no-store" } },
+      { error: failure.message },
+      { status: failure.status, headers: { "Cache-Control": "no-store" } },
     );
   }
 }
