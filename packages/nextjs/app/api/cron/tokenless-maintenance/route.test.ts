@@ -1,13 +1,19 @@
 import { NextRequest } from "next/server";
-import { GET, scheduledMaintenanceResponse } from "./route";
+import { GET, maxDuration, scheduledMaintenanceResponse } from "./route";
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
+import { SCHEDULED_MAINTENANCE_PROCESSING_BUDGET_MS } from "~~/lib/tokenless/scheduledMaintenance";
 
 const previousSecret = process.env.CRON_SECRET;
 
 afterEach(() => {
   if (previousSecret === undefined) delete process.env.CRON_SECRET;
   else process.env.CRON_SECRET = previousSecret;
+});
+
+test("scheduled maintenance reserves time to persist health before the route deadline", () => {
+  assert.equal(maxDuration, 60);
+  assert.ok(SCHEDULED_MAINTENANCE_PROCESSING_BUDGET_MS <= maxDuration * 1_000 - 5_000);
 });
 
 test("scheduled maintenance route rejects requests without the Vercel cron bearer secret", async () => {

@@ -73,6 +73,9 @@ const DEFAULT_WORK_LIMIT = 20;
 const DEFAULT_WEBHOOK_LIMIT = 50;
 const DEFAULT_NOTIFICATION_LIMIT = 20;
 const EVIDENCE_PENDING_ALERT_SECONDS = 15 * 60;
+// Vercel terminates the route after 60 seconds. Stop starting business work ten seconds
+// earlier so health/summary persistence and any claimed-work recovery can finish cleanly.
+export const SCHEDULED_MAINTENANCE_PROCESSING_BUDGET_MS = 50_000;
 const NON_COUNTING_DEFER_CODES = new Set([
   "indexed_evidence_pending",
   "evidence_pending",
@@ -394,7 +397,12 @@ type MaintenanceProcessors = {
 // The three scheduled-work stages and the evidence-pending health probe are pipeline steps rather
 // than injectable processors, but an uncaught throw in any of them used to abandon every processor
 // that ran after them for the whole tick. They are isolated under their own names.
-type MaintenanceStage = "seedScheduledWork" | "claimDueWork" | "processClaimedWork" | "evidencePendingHealth";
+type MaintenanceStage =
+  | "seedScheduledWork"
+  | "claimDueWork"
+  | "processClaimedWork"
+  | "evidencePendingHealth"
+  | "invocationDeadline";
 
 type MaintenanceProcessorFailure = {
   processor: keyof MaintenanceProcessors | MaintenanceStage;
@@ -411,6 +419,11 @@ type IsolatedMaintenanceProcessorInput<T> = {
   fallback: T;
   configuration?: (result: T) => MaintenanceProcessorConfiguration;
   observe?: (observation: ScheduledProcessorHealthObservation) => void;
+};
+
+type MaintenanceProcessingDeadline = {
+  reached: () => boolean;
+  recordExhaustion: () => void;
 };
 
 function maintenanceProcessorErrorCode(error: unknown) {
@@ -436,6 +449,26 @@ function maintenanceProcessorErrorEvidence(
   };
 }
 
+function recordMaintenanceProcessorFailure(
+  error: unknown,
+  processor: keyof MaintenanceProcessors | MaintenanceStage,
+  failures: MaintenanceProcessorFailure[],
+  observe?: (observation: ScheduledProcessorHealthObservation) => void,
+) {
+  const failure = {
+    processor,
+    ...maintenanceProcessorErrorEvidence(error, processor),
+  };
+  failures.push(failure);
+  observe?.({ configurationState: "broken", ...failure });
+  console.error(
+    JSON.stringify({
+      event: "tokenless_scheduled_maintenance_processor_failure",
+      ...failure,
+    }),
+  );
+}
+
 async function runIsolatedMaintenanceProcessor<T>(input: IsolatedMaintenanceProcessorInput<T>) {
   try {
     const result = await input.run();
@@ -445,18 +478,7 @@ async function runIsolatedMaintenanceProcessor<T>(input: IsolatedMaintenanceProc
     });
     return result;
   } catch (error) {
-    const failure = {
-      processor: input.processor,
-      ...maintenanceProcessorErrorEvidence(error, input.processor),
-    };
-    input.failures.push(failure);
-    input.observe?.({ configurationState: "broken", ...failure });
-    console.error(
-      JSON.stringify({
-        event: "tokenless_scheduled_maintenance_processor_failure",
-        ...failure,
-      }),
-    );
+    recordMaintenanceProcessorFailure(error, input.processor, input.failures, input.observe);
     return input.fallback;
   }
 }
@@ -568,6 +590,7 @@ async function claimDueWork(now: Date, limit: number) {
 
 async function processClaimedWork(input: {
   appOrigin: string;
+  deadline?: MaintenanceProcessingDeadline;
   items: Row[];
   now: Date;
   processors: MaintenanceProcessors;
@@ -587,7 +610,12 @@ async function processClaimedWork(input: {
       deadDeliveryIds: [] as string[],
     },
   };
-  for (const row of input.items) {
+  for (const [index, row] of input.items.entries()) {
+    if (input.deadline?.reached()) {
+      input.deadline.recordExhaustion();
+      await releaseClaimedWork(input.items.slice(index), input.now);
+      break;
+    }
     const itemId = rowString(row, "item_id")!;
     const kind = rowString(row, "kind") as WorkKind;
     const subjectKey = rowString(row, "subject_key")!;
@@ -757,6 +785,35 @@ async function processClaimedWork(input: {
   return summary;
 }
 
+async function releaseClaimedWork(items: Row[], now: Date) {
+  const reason = "maintenance invocation deadline exhausted before processing";
+  for (const row of items) {
+    const itemId = rowString(row, "item_id")!;
+    const kind = rowString(row, "kind") as WorkKind;
+    const subjectKey = rowString(row, "subject_key")!;
+    const claimGeneration = Number(row.claim_generation);
+    const released = await dbClient.execute({
+      sql: `UPDATE tokenless_scheduled_work_items
+            SET state='retry',next_attempt_at=?,last_error=?,updated_at=?
+            WHERE item_id=? AND state='processing' AND claim_generation=?
+            RETURNING item_id`,
+      args: [now, reason, now, itemId, claimGeneration],
+    });
+    if (released.rows.length !== 1 || kind !== "project_private_review_evidence") continue;
+    await dbClient.execute({
+      sql: `UPDATE tokenless_private_unpaid_review_deliveries
+            SET evidence_projection_state='retry',
+                evidence_projection_next_attempt_at=?,
+                evidence_projection_last_error=?,
+                evidence_projection_claimed_at=NULL
+            WHERE delivery_id=?
+              AND evidence_projection_state='processing'
+              AND evidence_projection_claim_generation=?`,
+      args: [now, reason, subjectKey, claimGeneration],
+    });
+  }
+}
+
 async function evidencePendingOperationalHealth(now: Date) {
   const result = await dbClient.execute(
     `SELECT COUNT(*) AS pending_count, MIN(created_at) AS oldest_created_at
@@ -788,7 +845,23 @@ export async function runTokenlessScheduledMaintenance(input: {
   webhookLimit?: number;
   notificationLimit?: number;
   processors?: Partial<MaintenanceProcessors>;
+  runtime?: {
+    monotonicNow?: () => number;
+    processingBudgetMs?: number;
+  };
 }) {
+  const monotonicNow = input.runtime?.monotonicNow ?? Date.now;
+  const processingStartedAt = monotonicNow();
+  const processingBudgetMs = input.runtime?.processingBudgetMs ?? SCHEDULED_MAINTENANCE_PROCESSING_BUDGET_MS;
+  if (
+    !Number.isFinite(processingStartedAt) ||
+    !Number.isSafeInteger(processingBudgetMs) ||
+    processingBudgetMs < 1 ||
+    processingBudgetMs > SCHEDULED_MAINTENANCE_PROCESSING_BUDGET_MS
+  ) {
+    throw new Error("Scheduled maintenance processing deadline is invalid.");
+  }
+  const processingDeadlineAt = processingStartedAt + processingBudgetMs;
   const now = input.now ?? new Date();
   const workLimit = bounded(input.workLimit, DEFAULT_WORK_LIMIT, 100);
   const webhookLimit = bounded(input.webhookLimit, DEFAULT_WEBHOOK_LIMIT, 100);
@@ -825,12 +898,42 @@ export async function runTokenlessScheduledMaintenance(input: {
     const processors: MaintenanceProcessors = { ...defaultProcessors, ...input.processors };
     const processorFailures: MaintenanceProcessorFailure[] = [];
     const processorHealth = new Map<string, ScheduledProcessorHealthObservation>();
-    const runProcessor = <T>(processorInput: Omit<IsolatedMaintenanceProcessorInput<T>, "failures" | "observe">) =>
-      runIsolatedMaintenanceProcessor({
+    let processingDeadlineExhausted = false;
+    const deadlineReached = () => monotonicNow() >= processingDeadlineAt;
+    const recordDeadlineExhaustion = () => {
+      if (processingDeadlineExhausted) return;
+      processingDeadlineExhausted = true;
+      recordMaintenanceProcessorFailure(
+        new TokenlessServiceError(
+          "Scheduled maintenance processing deadline was exhausted.",
+          503,
+          "maintenance_deadline_exhausted",
+          true,
+        ),
+        "invocationDeadline",
+        processorFailures,
+        observation => processorHealth.set(observation.processor, observation),
+      );
+    };
+    const processingDeadline: MaintenanceProcessingDeadline = {
+      reached: deadlineReached,
+      recordExhaustion: recordDeadlineExhaustion,
+    };
+    const runProcessor = <T>(
+      processorInput: Omit<IsolatedMaintenanceProcessorInput<T>, "failures" | "observe"> & {
+        runWhenDeadlineExhausted?: boolean;
+      },
+    ) => {
+      if (!processorInput.runWhenDeadlineExhausted && deadlineReached()) {
+        recordDeadlineExhaustion();
+        return Promise.resolve(processorInput.fallback);
+      }
+      return runIsolatedMaintenanceProcessor({
         ...processorInput,
         failures: processorFailures,
         observe: observation => processorHealth.set(observation.processor, observation),
       });
+    };
     const expiredQuotes = await runProcessor({
       processor: "sweepExpiredQuotes",
       run: () => processors.sweepExpiredQuotes({ now, limit: workLimit }),
@@ -991,10 +1094,12 @@ export async function runTokenlessScheduledMaintenance(input: {
       run: () =>
         processClaimedWork({
           appOrigin: input.appOrigin,
+          deadline: processingDeadline,
           items,
           now,
           processors,
         }),
+      runWhenDeadlineExhausted: true,
       fallback: {
         completed: 0,
         dead: 0,
@@ -1196,6 +1301,7 @@ export async function runTokenlessScheduledMaintenance(input: {
         suppressed: 0,
       } as Awaited<ReturnType<MaintenanceProcessors["processNotifications"]>>,
     });
+    if (deadlineReached()) recordDeadlineExhaustion();
     await persistScheduledProcessorHealth(processorHealth.values(), now);
     const status =
       processorFailures.length > 0 ||
@@ -1259,6 +1365,10 @@ export async function runTokenlessScheduledMaintenance(input: {
       expiredQuotes,
       expiredPublicMedia,
       processorFailures,
+      processingDeadline: {
+        budgetMs: processingBudgetMs,
+        exhausted: processingDeadlineExhausted,
+      },
       directPrivateReviewDeadlines,
       paidAssignmentSettlements,
       networkAssignmentSettlements,

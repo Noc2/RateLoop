@@ -461,6 +461,121 @@ test("one processor failure degrades the run, retains safe evidence, and logs on
   ]);
 });
 
+test("the invocation deadline stops cumulative processor work and records one bounded failure", async () => {
+  let elapsedMs = 0;
+  const calls: string[] = [];
+  const logLines: string[] = [];
+  const originalConsoleError = console.error;
+  console.error = (...values: unknown[]) => {
+    logLines.push(values.map(String).join(" "));
+  };
+  let result: Awaited<ReturnType<typeof runTokenlessScheduledMaintenance>>;
+  try {
+    result = await runTokenlessScheduledMaintenance({
+      appOrigin: "https://tokenless.example.test",
+      now: NOW,
+      processors: {
+        ...processors(async () => undefined),
+        async sweepExpiredQuotes() {
+          calls.push("quotes");
+          elapsedMs += 30;
+          return { deleted: 0, scanned: 0 };
+        },
+        async sweepExpiredPublicMedia() {
+          calls.push("public-media");
+          elapsedMs += 25;
+          return { deleted: 0, failed: [] };
+        },
+        async revivePrivacyWorkerFailures() {
+          calls.push("privacy");
+          return { revived: 0 };
+        },
+        async processNotifications() {
+          calls.push("notifications");
+          return { dead: 0, delivered: 0, enqueued: 0, materialized: 0, parked: 0, retry: 0, suppressed: 0 };
+        },
+      },
+      runtime: {
+        monotonicNow: () => elapsedMs,
+        processingBudgetMs: 50,
+      },
+    });
+  } finally {
+    console.error = originalConsoleError;
+  }
+  if (result.status === "duplicate") assert.fail("first invocation cannot be duplicate");
+  assert.equal(result.status, "degraded");
+  assert.deepEqual(calls, ["quotes", "public-media"]);
+  assert.deepEqual(result.summary.processingDeadline, { budgetMs: 50, exhausted: true });
+  assert.equal(result.summary.processorFailures.length, 1);
+  assert.equal(result.summary.processorFailures[0]?.processor, "invocationDeadline");
+  assert.equal(result.summary.processorFailures[0]?.errorCode, "maintenance_deadline_exhausted");
+  assert.match(result.summary.processorFailures[0]?.errorDigest ?? "", /^sha256:[0-9a-f]{64}$/u);
+  assert.equal(logLines.length, 1);
+});
+
+test("the invocation deadline releases unstarted claimed work without consuming an attempt", async () => {
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_scheduled_work_items
+          (item_id,kind,subject_key,state,attempt_count,next_attempt_at,created_at,updated_at)
+          VALUES
+          ('swi_deadline_first','delete_artifact','object_deadline_first','pending',0,?,?,?),
+          ('swi_deadline_second','delete_artifact','object_deadline_second','pending',0,?,?,?)`,
+    args: [NOW, new Date(NOW.getTime() - 2), NOW, NOW, new Date(NOW.getTime() - 1), NOW],
+  });
+  let elapsedMs = 0;
+  const deleted: string[] = [];
+  const originalConsoleError = console.error;
+  console.error = () => undefined;
+  let result: Awaited<ReturnType<typeof runTokenlessScheduledMaintenance>>;
+  try {
+    result = await runTokenlessScheduledMaintenance({
+      appOrigin: "https://tokenless.example.test",
+      now: NOW,
+      processors: {
+        ...processors(async () => undefined),
+        async deleteArtifact(objectId) {
+          deleted.push(objectId);
+          elapsedMs = 51;
+          return true;
+        },
+      },
+      runtime: {
+        monotonicNow: () => elapsedMs,
+        processingBudgetMs: 50,
+      },
+    });
+  } finally {
+    console.error = originalConsoleError;
+  }
+  if (result.status === "duplicate") assert.fail("first invocation cannot be duplicate");
+  assert.equal(result.status, "degraded");
+  assert.deepEqual(deleted, ["object_deadline_first"]);
+  assert.deepEqual(result.summary.work, { completed: 1, dead: 0, deferred: 0, retry: 0 });
+  const work = await dbClient.execute({
+    sql: `SELECT subject_key,state,attempt_count,next_attempt_at,last_error
+          FROM tokenless_scheduled_work_items
+          WHERE item_id IN ('swi_deadline_first','swi_deadline_second')
+          ORDER BY subject_key`,
+  });
+  assert.deepEqual(work.rows, [
+    {
+      attempt_count: 1,
+      last_error: null,
+      next_attempt_at: NOW,
+      state: "completed",
+      subject_key: "object_deadline_first",
+    },
+    {
+      attempt_count: 0,
+      last_error: "maintenance invocation deadline exhausted before processing",
+      next_attempt_at: NOW,
+      state: "retry",
+      subject_key: "object_deadline_second",
+    },
+  ]);
+});
+
 test("expired public question media is swept by the cron rather than by upload traffic", async () => {
   const sweptAt: Array<Date | undefined> = [];
   const result = await runTokenlessScheduledMaintenance({
