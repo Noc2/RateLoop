@@ -19,8 +19,16 @@ const { validatePaidLaneActivation } = paidLaneActivationModule.default ?? paidL
 
 const BASE_SEPOLIA_CHAIN_ID = 84_532;
 const DEPLOYMENT_SCHEMA = "rateloop-tokenless-deployment-v4";
+const DEPLOYMENT_VERSION = 4;
 const MINIMUM_REVEAL_WINDOW_SECONDS = 300;
 const TOKENLESS_REVIEW_ORIGIN = "https://rateloop-tokenless.vercel.app";
+const ACTIVE_DEPLOYMENT_CONTRACTS = Object.freeze([
+  ["CredentialIssuer", "TOKENLESS_CREDENTIAL_ISSUER_ADDRESS", "CredentialIssuer"],
+  ["TestUSDC", "TOKENLESS_USDC_ADDRESS", "MockERC20"],
+  ["TokenlessFeedbackBonus", "TOKENLESS_FEEDBACK_BONUS_ADDRESS", "TokenlessFeedbackBonus"],
+  ["TokenlessPanel", "TOKENLESS_PANEL_ADDRESS", "TokenlessPanel"],
+  ["X402PanelSubmitter", "TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS", "X402PanelSubmitter"],
+]);
 const PLATFORM_EVM_SIGNERS = [
   {
     role: "CREDENTIAL_ISSUER",
@@ -370,6 +378,86 @@ function activeDeployment(activeRegistry, errors) {
   return active;
 }
 
+function configuredDeploymentKey(env) {
+  return [
+    "tokenless-v4",
+    BASE_SEPOLIA_CHAIN_ID,
+    value(env, "TOKENLESS_PANEL_ADDRESS").toLowerCase(),
+    value(env, "TOKENLESS_CREDENTIAL_ISSUER_ADDRESS").toLowerCase(),
+    value(env, "TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS").toLowerCase(),
+    value(env, "TOKENLESS_FEEDBACK_BONUS_ADDRESS").toLowerCase(),
+  ].join(":");
+}
+
+function exactRuntimeCodeHash(raw) {
+  return typeof raw === "string" && /^0x[0-9a-f]{64}$/u.test(raw);
+}
+
+function normalizedRegistryAddress(raw) {
+  return typeof raw === "string" ? raw.toLowerCase() : "";
+}
+
+function validateExactActiveDeploymentBundle({ activeRegistry, deploymentSchema, env, errors }) {
+  const active = activeDeployment(activeRegistry, errors);
+  if (!active) return;
+
+  const expectedKey = configuredDeploymentKey(env);
+  const contracts = active.contracts && typeof active.contracts === "object" ? active.contracts : {};
+  const contractNames = Object.keys(contracts).sort();
+  const expectedContractNames = ACTIVE_DEPLOYMENT_CONTRACTS.map(([name]) => name).sort();
+  const deploymentBlock = Number(active.deploymentBlockNumber);
+  const contractBindingsMatch = ACTIVE_DEPLOYMENT_CONTRACTS.every(([contractName, envName, artifactName]) => {
+    const contract = contracts[contractName];
+    return (
+      contract &&
+      contract.artifact === artifactName &&
+      normalizedRegistryAddress(contract.address) === value(env, envName).toLowerCase() &&
+      Number.isSafeInteger(Number(contract.deployedOnBlock)) &&
+      Number(contract.deployedOnBlock) >= deploymentBlock &&
+      exactRuntimeCodeHash(contract.runtimeCodeHash)
+    );
+  });
+  const exactContractSet =
+    contractNames.length === expectedContractNames.length &&
+    contractNames.every((name, index) => name === expectedContractNames[index]);
+  const metadataMatches =
+    deploymentSchema === DEPLOYMENT_SCHEMA &&
+    value(env, "TOKENLESS_DEPLOYMENT_SCHEMA") === active.schemaVersion &&
+    active.schemaVersion === DEPLOYMENT_SCHEMA &&
+    active.version === DEPLOYMENT_VERSION &&
+    active.deploymentComplete === true &&
+    active.deploymentProfile === "test" &&
+    active.networkName === "baseSepolia" &&
+    active.chainId === BASE_SEPOLIA_CHAIN_ID &&
+    value(env, "TOKENLESS_CHAIN_ID") === String(active.chainId) &&
+    Number.isSafeInteger(deploymentBlock) &&
+    deploymentBlock > 0 &&
+    String(active.deploymentBlockNumber) === value(env, "TOKENLESS_DEPLOYMENT_BLOCK") &&
+    active.deploymentKey === expectedKey &&
+    value(env, "TOKENLESS_DEPLOYMENT_KEY").toLowerCase() === expectedKey &&
+    normalizedRegistryAddress(active.beaconVerifier) ===
+      value(env, "TOKENLESS_BEACON_VERIFIER_ADDRESS").toLowerCase() &&
+    active.beaconVerifierArtifact === "QuicknetTBeaconVerifier" &&
+    Number.isSafeInteger(Number(active.beaconVerifierDeployedOnBlock)) &&
+    Number(active.beaconVerifierDeployedOnBlock) >= deploymentBlock &&
+    normalizedRegistryAddress(active.feeRecipient) === value(env, "TOKENLESS_FEE_RECIPIENT").toLowerCase() &&
+    active.runtimeCodeEvidenceComplete === true &&
+    exactRuntimeCodeHash(active.beaconVerifierRuntimeCodeHash);
+
+  if (!metadataMatches || !exactContractSet || !contractBindingsMatch) {
+    errors.push("The configured chain bundle must exactly match one complete active tokenless v4 registry entry.");
+  }
+}
+
+function validateHostedGitIdentity(env, expectedRef, errors) {
+  if (value(env, "VERCEL_GIT_COMMIT_REF") !== expectedRef) {
+    errors.push(`The hosted deployment requires the ${expectedRef} Git branch.`);
+  }
+  if (!/^[0-9a-f]{40}$/u.test(value(env, "VERCEL_GIT_COMMIT_SHA"))) {
+    errors.push("The hosted deployment requires the full lowercase Git commit SHA.");
+  }
+}
+
 function addSecretRole(roles, name, secret) {
   if (!secret) return;
   const fingerprint = Buffer.isBuffer(secret) ? secret.toString("hex") : secret.toLowerCase().replace(/^0x/u, "");
@@ -407,7 +495,7 @@ function validateTokenlessTestVault(env, errors) {
   return wrappingVersion && wrappingKeys ? currentKey(env, "TOKENLESS_ARTIFACT_WRAPPING", "base64url", errors) : null;
 }
 
-function validateTokenlessTestDeployment(env) {
+function validateTokenlessTestDeployment(env, { activeRegistry, deploymentSchema }) {
   const errors = [];
   const activatedTestLanes = [
     [
@@ -451,9 +539,7 @@ function validateTokenlessTestDeployment(env) {
   if (env.VERCEL_PROJECT_NAME !== TOKENLESS_VERCEL_PROJECT.projectName) {
     errors.push(`The tokenless test deployment requires Vercel project ${TOKENLESS_VERCEL_PROJECT.projectName}.`);
   }
-  if (value(env, "VERCEL_GIT_COMMIT_REF") && env.VERCEL_GIT_COMMIT_REF !== "tokenless") {
-    errors.push("The tokenless test deployment requires the tokenless Git branch.");
-  }
+  validateHostedGitIdentity(env, "tokenless", errors);
   for (const name of ["APP_URL", "NEXT_PUBLIC_APP_URL"]) {
     if (value(env, name) !== TOKENLESS_REVIEW_ORIGIN) {
       errors.push(`${name} must remain ${TOKENLESS_REVIEW_ORIGIN} for a tokenless test deployment.`);
@@ -481,17 +567,6 @@ function validateTokenlessTestDeployment(env) {
     if (!nonZeroEvmAddress(value(env, name))) {
       errors.push(`${name} must be a non-zero EVM address.`);
     }
-  }
-  const expectedDeploymentKey = [
-    "tokenless-v4",
-    BASE_SEPOLIA_CHAIN_ID,
-    value(env, "TOKENLESS_PANEL_ADDRESS").toLowerCase(),
-    value(env, "TOKENLESS_CREDENTIAL_ISSUER_ADDRESS").toLowerCase(),
-    value(env, "TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS").toLowerCase(),
-    value(env, "TOKENLESS_FEEDBACK_BONUS_ADDRESS").toLowerCase(),
-  ].join(":");
-  if (value(env, "TOKENLESS_DEPLOYMENT_KEY").toLowerCase() !== expectedDeploymentKey) {
-    errors.push("TOKENLESS_DEPLOYMENT_KEY must match the complete configured tokenless v4 bundle.");
   }
   for (const name of [
     "TOKENLESS_DEPLOYMENT_BLOCK",
@@ -606,6 +681,7 @@ function validateTokenlessTestDeployment(env) {
   for (const names of testSecretRoles.values()) {
     if (names.length > 1) errors.push(`Tokenless test key roles must be distinct: ${names.join(", ")}.`);
   }
+  validateExactActiveDeploymentBundle({ activeRegistry, deploymentSchema, env, errors });
   return errors;
 }
 
@@ -620,9 +696,10 @@ export function validateTokenlessProductionReadiness({
   if (!hosted) return errors;
 
   if (value(env, "VERCEL_GIT_COMMIT_REF") !== "main") {
-    return validateTokenlessTestDeployment(env);
+    return validateTokenlessTestDeployment(env, { activeRegistry, deploymentSchema });
   }
 
+  validateHostedGitIdentity(env, "main", errors);
   errors.push(...validateTokenlessEuDeployment({ env }));
 
   for (const [capability, label] of Object.entries(HOSTED_RELEASE_CAPABILITY_LABELS)) {
@@ -1093,33 +1170,7 @@ export function validateTokenlessProductionReadiness({
     if (names.length > 1 && !errors.includes(message)) errors.push(message);
   }
 
-  const active = activeDeployment(activeRegistry, errors);
-  if (active) {
-    const expectedKey = [
-      "tokenless-v4",
-      BASE_SEPOLIA_CHAIN_ID,
-      value(env, "TOKENLESS_PANEL_ADDRESS").toLowerCase(),
-      value(env, "TOKENLESS_CREDENTIAL_ISSUER_ADDRESS").toLowerCase(),
-      value(env, "TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS").toLowerCase(),
-      value(env, "TOKENLESS_FEEDBACK_BONUS_ADDRESS").toLowerCase(),
-    ].join(":");
-    const matches = [
-      active.deploymentKey === expectedKey && value(env, "TOKENLESS_DEPLOYMENT_KEY").toLowerCase() === expectedKey,
-      Number(active.deploymentBlockNumber) === Number(value(env, "TOKENLESS_DEPLOYMENT_BLOCK")),
-      active.contracts?.TokenlessPanel?.address?.toLowerCase() === value(env, "TOKENLESS_PANEL_ADDRESS").toLowerCase(),
-      active.contracts?.CredentialIssuer?.address?.toLowerCase() ===
-        value(env, "TOKENLESS_CREDENTIAL_ISSUER_ADDRESS").toLowerCase(),
-      active.contracts?.X402PanelSubmitter?.address?.toLowerCase() ===
-        value(env, "TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS").toLowerCase(),
-      active.contracts?.TokenlessFeedbackBonus?.address?.toLowerCase() ===
-        value(env, "TOKENLESS_FEEDBACK_BONUS_ADDRESS").toLowerCase(),
-      active.contracts?.TestUSDC?.address?.toLowerCase() === value(env, "TOKENLESS_USDC_ADDRESS").toLowerCase(),
-      active.beaconVerifier?.toLowerCase() === value(env, "TOKENLESS_BEACON_VERIFIER_ADDRESS").toLowerCase(),
-    ];
-    if (matches.some(match => !match)) {
-      errors.push("The configured chain bundle must exactly match the complete active tokenless v4 registry.");
-    }
-  }
+  validateExactActiveDeploymentBundle({ activeRegistry, deploymentSchema, env, errors });
   return errors;
 }
 

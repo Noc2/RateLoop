@@ -49,14 +49,20 @@ export function compiledBeaconVerifierRuntimeCodeHash(root = foundryRoot) {
   }
   const artifact = JSON.parse(readFileSync(artifactPath, "utf8"));
   const bytecode = artifact.deployedBytecode?.object;
-  if (typeof bytecode !== "string" || !/^0x(?:[0-9a-fA-F]{2})+$/u.test(bytecode)) {
-    throw new Error("Compiled QuicknetTBeaconVerifier has no exact deployed runtime bytecode.");
+  if (
+    typeof bytecode !== "string" ||
+    !/^0x(?:[0-9a-fA-F]{2})+$/u.test(bytecode)
+  ) {
+    throw new Error(
+      "Compiled QuicknetTBeaconVerifier has no exact deployed runtime bytecode.",
+    );
   }
   return keccak256(bytecode).toLowerCase();
 }
 
 async function rpcBytecodeLoader(rpcUrl, address) {
-  if (!rpcUrl) throw new Error("RPC_URL is required to bind runtime bytecode evidence.");
+  if (!rpcUrl)
+    throw new Error("RPC_URL is required to bind runtime bytecode evidence.");
   const response = await fetch(rpcUrl, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -67,9 +73,15 @@ async function rpcBytecodeLoader(rpcUrl, address) {
       params: [address, "latest"],
     }),
   });
-  if (!response.ok) throw new Error(`RPC bytecode request failed with HTTP ${response.status}.`);
+  if (!response.ok)
+    throw new Error(
+      `RPC bytecode request failed with HTTP ${response.status}.`,
+    );
   const payload = await response.json();
-  if (payload.error) throw new Error(`RPC bytecode request failed: ${payload.error.message ?? "unknown error"}.`);
+  if (payload.error)
+    throw new Error(
+      `RPC bytecode request failed: ${payload.error.message ?? "unknown error"}.`,
+    );
   return payload.result;
 }
 
@@ -119,6 +131,7 @@ export async function exportTokenlessDeploymentFromBroadcast({
   broadcastPath = tokenlessBroadcastPath(),
   deploymentPath = tokenlessDeploymentPath(),
   targetNetwork = process.env.DEPLOY_TARGET_NETWORK,
+  feeRecipient = process.env.TOKENLESS_FEE_RECIPIENT,
   getBytecode = (address) => rpcBytecodeLoader(process.env.RPC_URL, address),
   expectedBeaconVerifierRuntimeCodeHash = compiledBeaconVerifierRuntimeCodeHash(),
   bytecodeRetryAttempts = DEFAULT_BYTECODE_RETRY_ATTEMPTS,
@@ -135,7 +148,9 @@ export async function exportTokenlessDeploymentFromBroadcast({
   }
 
   const broadcast = JSON.parse(readFileSync(broadcastPath, "utf8"));
-  const reconstructed = reconstructTokenlessDeploymentFromBroadcast(broadcast);
+  const reconstructed = reconstructTokenlessDeploymentFromBroadcast(broadcast, {
+    feeRecipient,
+  });
   const artifact = await attachTokenlessRuntimeCodeEvidence(reconstructed, {
     getBytecode: (address) =>
       loadBytecodeAfterRpcPropagation(getBytecode, address, {
@@ -156,7 +171,8 @@ export async function exportTokenlessDeploymentFromBroadcast({
 }
 
 async function main() {
-  const { artifact, deploymentPath } = await exportTokenlessDeploymentFromBroadcast();
+  const { artifact, deploymentPath } =
+    await exportTokenlessDeploymentFromBroadcast();
   console.log(
     `Exported ${artifact.schemaVersion} deployment to ${deploymentPath}`,
   );

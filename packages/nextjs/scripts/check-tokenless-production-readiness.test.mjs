@@ -14,6 +14,8 @@ import { privateKeyToAccount } from "viem/accounts";
 
 const address = index => `0x${index.toString(16).padStart(40, "0")}`;
 const encodedKey = index => Buffer.alloc(32, index).toString("base64url");
+const runtimeCodeHash = index => `0x${index.toString(16).padStart(64, "0")}`;
+const GIT_SHA = "a".repeat(40);
 const tokenlessGoldKeyring = (index = 16) => ({
   TOKENLESS_GOLD_INJECTION_KEY_VERSION: "v1",
   TOKENLESS_GOLD_INJECTION_KEYS: JSON.stringify({ v1: encodedKey(index) }),
@@ -60,6 +62,59 @@ const tokenlessTestRpc = () => {
     TOKENLESS_USDC_EIP712_VERSION: "2",
   };
 };
+const tokenlessTestRegistry = () => {
+  const rpc = tokenlessTestRpc();
+  return {
+    84532: {
+      schemaVersion: rpc.TOKENLESS_DEPLOYMENT_SCHEMA,
+      version: 4,
+      deploymentComplete: true,
+      deploymentProfile: "test",
+      networkName: "baseSepolia",
+      chainId: 84532,
+      deploymentBlockNumber: Number(rpc.TOKENLESS_DEPLOYMENT_BLOCK),
+      deploymentKey: rpc.TOKENLESS_DEPLOYMENT_KEY,
+      feeRecipient: rpc.TOKENLESS_FEE_RECIPIENT,
+      beaconVerifier: rpc.TOKENLESS_BEACON_VERIFIER_ADDRESS,
+      beaconVerifierArtifact: "QuicknetTBeaconVerifier",
+      beaconVerifierDeployedOnBlock: Number(rpc.TOKENLESS_DEPLOYMENT_BLOCK),
+      beaconVerifierRuntimeCodeHash: runtimeCodeHash(7),
+      runtimeCodeEvidenceComplete: true,
+      contracts: {
+        CredentialIssuer: {
+          address: rpc.TOKENLESS_CREDENTIAL_ISSUER_ADDRESS,
+          artifact: "CredentialIssuer",
+          deployedOnBlock: Number(rpc.TOKENLESS_DEPLOYMENT_BLOCK),
+          runtimeCodeHash: runtimeCodeHash(2),
+        },
+        TestUSDC: {
+          address: rpc.TOKENLESS_USDC_ADDRESS,
+          artifact: "MockERC20",
+          deployedOnBlock: Number(rpc.TOKENLESS_DEPLOYMENT_BLOCK),
+          runtimeCodeHash: runtimeCodeHash(4),
+        },
+        TokenlessFeedbackBonus: {
+          address: rpc.TOKENLESS_FEEDBACK_BONUS_ADDRESS,
+          artifact: "TokenlessFeedbackBonus",
+          deployedOnBlock: Number(rpc.TOKENLESS_DEPLOYMENT_BLOCK),
+          runtimeCodeHash: runtimeCodeHash(6),
+        },
+        TokenlessPanel: {
+          address: rpc.TOKENLESS_PANEL_ADDRESS,
+          artifact: "TokenlessPanel",
+          deployedOnBlock: Number(rpc.TOKENLESS_DEPLOYMENT_BLOCK),
+          runtimeCodeHash: runtimeCodeHash(1),
+        },
+        X402PanelSubmitter: {
+          address: rpc.TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS,
+          artifact: "X402PanelSubmitter",
+          deployedOnBlock: Number(rpc.TOKENLESS_DEPLOYMENT_BLOCK),
+          runtimeCodeHash: runtimeCodeHash(3),
+        },
+      },
+    },
+  };
+};
 const tokenlessTestPlatformSecrets = () => {
   const platformSecrets = tokenlessEuDeploymentManifest.resources.platformSecrets;
   return {
@@ -69,6 +124,23 @@ const tokenlessTestPlatformSecrets = () => {
     TOKENLESS_ARTIFACT_WRAPPING_KEYS: JSON.stringify({ "artifact-v1": encodedKey(19) }),
   };
 };
+const tokenlessHostedEnv = () => ({
+  VERCEL: "1",
+  VERCEL_ENV: "production",
+  VERCEL_PROJECT_ID: "prj_H6C2pfWKEAupFroHbLfzhquaNCLm",
+  VERCEL_PROJECT_NAME: "rateloop-tokenless",
+  VERCEL_GIT_COMMIT_REF: "tokenless",
+  VERCEL_GIT_COMMIT_SHA: GIT_SHA,
+  APP_URL: "https://rateloop-tokenless.vercel.app",
+  NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
+  TOKENLESS_NETWORK_PANELS_ENABLED: "false",
+  ...tokenlessTestRpc(),
+  ...tokenlessTestPlatformSecrets(),
+  ...tokenlessTestDatabase(),
+  TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: encodedKey(18),
+  ...tokenlessGoldKeyring(),
+  ...tokenlessTestOperationalSecrets(),
+});
 
 function validFixture() {
   const panel = address(1);
@@ -88,6 +160,7 @@ function validFixture() {
   Object.assign(env, {
     VERCEL_ENV: "production",
     VERCEL_GIT_COMMIT_REF: "main",
+    VERCEL_GIT_COMMIT_SHA: GIT_SHA,
     TOKENLESS_DATA_PLANE_MODE: "eu-processing-region",
     TOKENLESS_HOME_REGION: "eu",
     TOKENLESS_EU_MANIFEST_SHA256: euManifestDigest,
@@ -250,16 +323,50 @@ function validFixture() {
     activeRegistry: {
       84532: {
         schemaVersion: "rateloop-tokenless-deployment-v4",
+        version: 4,
         deploymentComplete: true,
+        deploymentProfile: "test",
+        networkName: "baseSepolia",
+        chainId: 84532,
         deploymentBlockNumber: 123,
         deploymentKey,
+        feeRecipient: address(5),
         beaconVerifier,
+        beaconVerifierArtifact: "QuicknetTBeaconVerifier",
+        beaconVerifierDeployedOnBlock: 123,
+        beaconVerifierRuntimeCodeHash: runtimeCodeHash(7),
+        runtimeCodeEvidenceComplete: true,
         contracts: {
-          TokenlessPanel: { address: panel },
-          CredentialIssuer: { address: issuer },
-          X402PanelSubmitter: { address: adapter },
-          TokenlessFeedbackBonus: { address: feedbackBonus },
-          TestUSDC: { address: usdc },
+          TokenlessPanel: {
+            address: panel,
+            artifact: "TokenlessPanel",
+            deployedOnBlock: 123,
+            runtimeCodeHash: runtimeCodeHash(1),
+          },
+          CredentialIssuer: {
+            address: issuer,
+            artifact: "CredentialIssuer",
+            deployedOnBlock: 123,
+            runtimeCodeHash: runtimeCodeHash(2),
+          },
+          X402PanelSubmitter: {
+            address: adapter,
+            artifact: "X402PanelSubmitter",
+            deployedOnBlock: 123,
+            runtimeCodeHash: runtimeCodeHash(3),
+          },
+          TokenlessFeedbackBonus: {
+            address: feedbackBonus,
+            artifact: "TokenlessFeedbackBonus",
+            deployedOnBlock: 123,
+            runtimeCodeHash: runtimeCodeHash(6),
+          },
+          TestUSDC: {
+            address: usdc,
+            artifact: "MockERC20",
+            deployedOnBlock: 123,
+            runtimeCodeHash: runtimeCodeHash(4),
+          },
         },
       },
     },
@@ -346,37 +453,25 @@ test("main hosted builds fail closed while local builds skip the release gate", 
     { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "main" },
     { VERCEL: "1", VERCEL_GIT_COMMIT_REF: "main" },
   ]) {
-    const errors = validateTokenlessProductionReadiness({ env, activeRegistry: {} });
+    const errors = validateTokenlessProductionReadiness({ env, activeRegistry: tokenlessTestRegistry() });
     assert.match(errors.join("\n"), /APP_URL is required for a hosted release/);
     assert.match(errors.join("\n"), /paid assignment reservation/i);
   }
-  assert.deepEqual(validateTokenlessProductionReadiness({ env: {}, activeRegistry: {} }), []);
+  assert.deepEqual(validateTokenlessProductionReadiness({ env: {}, activeRegistry: tokenlessTestRegistry() }), []);
 });
 
 test("the tokenless branch automatically uses the isolated test deployment gate", () => {
-  const env = {
-    VERCEL: "1",
-    VERCEL_ENV: "production",
-    VERCEL_PROJECT_ID: "prj_H6C2pfWKEAupFroHbLfzhquaNCLm",
-    VERCEL_PROJECT_NAME: "rateloop-tokenless",
-    VERCEL_GIT_COMMIT_REF: "tokenless",
-    APP_URL: "https://rateloop-tokenless.vercel.app",
-    NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
-    TOKENLESS_NETWORK_PANELS_ENABLED: "false",
-    ...tokenlessTestRpc(),
-    ...tokenlessTestPlatformSecrets(),
-    ...tokenlessTestDatabase(),
-    TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: encodedKey(18),
-    ...tokenlessGoldKeyring(),
-    ...tokenlessTestOperationalSecrets(),
-  };
-  assert.deepEqual(validateTokenlessProductionReadiness({ env, activeRegistry: {} }), []);
+  const env = tokenlessHostedEnv();
+  assert.deepEqual(validateTokenlessProductionReadiness({ env, activeRegistry: tokenlessTestRegistry() }), []);
   const disabledWithoutWalletScreening = { ...env };
   delete disabledWithoutWalletScreening.TOKENLESS_WALLET_SCREENING_PROVIDER_ID;
   delete disabledWithoutWalletScreening.TOKENLESS_WALLET_SCREENING_PROVIDER_URL;
   delete disabledWithoutWalletScreening.TOKENLESS_WALLET_SCREENING_PROVIDER_SECRET;
   assert.deepEqual(
-    validateTokenlessProductionReadiness({ env: disabledWithoutWalletScreening, activeRegistry: {} }),
+    validateTokenlessProductionReadiness({
+      env: disabledWithoutWalletScreening,
+      activeRegistry: tokenlessTestRegistry(),
+    }),
     [],
   );
   const activated = {
@@ -397,13 +492,19 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
     WORLD_ID_ENVIRONMENT: "production",
   };
   activated.NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE = derivePaidLaneActivationReference(activated);
-  assert.deepEqual(validateTokenlessProductionReadiness({ env: activated, activeRegistry: {} }), []);
+  assert.deepEqual(
+    validateTokenlessProductionReadiness({ env: activated, activeRegistry: tokenlessTestRegistry() }),
+    [],
+  );
   const activatedWithoutWalletScreening = { ...activated };
   delete activatedWithoutWalletScreening.TOKENLESS_WALLET_SCREENING_PROVIDER_ID;
   delete activatedWithoutWalletScreening.TOKENLESS_WALLET_SCREENING_PROVIDER_URL;
   delete activatedWithoutWalletScreening.TOKENLESS_WALLET_SCREENING_PROVIDER_SECRET;
   assert.match(
-    validateTokenlessProductionReadiness({ env: activatedWithoutWalletScreening, activeRegistry: {} }).join("\n"),
+    validateTokenlessProductionReadiness({
+      env: activatedWithoutWalletScreening,
+      activeRegistry: tokenlessTestRegistry(),
+    }).join("\n"),
     /TOKENLESS_WALLET_SCREENING_PROVIDER_ID is required for paid eligibility/u,
   );
   const publicOnlyActivation = {
@@ -413,7 +514,9 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
   publicOnlyActivation.NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE =
     derivePaidLaneActivationReference(publicOnlyActivation);
   assert.match(
-    validateTokenlessProductionReadiness({ env: publicOnlyActivation, activeRegistry: {} }).join("\n"),
+    validateTokenlessProductionReadiness({ env: publicOnlyActivation, activeRegistry: tokenlessTestRegistry() }).join(
+      "\n",
+    ),
     /TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED and NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED must match/u,
   );
   const hybridActivated = {
@@ -424,26 +527,32 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
   hybridActivated.NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE =
     derivePaidLaneActivationReference(hybridActivated);
   assert.match(
-    validateTokenlessProductionReadiness({ env: hybridActivated, activeRegistry: {} }).join("\n"),
+    validateTokenlessProductionReadiness({ env: hybridActivated, activeRegistry: tokenlessTestRegistry() }).join("\n"),
     /hybrid_public_safe is unavailable/u,
   );
   assert.match(
     validateTokenlessProductionReadiness({
       env: { ...env, STRIPE_SECRET_KEY: `sk_live_${"a".repeat(32)}` },
-      activeRegistry: {},
+      activeRegistry: tokenlessTestRegistry(),
     }).join("\n"),
     /must not use Stripe live mode on the Base Sepolia tokenless test deployment/i,
   );
   assert.match(
     validateTokenlessProductionReadiness({
       env: { ...env, STRIPE_SECRET_KEY: `rk_live_${"a".repeat(32)}` },
-      activeRegistry: {},
+      activeRegistry: tokenlessTestRegistry(),
     }).join("\n"),
     /must not use Stripe live mode on the Base Sepolia tokenless test deployment/i,
   );
   const cliDeploymentEnv = { ...env };
   delete cliDeploymentEnv.VERCEL_GIT_COMMIT_REF;
-  assert.deepEqual(validateTokenlessProductionReadiness({ env: cliDeploymentEnv, activeRegistry: {} }), []);
+  assert.match(
+    validateTokenlessProductionReadiness({
+      env: cliDeploymentEnv,
+      activeRegistry: tokenlessTestRegistry(),
+    }).join("\n"),
+    /requires the tokenless Git branch/u,
+  );
 
   for (const [name, invalidValue, expected] of [
     ["VERCEL_ENV", "preview", /production target/i],
@@ -456,19 +565,24 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
     ["TOKENLESS_BEACON_FAILURE_GRACE_SECONDS", "21599", /must be at least 21600 seconds/i],
   ]) {
     const invalid = { ...env, [name]: invalidValue };
-    assert.match(validateTokenlessProductionReadiness({ env: invalid, activeRegistry: {} }).join("\n"), expected);
+    assert.match(
+      validateTokenlessProductionReadiness({ env: invalid, activeRegistry: tokenlessTestRegistry() }).join("\n"),
+      expected,
+    );
   }
 
   const missingFeeRecipient = { ...env };
   delete missingFeeRecipient.TOKENLESS_FEE_RECIPIENT;
   assert.match(
-    validateTokenlessProductionReadiness({ env: missingFeeRecipient, activeRegistry: {} }).join("\n"),
+    validateTokenlessProductionReadiness({ env: missingFeeRecipient, activeRegistry: tokenlessTestRegistry() }).join(
+      "\n",
+    ),
     /TOKENLESS_FEE_RECIPIENT must be a non-zero EVM address/,
   );
   assert.match(
     validateTokenlessProductionReadiness({
       env: { ...env, TOKENLESS_SANCTIONS_MATCH_RETENTION_DAYS: "30" },
-      activeRegistry: {},
+      activeRegistry: tokenlessTestRegistry(),
     }).join("\n"),
     /TOKENLESS_SANCTIONS_MATCH_RETENTION_DAYS must be an integer from 365 to 3650/,
   );
@@ -478,7 +592,7 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
         ...env,
         TOKENLESS_FEEDBACK_BONUS_ADDRESS: "0xa0c1f730aad6b7cb78eAEacA39743F6430Dc57b0",
       },
-      activeRegistry: {},
+      activeRegistry: tokenlessTestRegistry(),
     }).join("\n"),
     /TOKENLESS_FEEDBACK_BONUS_ADDRESS must be a non-zero EVM address/,
   );
@@ -486,11 +600,14 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
     const missingSecret = { ...env };
     delete missingSecret[name];
     assert.match(
-      validateTokenlessProductionReadiness({ env: missingSecret, activeRegistry: {} }).join("\n"),
+      validateTokenlessProductionReadiness({ env: missingSecret, activeRegistry: tokenlessTestRegistry() }).join("\n"),
       new RegExp(`${name} is required`),
     );
     assert.match(
-      validateTokenlessProductionReadiness({ env: { ...env, [name]: "too-short" }, activeRegistry: {} }).join("\n"),
+      validateTokenlessProductionReadiness({
+        env: { ...env, [name]: "too-short" },
+        activeRegistry: tokenlessTestRegistry(),
+      }).join("\n"),
       new RegExp(`${name} must contain at least 32 characters`),
     );
   }
@@ -498,31 +615,139 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
     const missingSecret = { ...env };
     delete missingSecret[name];
     assert.match(
-      validateTokenlessProductionReadiness({ env: missingSecret, activeRegistry: {} }).join("\n"),
+      validateTokenlessProductionReadiness({ env: missingSecret, activeRegistry: tokenlessTestRegistry() }).join("\n"),
       new RegExp(`${name} must`),
     );
   }
   assert.match(
     validateTokenlessProductionReadiness({
       env: { ...env, TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY: "too-short" },
-      activeRegistry: {},
+      activeRegistry: tokenlessTestRegistry(),
     }).join("\n"),
     /TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY must encode exactly 32 bytes/u,
   );
   assert.match(
     validateTokenlessProductionReadiness({
       env: { ...env, TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY_VERSION: "contains spaces" },
-      activeRegistry: {},
+      activeRegistry: tokenlessTestRegistry(),
     }).join("\n"),
     /TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY_VERSION must be a stable version label/u,
   );
 
   const mainErrors = validateTokenlessProductionReadiness({
     env: { ...env, VERCEL_GIT_COMMIT_REF: "main" },
-    activeRegistry: {},
+    activeRegistry: tokenlessTestRegistry(),
   }).join("\n");
   assert.match(mainErrors, /paid assignment reservation/i);
   assert.match(mainErrors, /APP_URL is required for a hosted release|TOKENLESS_DATA_PLANE_MODE/u);
+});
+
+test("tokenless and production hosted gates share one exact deployment-bundle invariant", () => {
+  const fixtures = [
+    {
+      label: "tokenless",
+      value: {
+        env: tokenlessHostedEnv(),
+        activeRegistry: tokenlessTestRegistry(),
+      },
+    },
+    { label: "production", value: validFixture() },
+  ];
+  const envPerturbations = [
+    ["schema", "TOKENLESS_DEPLOYMENT_SCHEMA", "rateloop-tokenless-deployment-v3"],
+    ["chain", "TOKENLESS_CHAIN_ID", "84531"],
+    ["key", "TOKENLESS_DEPLOYMENT_KEY", "tokenless-v4:84532:mixed"],
+    ["block", "TOKENLESS_DEPLOYMENT_BLOCK", "124"],
+    ["panel", "TOKENLESS_PANEL_ADDRESS", address(91)],
+    ["credential issuer", "TOKENLESS_CREDENTIAL_ISSUER_ADDRESS", address(92)],
+    ["x402 submitter", "TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS", address(93)],
+    ["feedback bonus", "TOKENLESS_FEEDBACK_BONUS_ADDRESS", address(94)],
+    ["beacon verifier", "TOKENLESS_BEACON_VERIFIER_ADDRESS", address(95)],
+    ["USDC", "TOKENLESS_USDC_ADDRESS", address(96)],
+    ["fee recipient", "TOKENLESS_FEE_RECIPIENT", address(97)],
+  ];
+
+  for (const fixture of fixtures) {
+    assert.deepEqual(
+      validateTokenlessProductionReadiness(fixture.value),
+      [],
+      `${fixture.label} fixture must start valid`,
+    );
+    for (const [field, name, invalidValue] of envPerturbations) {
+      const candidate = structuredClone(fixture.value);
+      candidate.env[name] = invalidValue;
+      assert.match(
+        validateTokenlessProductionReadiness(candidate).join("\n"),
+        /exactly match one complete active tokenless v4 registry entry/u,
+        `${fixture.label} must reject a mismatched ${field}`,
+      );
+    }
+  }
+});
+
+test("exact deployment readiness requires complete runtime-code evidence and a registry-bound fee recipient", () => {
+  const mutations = [
+    ["fee recipient", active => delete active.feeRecipient],
+    ["runtime evidence marker", active => delete active.runtimeCodeEvidenceComplete],
+    ["beacon verifier code hash", active => delete active.beaconVerifierRuntimeCodeHash],
+    ["credential issuer code hash", active => delete active.contracts.CredentialIssuer.runtimeCodeHash],
+    ["test USDC code hash", active => delete active.contracts.TestUSDC.runtimeCodeHash],
+    ["feedback bonus code hash", active => delete active.contracts.TokenlessFeedbackBonus.runtimeCodeHash],
+    ["panel code hash", active => delete active.contracts.TokenlessPanel.runtimeCodeHash],
+    ["x402 submitter code hash", active => delete active.contracts.X402PanelSubmitter.runtimeCodeHash],
+  ];
+
+  for (const [field, mutate] of mutations) {
+    const activeRegistry = tokenlessTestRegistry();
+    mutate(activeRegistry[84532]);
+    assert.match(
+      validateTokenlessProductionReadiness({
+        env: tokenlessHostedEnv(),
+        activeRegistry,
+      }).join("\n"),
+      /exactly match one complete active tokenless v4 registry entry/u,
+      `tokenless readiness must reject a registry missing ${field}`,
+    );
+  }
+});
+
+test("tokenless hosted readiness requires explicit branch and immutable commit evidence", () => {
+  for (const [field, mutate, expected] of [
+    ["missing ref", env => delete env.VERCEL_GIT_COMMIT_REF, /requires the tokenless Git branch/u],
+    [
+      "mismatched ref",
+      env => {
+        env.VERCEL_GIT_COMMIT_REF = "feature/unreviewed";
+      },
+      /requires the tokenless Git branch/u,
+    ],
+    ["missing SHA", env => delete env.VERCEL_GIT_COMMIT_SHA, /requires the full lowercase Git commit SHA/u],
+    [
+      "malformed SHA",
+      env => {
+        env.VERCEL_GIT_COMMIT_SHA = "A".repeat(40);
+      },
+      /requires the full lowercase Git commit SHA/u,
+    ],
+  ]) {
+    const env = tokenlessHostedEnv();
+    mutate(env);
+    assert.match(
+      validateTokenlessProductionReadiness({
+        env,
+        activeRegistry: tokenlessTestRegistry(),
+      }).join("\n"),
+      expected,
+      `tokenless readiness must reject ${field}`,
+    );
+  }
+
+  const production = validFixture();
+  delete production.env.VERCEL_GIT_COMMIT_SHA;
+  assert.match(
+    validateTokenlessProductionReadiness(production).join("\n"),
+    /requires the full lowercase Git commit SHA/u,
+  );
 });
 
 test("the tokenless hosted gate inventories platform-secret custody without a residency claim", () => {
@@ -533,6 +758,7 @@ test("the tokenless hosted gate inventories platform-secret custody without a re
     VERCEL_PROJECT_ID: "prj_H6C2pfWKEAupFroHbLfzhquaNCLm",
     VERCEL_PROJECT_NAME: "rateloop-tokenless",
     VERCEL_GIT_COMMIT_REF: "tokenless",
+    VERCEL_GIT_COMMIT_SHA: GIT_SHA,
     APP_URL: "https://rateloop-tokenless.vercel.app",
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
     TOKENLESS_NETWORK_PANELS_ENABLED: "false",
@@ -546,13 +772,13 @@ test("the tokenless hosted gate inventories platform-secret custody without a re
   const missingResource = { ...env };
   delete missingResource[platformSecrets.resourceIdEnv];
   assert.match(
-    validateTokenlessProductionReadiness({ env: missingResource, activeRegistry: {} }).join("\n"),
+    validateTokenlessProductionReadiness({ env: missingResource, activeRegistry: tokenlessTestRegistry() }).join("\n"),
     new RegExp(`${platformSecrets.resourceIdEnv} is required`),
   );
   assert.match(
     validateTokenlessProductionReadiness({
       env: { ...env, [platformSecrets.providerEnv]: "local" },
-      activeRegistry: {},
+      activeRegistry: tokenlessTestRegistry(),
     }).join("\n"),
     new RegExp(`${platformSecrets.providerEnv} must select Vercel and Railway platform-secret custody`),
   );
@@ -568,6 +794,7 @@ test("the isolated review deployment may retain its existing local vault without
     VERCEL_PROJECT_ID: "prj_H6C2pfWKEAupFroHbLfzhquaNCLm",
     VERCEL_PROJECT_NAME: "rateloop-tokenless",
     VERCEL_GIT_COMMIT_REF: "tokenless",
+    VERCEL_GIT_COMMIT_SHA: GIT_SHA,
     APP_URL: "https://rateloop-tokenless.vercel.app",
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
     TOKENLESS_NETWORK_PANELS_ENABLED: "false",
@@ -578,18 +805,18 @@ test("the isolated review deployment may retain its existing local vault without
     ...tokenlessGoldKeyring(),
     ...tokenlessTestOperationalSecrets(),
   };
-  assert.deepEqual(validateTokenlessProductionReadiness({ env, activeRegistry: {} }), []);
+  assert.deepEqual(validateTokenlessProductionReadiness({ env, activeRegistry: tokenlessTestRegistry() }), []);
   assert.match(
     validateTokenlessProductionReadiness({
       env: { ...env, ...tokenlessTestPlatformSecrets() },
-      activeRegistry: {},
+      activeRegistry: tokenlessTestRegistry(),
     }).join("\n"),
     /Configure exactly one tokenless test vault key source/,
   );
   assert.match(
     validateTokenlessProductionReadiness({
       env: { ...env, VERCEL_GIT_COMMIT_REF: "main" },
-      activeRegistry: {},
+      activeRegistry: tokenlessTestRegistry(),
     }).join("\n"),
     /TOKENLESS_ARTIFACT_MASTER_KEY is migration-only/,
   );
@@ -602,6 +829,7 @@ test("the tokenless test deployment still rejects browser-exposed secrets", () =
     VERCEL_PROJECT_ID: "prj_H6C2pfWKEAupFroHbLfzhquaNCLm",
     VERCEL_PROJECT_NAME: "rateloop-tokenless",
     VERCEL_GIT_COMMIT_REF: "tokenless",
+    VERCEL_GIT_COMMIT_SHA: GIT_SHA,
     APP_URL: "https://rateloop-tokenless.vercel.app",
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
     TOKENLESS_NETWORK_PANELS_ENABLED: "false",
@@ -618,7 +846,7 @@ test("the tokenless test deployment still rejects browser-exposed secrets", () =
     NEXT_PUBLIC_TOKENLESS_KMS_KEY_RESOURCE: "must-not-ship-kms-resource",
     NEXT_PUBLIC_TOKENLESS_EXPERTISE_OPERATOR_ACCOUNTS: "must-not-ship-expertise-accounts",
   };
-  const output = validateTokenlessProductionReadiness({ env, activeRegistry: {} }).join("\n");
+  const output = validateTokenlessProductionReadiness({ env, activeRegistry: tokenlessTestRegistry() }).join("\n");
   assert.match(output, /NEXT_PUBLIC_TOKENLESS_COMPLIANCE_OPERATOR_SECRET is forbidden/);
   assert.match(output, /NEXT_PUBLIC_TOKENLESS_PIPELINE_TOKEN is forbidden/);
   assert.match(output, /NEXT_PUBLIC_TOKENLESS_GOLD_INJECTION_KEY_VERSION is forbidden/);
@@ -635,6 +863,7 @@ test("the tokenless test deployment rejects a keeper key shared with another sig
     VERCEL_PROJECT_ID: "prj_H6C2pfWKEAupFroHbLfzhquaNCLm",
     VERCEL_PROJECT_NAME: "rateloop-tokenless",
     VERCEL_GIT_COMMIT_REF: "tokenless",
+    VERCEL_GIT_COMMIT_SHA: GIT_SHA,
     APP_URL: "https://rateloop-tokenless.vercel.app",
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
     TOKENLESS_NETWORK_PANELS_ENABLED: "false",
@@ -650,7 +879,7 @@ test("the tokenless test deployment rejects a keeper key shared with another sig
   const shared = `0x${"c".repeat(64)}`;
   const reusedKeeper = validateTokenlessProductionReadiness({
     env: { ...base, TOKENLESS_PREPAID_FUNDER_PRIVATE_KEY: shared, TOKENLESS_KEEPER_PRIVATE_KEY: shared },
-    activeRegistry: {},
+    activeRegistry: tokenlessTestRegistry(),
   }).join("\n");
   assert.match(reusedKeeper, /Tokenless test key roles must be distinct/u);
   assert.match(reusedKeeper, /TOKENLESS_KEEPER_PRIVATE_KEY/u);
@@ -661,7 +890,7 @@ test("the tokenless test deployment rejects a keeper key shared with another sig
       TOKENLESS_X402_RELAYER_PRIVATE_KEY: shared,
       TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY: shared,
     },
-    activeRegistry: {},
+    activeRegistry: tokenlessTestRegistry(),
   }).join("\n");
   assert.match(reusedEvidence, /Tokenless test key roles must be distinct/u);
   assert.match(reusedEvidence, /TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY/u);
@@ -674,6 +903,7 @@ test("the tokenless test deployment requires a dedicated server-only media previ
     VERCEL_PROJECT_ID: "prj_H6C2pfWKEAupFroHbLfzhquaNCLm",
     VERCEL_PROJECT_NAME: "rateloop-tokenless",
     VERCEL_GIT_COMMIT_REF: "tokenless",
+    VERCEL_GIT_COMMIT_SHA: GIT_SHA,
     APP_URL: "https://rateloop-tokenless.vercel.app",
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
     TOKENLESS_NETWORK_PANELS_ENABLED: "false",
@@ -684,20 +914,20 @@ test("the tokenless test deployment requires a dedicated server-only media previ
     ...tokenlessTestOperationalSecrets(),
   };
   assert.match(
-    validateTokenlessProductionReadiness({ env: base, activeRegistry: {} }).join("\n"),
+    validateTokenlessProductionReadiness({ env: base, activeRegistry: tokenlessTestRegistry() }).join("\n"),
     /TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET is required/u,
   );
   assert.match(
     validateTokenlessProductionReadiness({
       env: { ...base, TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: "too-short" },
-      activeRegistry: {},
+      activeRegistry: tokenlessTestRegistry(),
     }).join("\n"),
     /must encode exactly 32 bytes/u,
   );
   assert.match(
     validateTokenlessProductionReadiness({
       env: { ...base, TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: `${encodedKey(18)}=` },
-      activeRegistry: {},
+      activeRegistry: tokenlessTestRegistry(),
     }).join("\n"),
     /must encode exactly 32 bytes/u,
   );
@@ -705,7 +935,7 @@ test("the tokenless test deployment requires a dedicated server-only media previ
     assert.deepEqual(
       validateTokenlessProductionReadiness({
         env: { ...base, TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: secret },
-        activeRegistry: {},
+        activeRegistry: tokenlessTestRegistry(),
       }),
       [],
     );
@@ -718,7 +948,7 @@ test("the tokenless test deployment requires a dedicated server-only media previ
         TOKENLESS_MCP_RATE_LIMIT_SECRET: reused.toString("utf8"),
         TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: reused.toString("base64url"),
       },
-      activeRegistry: {},
+      activeRegistry: tokenlessTestRegistry(),
     }).join("\n"),
     /Tokenless test key roles must be distinct/u,
   );
@@ -728,7 +958,7 @@ test("the tokenless test deployment requires a dedicated server-only media previ
       NEXT_PUBLIC_TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: "do-not-print-preview-secret",
       TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: encodedKey(18),
     },
-    activeRegistry: {},
+    activeRegistry: tokenlessTestRegistry(),
   }).join("\n");
   assert.match(exposed, /NEXT_PUBLIC_TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET is forbidden/u);
   assert.doesNotMatch(exposed, /do-not-print-preview-secret/u);
@@ -741,6 +971,7 @@ test("the tokenless test deployment validates the active gold-injection keyring 
     VERCEL_PROJECT_ID: "prj_H6C2pfWKEAupFroHbLfzhquaNCLm",
     VERCEL_PROJECT_NAME: "rateloop-tokenless",
     VERCEL_GIT_COMMIT_REF: "tokenless",
+    VERCEL_GIT_COMMIT_SHA: GIT_SHA,
     APP_URL: "https://rateloop-tokenless.vercel.app",
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
     TOKENLESS_NETWORK_PANELS_ENABLED: "false",
@@ -750,12 +981,17 @@ test("the tokenless test deployment validates the active gold-injection keyring 
     TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: encodedKey(18),
     ...tokenlessTestOperationalSecrets(),
   };
-  const missing = validateTokenlessProductionReadiness({ env: base, activeRegistry: {} }).join("\n");
+  const missing = validateTokenlessProductionReadiness({ env: base, activeRegistry: tokenlessTestRegistry() }).join(
+    "\n",
+  );
   assert.match(missing, /TOKENLESS_GOLD_INJECTION_KEY_VERSION is required/u);
   assert.match(missing, /TOKENLESS_GOLD_INJECTION_KEYS is required/u);
 
   assert.deepEqual(
-    validateTokenlessProductionReadiness({ env: { ...base, ...tokenlessGoldKeyring() }, activeRegistry: {} }),
+    validateTokenlessProductionReadiness({
+      env: { ...base, ...tokenlessGoldKeyring() },
+      activeRegistry: tokenlessTestRegistry(),
+    }),
     [],
   );
   assert.match(
@@ -765,7 +1001,7 @@ test("the tokenless test deployment validates the active gold-injection keyring 
         TOKENLESS_GOLD_INJECTION_KEY_VERSION: "v2",
         TOKENLESS_GOLD_INJECTION_KEYS: JSON.stringify({ v1: encodedKey(16) }),
       },
-      activeRegistry: {},
+      activeRegistry: tokenlessTestRegistry(),
     }).join("\n"),
     /must contain the configured 32-byte current key/u,
   );
@@ -775,7 +1011,7 @@ test("the tokenless test deployment validates the active gold-injection keyring 
         ...base,
         ...tokenlessGoldKeyring(18),
       },
-      activeRegistry: {},
+      activeRegistry: tokenlessTestRegistry(),
     }).join("\n"),
     /Tokenless test key roles must be distinct: TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET, TOKENLESS_GOLD_INJECTION/u,
   );
@@ -788,6 +1024,7 @@ test("test and production deployments refuse server-held Feedback Bonus award au
     VERCEL_PROJECT_ID: "prj_H6C2pfWKEAupFroHbLfzhquaNCLm",
     VERCEL_PROJECT_NAME: "rateloop-tokenless",
     VERCEL_GIT_COMMIT_REF: "tokenless",
+    VERCEL_GIT_COMMIT_SHA: GIT_SHA,
     APP_URL: "https://rateloop-tokenless.vercel.app",
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
     TOKENLESS_NETWORK_PANELS_ENABLED: "false",
@@ -799,7 +1036,10 @@ test("test and production deployments refuse server-held Feedback Bonus award au
     TOKENLESS_FEEDBACK_BONUS_AWARDER_PRIVATE_KEY: "server-must-not-custody-human-awarder",
     NEXT_PUBLIC_TOKENLESS_FEEDBACK_BONUS_AWARD_WORKER_PRIVATE_KEY: "browser-must-not-see-worker-secret",
   };
-  const testOutput = validateTokenlessProductionReadiness({ env: testEnv, activeRegistry: {} }).join("\n");
+  const testOutput = validateTokenlessProductionReadiness({
+    env: testEnv,
+    activeRegistry: tokenlessTestRegistry(),
+  }).join("\n");
   assert.match(testOutput, /TOKENLESS_FEEDBACK_BONUS_AWARDER_PRIVATE_KEY is forbidden/);
   assert.match(testOutput, /NEXT_PUBLIC_TOKENLESS_FEEDBACK_BONUS_AWARD_WORKER_PRIVATE_KEY is forbidden/);
   assert.doesNotMatch(testOutput, /server-must-not-custody-human-awarder/);

@@ -67,7 +67,8 @@ export async function attachTokenlessRuntimeCodeEvidence(
   ) {
     throw new Error("BeaconVerifier has no exact deployed runtime bytecode.");
   }
-  const observedBeaconVerifierRuntimeCodeHash = keccak256(beaconCode).toLowerCase();
+  const observedBeaconVerifierRuntimeCodeHash =
+    keccak256(beaconCode).toLowerCase();
   const expectedBeaconVerifierHash = normalizeCodeHash(
     expectedBeaconVerifierRuntimeCodeHash,
     "compiled QuicknetTBeaconVerifier runtimeCodeHash",
@@ -77,7 +78,8 @@ export async function attachTokenlessRuntimeCodeEvidence(
       `QuicknetTBeaconVerifier runtime bytecode hash mismatch: compiled ${expectedBeaconVerifierHash}, deployed ${observedBeaconVerifierRuntimeCodeHash}.`,
     );
   }
-  evidenced.beaconVerifierRuntimeCodeHash = observedBeaconVerifierRuntimeCodeHash;
+  evidenced.beaconVerifierRuntimeCodeHash =
+    observedBeaconVerifierRuntimeCodeHash;
   evidenced.runtimeCodeEvidenceComplete = true;
   return validateTokenlessDeploymentArtifact(evidenced, {
     requireRuntimeCodeEvidence: true,
@@ -253,6 +255,7 @@ export function reconstructTokenlessDeploymentFromBroadcast(
   broadcast,
   {
     chainId = TOKENLESS_BASE_SEPOLIA_CHAIN_ID,
+    feeRecipient,
     networkName = TOKENLESS_BASE_SEPOLIA_NETWORK,
   } = {},
 ) {
@@ -266,6 +269,7 @@ export function reconstructTokenlessDeploymentFromBroadcast(
       `${TOKENLESS_DEPLOYMENT_KEY_VERSION} networkName must be ${TOKENLESS_BASE_SEPOLIA_NETWORK}.`,
     );
   }
+  const configuredFeeRecipient = normalizeAddress(feeRecipient, "feeRecipient");
 
   const creates = findCreates(broadcast);
   const unexpectedNames = creates
@@ -368,6 +372,7 @@ export function reconstructTokenlessDeploymentFromBroadcast(
     chainId,
     deploymentBlockNumber,
     deploymentKey,
+    feeRecipient: configuredFeeRecipient,
     beaconVerifier,
     beaconVerifierArtifact: BEACON_VERIFIER_ARTIFACT,
     beaconVerifierDeployedOnBlock: beaconVerifierDeployment.blockNumber,
@@ -413,6 +418,7 @@ export function validateTokenlessDeploymentArtifact(
     throw new Error("Tokenless deployment artifact is not for Base Sepolia.");
   }
   normalizeBlockNumber(artifact.deploymentBlockNumber, "deploymentBlockNumber");
+  normalizeAddress(artifact.feeRecipient, "feeRecipient");
   normalizeAddress(artifact.beaconVerifier, "beaconVerifier");
   if (artifact.beaconVerifierArtifact !== BEACON_VERIFIER_ARTIFACT) {
     throw new Error(
@@ -445,7 +451,9 @@ export function validateTokenlessDeploymentArtifact(
     (artifact.runtimeCodeEvidenceComplete !== true ||
       artifact.beaconVerifierRuntimeCodeHash === undefined)
   ) {
-    throw new Error("Tokenless deployment runtime bytecode evidence is incomplete.");
+    throw new Error(
+      "Tokenless deployment runtime bytecode evidence is incomplete.",
+    );
   }
 
   const contracts = artifact.contracts;
@@ -496,12 +504,17 @@ export function validateTokenlessDeploymentArtifact(
   // skip earlier constructor events.
   const minimumDeployedBlock = Math.min(
     ...Object.values(contracts).map((contract) =>
-      normalizeBlockNumber(contract.deployedOnBlock, "contract deployedOnBlock"),
+      normalizeBlockNumber(
+        contract.deployedOnBlock,
+        "contract deployedOnBlock",
+      ),
     ),
   );
   if (
-    normalizeBlockNumber(artifact.deploymentBlockNumber, "deploymentBlockNumber") !==
-    minimumDeployedBlock
+    normalizeBlockNumber(
+      artifact.deploymentBlockNumber,
+      "deploymentBlockNumber",
+    ) !== minimumDeployedBlock
   ) {
     throw new Error(
       "Tokenless deployment block must equal the earliest contract deployment block.",

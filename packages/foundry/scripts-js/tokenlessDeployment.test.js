@@ -17,13 +17,22 @@ import {
   buildTokenlessSourceAbiFiles,
 } from "./generateTokenlessArtifacts.js";
 import {
-  reconstructTokenlessDeploymentFromBroadcast,
+  reconstructTokenlessDeploymentFromBroadcast as reconstructRawTokenlessDeploymentFromBroadcast,
   TOKENLESS_DEPLOYMENT_SCHEMA,
   validateTokenlessDeploymentArtifact,
 } from "./tokenlessDeployment.js";
 
 function address(index) {
   return `0x${index.toString(16).padStart(40, "0")}`;
+}
+
+const FEE_RECIPIENT = address(50);
+
+function reconstructTokenlessDeploymentFromBroadcast(broadcast, options = {}) {
+  return reconstructRawTokenlessDeploymentFromBroadcast(broadcast, {
+    feeRecipient: FEE_RECIPIENT,
+    ...options,
+  });
 }
 
 function hash(index) {
@@ -67,12 +76,7 @@ function completeBroadcast({ includeAdapter = false } = {}) {
       [address(10), address(11), "86400"],
       2,
     ),
-    createTransaction(
-      "QuicknetTBeaconVerifier",
-      address(6),
-      [],
-      3,
-    ),
+    createTransaction("QuicknetTBeaconVerifier", address(6), [], 3),
     createTransaction(
       "TokenlessPanel",
       panel,
@@ -106,6 +110,7 @@ test("reconstructs an isolated versioned tokenless Base Sepolia artifact", () =>
   assert.equal(artifact.networkName, "baseSepolia");
   assert.equal(artifact.deploymentProfile, "test");
   assert.equal(artifact.deploymentComplete, true);
+  assert.equal(artifact.feeRecipient, FEE_RECIPIENT);
   assert.equal(artifact.contracts.TestUSDC.artifact, "MockERC20");
   assert.equal(artifact.contracts.CredentialIssuer.address, address(2));
   assert.equal(artifact.contracts.TokenlessPanel.address, address(3));
@@ -120,6 +125,23 @@ test("reconstructs an isolated versioned tokenless Base Sepolia artifact", () =>
   assert.match(
     artifact.deploymentKey,
     /^tokenless-v4:84532:0x[0-9a-f]{40}:0x[0-9a-f]{40}:0x0{40}:0x[0-9a-f]{40}$/,
+  );
+});
+
+test("requires the operational fee recipient in every deployment artifact", () => {
+  assert.throws(
+    () => reconstructRawTokenlessDeploymentFromBroadcast(completeBroadcast()),
+    /feeRecipient must be a non-zero address/u,
+  );
+  const artifact =
+    reconstructTokenlessDeploymentFromBroadcast(completeBroadcast());
+  assert.throws(
+    () =>
+      validateTokenlessDeploymentArtifact({
+        ...artifact,
+        feeRecipient: undefined,
+      }),
+    /feeRecipient must be a non-zero address/u,
   );
 });
 
@@ -196,9 +218,10 @@ test("rejects missing required contracts and mixed broadcasts", () => {
   );
 
   const missingBeaconVerifier = completeBroadcast();
-  missingBeaconVerifier.transactions = missingBeaconVerifier.transactions.filter(
-    (transaction) => transaction.contractName !== "QuicknetTBeaconVerifier",
-  );
+  missingBeaconVerifier.transactions =
+    missingBeaconVerifier.transactions.filter(
+      (transaction) => transaction.contractName !== "QuicknetTBeaconVerifier",
+    );
   assert.throws(
     () => reconstructTokenlessDeploymentFromBroadcast(missingBeaconVerifier),
     /exactly one QuicknetTBeaconVerifier/,
@@ -328,6 +351,7 @@ test("export writes tokenless-v4 with exact runtime hashes and leaves historical
       broadcastPath,
       deploymentPath: tokenlessPath,
       targetNetwork: "baseSepolia",
+      feeRecipient: FEE_RECIPIENT,
       getBytecode: async (contractAddress) =>
         `0x60${contractAddress.slice(-2)}`,
       expectedBeaconVerifierRuntimeCodeHash: keccak256("0x6006"),
@@ -341,8 +365,12 @@ test("export writes tokenless-v4 with exact runtime hashes and leaves historical
     const exported = JSON.parse(readFileSync(tokenlessPath, "utf8"));
     assert.equal(exported.schemaVersion, TOKENLESS_DEPLOYMENT_SCHEMA);
     assert.equal(exported.chainId, 84532);
+    assert.equal(exported.feeRecipient, FEE_RECIPIENT);
     assert.equal(exported.runtimeCodeEvidenceComplete, true);
-    assert.match(exported.contracts.TokenlessPanel.runtimeCodeHash, /^0x[0-9a-f]{64}$/u);
+    assert.match(
+      exported.contracts.TokenlessPanel.runtimeCodeHash,
+      /^0x[0-9a-f]{64}$/u,
+    );
     assert.match(exported.beaconVerifierRuntimeCodeHash, /^0x[0-9a-f]{64}$/u);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -350,7 +378,9 @@ test("export writes tokenless-v4 with exact runtime hashes and leaves historical
 });
 
 test("export waits for a freshly deployed contract to propagate across the RPC", async () => {
-  const root = mkdtempSync(join(tmpdir(), "rateloop-tokenless-rpc-propagation-"));
+  const root = mkdtempSync(
+    join(tmpdir(), "rateloop-tokenless-rpc-propagation-"),
+  );
   try {
     const broadcastPath = join(root, "run-latest.json");
     const deploymentPath = join(
@@ -369,6 +399,7 @@ test("export waits for a freshly deployed contract to propagate across the RPC",
       broadcastPath,
       deploymentPath,
       targetNetwork: "baseSepolia",
+      feeRecipient: FEE_RECIPIENT,
       getBytecode: async (contractAddress) => {
         if (contractAddress === testUsdc && testUsdcLoads++ < 2) return "0x";
         return `0x60${contractAddress.slice(-2)}`;
@@ -398,7 +429,12 @@ test("export rejects deployed verifier bytecode that differs from the compiled r
   const root = mkdtempSync(join(tmpdir(), "rateloop-tokenless-verifier-hash-"));
   try {
     const broadcastPath = join(root, "run-latest.json");
-    const deploymentPath = join(root, "deployments", "tokenless-v4", "84532.json");
+    const deploymentPath = join(
+      root,
+      "deployments",
+      "tokenless-v4",
+      "84532.json",
+    );
     writeFileSync(broadcastPath, JSON.stringify(completeBroadcast()));
 
     await assert.rejects(
@@ -407,7 +443,9 @@ test("export rejects deployed verifier bytecode that differs from the compiled r
           broadcastPath,
           deploymentPath,
           targetNetwork: "baseSepolia",
-          getBytecode: async (contractAddress) => `0x60${contractAddress.slice(-2)}`,
+          feeRecipient: FEE_RECIPIENT,
+          getBytecode: async (contractAddress) =>
+            `0x60${contractAddress.slice(-2)}`,
           expectedBeaconVerifierRuntimeCodeHash: keccak256("0x6007"),
         }),
       /runtime bytecode hash mismatch/,
