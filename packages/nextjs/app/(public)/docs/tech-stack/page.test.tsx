@@ -25,7 +25,7 @@ test("tech-stack docs separate architecture reference from the hosted path", asy
   const { default: TechStackPage } = await import("./page");
   const html = renderToStaticMarkup(<TechStackPage />).replace(/\s+/g, " ");
 
-  assert.match(html, /Tech.*rateloop-text-gradient.*Stack/i);
+  assert.match(html, /Understand the.*rateloop-text-gradient.*Review Architecture/i);
   assert.match(html, /current hosted path uses invited, unpaid workspace reviewers/i);
   assert.match(html, /does not activate the fund-backed settlement mechanisms/i);
   for (const anchor of LANDING_TECH_ANCHORS) {

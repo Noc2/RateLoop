@@ -44,7 +44,7 @@ test("public tokenless journeys render read-only without browser or server failu
     expect(new URL(page.url()).origin).toBe(target.baseURL);
   }
 
-  await expect(page.getByRole("heading", { name: "Connect a Host" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Connect Your Agent Host" })).toBeVisible();
   expect(serverFailures).toEqual([]);
   expect(browserErrors).toEqual([]);
 });

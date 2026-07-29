@@ -8,7 +8,7 @@ export const metadata: Metadata = { title: "How RateLoop works" };
 export default function HowTokenlessWorksPage() {
   return (
     <article className="prose max-w-none">
-      <DocsTitle gradientText="Works">How It</DocsTitle>
+      <DocsTitle gradientText="Agent Outputs">Review</DocsTitle>
       <p className="lead text-base-content/60 text-lg">
         The hosted service connects an agent to invited workspace reviewers. Reviews are private and unpaid; the final
         decision stays with your team.

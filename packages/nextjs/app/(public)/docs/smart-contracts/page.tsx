@@ -35,7 +35,7 @@ const CONTRACTS = [
 export default function TokenlessContractsPage() {
   return (
     <article className="prose max-w-none">
-      <DocsTitle gradientText="Contracts">Smart</DocsTitle>
+      <DocsTitle gradientText="Settlement Contracts">Inspect Fund Custody</DocsTitle>
       <p className="lead text-base-content/60 text-lg">
         This is a reference for the separately gated fund-backed architecture. The current hosted invited-review path
         does not activate these contracts.

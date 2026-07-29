@@ -25,7 +25,7 @@ const AIErrorsPage: NextPage = () => (
     >
       &larr; Back to Agents &amp; MCP
     </Link>
-    <DocsTitle gradientText="Errors">API</DocsTitle>
+    <DocsTitle gradientText="API Errors">Recover From</DocsTitle>
     <p className="lead text-base-content/60 text-lg">
       The v1 API returns one stable error envelope. A retryable error is safe to poll again; it does not authorize a
       duplicate payment or ask.

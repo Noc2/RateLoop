@@ -15,7 +15,7 @@ test("human-oversight docs map each Article 14(4) measure to a capability and a 
   const { default: HumanOversightPage } = await import("./page");
   const html = renderToStaticMarkup(<HumanOversightPage />).replace(/\s+/g, " ");
 
-  assert.match(html, /Human.*rateloop-text-gradient.*Oversight/i);
+  assert.match(html, /Configure.*rateloop-text-gradient.*Accountable Oversight/i);
   assert.match(html, /support a deployer&#x27;s configured human oversight/i);
   assert.match(
     html,

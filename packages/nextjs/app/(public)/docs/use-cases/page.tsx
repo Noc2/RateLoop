@@ -118,7 +118,7 @@ const useCases: readonly UseCase[] = [
 export default function UseCasesPage() {
   return (
     <article className="prose max-w-none">
-      <DocsTitle gradientText="Cases">Use</DocsTitle>
+      <DocsTitle gradientText="Human Review Helps">Choose Where</DocsTitle>
       <p className="lead text-base-content/60 text-lg">
         Use RateLoop when automated checks can verify the rules, but a person still has to judge whether an AI output is
         appropriate for this situation. Three worked examples:

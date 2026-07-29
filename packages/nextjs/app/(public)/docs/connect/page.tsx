@@ -47,7 +47,7 @@ function HostList({ hosts }: { hosts: readonly TokenlessHostCapability[] }) {
 export default function ConnectHostIndexPage() {
   return (
     <article className="prose max-w-none">
-      <DocsTitle gradientText="Host">Connect a</DocsTitle>
+      <DocsTitle gradientText="Agent Host">Connect Your</DocsTitle>
       <p className="lead text-base-content/60 text-lg">
         Copy the connection message from your workspace&apos;s <Link href="/agents/connections">Agents tab</Link>, then
         open your host&apos;s guide to see what to expect. Every guide is generated from the same host-capability

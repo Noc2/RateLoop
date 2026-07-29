@@ -49,7 +49,7 @@ const OVERSIGHT_SECTIONS = [
 export default function HumanOversightPage() {
   return (
     <article className="prose max-w-none">
-      <DocsTitle gradientText="Oversight">Human</DocsTitle>
+      <DocsTitle gradientText="Accountable Oversight">Configure</DocsTitle>
       <p className="lead text-base-content/60 text-lg">
         RateLoop can support a deployer&apos;s configured human oversight of AI agent outputs: monitor, interpret,
         override, and stop, with records of each step. This page maps Article 14(4) measures to relevant RateLoop

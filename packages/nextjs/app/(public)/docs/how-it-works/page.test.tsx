@@ -13,7 +13,7 @@ test("how-it-works follows the hosted invited-review path", async () => {
   const { default: HowItWorksPage } = await import("./page");
   const html = renderToStaticMarkup(<HowItWorksPage />).replace(/\s+/g, " ");
 
-  assert.match(html, /How It.*rateloop-text-gradient.*Works/i);
+  assert.match(html, /Review.*rateloop-text-gradient.*Agent Outputs/i);
   assert.match(
     html,
     /<h3 id="human-assurance-loop-title"[^>]*>\s*<span>Human<\/span>\s*<span>Assurance<\/span>\s*<span class="inline-block text-white">Loop<\/span>\s*<\/h3>/i,

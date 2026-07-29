@@ -14,7 +14,7 @@ test("the connect index lists every registry host with the plugin hosts first", 
   const { default: ConnectHostIndexPage } = await import("./page");
   const html = renderToStaticMarkup(<ConnectHostIndexPage />).replace(/\s+/g, " ");
 
-  assert.match(html, /Connect a.*rateloop-text-gradient.*Host/);
+  assert.match(html, /Connect Your.*rateloop-text-gradient.*Agent Host/);
   assert.match(html, /generated from the same host-capability registry/);
   assert.match(html, /href="\/agents\/connections"/);
   assert.match(html, /Primary path/);

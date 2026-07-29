@@ -26,7 +26,7 @@ function CodeBlock({ children }: { children: string }) {
 export default function TokenlessAgentDocsPage() {
   return (
     <article className="prose max-w-none">
-      <DocsTitle gradientText="MCP">Agents &amp;</DocsTitle>
+      <DocsTitle gradientText="Review Loop">Run the Agent</DocsTitle>
       <p className="lead text-base-content/60 text-lg">
         Connect an agent to one workspace review policy. The current hosted path requests private, unpaid review from
         invited workspace reviewers.

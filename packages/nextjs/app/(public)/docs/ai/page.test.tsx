@@ -13,7 +13,7 @@ test("agent docs lead with the hosted connected-workspace path", async () => {
   const { default: AgentDocsPage } = await import("./page");
   const html = renderToStaticMarkup(<AgentDocsPage />).replace(/\s+/g, " ");
 
-  assert.match(html, /Agents.*rateloop-text-gradient.*MCP/);
+  assert.match(html, /Run the Agent.*rateloop-text-gradient.*Review Loop/);
   assert.match(html, /https:\/\/rateloop-tokenless\.vercel\.app\/api\/mcp/);
   assert.match(html, /https:\/\/rateloop-tokenless\.vercel\.app\/api\/agent\/v1\/mcp/);
   assert.match(html, /current hosted path requests private, unpaid review from invited workspace reviewers/i);

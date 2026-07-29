@@ -13,7 +13,7 @@ test("smart-contract docs name the complete production contract set", async () =
   const { default: SmartContractsPage } = await import("./page");
   const html = renderToStaticMarkup(<SmartContractsPage />).replace(/\s+/g, " ");
 
-  assert.match(html, /Smart.*rateloop-text-gradient.*Contracts/i);
+  assert.match(html, /Inspect Fund Custody.*rateloop-text-gradient.*Settlement Contracts/i);
   assert.match(html, /separately gated fund-backed architecture/i);
   assert.match(html, /current hosted invited-review path does not activate these contracts/i);
   assert.match(html, /id="tokenless-panel".*TokenlessPanel/i);

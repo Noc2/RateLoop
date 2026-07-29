@@ -14,7 +14,7 @@ export const metadata = {
 export default function TokenlessTechStackPage() {
   return (
     <article className="prose max-w-none">
-      <DocsTitle gradientText="Stack">Tech</DocsTitle>
+      <DocsTitle gradientText="Review Architecture">Understand the</DocsTitle>
       <p className="lead text-base-content/60 text-lg">
         This is a technical architecture reference. The current hosted path uses invited, unpaid workspace reviewers and
         does not activate the fund-backed settlement mechanisms described below.

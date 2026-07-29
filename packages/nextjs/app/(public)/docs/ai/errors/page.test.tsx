@@ -16,4 +16,5 @@ test("the API error reference begins with a link to its parent guide", async () 
 
   assert.ok(backLink >= 0 && backLink < html.indexOf("<h1"));
   assert.match(html, /← Back to Agents &amp; MCP/);
+  assert.match(html, /Recover From.*rateloop-text-gradient.*API Errors/);
 });

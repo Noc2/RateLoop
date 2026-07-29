@@ -15,7 +15,7 @@ test("use cases show three worked examples with bounded human-assurance decision
   const { default: UseCasesPage } = await import("./page");
   const html = renderToStaticMarkup(<UseCasesPage />).replace(/\s+/g, " ");
 
-  assert.match(html, /Use.*rateloop-text-gradient.*Cases/i);
+  assert.match(html, /Choose Where.*rateloop-text-gradient.*Human Review Helps/i);
   assert.equal(html.match(/data-use-case=/g)?.length, 3);
   assert.equal(html.match(/Illustrative example/g)?.length, 3);
 
