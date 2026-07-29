@@ -28,8 +28,7 @@ tokenless-v3:84532:0xf97d28e02f7301b4f6cb19160e1176eaf3e4f19a:0x67a89f76ae9a8986
 
 Hosted releases use the same persisted workflow as production. Release checks fail closed until the configured chain,
 database, regional resources, signing roles, private storage, and operational evidence all match the approved
-deployment manifest. The current release record is maintained internally in
-[`docs/tokenless-production-readiness-2026-07.md`](docs/tokenless-production-readiness-2026-07.md).
+deployment manifest. The release record is maintained outside this repository.
 
 ## Identity and privacy
 

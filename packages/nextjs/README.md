@@ -39,8 +39,7 @@ DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/rateloop_tokenless_e2
   yarn workspace @rateloop/nextjs e2e
 ```
 
-The Playwright journeys are the deterministic browser gate in the
-[production-readiness register](../../docs/tokenless-production-readiness-2026-07.md). They run against their own
+The Playwright journeys are the deterministic browser gate for a hosted release. They run against their own
 database and **refuse any other one**: `e2e/scripts/prepare.ts` requires the database name to match
 `rateloop(_<suffix>)?_e2e` and then drops and recreates `public` before migrating, so pointing this at a development
 database is rejected rather than destructive. The default `DATABASE_URL` in `.env.example` does not match that
@@ -73,9 +72,7 @@ assignment, and short reviewer leases. Workspaces and projects carry a home regi
 retention, and legal-hold policy. Structured subject requests and integrity-chained, tenant-exportable application audit
 records support operations without exposing private content in the public settlement record.
 
-Operational procedures are in the
-[`privacy operations runbook`](../../docs/tokenless-privacy-operations-runbook-2026-07.md), and the release resource
-checks are in the [`EU deployment runbook`](../../docs/tokenless-eu-deployment-runbook.md).
+Privacy operating procedures and the EU release resource checks are maintained outside this repository.
 
 ## API
 
