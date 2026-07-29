@@ -4,11 +4,18 @@ Written 29 July 2026, drawing on a system survey, a legal review, market researc
 and several rounds of adversarial code audit. This is an assessment, not a plan; the
 plan is [remediation-plan.md](remediation-plan.md).
 
-Revised the same day after a second research pass verified each weakness against the
-code. Six of the eight were wrong in some respect, and two — the dashboard and the
-compliance reader — were wrong in their central claim. Those corrections are recorded
-in place rather than quietly removed, because the pattern of error is itself a
-finding: **every mistake came from describing a survey instead of the code.**
+Revised twice on the same day. A second research pass verified each weakness against
+the code: six of the eight were wrong in some respect, and two — the dashboard and
+the compliance reader — were wrong in their central claim. A third, adversarial pass
+then found that **the corrections had themselves introduced new errors**, including
+two counts that were right before being "fixed", and one case where correcting a
+documented defect away concealed a live bug.
+
+All of it is recorded in place rather than quietly removed, because the pattern is
+the finding, and it turned out to have two halves. Every first-round mistake came
+from describing a survey instead of the code. Every second-round mistake came from
+trusting a correction without re-deriving it. **Prefer a number you can regenerate
+with a command over a number someone checked once.**
 
 ---
 
@@ -51,8 +58,8 @@ authority over another.
 This is the most unusual thing about the codebase and deserves to be named as a
 strength rather than a curiosity.
 
-There is a **machine-enforced claim gate**: a capability map lists eighteen
-capabilities and hardcodes sixteen to false, while the two it derives are false in
+There is a **machine-enforced claim gate**: a capability map lists seventeen
+capabilities and hardcodes fourteen to false, while the three it derives are false in
 practice because the paid lanes require a hash-bound activation reference nobody has
 issued. A fifteen-rule regex matrix then blocks matching phrases, enforced by a test
 that walks every public page, every component those pages transitively import, every
@@ -80,11 +87,13 @@ Deterministic sampling, verifiable after the fact: the bucket is an HMAC over sc
 and opportunity identity, and the full digest is persisted so the draw can be
 checked. A missing key fails closed rather than falling back to chance.
 
-The scoring library exists in three implementations with byte-identical arithmetic,
-one of which is a fail-closed server-side verifier that rejects the evidence bundle
-on mismatch. An independent audit worked the arithmetic by hand against a frozen
-vector and found it exact; a suspected rounding asymmetry was investigated and
-**refuted** — predictions sit on a grid that makes both branches exact.
+The scoring arithmetic exists in two production implementations — Solidity and
+TypeScript — plus a JavaScript script, with a separate Solidity test oracle for the
+sort and selection steps. One of the two is a fail-closed server-side verifier that
+rejects the evidence bundle on mismatch. An independent audit worked the arithmetic by hand against a frozen vector and found
+it exact, and grid-exactness tests exist for both branches. (The narrative that a
+suspected rounding asymmetry was investigated and refuted is not recorded anywhere in
+the repository; treat it as unverified.)
 
 Beacon proofs are verified on chain with real pairing operations rather than
 trusted. Where they cannot be, the fallback takes **no entropy at all** and pays
@@ -138,8 +147,8 @@ exactly what that persona needs exist, work, and are wired to nothing.
   canonical map does not.
 
 Browser-side verification is likewise closer than it looks. The verifier does no
-network I/O, no chain reads and needs no exotic curve: it is four hundred lines with
-about seven `node:crypto` touch points, and Ed25519 became available in every major
+network I/O, no chain reads and needs no exotic curve: it is four hundred and five lines with
+five `node:crypto` touch points, and Ed25519 became available in every major
 browser's WebCrypto in 2026. The one real friction is that its hash path is
 synchronous while the browser's is not.
 
@@ -158,8 +167,9 @@ written commitment to Type 2 by a date, plus a completed questionnaire.
 
 The paid marketplace is fully implemented and gated behind a five-way evidence lock.
 The reviewer surface offers eligibility, earnings, a payout wallet and identity
-assurance, all inert. Live statistics read **zero verified humans and zero paid
-out**.
+assurance, all inert. The landing statistics for verified humans and amounts paid are
+zero — and are **never rendered**, because the social-proof projection filters out
+zero values and omits the strip entirely, which a test pins.
 
 So the product is not a two-sided marketplace today; it is a single-sided workflow
 tool for a team reviewing its own agent's output. That is a coherent product — but
@@ -197,8 +207,9 @@ a degraded run and does reach the operator panel. What is true:
   reveal silent failure fails silently.
 
 Underneath all of it is a reporting gap: the panel names fifteen signals while the
-degraded predicate has about thirty terms, so nine subsystems can degrade a run and
-produce an amber badge with **no chips saying why**.
+degraded predicate has thirty-six terms, so **twenty-one terms across thirteen
+subsystems** can degrade a run and produce an amber badge with **no chips saying
+why**.
 
 For a product whose value proposition is _evidence that something happened_, **a
 subsystem that silently does nothing is the worst available failure mode.**
@@ -278,14 +289,22 @@ competence basis, training records, authority scope and expiry.
 
 ### 6. Documentation drifted far enough to mislead
 
-Before this rewrite: a scope was documented as five dimensions where the schema has
-twelve; a monitoring floor was documented at 10% where the code samples at 25%; the
-README advertised paid mechanisms with no availability caveat and cited a deployment
-a full generation out of date; a CLI command was documented that does not exist.
+Before this rewrite: a scope was documented as five dimensions where the constraint
+has twelve and the identity hash uses fourteen; the README advertised paid mechanisms
+with no availability caveat and cited a deployment a full generation out of date; a
+CLI command was documented that does not exist.
+
+One item originally listed here has been removed, because a third pass showed it was
+not drift at all. Older documents described a 10% monitoring floor; the replacement
+set called that stale and asserted the code samples at 25%. **Both are true, in
+different modules** — five stage-rate tables exist, four of them wrong, and one of the
+wrong ones drives a coverage alert. The documentation was reporting a real defect, and
+correcting it away made this document worse than the ones it replaced.
 
 The four documents asserted by tests did not drift. **Everything not mechanically
 checked did.** That is the lesson, and it is why this replacement set is deliberately
-small.
+small — and why "the docs are stale" should be a hypothesis to test against the code,
+not a conclusion.
 
 ### 7. Some dashboard state is served but never rendered
 
@@ -295,23 +314,27 @@ administration page, three charts buried in a collapsed disclosure, a performanc
 rollup rendered by nothing, two tabs with no link between them, and state that lived
 in React rather than the URL. **Four of those five had already been fixed before this
 document was written.** The overview leads with headline cards, a version table,
-trend charts and a review-quality panel; two of the three charts are top-level; the
-rollup renders with a Wilson lower bound and its sample size; the Results and
-Evidence tabs link both ways along the run identifier; and three hand-written modules
-keep filters and selection in the query string, with `pushState` for selection so
-Back undoes it.
+trend charts and a review-quality panel; the rollup renders with a Wilson lower bound
+and its sample size; and three hand-written modules keep filters and selection in the
+query string.
 
 The lesson is the one in weakness 6, turned on this document: **an assessment written
 from a survey rather than from the code at hand will describe a state of the world
-that has passed.**
+that has passed.** A third pass then caught the correction itself drifting — the
+Evidence tab has since been **deleted**, so a claim here that it and Results "link
+both ways" described a two-tab relationship that no longer exists. Both panels now
+sit on Results and the run links survive as same-page anchors.
 
-What actually remains is narrow. The per-scope rollup is serialised in full to the
-browser on a second endpoint and consumed by no component — dead payload rather than
-a missing view. Three visualisations still sit inside a collapsed "operations and
-policy details" disclosure whose label and position a test pins. Overview filters are
-parsed only on the client, so a shared link renders the default view before hydration
-corrects it. And the scheduled-worker health panel is the last piece of operations
-plumbing on a performance tab.
+What actually remains is narrow, and narrower than the correction claimed. Of five
+visualisations, **two are top-level and three sit inside a collapsed "operations and
+policy details" disclosure** whose label and position a test pins. The per-scope
+rollup is partly consumed — a summary component reduces it to five headline totals —
+so the dead payload is the per-scope detail rather than the whole object. Only one of
+the three URL modules uses `pushState`, so Back does **not** undo run selection or
+overview filtering in the other two. Overview filters are parsed only on the client,
+so a shared link renders the default view before hydration corrects it. And the
+scheduled-worker health panel is the last piece of operations plumbing on a
+performance tab.
 
 One constraint any future work inherits: **there is no charting library.** Every
 chart is hand-rolled inline SVG with `role="img"`, a title and description, and a

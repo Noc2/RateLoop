@@ -16,7 +16,8 @@ OpenAI Agents SDK, Promptfoo and Langfuse. An AI or platform engineer who alread
 owns an eval stack.
 
 **B. Deciding how much gets reviewed.** Audience, criterion, panel size, response
-window, expertise, and frequency — always, fixed percentage, rules, or adaptive. A
+window, expertise, and frequency — manual, always, fixed percentage, rules, or
+adaptive. A
 quality or product owner.
 
 **C. Signing off on an individual output.** The approvals inbox, backed by
@@ -40,7 +41,10 @@ world.
 | -------------------- | ------ | --------------------- |
 | Price                | $0     | **$29/mo** (list $99) |
 | Decisions per period | **25** | **250**               |
-| Active agents        | 1      | 3                     |
+
+The period differs by plan: Free uses a strict UTC calendar month, Early Access the
+Stripe subscription anniversary window.
+| Active agents | 1 | 3 |
 
 Read against the adaptive sampler's 25% floor, **250 decisions a month is roughly a
 thousand reviewable outputs, about 33 a day.** At the "always" setting it is 250
@@ -286,7 +290,7 @@ force today, genuinely pre-send, and requires a named principal plus a retained
 record. But established vendors own that workflow and that buyer. Worth pursuing only
 with a sharp "for agent-generated communications, not campaign assets" framing.
 
-**Not the wedge:** "human oversight for the EU AI Act". Seventeen months away,
+**Not the wedge:** "human oversight for the EU AI Act". Sixteen months away,
 requires capability rather than evidence, self-certified with no notified body for
 most categories, and no published standard defines the artefact.
 

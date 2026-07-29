@@ -59,8 +59,9 @@ Entirely off-chain. No quote, no payment, no chain execution, no voucher.
 
 The workspace owner invites named reviewers by email. Artifacts are AES-256-GCM
 encrypted in private storage and handed out under short-lived leases — a 15-minute
-reservation and a 10-minute artifact lease. Responses are a binary choice plus an
-optional rationale.
+reservation and a 10-minute artifact lease. Responses are a binary choice plus a
+rationale, whose mode is `off`, `optional` or `required` — and the shipped default in
+both the setup path and the editor is **required**.
 
 **The workspace can read plaintext rationales and per-response choices in this
 lane**, because it owns the material. This is the lane the hosted end-to-end test
@@ -111,14 +112,29 @@ rate and the workspace's production floor.
 
 **`monitoring` and `medium_coverage` sample at the same rate.** Reaching
 `monitoring` changes coverage by nothing; its only effect is a periodic
-recalibration every 100 cases. Two older documents claimed a 10% monitoring floor.
-That was never true in this code.
+recalibration every 100 cases.
 
-Promotion is one step at a time and requires a run of stable, passing windows.
-**Demotion always goes straight back to `calibrating`**, never one step.
+**The 10% monitoring floor that older documents described is real, and it is a
+live defect.** An earlier draft of this section called it documentation drift; it is
+not. The stage-rate table is declared in **five** places. One — `adaptiveReview.ts`,
+the canonical set that actually drives sampling — says 2,500 basis points. The other
+four say 1,000: the policy-management module, the overview projection, the registry
+projection, and the oversight-alert module.
+
+The last of those is the one that bites. The coverage-floor alert compares a scope's
+production floor against its stage rate and warns when the floor is lower — using
+1,000 where sampling uses 2,500. **A workspace whose floor sits between 10% and 25%
+is under-sampled relative to what the alert believes, and no warning fires.** Fixing
+this means deleting four copies and importing the canonical one; the remediation plan
+carries it.
+
+Promotion is one step at a time, but only the first promotion requires two
+consecutive passing windows. `high_coverage → medium_coverage` and
+`medium_coverage → monitoring` each need one passing window plus a case-count
+threshold. **Demotion always goes straight back to `calibrating`**, never one step.
 
 A window is the 30 most recent comparable observations, split in half. It passes
-only if all of a set of conditions hold, including a Wilson lower bound above the
+only if all of a set of conditions hold, including a Wilson lower bound at or above the
 agreement threshold, at least two responding humans per case, latency within
 policy, and no open severe disagreement on a critical-risk case.
 
@@ -142,7 +158,8 @@ this tuple stay in sync.**
 
 Robust Bayesian Truth Serum. The Solidity library is normative; a server-side
 verifier recomputes it and rejects the evidence bundle on any mismatch, and a
-JavaScript oracle exists for cross-language parity vectors.
+second Solidity implementation, kept in the test suite, acts as an independent
+oracle for the sort and selection steps.
 
 **What it is used for: payout weighting, and nothing else.** Eighty per cent of a
 seat's pay is unconditional; RBTS weights only the top twenty. It is not used for
@@ -159,7 +176,7 @@ What goes on chain: a vote-key, a sealed commitment, a payout commitment, and th
 **raw timelock ciphertext**, which is emitted in an event.
 
 Encryption targets a future drand round on the `quicknet-t` testnet chain. The
-parameters are pinned in **four places that must agree** — the panel contract, the
+parameters are pinned in **at least seven places that must agree** — the panel contract, the
 beacon verifier, the keeper, and the browser.
 
 There are two distinct beacon rounds. The **scoring** round is verified on chain.
@@ -222,7 +239,8 @@ while doing nothing**.
 
 The production-readiness check returns early for any branch that is not `main`. On
 `tokenless`, **the entire production path never runs** — not the required
-variables, not the regional manifest, not signer-role separation. This is
+variables and not the regional manifest. Signer-role separation still runs on the
+test path; what is skipped is the stricter address-level check. This is
 deliberate and documented, but it means everything green on the hosted tokenless
 deployment was validated by the _test_ path only.
 
@@ -259,7 +277,7 @@ code-complete with **no configuration gate at all** — a document calls it
 experimental and disabled for real money, but nothing in the code enforces that.
 
 Several subsystems fail _quietly_ rather than loudly when unconfigured: the
-transparency-log attestation counts jobs as unavailable while reporting success;
+integrity-epoch producer returns a disabled result that no health signal names;
 the integrity-epoch producer returns a disabled result; the top-up reconciler
 returns zeroes. Separately, the maintenance runner catches every processor error
 into a failures array and returns a zero-valued fallback, so any of roughly twenty
@@ -267,7 +285,8 @@ processors can be permanently broken while the endpoint returns 200. It is
 observable in the run summary — but only if someone reads it.
 
 **No host holds the "verified" tier.** Two are supported, seven experimental, zero
-verified — and the type system pins the verified variant off. This matters because
+verified. The type system permits the tier and merely couples it to evidence fields;
+what holds the count at zero is a runtime test assertion. This matters because
 the verified tier is what several documents point at as the answer to enforcing
 withheld delivery.
 
@@ -275,7 +294,7 @@ withheld delivery.
 
 There is a machine-enforced claim gate. A capability map hardcodes fourteen of
 seventeen capabilities to false, and a regex matrix blocks matching phrases across
-every public page and doc, enforced by a test. Four claims are permanently
+every public page and doc, enforced by a test. Five claims are permanently
 forbidden, including "compliance-ready" and "guarantees compliance".
 
 Because of it the **in-app public docs are honest** about the hosted path being
@@ -349,7 +368,7 @@ On-chain caps include 500 commits per round and a 20% fee ceiling. The MCP surfa
 is limited to 60 requests per minute per client identity, and fails closed without
 a sufficiently long secret.
 
-**Unbounded and worth capping:** 189 SQL statements order without limiting. The
+**Unbounded and worth capping:** roughly 200 SQL statements order without limiting. The
 subject-access export is roughly thirty consecutive unbounded selects. Evidence
 packet generation loads an entire run — every case, every response, every override
 — with no database-level cap. There is no cap on workspace members, API keys,
@@ -365,17 +384,17 @@ with one declared, recorded gap.
 
 Recorded so the same drift is not reintroduced.
 
-| Claim                                          | Reality                                                                   |
-| ---------------------------------------------- | ------------------------------------------------------------------------- |
-| A scope has five dimensions                    | Twelve                                                                    |
-| Monitoring floor is 10%                        | 25%, identical to medium coverage                                         |
-| Adaptive reports safety gates unavailable      | That branch is unreachable; gates are available                           |
-| Opportunity keyed on integration id            | Keyed on agent id                                                         |
-| Deployment is `tokenless-v3` at an older block | `tokenless-v4`, a full generation newer                                   |
-| README advertises paid mechanisms plainly      | All of them are gated off                                                 |
-| Adaptive coverage pinned at 100%               | The ladder shipped                                                        |
-| An agents `handoff` CLI command exists         | It does not; the real path is a media upload followed by an MCP tool call |
-| 66 mapped tables, 219 total                    | 67 mapped, roughly 245 total                                              |
+| Claim                                          | Reality                                                                      |
+| ---------------------------------------------- | ---------------------------------------------------------------------------- |
+| A scope has five dimensions                    | Twelve in the database constraint, fourteen in the identity hash             |
+| Monitoring floor is 10%                        | **Not drift — a live defect.** Sampling uses 25%; four modules still say 10% |
+| Adaptive reports safety gates unavailable      | That branch is unreachable; gates are available                              |
+| Opportunity keyed on integration id            | Keyed on agent id                                                            |
+| Deployment is `tokenless-v3` at an older block | `tokenless-v4`, a full generation newer                                      |
+| README advertises paid mechanisms plainly      | All of them are gated off                                                    |
+| Adaptive coverage pinned at 100%               | The ladder shipped                                                           |
+| An agents `handoff` CLI command exists         | It does not; the real path is a media upload followed by an MCP tool call    |
+| 66 mapped tables, 219 total                    | 67 mapped, roughly 245 total                                                 |
 
 **Left deliberately unresolved**, because they are decisions rather than facts:
 whether the adaptive ladder shipped ahead of its safety gate or the register is

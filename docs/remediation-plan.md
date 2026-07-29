@@ -45,24 +45,29 @@ says plainly that no host is in the Verified tier. This is copy alignment, not a
 position. Drop the verb _prove_ throughout in favour of _establish_, matching what the
 evidence packet itself already says.
 
-Four test files currently assert the false copy as contract and must be updated in
-the same commit.
+**One** test file asserts the false copy as contract — the evidence page's — and must
+be updated in the same commit. The two `/docs/ai` sentences are deletable with no test
+change. Sentence (c) exists in two surfaces: the page and its markdown mirror.
 
 ### 0.2 Extend the tier-honesty gate to every public surface
 
-The existing gate derives its expectation from the host registry rather than
-hardcoding it, which is the right design — it will relax automatically the day a host
-legitimately earns the tier. It simply scans two pages.
+Two gates exist and the cheaper path is the second one. The tier gate derives its
+expectation from the host registry — the right design, since it relaxes automatically
+the day a host earns the tier — but it scans only two route modules. Meanwhile the
+claim-gate test **already walks** every public page, every transitively imported
+component, all of `components/tokenless`, every machine doc and every plugin markdown
+file. It simply has no tier rule.
 
-Extend its page list to the remaining docs pages, the homepage, and the machine-doc
-markdown mirrors, with a registry-driven guard: when no host holds the verified tier,
-no rendered public surface may use present-tense verified-host capability language.
+Add one registry-driven rule there rather than extending the connect gate's page
+list: when no host holds the verified tier, no scanned surface may use present-tense
+verified-host capability language.
 
 ### 0.3 Add the availability caveat to the eight defensible claims
 
-Eight further statements take the form "only a verified host can X". Each is
-literally true — a necessary condition, which is a disclaimer. None says that no host
-holds the tier today. Append that sentence.
+Ten statements take the form "only a verified host can X" — eight in the app, plus
+one in the connection markdown and one in a plugin skill file. Each is literally true:
+a necessary condition, which is a disclaimer. None says that no host holds the tier
+today. Append that sentence.
 
 ### 0.4 Resolve the two definitions of "verified"
 
@@ -96,8 +101,8 @@ record holder. Delete rather than hedge.
 Articles 12 and 72 are provider obligations and should not appear in a deployer-facing
 mapping; Article 12(3)'s human-verification field is scoped to remote biometric
 identification only. Remove both from the compliance table **and** from the OSCAL
-component definition, which the claim gate does not scan because it only reads
-markdown.
+component definition, which the claim gate does not scan because it reads only `.tsx`
+and `.md`.
 
 Also correct the Article 26(6) row: that duty attaches to logs the high-risk AI
 system generates, not to a third-party review vendor's records. A six-month retention
@@ -160,7 +165,7 @@ plainly that a reader with a packet needs no account to obtain the pin.
 
 ### 1.3 Make the verifier isomorphic
 
-Four hundred lines, roughly seven `node:crypto` touch points, no network I/O, no
+Four hundred and five lines, five `node:crypto` touch points, no network I/O, no
 chain reads, no exotic curve. Ed25519 is now in every major browser's WebCrypto.
 
 The one real obstacle is that the hash path is synchronous and recursive while
@@ -218,11 +223,33 @@ silent evidence gap for a user-visible failure on a decision that did succeed.
 
 This is the most consequential defect in the plan.
 
+### 2.1b Collapse the five stage-rate tables into one
+
+Found by the verification pass, and it is a code defect rather than a documentation
+one. Earlier drafts of these documents asserted the opposite — that a 10% monitoring
+floor was drift in old docs — so this item exists partly to retract that.
+
+The adaptive stage-rate table is declared in five places. `adaptiveReview.ts` is
+canonical and says `monitoring: 2_500`. The policy-management module, the overview
+projection, the registry projection and the oversight-alert module all say
+`monitoring: 1_000`, and only the evaluation dashboard imports the canonical
+constant.
+
+**The oversight-alert copy is the one that causes harm.** The coverage-floor alert
+compares a scope's production floor against its stage rate and warns when the floor
+falls below it — at 1,000 where sampling actually runs at 2,500. A workspace with a
+floor between those values is under-covered relative to the alert's model of the
+world and is never told.
+
+Delete the four copies, import the canonical one, and add a test asserting a single
+definition — the same "bind the sites that re-derive a rule" shape as 4.3, which is
+what would have caught it.
+
 ### 2.2 Name every degraded signal in the health panel
 
-The panel names fifteen signals while the degraded predicate has about thirty terms.
-Nine subsystems can degrade a run and produce an amber badge with no chips explaining
-why. A pure-additive change to one array.
+The panel names fifteen signals while the degraded predicate has thirty-six terms.
+**Twenty-one terms across thirteen subsystems** can degrade a run and produce an amber
+badge with no chips explaining why. A pure-additive change to one array.
 
 Fix in the same commit: the health panel renders `null` when its own fetch fails.
 
@@ -324,7 +351,7 @@ Annex III obligations apply from 2 December 2027 under Regulation (EU) 2026/1744
 force since 27 July 2026 — **fixed, not conditional**. The current copy says "the
 Commission currently says", which understates settled law.
 
-Seventeen months, no notified body for points 2–8, and zero harmonised standards
+Sixteen months, no notified body for points 2–8, and zero harmonised standards
 published or cited. The honest pitch is that nobody can tell you today what oversight
 evidence must look like and no external party will gate you before December 2027 —
 which is exactly why starting now is cheap.
@@ -360,9 +387,13 @@ this plan.
 ### 3b.2 Commit to no model training, because it is already true
 
 **There is no LLM SDK anywhere in the repository** — no OpenAI, Anthropic, AI SDK or
-LangChain dependency. Customer output text never reaches a model provider. The only
-`openai` string in the codebase is telemetry metadata the customer's own agent
-reports.
+LangChain dependency, and customer output text never reaches a model provider.
+
+State it precisely, because a diligence reader will grep. There are two other
+`openai` hits: telemetry metadata the customer's own agent reports, and a marketing
+package that calls a text-to-speech endpoint over raw `fetch` to generate voiceover.
+Neither touches customer data, but the claim must be worded so that finding them
+confirms it rather than contradicting it.
 
 This is a stronger version of the clause every comparable vendor offers, and it is
 independently verifiable by anyone reading the dependency manifest. Put it in the
@@ -448,18 +479,19 @@ proved its own fix and constrained nothing downstream.
 ### 4.1 Write the rule down
 
 There is no testing guidance in the repository's agent instructions, and the
-contributing guide references a CI job, a script and a coverage target that do not
-exist. One paragraph, encoding what the adversarial passes actually did: **when a fix
+contributing guide references a script that does not exist plus two CI jobs that do
+not exist. One paragraph, encoding what the adversarial passes actually did: **when a fix
 changes a rule, find every other site that re-derives that rule and add a test that
 binds them.** Free, and it is the precondition for the rest.
 
 ### 4.2 Enumerate the terminal sets instead of hardcoding values
 
 The work-item guard excludes terminal reasons by string prefix, but only two of three
-terminal code sets emit one. A test that iterates the exported sets — rather than
-naming strings — and forces each to fire on a final attempt would fail today, on a
+terminal code sets emit one. A test that iterates the sets — rather than naming
+strings — and forces each to fire on a final attempt would fail today, on a
 possibly-paid payment authorisation that can be revived six hours after being
-deliberately dead-lettered.
+deliberately dead-lettered. **The three sets are module-private, so exporting them is
+step one.**
 
 That is a live instance of a bug already fixed once elsewhere. Iterating the sets
 also means a fourth terminal code added without a prefix fails immediately.
