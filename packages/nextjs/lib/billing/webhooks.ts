@@ -12,6 +12,7 @@ import "server-only";
 import Stripe from "stripe";
 import { dbPool } from "~~/lib/db";
 import { stripeRefundReversalKey } from "~~/lib/tokenless/idempotencyKeys";
+import { persistScheduledProcessorHealth } from "~~/lib/tokenless/scheduledProcessorHealth";
 
 const HANDLED_EVENTS = new Set([
   "checkout.session.completed",
@@ -31,6 +32,12 @@ const REVERSAL_EVENTS = new Set([
   "charge.dispute.created",
   "charge.dispute.closed",
 ]);
+
+const STRIPE_WEBHOOK_HEALTH_PROCESSOR = "processStripeWebhook";
+const STRIPE_WEBHOOK_ATTENTION_CODE = "billing_webhook_operator_attention";
+const STRIPE_WEBHOOK_ATTENTION_DIGEST = `sha256:${createHash("sha256")
+  .update(`${STRIPE_WEBHOOK_HEALTH_PROCESSOR}:${STRIPE_WEBHOOK_ATTENTION_CODE}`)
+  .digest("hex")}` as const;
 
 function providerId(value: string | { id: string } | null | undefined) {
   return typeof value === "string" ? value : (value?.id ?? null);
@@ -275,6 +282,53 @@ async function recordEventOutcome(client: PoolClient, eventId: string, attention
   );
 }
 
+/**
+ * Project the durable queue state rather than the outcome of only the latest delivery. A healthy
+ * event must not clear an older event that still needs an operator, while replaying the repaired
+ * event resolves the health row once the failed queue is empty.
+ *
+ * Health projection is deliberately best-effort after the webhook event itself is durable. Stripe
+ * must not retry an operator-attention event merely because the observability projection failed.
+ */
+async function projectStripeWebhookHealth(
+  client: Pick<PoolClient, "query">,
+  now = new Date(),
+  persistHealth = persistScheduledProcessorHealth,
+) {
+  try {
+    const pending = await client.query(
+      `SELECT COUNT(*) AS count FROM tokenless_billing_webhook_events
+       WHERE processing_status='failed'`,
+    );
+    const pendingCount = Number(pending.rows[0]?.count ?? 0);
+    if (!Number.isSafeInteger(pendingCount) || pendingCount < 0) {
+      throw new Error("invalid_billing_webhook_attention_count");
+    }
+    await persistHealth(
+      [
+        pendingCount > 0
+          ? {
+              configurationState: "broken",
+              errorCode: STRIPE_WEBHOOK_ATTENTION_CODE,
+              errorDigest: STRIPE_WEBHOOK_ATTENTION_DIGEST,
+              processor: STRIPE_WEBHOOK_HEALTH_PROCESSOR,
+            }
+          : {
+              configurationState: "enabled",
+              processor: STRIPE_WEBHOOK_HEALTH_PROCESSOR,
+            },
+      ],
+      now,
+    );
+  } catch {
+    console.error(
+      JSON.stringify({
+        event: "tokenless_stripe_webhook_health_projection_failed",
+      }),
+    );
+  }
+}
+
 export function constructStripeEvent(rawBody: string, signature: string | null) {
   return getStripe().webhooks.constructEvent(rawBody, signature ?? "", getStripeWebhookSecret());
 }
@@ -374,6 +428,9 @@ export async function processStripeWebhook(input: { event: Stripe.Event; rawBody
         await recordEventOutcome(client, input.event.id, attention);
       }
       if (topupId) await drainPrepaidTopupAuditOutbox({ topupId });
+      if (attention.length > 0 || existing.rows[0]?.processing_status === "failed") {
+        await projectStripeWebhookHealth(client, receivedAt);
+      }
       return attention.length > 0 ? { attention: attention.join(","), duplicate: false } : { duplicate: false };
     } catch (error) {
       await client.query(
@@ -393,5 +450,6 @@ export async function processStripeWebhook(input: { event: Stripe.Event; rawBody
 export const __stripeWebhookTestUtils = {
   boundedErrorCode,
   invoiceSubscriptionId,
+  projectStripeWebhookHealth,
   subscriptionPeriod,
 };

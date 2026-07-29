@@ -1,6 +1,6 @@
 import { LEGACY_EARLY_ACCESS_PRICE_VERSION } from "./plans";
 import { __setStripeForTests } from "./stripe";
-import { processStripeWebhook } from "./webhooks";
+import { __stripeWebhookTestUtils, processStripeWebhook } from "./webhooks";
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import type Stripe from "stripe";
@@ -169,6 +169,16 @@ async function webhookEvent(eventId: string) {
   return { errorCode: result.rows[0]?.error_code ?? null, status: result.rows[0]?.processing_status };
 }
 
+async function webhookProcessorHealth() {
+  const result = await dbClient.execute({
+    sql: `SELECT configuration_state,consecutive_failures,last_error_code,last_error_digest,
+                 operator_alert_state
+          FROM tokenless_scheduled_processor_health
+          WHERE processor_name='processStripeWebhook'`,
+  });
+  return result.rows[0] as Record<string, unknown> | undefined;
+}
+
 beforeEach(async () => {
   process.env.STRIPE_EARLY_ACCESS_MONTHLY_PRICE_ID = PRICE_ID;
   process.env.STRIPE_SECRET_KEY = "sk_test_fixture";
@@ -322,6 +332,86 @@ test("unrecognised Stripe prices grant nothing, are recorded, and do not fail th
     errorCode: "unsupported_subscription_price",
     status: "failed",
   });
+  const health = await webhookProcessorHealth();
+  assert.equal(health?.configuration_state, "broken");
+  assert.equal(Number(health?.consecutive_failures), 1);
+  assert.equal(health?.last_error_code, "billing_webhook_operator_attention");
+  assert.match(String(health?.last_error_digest), /^sha256:[0-9a-f]{64}$/u);
+  assert.equal(health?.operator_alert_state, "pending");
+  assert.doesNotMatch(
+    JSON.stringify(health),
+    /evt_wrong_price|price_attacker_controlled|unsupported_subscription_price/u,
+  );
+});
+
+test("unrelated success cannot hide pending attention and repairing the failed event resolves health", async () => {
+  const attentionEvent = subscriptionEvent({
+    created: 1_784_035_200,
+    eventId: "evt_attention_then_repaired",
+    priceId: "price_pending_attention",
+    status: "active",
+  });
+  canonicalSubscription = attentionEvent.data.object as Stripe.Subscription;
+  assert.deepEqual(await processStripeWebhook({ event: attentionEvent, rawBody: "attention-body" }), {
+    attention: "unsupported_subscription_price",
+    duplicate: false,
+  });
+
+  const healthyEvent = subscriptionEvent({
+    created: 1_784_035_300,
+    eventId: "evt_healthy_while_attention_pending",
+    status: "active",
+  });
+  canonicalSubscription = healthyEvent.data.object as Stripe.Subscription;
+  assert.deepEqual(await processStripeWebhook({ event: healthyEvent, rawBody: "healthy-body" }), {
+    duplicate: false,
+  });
+  const stillPending = await webhookProcessorHealth();
+  assert.equal(stillPending?.configuration_state, "broken");
+  assert.equal(Number(stillPending?.consecutive_failures), 1);
+  assert.equal(stillPending?.operator_alert_state, "pending");
+
+  process.env.STRIPE_EARLY_ACCESS_MONTHLY_PRICE_ID = "price_pending_attention";
+  canonicalSubscription = attentionEvent.data.object as Stripe.Subscription;
+  assert.deepEqual(await processStripeWebhook({ event: attentionEvent, rawBody: "attention-body" }), {
+    duplicate: false,
+  });
+  assert.deepEqual(await webhookEvent("evt_attention_then_repaired"), {
+    errorCode: null,
+    status: "processed",
+  });
+  const resolved = await webhookProcessorHealth();
+  assert.equal(resolved?.configuration_state, "enabled");
+  assert.equal(Number(resolved?.consecutive_failures), 0);
+  assert.equal(resolved?.last_error_code, null);
+  assert.equal(resolved?.last_error_digest, null);
+  assert.equal(resolved?.operator_alert_state, "resolved");
+});
+
+test("health projection failure is swallowed with a payload-free log so Stripe is not retried", async () => {
+  const lines: string[] = [];
+  const originalConsoleError = console.error;
+  console.error = (...values: unknown[]) => lines.push(values.map(String).join(" "));
+  try {
+    await assert.doesNotReject(() =>
+      __stripeWebhookTestUtils.projectStripeWebhookHealth(
+        {
+          query: async () => ({ rowCount: 1, rows: [{ count: 1 }] }),
+        } as never,
+        seededAt,
+        async () => {
+          throw new Error("private-health-storage-detail");
+        },
+      ),
+    );
+  } finally {
+    console.error = originalConsoleError;
+  }
+  assert.deepEqual(
+    lines.map(line => JSON.parse(line)),
+    [{ event: "tokenless_stripe_webhook_health_projection_failed" }],
+  );
+  assert.doesNotMatch(lines.join("\n"), /private-health-storage-detail|payload|eventId|eventType/u);
 });
 
 test("rotating the configured price keeps existing subscribers projected under their real price", async () => {
