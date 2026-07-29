@@ -59,7 +59,7 @@ const questions = [
   ["Who Reviews the Work?", "Your invited workspace reviewers."],
   [
     "Can an Agent Run Reviews Automatically?",
-    "Connection alone does not intercept outputs. An active agent can call RateLoop for each eligible output; only a verified host adapter that controls delivery can enforce waiting before release. Ordinary Codex integrations are advisory.",
+    "Connection alone does not intercept outputs. An active agent can call RateLoop for each eligible output; only a verified host adapter that controls delivery can enforce waiting before release. No host currently holds that tier. Ordinary Codex integrations are advisory.",
   ],
   [
     "Can I Use Private Data?",

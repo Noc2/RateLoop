@@ -228,11 +228,12 @@ export default function EvidencePage() {
       </div>
       <p>
         RateLoop does not control output delivery in advisory integrations. Only a verified host adapter that owns the
-        delivery boundary can enforce a held review state. RateLoop records the model identity reported by the connected
-        host for each execution and labels it host-reported; it does not independently verify that the reported model
-        produced the output. RateLoop does not market SOC 2 / ISO / HIPAA / residency attestations it does not hold, and
-        no evidence export by itself makes anyone compliant. The capability-by-capability mapping behind each row lives
-        on <Link href="/docs/human-oversight">Human Oversight</Link>.
+        delivery boundary can enforce a held review state. No host currently holds that tier. RateLoop records the model
+        identity reported by the connected host for each execution and labels it host-reported; it does not
+        independently verify that the reported model produced the output. RateLoop does not market SOC 2 / ISO / HIPAA /
+        residency attestations it does not hold, and no evidence export by itself makes anyone compliant. The
+        capability-by-capability mapping behind each row lives on{" "}
+        <Link href="/docs/human-oversight">Human Oversight</Link>.
       </p>
 
       <h2 id="packet">What an evidence packet contains</h2>

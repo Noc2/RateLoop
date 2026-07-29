@@ -35,7 +35,7 @@ export default function HowTokenlessWorksPage() {
         After connection, the agent reads its owner-approved context and evaluates each eligible output. If review is
         required, it requests one review and waits for the same operation instead of creating a duplicate. Generic MCP
         integrations are advisory; only a verified host integration that controls delivery can establish that the output
-        stayed blocked while it waited.
+        stayed blocked while it waited. No host currently holds that tier.
       </p>
       <p>
         See <Link href="/docs/ai">Agents &amp; MCP</Link> for the connection and tool sequence.

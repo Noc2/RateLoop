@@ -187,7 +187,7 @@ Framework-native LangGraph, OpenAI Agents, Claude Code, and MCP elicitation cont
 
 Generic MCP and ordinary Codex hooks are advisory: the host can bypass them and they do not establish that output remained
 blocked. Only a verified adapter that owns the downstream output boundary and validates RateLoop's signed evidence may
-be described as host-enforced.
+be described as host-enforced. No host currently holds that tier.
 
 Deleting a RateLoop workspace revokes its OAuth token family, access tokens, refresh tokens, connection intent, and agent
 integration. On the next RateLoop Workspace invocation, the protected MCP server should return the standard OAuth

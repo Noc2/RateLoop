@@ -24,8 +24,9 @@ context, organization, and operation.
 | Art 4 · AI literacy            | Exportable training and calibration records for reviewers and oversight persons.                                                                                                                                                                                      | Ensuring sufficient AI literacy across the staff who operate the system.                                |
 
 RateLoop does not control output delivery in advisory integrations. Only a verified host adapter that owns the delivery
-boundary can enforce a held review state. RateLoop records the model identity reported by the connected host for each
-execution and labels it host-reported; it does not independently verify that the reported model produced the output.
+boundary can enforce a held review state. No host currently holds that tier. RateLoop records the
+model identity reported by the connected host for each execution and labels it host-reported; it does not independently
+verify that the reported model produced the output.
 RateLoop does not market SOC 2 / ISO / HIPAA / residency attestations it does not hold, and no evidence export by itself
 makes anyone compliant. The capability-by-capability mapping behind each row lives in
 [`human-oversight.md`](./human-oversight.md); the browser version is [`/docs/human-oversight`](/docs/human-oversight).

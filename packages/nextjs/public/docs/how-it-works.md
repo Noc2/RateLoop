@@ -71,7 +71,7 @@ Installing MCP does not create a background check. The tools must be available i
 pass `rateloop_verify_connection`, and the agent must call the evaluation flow for each eligible output. A policy edit is
 picked up by the next context read; deletion or revocation requires a fresh connection. Generic MCP and ordinary Codex
 hooks are advisory; a verified adapter that owns the output boundary is required when the host must establish that output
-stayed blocked.
+stayed blocked. No host currently holds that tier.
 
 The separately gated fund-backed API and SDK use `quote -> ask -> wait -> result`; they are not the ordinary hosted
 review path. The public MCP Adapter remains a separate, approval-bound browser handoff and never turns draft content

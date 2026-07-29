@@ -23,6 +23,7 @@ test("human-oversight docs map each Article 14(4) measure to a capability and a 
   );
   assert.match(html, /RateLoop does not determine whether the EU AI Act applies or establish compliance\./);
   assert.match(html, /only a verified host integration can enforce its review state at the output boundary\./);
+  assert.match(html, /No host currently holds that tier/i);
   assert.doesNotMatch(html, /primary verified path|verified hosts honor/i);
 
   for (const [requirement, capability, responsibility] of [
@@ -80,6 +81,7 @@ test("machine human-oversight doc mirrors the page and is cross-linked with evid
     /Your people provide oversight\. RateLoop supports the configured workflow and records its evidence\./,
   );
   assert.match(oversight, /only a verified host integration can\s+enforce its review state at the output boundary\./);
+  assert.match(oversight, /No host currently holds that tier/i);
   for (const heading of [
     "### 1. Monitor operation — Article 14(4)(a)",
     "### 2. Counter automation bias — Article 14(4)(b)",

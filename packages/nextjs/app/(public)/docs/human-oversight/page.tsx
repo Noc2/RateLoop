@@ -41,7 +41,7 @@ const OVERSIGHT_SECTIONS = [
     id: "stop",
     requirement: "Article 14(4)(e)",
     title: "Intervene or stop",
-    body: "Only a verified host adapter that controls delivery can establish that an eligible output stayed undelivered until a person decided. Ordinary Codex, plugin, and MCP integrations are advisory: they report the review lifecycle but do not verify interception or withheld delivery. RateLoop's workspace stop blocks new review-triggered release authorizations; a verified host must honor that state at delivery, while an advisory host can bypass it. Releasing the stop restores no agent grant automatically.",
+    body: "Only a verified host adapter that controls delivery can establish that an eligible output stayed undelivered until a person decided. No host currently holds that tier. Ordinary Codex, plugin, and MCP integrations are advisory: they report the review lifecycle but do not verify interception or withheld delivery. RateLoop's workspace stop blocks new review-triggered release authorizations; a verified host must honor that state at delivery, while an advisory host can bypass it. Releasing the stop restores no agent grant automatically.",
     responsibility: "You remain responsible for choosing which outputs are gated, when to intervene, and when to halt.",
   },
 ] as const;
@@ -66,7 +66,7 @@ export default function HumanOversightPage() {
         <p className="mt-3 max-w-4xl text-sm leading-7 text-base-content/75 sm:text-base">
           RateLoop does not determine whether the EU AI Act applies or establish compliance. That depends on your
           system, role, context, organization, and operation. RateLoop operates around your AI system; only a verified
-          host integration can enforce its review state at the output boundary.
+          host integration can enforce its review state at the output boundary. No host currently holds that tier.
         </p>
       </aside>
 

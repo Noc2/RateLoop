@@ -54,6 +54,7 @@ test("evidence docs explain exact artifacts, checks, mappings, and boundaries", 
   assert.match(html, /Choosing those natural persons and ensuring they are competent, trained, and authorized/i);
   assert.match(html, /RateLoop does not control output delivery in advisory integrations/i);
   assert.match(html, /Only a verified host adapter that owns the delivery boundary can enforce a held review state/i);
+  assert.match(html, /No host currently holds that tier/i);
   assert.match(
     html,
     /records the model identity reported by the connected host for each execution and labels it host-reported/i,
@@ -123,6 +124,7 @@ test("machine docs mirror evidence boundaries and are linked from agent setup", 
     evidence,
     /Only a verified host adapter that owns the delivery\s+boundary can enforce a held review state/i,
   );
+  assert.match(evidence, /No host currently holds that tier/i);
   assert.doesNotMatch(evidence, /What this is not|RateLoop never claims|26\(1\)/);
   assert.match(
     evidence,
