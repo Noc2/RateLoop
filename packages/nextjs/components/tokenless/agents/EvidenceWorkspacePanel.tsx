@@ -565,17 +565,18 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
     [attestations],
   );
   const base = `/api/account/workspaces/${encodeURIComponent(workspaceId)}`;
+  const packetSelectionRequested = Boolean(urlSnapshot.state.packetId || urlSnapshot.state.runId);
   const selectedPacket = useMemo(() => {
     const { packetId, runId } = urlSnapshot.state;
-    const selected =
-      packetId || runId
-        ? packets.find(
-            row =>
-              (!packetId || row.packet.payload.packetId === packetId) && (!runId || row.packet.payload.runId === runId),
-          )
-        : null;
-    return selected?.packet ?? packets[0]?.packet ?? null;
+    if (!packetId && !runId) return packets[0]?.packet ?? null;
+    return (
+      packets.find(
+        row =>
+          (!packetId || row.packet.payload.packetId === packetId) && (!runId || row.packet.payload.runId === runId),
+      )?.packet ?? null
+    );
   }, [packets, urlSnapshot.state]);
+  const packetSelectionUnavailable = packetSelectionRequested && !selectedPacket;
   const selectedTrustedKey = selectedPacket
     ? (keys.find(key => key.keyId === selectedPacket.signing.keyId) ?? null)
     : null;
@@ -651,7 +652,25 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
         </Card>
       ) : null}
 
-      {!loading && packets.length === 0 ? (
+      {!loading && !error && packetSelectionUnavailable ? (
+        <Card as="section" className="rounded-2xl p-6" aria-labelledby="evidence-unavailable-heading">
+          <h2 id="evidence-unavailable-heading" className="font-semibold">
+            Evidence record unavailable
+          </h2>
+          <p className="mt-2 text-sm text-base-content/55">
+            The linked run or packet is not available in this workspace.
+          </p>
+          <button
+            type="button"
+            className="btn btn-sm rateloop-secondary-action mt-4"
+            onClick={() => updateUrlState({ runId: null, packetId: null })}
+          >
+            Show available records
+          </button>
+        </Card>
+      ) : null}
+
+      {!loading && !packetSelectionRequested && packets.length === 0 ? (
         <Card as="section" className="rounded-2xl p-6" aria-labelledby="evidence-empty-heading">
           <h2 id="evidence-empty-heading" className="font-semibold">
             No evidence records yet

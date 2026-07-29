@@ -177,6 +177,49 @@ test("a packet reveals verification while manager-only exports and controls stay
   }
 });
 
+test("an invalid evidence deep link fails closed until the selection is cleared", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup, waitFor } = await import("@testing-library/react");
+  const userEvent = (await import("@testing-library/user-event")).default;
+  const restoreFetch = installFetch([
+    {
+      runId: "run-evidence-1",
+      projectId: "project-release-controls",
+      projectName: "Release controls",
+      suiteId: "suite-production-readiness",
+      suiteName: "Production readiness",
+      suiteVersion: 1,
+      evidencePacketAvailable: true,
+    },
+  ]);
+  window.history.replaceState(
+    null,
+    "",
+    "/agents/results?workspace=workspace-evidence&run=missing-run&packet=missing-packet",
+  );
+
+  try {
+    const view = await mount(false);
+    await view.findByRole("heading", { name: "Evidence record unavailable" });
+    assert.ok(view.getByText("The linked run or packet is not available in this workspace."));
+    assert.equal(view.queryByText("Verify an export"), null);
+    assert.equal(view.queryByRole("link", { name: "Link to packet" }), null);
+
+    await userEvent.setup({ document }).click(view.getByRole("button", { name: "Show available records" }));
+    await waitFor(() => {
+      const params = new URLSearchParams(window.location.search);
+      assert.equal(params.has("run"), false);
+      assert.equal(params.has("packet"), false);
+      assert.ok(view.getByText("Verify an export"));
+      assert.equal(view.queryByRole("heading", { name: "Evidence record unavailable" }), null);
+    });
+  } finally {
+    await act(async () => cleanup());
+    restoreFetch();
+    restoreDom();
+  }
+});
+
 test("evidence selection and filters restore from the URL and preserve workspace context on changes", async () => {
   const restoreDom = installTestDom();
   const { act, cleanup, waitFor } = await import("@testing-library/react");
