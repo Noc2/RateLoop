@@ -90,13 +90,7 @@ export async function getScheduledWorkerHealth(input: { accountAddress: string; 
     state,
     currentRun: text(latest, "status") === "running" ? "running" : "idle",
     lastCompletedAt: lastCompletedAt?.toISOString() ?? null,
-    latestRunId: text(latest, "run_id"),
-    signals: signals(latestCompleted),
-    recent: {
-      healthy: runs.filter(row => text(row, "status") === "healthy").length,
-      degraded: runs.filter(row => text(row, "status") === "degraded").length,
-      failed: runs.filter(row => text(row, "status") === "failed").length,
-    },
+    signals: signals(latestCompleted).map(signal => ({ key: signal.key, label: signal.label })),
   };
 }
 

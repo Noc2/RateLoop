@@ -14,13 +14,13 @@ test("workspace maintenance health renders actionable redacted signals", async (
       state: "degraded",
       currentRun: "idle",
       lastCompletedAt: "2026-07-26T11:59:00.000Z",
-      signals: [{ key: "notifications.parked", label: "Parked notifications", count: 2 }],
+      signals: [{ key: "notifications.parked", label: "Parked notifications" }],
     });
   };
   try {
     const view = render(<ScheduledWorkerHealthPanel workspaceId="workspace_health" />);
     await waitFor(() => assert.ok(view.getByText("Maintenance needs attention")));
-    assert.ok(view.getByText("Parked notifications: 2"));
+    assert.ok(view.getByText("Parked notifications"));
     assert.doesNotMatch(view.container.textContent ?? "", /delivery[_-]id|last_error/u);
     await new Promise(resolve => window.setTimeout(resolve, 0));
   } finally {

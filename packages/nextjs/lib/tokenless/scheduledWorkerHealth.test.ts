@@ -54,19 +54,19 @@ test("workspace owners can reach redacted degraded scheduled-worker health", asy
   assert.equal(health.state, "degraded");
   assert.equal(health.lastCompletedAt, completedAt.toISOString());
   assert.deepEqual(
-    health.signals.map(signal => [signal.key, signal.count]),
+    health.signals.map(signal => signal.key),
     [
-      ["processorFailures", 1],
-      ["notifications.parked", 2],
-      ["notifications.retry", 1],
-      ["attestations.unavailable", 1],
-      ["directPrivateReviewDeadlines.retry", 4],
-      ["directPrivateReviewEvidence.dead", 1],
+      "processorFailures",
+      "notifications.parked",
+      "notifications.retry",
+      "attestations.unavailable",
+      "directPrivateReviewDeadlines.retry",
+      "directPrivateReviewEvidence.dead",
     ],
   );
   assert.doesNotMatch(
     JSON.stringify(health),
-    /private detail|private-delivery-id|private-attestation-id|private-opportunity-id|private-evidence-id/u,
+    /private detail|private-delivery-id|private-attestation-id|private-opportunity-id|private-evidence-id|swr_degraded|"count":|recent/u,
   );
 });
 

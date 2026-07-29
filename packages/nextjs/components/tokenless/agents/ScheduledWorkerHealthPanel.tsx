@@ -7,7 +7,7 @@ type Health = {
   state: "degraded" | "healthy" | "stale" | "unavailable";
   currentRun: "idle" | "running";
   lastCompletedAt: string | null;
-  signals: Array<{ key: string; label: string; count: number }>;
+  signals: Array<{ key: string; label: string }>;
 };
 
 type PanelState = { status: "loading" } | { status: "ready"; health: Health } | { status: "error" };
@@ -91,7 +91,7 @@ export function ScheduledWorkerHealthPanel({ workspaceId }: { workspaceId: strin
         <ul className="mt-3 flex flex-wrap gap-2" aria-label="Maintenance issues">
           {health.signals.map(signal => (
             <li key={signal.key} className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs">
-              {signal.label}: {signal.count}
+              {signal.label}
             </li>
           ))}
         </ul>
