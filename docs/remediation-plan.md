@@ -98,6 +98,35 @@ Also correct the Article 26(6) row: that duty attaches to logs the high-risk AI
 system generates, not to a third-party review vendor's records. A six-month retention
 floor _supports_ it and does not satisfy it.
 
+### 0.7 Re-word the EU residency claim
+
+A second false claim of the same species as the verified-host one, found by the
+EU-posture research.
+
+The deployment manifest asserts EU residency across eleven resources, and the schema
+genuinely cannot represent a non-EU tenant — compute is pinned to Frankfurt, workers
+to Amsterdam. But **Vercel's own DPA states its primary processing facilities are in
+the United States and that backups are globally replicated.** Region pinning does not
+cure a term in the provider's contract, and a buyer's counsel who reads both
+documents sees a misrepresentation.
+
+Two further problems sit underneath it. The validator only string-compares
+environment variables against manifest constants and then signs the result — it never
+asks a provider what region a resource is actually in, and the environment file says
+so. And `supportAccess` is declared in the manifest with **no implementing code at
+all**: no break-glass approval, no access logging. Support access is the classic
+residency-breaker.
+
+Re-word to "EU processing region", with an explicit carve-out for backups and
+control-plane data and a note that transfers are covered by standard contractual
+clauses. Roughly a day, and it removes the only outright-false statement in the
+infrastructure story. Literal residency means leaving Vercel and Railway for an
+EU-incorporated host — a re-platform, not a fix.
+
+Also correct the manifest's declared `analytics` processor: no analytics SDK exists
+anywhere in the repository. Over-declaring a processor is a smaller error than
+under-declaring one, but it is still wrong.
+
 ---
 
 ## Tier 1 — Route what already exists
@@ -308,6 +337,103 @@ competitors' pages will not.
 
 ---
 
+## Tier 3b — What an EU buyer actually asks for
+
+The product is sold as a compliance solution to EU companies, and the EU buyer's
+diligence questions are not the ones the rest of this plan answers.
+
+### 3b.1 Turn on enterprise identity
+
+**SAML 2.0, OIDC and SCIM are already built and well hardened** — deprecated
+algorithms rejected, IdP-initiated flows disabled, `InResponseTo` validation on,
+domain verification required, and deprovisioning that reaches memberships, sessions,
+agent OAuth families and MCP sessions. All of it is gated behind a single boolean.
+
+Test it and turn it on. Probably the cheapest enterprise win available anywhere in
+this plan.
+
+### 3b.2 Commit to no model training, because it is already true
+
+**There is no LLM SDK anywhere in the repository** — no OpenAI, Anthropic, AI SDK or
+LangChain dependency. Customer output text never reaches a model provider. The only
+`openai` string in the codebase is telemetry metadata the customer's own agent
+reports.
+
+This is a stronger version of the clause every comparable vendor offers, and it is
+independently verifiable by anyone reading the dependency manifest. Put it in the
+DPA and say why it is checkable.
+
+### 3b.3 Close the DPA's gaps
+
+The DPA maps cleanly to Article 28(3), which most vendors' do not. Four things are
+missing and all are drafting rather than engineering: a breach-notification SLA in
+hours rather than "without undue delay"; a technical and organisational measures
+annex, which the standard contractual clauses require anyway; an encryption-at-rest
+statement, since artifacts are envelope-encrypted but nothing says so; and the
+no-training clause from 3b.2.
+
+One item is not drafting: **§9 promises "current reports" that do not exist.** Either
+produce something or change the sentence.
+
+### 3b.4 Gate customer content by classification before the network lane goes live
+
+Network reviewers receive **decrypted plaintext**, and no data-classification check
+prevents restricted or regulated content from reaching them. Reviewer geoblocking
+covers sanctions only — a reviewer in any other non-EEA country can lawfully receive
+plaintext under the current configuration.
+
+This is the first question an EU security reviewer asks. It costs almost nothing to
+fix **now**, while the lane is inert and no reviewer exists to be affected: refuse the
+network audience above a configurable classification ceiling, and add an EEA-residency
+predicate to the audience policy.
+
+### 3b.5 Ship a trust page
+
+No security attestation exists, and the honest disclaimers about that are scattered
+across legal pages where they read as apology. A single `/trust` page carrying the
+completed security questionnaire, the subprocessor list, the region statement from
+0.7, the no-training commitment, and a dated roadmap converts a hard procurement "no"
+into a conditional "yes" in days rather than months.
+
+Complete the subprocessor list while here: the transparency log, the timestamp
+authority, the GRC connectors and customer-directed object-storage exports are all
+absent from it.
+
+### 3b.6 Buy qualified timestamps
+
+The highest-leverage credibility upgrade available to the evidence product, and it is
+a purchase order.
+
+Signed packets carry **no legal presumption** — they are admissible and nothing more,
+which leaves the customer proving hash construction, key custody and clock source in
+its own litigation, with RateLoop in the witness box. A qualified timestamp under
+eIDAS Article 41(2) reverses that burden onto the challenger, and German and French
+procedural law key their own presumptions to the same tier.
+
+**ETSI EN 319 422 is a profile of RFC 3161, which the attestation pipeline already
+implements.** This is closer to changing a URL and a trust anchor than to building
+anything. Roughly €0.50–2.50 per token. Consider a qualified electronic seal under
+Article 35(2) alongside it.
+
+Do **not** pursue becoming a qualified trust service provider: conformity assessment,
+supervisory approval, biennial audits, and listing is constitutive.
+
+### 3b.7 Keep the scoring deterministic, deliberately
+
+Not a task but a constraint the rest of the roadmap must respect, recorded here so it
+is not traded away by accident.
+
+Scoring reviewers, routing by those scores and pausing assignments is Annex III(4)(b)
+on its face. The product escapes Chapter III because none of it infers. **Any
+inference introduced into scoring, routing or triage risks making RateLoop the
+provider of a high-risk system**, and Article 6(3) offers no relief because profiling
+always forces high-risk status.
+
+If an inference feature is wanted, ship it as a separately licensed, off-by-default
+module and write the Article 3(1) assessment for the core product first.
+
+---
+
 ## Tier 4 — Change how fixes are tested
 
 The obvious remedy is not the right one. "Ship a test with every fix" was **already
@@ -412,16 +538,21 @@ pins the disclosure's label and position.
 
 ## Sequence
 
-| Order | Items     | Why here                                                                   |
-| ----- | --------- | -------------------------------------------------------------------------- |
-| 1     | 0.1 – 0.6 | Every day a false claim ships is exposure. Cheap, and all copy plus tests. |
-| 2     | 2.1       | The evidence gap is the worst defect found. It is one change.              |
-| 3     | 4.1 – 4.3 | Do these before other fixes, so the fixes below inherit the discipline.    |
-| 4     | 1.1 – 1.5 | Routing finished parts. Highest value per hour in the plan.                |
-| 5     | 2.2 – 2.7 | Observability, cheapest first. 2.5 waits on 2.4 having run a while.        |
-| 6     | 3.1 – 3.6 | Needs Tier 0 to have landed, or it re-aims copy that is still false.       |
-| 7     | 1.6       | Wants 1.4 first, so a shared record is verifiable where it opens.          |
-| 8     | 4.4 – 4.6 | Real value, no deadline.                                                   |
+| Order | Items       | Why here                                                                   |
+| ----- | ----------- | -------------------------------------------------------------------------- |
+| 1     | 0.1 – 0.7   | Every day a false claim ships is exposure. Cheap, and all copy plus tests. |
+| 2     | 2.1         | The evidence gap is the worst defect found. It is one change.              |
+| 3     | 3b.4        | Costs nothing while the network lane is inert. It stops being free later.  |
+| 4     | 4.1 – 4.3   | Do these before other fixes, so the fixes below inherit the discipline.    |
+| 5     | 3b.1 – 3b.3 | Enterprise identity is a boolean; the DPA items are drafting.              |
+| 6     | 1.1 – 1.5   | Routing finished parts. Highest value per hour in the plan.                |
+| 7     | 3b.5 – 3b.6 | The trust page needs 0.7's wording; timestamps are a purchase order.       |
+| 8     | 2.2 – 2.7   | Observability, cheapest first. 2.5 waits on 2.4 having run a while.        |
+| 9     | 3.1 – 3.6   | Needs Tier 0 to have landed, or it re-aims copy that is still false.       |
+| 10    | 1.6         | Wants 1.4 first, so a shared record is verifiable where it opens.          |
+| 11    | 4.4 – 4.6   | Real value, no deadline.                                                   |
 
-Tier 0 and item 2.1 are the ones with a deadline attached. Everything else is
-improvement, and improvement can be sequenced by appetite.
+Tier 0, item 2.1 and item 3b.4 are the ones with a deadline attached — the first two
+because they are wrong today, the third because it is free only until the network
+lane has a reviewer in it. Item 3b.7 is a standing constraint rather than a task.
+Everything else is improvement, and improvement can be sequenced by appetite.
