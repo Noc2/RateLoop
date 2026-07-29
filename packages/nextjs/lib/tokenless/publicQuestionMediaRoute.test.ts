@@ -7,6 +7,8 @@ import { POST as uploadImage } from "~~/app/api/agent/v1/media/images/route";
 import { GET } from "~~/app/api/public-media/images/[assetId]/route";
 import { resolveBetterAuthPrincipal } from "~~/lib/auth/principal";
 import { AUTH_SESSION_COOKIE, createAuthSession } from "~~/lib/auth/session";
+import { recordOperatorBusinessVerification } from "~~/lib/billing/businessCustomerEligibility";
+import { updateWorkspaceBillingProfile } from "~~/lib/billing/workspaceBilling";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
@@ -24,6 +26,7 @@ import { createTokenlessQuote } from "~~/lib/tokenless/server";
 const ORIGIN = "https://tokenless.example.test";
 const ASSET_ID = `pqm_${"R".repeat(32)}`;
 const SECOND_ASSET_ID = `pqm_${"S".repeat(32)}`;
+const BUSINESS_EVIDENCE_HASH = "b".repeat(64);
 
 function audiencePolicy() {
   return {
@@ -200,6 +203,21 @@ test("an API-key upload remains private but its exact grant lets a different bro
   });
 
   const now = new Date();
+  await updateWorkspaceBillingProfile({
+    accountAddress: owner.principalId,
+    legalName: "Cross-Principal Preview GmbH",
+    registeredAddress: "Teststrasse 2, Berlin",
+    workspaceId,
+  });
+  await recordOperatorBusinessVerification({
+    operatorReference: "operator:public-media-route-test",
+    reason: "Test fixture matched the workspace to retained register evidence.",
+    verificationExpiresAt: new Date(now.getTime() + 365 * 24 * 60 * 60 * 1_000),
+    verificationMethod: "commercial_register",
+    verificationReferenceHash: BUSINESS_EVIDENCE_HASH,
+    verifiedAt: now,
+    workspaceId,
+  });
   await dbClient.execute({
     sql: `UPDATE tokenless_workspace_subscriptions
           SET plan_key = 'early_access', price_version = 'early_access_usd_99_2026_07',

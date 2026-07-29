@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import sharp from "sharp";
+import { recordOperatorBusinessVerification } from "~~/lib/billing/businessCustomerEligibility";
+import { updateWorkspaceBillingProfile } from "~~/lib/billing/workspaceBilling";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
@@ -27,6 +29,7 @@ import { TokenlessServiceError, createTokenlessAsk, createTokenlessQuote } from 
 const OWNER = "0x1111111111111111111111111111111111111111";
 const OUTSIDER = "0x2222222222222222222222222222222222222222";
 const ASSET_ID = `pqm_${"A".repeat(32)}`;
+const BUSINESS_EVIDENCE_HASH = "a".repeat(64);
 
 function audiencePolicy() {
   return {
@@ -80,6 +83,21 @@ beforeEach(async () => {
   __setPublicQuestionMediaPreviewKeyForTests(new Uint8Array(32).fill(42));
   workspaceId = (await createWorkspace({ name: "Media workspace", ownerAddress: OWNER })).workspaceId;
   const now = new Date();
+  await updateWorkspaceBillingProfile({
+    accountAddress: OWNER,
+    legalName: "Media Test GmbH",
+    registeredAddress: "Teststrasse 1, Berlin",
+    workspaceId,
+  });
+  await recordOperatorBusinessVerification({
+    operatorReference: "operator:public-media-test",
+    reason: "Test fixture matched the workspace to retained register evidence.",
+    verificationExpiresAt: new Date(now.getTime() + 365 * 24 * 60 * 60 * 1_000),
+    verificationMethod: "commercial_register",
+    verificationReferenceHash: BUSINESS_EVIDENCE_HASH,
+    verifiedAt: now,
+    workspaceId,
+  });
   await dbClient.execute({
     sql: `UPDATE tokenless_workspace_subscriptions
           SET plan_key = 'early_access', price_version = 'early_access_usd_99_2026_07',
