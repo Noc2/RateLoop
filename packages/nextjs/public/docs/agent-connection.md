@@ -185,7 +185,7 @@ non-claims, read [`evidence.md`](./evidence.md). The browser version is [`/docs/
 Framework-native LangGraph, OpenAI Agents, Claude Code, and MCP elicitation contracts are documented in
 [`framework-integrations.md`](./framework-integrations.md).
 
-Generic MCP and ordinary Codex hooks are advisory: the host can bypass them and they do not prove that output remained
+Generic MCP and ordinary Codex hooks are advisory: the host can bypass them and they do not establish that output remained
 blocked. Only a verified adapter that owns the downstream output boundary and validates RateLoop's signed evidence may
 be described as host-enforced.
 

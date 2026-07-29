@@ -66,8 +66,8 @@ export default function TokenlessAgentDocsPage() {
         </li>
       </ol>
       <p>
-        Generic MCP is advisory: RateLoop records when review is required, but cannot prove that every host blocks its
-        output. Use a verified host-enforced integration when blocking is mandatory.
+        Generic MCP is advisory: RateLoop records when review is required, but cannot establish that every host blocks
+        its output. No available host integration currently provides verified delivery enforcement.
       </p>
 
       <h2>Connect with Codex</h2>
@@ -101,8 +101,8 @@ codex plugin add rateloop@rateloop`}</CodeBlock>
             host must implement remote Streamable HTTP, OAuth, tool results, and the session lifecycle.
           </p>
           <p>
-            Codex desktop is the primary verified path. Other clients require their own installed-host release smoke
-            test before a named version can be called verified.
+            Codex desktop is a supported connection path. Other clients require their own installed-host release smoke
+            test before a named version can be called release-tested.
           </p>
           <p>
             Use the <a href="/docs/agent-connection.md">host-specific setup and support matrix</a> for the current

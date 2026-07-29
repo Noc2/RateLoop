@@ -129,6 +129,7 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /Connection alone does not intercept outputs/i);
   assert.match(html, /only a verified host adapter that controls delivery can enforce waiting before release/i);
   assert.match(html, /Ordinary Codex integrations are advisory/i);
+  assert.doesNotMatch(html, /primary verified path/i);
   assert.match(html, /What Does RateLoop Record\?/);
   assert.match(html, /How can RateLoop support EU AI Act human oversight\?/);
   assert.match(html, /support configured human-review controls and export evidence relevant to Article 14/i);

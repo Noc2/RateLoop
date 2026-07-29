@@ -28,6 +28,8 @@ test("how-it-works follows the hosted invited-review path", async () => {
   assert.match(html, /requests one review and waits for the same operation instead of creating a duplicate/i);
   assert.match(html, /Generic MCP integrations are advisory/i);
   assert.match(html, /only a verified host integration that controls delivery/i);
+  assert.match(html, /can establish that the output stayed blocked/i);
+  assert.doesNotMatch(html, /can prove the output stayed blocked/i);
   assert.match(html, /only to reviewers invited to the workspace/i);
   assert.match(html, /Reviewers do not see other responses while answering/i);
   assert.match(html, /assigned reviewers and authorized RateLoop workloads may read it/i);

@@ -23,6 +23,7 @@ test("human-oversight docs map each Article 14(4) measure to a capability and a 
   );
   assert.match(html, /RateLoop does not determine whether the EU AI Act applies or establish compliance\./);
   assert.match(html, /only a verified host integration can enforce its review state at the output boundary\./);
+  assert.doesNotMatch(html, /primary verified path|verified hosts honor/i);
 
   for (const [requirement, capability, responsibility] of [
     ["Article 14\\(4\\)\\(a\\)", "oversight dashboard", "watching those surfaces"],

@@ -70,7 +70,7 @@ but cannot spend, publish, read private artifacts, or administer the workspace.
 Installing MCP does not create a background check. The tools must be available in the active task, the connection must
 pass `rateloop_verify_connection`, and the agent must call the evaluation flow for each eligible output. A policy edit is
 picked up by the next context read; deletion or revocation requires a fresh connection. Generic MCP and ordinary Codex
-hooks are advisory; a verified adapter that owns the output boundary is required when the host must prove that output
+hooks are advisory; a verified adapter that owns the output boundary is required when the host must establish that output
 stayed blocked.
 
 The separately gated fund-backed API and SDK use `quote -> ask -> wait -> result`; they are not the ordinary hosted

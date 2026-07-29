@@ -39,12 +39,12 @@ test("evidence docs explain exact artifacts, checks, mappings, and boundaries", 
   ]) {
     assert.match(html, new RegExp(requirement.replace(/[()·]/g, "\\$&")));
   }
-  assert.match(html, /Verified host enforcement can hold output undelivered until a person decides/i);
+  assert.doesNotMatch(html, /Verified host enforcement can hold output undelivered until a person decides/i);
   assert.match(
     html,
     /Advisory Codex, plugin, and MCP integrations record lifecycle state but do not verify withholding/i,
   );
-  assert.match(html, /Workspace stop blocks new RateLoop release authorizations that verified hosts honor/i);
+  assert.match(html, /no available host currently provides verified delivery enforcement/i);
   assert.match(html, /per-output override records with required reasons/i);
   assert.match(html, /Independent blinded review panels/i);
   assert.match(html, /surfaced disagreement before the decision/i);

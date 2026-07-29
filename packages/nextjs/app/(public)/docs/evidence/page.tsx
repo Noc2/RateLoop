@@ -52,7 +52,7 @@ const OVERSIGHT_MATRIX = [
   {
     requirement: "Art 14(4)(e) · Stop",
     provides:
-      "Verified host enforcement can hold output undelivered until a person decides. Advisory Codex, plugin, and MCP integrations record lifecycle state but do not verify withholding. Workspace stop blocks new RateLoop release authorizations that verified hosts honor.",
+      "Advisory Codex, plugin, and MCP integrations record lifecycle state but do not verify withholding. Workspace stop blocks new RateLoop release authorizations, but no available host currently provides verified delivery enforcement.",
     yours: "Choosing which outputs are gated, when to intervene, and when to halt.",
   },
   {
