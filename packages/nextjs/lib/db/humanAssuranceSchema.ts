@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   foreignKey,
   index,
   integer,
@@ -412,7 +413,80 @@ export const tokenlessAssuranceEvidencePackets = pgTable(
   },
   table => ({
     runUnique: uniqueIndex("tokenless_assurance_evidence_packets_run_unique").on(table.runId),
+    runPacketUnique: uniqueIndex("tokenless_assurance_evidence_packets_run_packet_unique").on(
+      table.runId,
+      table.packetId,
+    ),
     packetDigestUnique: uniqueIndex("tokenless_assurance_evidence_packets_digest_unique").on(table.packetDigest),
+  }),
+);
+
+export const tokenlessAssuranceEvidenceShareGrants = pgTable(
+  "tokenless_assurance_evidence_share_grants",
+  {
+    grantId: text("grant_id").primaryKey(),
+    tokenHash: text("token_hash").notNull().unique(),
+    workspaceId: text("workspace_id").notNull(),
+    projectId: text("project_id").notNull(),
+    runId: text("run_id").notNull(),
+    packetId: text("packet_id").notNull(),
+    createdBy: text("created_by").notNull(),
+    createdAt: time("created_at").notNull(),
+    expiresAt: time("expires_at").notNull(),
+    revokedAt: time("revoked_at"),
+    accessCount: integer("access_count").notNull().default(0),
+    lastAccessedAt: time("last_accessed_at"),
+  },
+  table => ({
+    workspaceProjectFk: foreignKey({
+      name: "tokenless_assurance_evidence_share_grants_workspace_project_fk",
+      columns: [table.workspaceId, table.projectId],
+      foreignColumns: [tokenlessAssuranceProjects.workspaceId, tokenlessAssuranceProjects.projectId],
+    }),
+    projectRunFk: foreignKey({
+      name: "tokenless_assurance_evidence_share_grants_project_run_fk",
+      columns: [table.projectId, table.runId],
+      foreignColumns: [tokenlessAssuranceRuns.projectId, tokenlessAssuranceRuns.runId],
+    }),
+    runPacketFk: foreignKey({
+      name: "tokenless_assurance_evidence_share_grants_run_packet_fk",
+      columns: [table.runId, table.packetId],
+      foreignColumns: [tokenlessAssuranceEvidencePackets.runId, tokenlessAssuranceEvidencePackets.packetId],
+    }),
+    idCheck: check(
+      "tokenless_assurance_evidence_share_grants_id_check",
+      sql`${table.grantId} ~ '^esh_[A-Za-z0-9_-]{22}$'`,
+    ),
+    tokenHashCheck: check(
+      "tokenless_assurance_evidence_share_grants_token_hash_check",
+      sql`${table.tokenHash} ~ '^sha256:[0-9a-f]{64}$'`,
+    ),
+    expiryCheck: check(
+      "tokenless_assurance_evidence_share_grants_expiry_check",
+      sql`${table.expiresAt} > ${table.createdAt}`,
+    ),
+    revocationCheck: check(
+      "tokenless_assurance_evidence_share_grants_revocation_check",
+      sql`${table.revokedAt} IS NULL OR ${table.revokedAt} >= ${table.createdAt}`,
+    ),
+    accessCountCheck: check(
+      "tokenless_assurance_evidence_share_grants_access_count_check",
+      sql`${table.accessCount} >= 0`,
+    ),
+    accessTimeCheck: check(
+      "tokenless_assurance_evidence_share_grants_access_time_check",
+      sql`(${table.accessCount} = 0 AND ${table.lastAccessedAt} IS NULL)
+          OR (${table.accessCount} > 0 AND ${table.lastAccessedAt} IS NOT NULL)`,
+    ),
+    runIdx: index("tokenless_assurance_evidence_share_grants_run_idx").on(
+      table.workspaceId,
+      table.projectId,
+      table.runId,
+      table.createdAt,
+    ),
+    activeIdx: index("tokenless_assurance_evidence_share_grants_active_idx")
+      .on(table.expiresAt)
+      .where(sql`${table.revokedAt} IS NULL`),
   }),
 );
 

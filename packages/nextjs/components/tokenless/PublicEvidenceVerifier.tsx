@@ -43,9 +43,9 @@ function CheckResult({ check }: { check: PublicEvidenceVerificationResult["check
   );
 }
 
-export function PublicEvidenceVerifier() {
-  const [packetJson, setPacketJson] = useState("");
-  const [sourceName, setSourceName] = useState<string | null>(null);
+export function PublicEvidenceVerifier({ initialPacketJson = "" }: { initialPacketJson?: string }) {
+  const [packetJson, setPacketJson] = useState(initialPacketJson);
+  const [sourceName, setSourceName] = useState<string | null>(initialPacketJson ? "Shared packet" : null);
   const [result, setResult] = useState<PublicEvidenceVerificationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -129,8 +129,9 @@ export function PublicEvidenceVerifier() {
           </button>
         </div>
         <p className="mt-4 text-sm leading-6 text-base-content/60">
-          Maximum 2 MB. Your packet stays in this browser. RateLoop does not upload, store, or send telemetry about its
-          contents; this page only fetches the public verification keys.
+          {initialPacketJson
+            ? "Maximum 2 MB. Verification runs in this browser; the verifier does not upload the packet or send telemetry about its contents. This page only fetches the public verification keys."
+            : "Maximum 2 MB. Your packet stays in this browser. RateLoop does not upload, store, or send telemetry about its contents; this page only fetches the public verification keys."}
         </p>
       </div>
 

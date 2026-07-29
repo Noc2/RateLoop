@@ -4,6 +4,7 @@ import { dbClient } from "~~/lib/db";
 import { TokenlessMcpHttpError } from "~~/lib/mcp/errors";
 
 const REQUESTS_PER_MINUTE = 60;
+const EVIDENCE_SHARE_REQUESTS_PER_MINUTE = 20;
 const MINIMUM_SECRET_LENGTH = 32;
 
 function rateLimitSecret() {
@@ -46,9 +47,9 @@ function clientIdentity(headers: Headers) {
   throw new TokenlessMcpHttpError("MCP client identity is unavailable.", 503, "rate_limit_identity_unavailable");
 }
 
-function hashClient(headers: Headers) {
+function hashClient(headers: Headers, namespace: string) {
   return createHmac("sha256", rateLimitSecret())
-    .update(`rateloop-mcp-rate-limit\0${clientIdentity(headers)}`)
+    .update(`${namespace}\0${clientIdentity(headers)}`)
     .digest("hex");
 }
 
@@ -58,9 +59,9 @@ function minuteWindow(now: Date) {
   return window;
 }
 
-export async function consumeMcpRateLimit(headers: Headers, now = new Date()) {
-  const clientHash = hashClient(headers);
-  const windowStartedAt = minuteWindow(now);
+async function consumeRateLimit(input: { headers: Headers; limit: number; namespace: string; now: Date }) {
+  const clientHash = hashClient(input.headers, input.namespace);
+  const windowStartedAt = minuteWindow(input.now);
 
   try {
     const result = await dbClient.execute({
@@ -86,21 +87,39 @@ export async function consumeMcpRateLimit(headers: Headers, now = new Date()) {
               END,
               updated_at = EXCLUDED.updated_at
             RETURNING request_count, window_started_at`,
-      args: [clientHash, windowStartedAt, now],
+      args: [clientHash, windowStartedAt, input.now],
     });
     const requestCount = Number(result.rows[0]?.request_count);
     if (!Number.isSafeInteger(requestCount) || requestCount < 1) {
       throw new Error("Invalid MCP rate-limit counter.");
     }
     return {
-      allowed: requestCount <= REQUESTS_PER_MINUTE,
-      limit: REQUESTS_PER_MINUTE,
-      remaining: Math.max(0, REQUESTS_PER_MINUTE - requestCount),
+      allowed: requestCount <= input.limit,
+      limit: input.limit,
+      remaining: Math.max(0, input.limit - requestCount),
       requestCount,
-      retryAfterSeconds: Math.max(1, Math.ceil((windowStartedAt.getTime() + 60_000 - now.getTime()) / 1_000)),
+      retryAfterSeconds: Math.max(1, Math.ceil((windowStartedAt.getTime() + 60_000 - input.now.getTime()) / 1_000)),
     };
   } catch (error) {
     if (error instanceof TokenlessMcpHttpError) throw error;
     throw new TokenlessMcpHttpError("MCP rate limiting is unavailable.", 503, "rate_limit_unavailable");
   }
+}
+
+export async function consumeMcpRateLimit(headers: Headers, now = new Date()) {
+  return consumeRateLimit({
+    headers,
+    limit: REQUESTS_PER_MINUTE,
+    namespace: "rateloop-mcp-rate-limit",
+    now,
+  });
+}
+
+export async function consumeEvidenceShareRateLimit(headers: Headers, now = new Date()) {
+  return consumeRateLimit({
+    headers,
+    limit: EVIDENCE_SHARE_REQUESTS_PER_MINUTE,
+    namespace: "rateloop-evidence-share-rate-limit",
+    now,
+  });
 }

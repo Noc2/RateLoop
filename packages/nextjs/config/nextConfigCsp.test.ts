@@ -59,6 +59,20 @@ test("thirdweb OAuth popups retain their opener", async () => {
   assert.equal(await getGlobalHeaderValue("Cross-Origin-Opener-Policy"), "same-origin-allow-popups");
 });
 
+test("shared evidence pages are non-cacheable, non-indexable, and never send referrers", async () => {
+  const headers = typeof nextConfig.headers === "function" ? await nextConfig.headers() : [];
+  const evidenceHeaders = headers.find(header => header.source === "/evidence/share/:path*")?.headers ?? [];
+  const value = (key: string) => evidenceHeaders.find(header => header.key === key)?.value;
+
+  assert.equal(value("Cache-Control"), "private, no-store, max-age=0");
+  assert.equal(value("Referrer-Policy"), "no-referrer");
+  assert.equal(value("X-Robots-Tag"), "noindex, nofollow, noarchive");
+  assert.ok(
+    headers.findIndex(header => header.source === "/evidence/share/:path*") >
+      headers.findIndex(header => header.source === "/(.*)"),
+  );
+});
+
 test("script-src uses the middleware nonce without unsafe-inline", async () => {
   const csp = await getContentSecurityPolicy();
   const scriptSrc = csp

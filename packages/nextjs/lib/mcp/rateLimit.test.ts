@@ -3,7 +3,7 @@ import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { TokenlessMcpHttpError } from "~~/lib/mcp/errors";
-import { consumeMcpRateLimit } from "~~/lib/mcp/rateLimit";
+import { consumeEvidenceShareRateLimit, consumeMcpRateLimit } from "~~/lib/mcp/rateLimit";
 
 const originalSecret = process.env.TOKENLESS_MCP_RATE_LIMIT_SECRET;
 
@@ -90,6 +90,33 @@ test("uses Vercel's authoritative client IP instead of caller-controlled proxy h
   const stored = await dbClient.execute("SELECT client_hash, request_count FROM tokenless_mcp_rate_limits");
   assert.equal(stored.rows.length, 1);
   assert.equal(Number(stored.rows[0]?.request_count), 2);
+});
+
+test("evidence shares have a lower domain-separated counter without consuming the MCP allowance", async () => {
+  const headers = new Headers({ "x-real-ip": "203.0.113.21" });
+  const now = new Date("2026-07-13T12:34:12.000Z");
+  for (let request = 1; request <= 20; request += 1) {
+    const result = await consumeEvidenceShareRateLimit(headers, now);
+    assert.equal(result.allowed, true);
+    assert.equal(result.limit, 20);
+    assert.equal(result.requestCount, request);
+  }
+  const denied = await consumeEvidenceShareRateLimit(headers, now);
+  assert.equal(denied.allowed, false);
+  assert.equal(denied.requestCount, 21);
+
+  const mcp = await consumeMcpRateLimit(headers, now);
+  assert.equal(mcp.allowed, true);
+  assert.equal(mcp.limit, 60);
+  assert.equal(mcp.requestCount, 1);
+  const stored = await dbClient.execute(
+    "SELECT client_hash,request_count FROM tokenless_mcp_rate_limits ORDER BY client_hash",
+  );
+  assert.equal(stored.rows.length, 2);
+  assert.deepEqual(
+    stored.rows.map(row => Number(row.request_count)).sort((left, right) => left - right),
+    [1, 21],
+  );
 });
 
 test("fails closed when the atomic database counter is unavailable", async () => {

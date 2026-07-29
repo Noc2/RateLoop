@@ -80,12 +80,42 @@ const secondEvidencePacket = {
 function installFetch(runs: Record<string, unknown>[]) {
   const previousFetch = globalThis.fetch;
   let auditors: Array<Record<string, unknown>> = [];
+  let shares: Array<Record<string, unknown>> = [];
   globalThis.fetch = async (input, init) => {
     const url = String(input);
     const method = init?.method ?? "GET";
     if (url.includes("/evaluations")) return Response.json(dashboard(runs));
     if (url.endsWith("/assurance/runs/run-evidence-1/evidence")) return Response.json(evidencePacket);
     if (url.endsWith("/assurance/runs/run-evidence-2/evidence")) return Response.json(secondEvidencePacket);
+    if (url.endsWith("/assurance/runs/run-evidence-1/evidence/shares") && method === "GET") {
+      return Response.json({ shares });
+    }
+    if (url.endsWith("/assurance/runs/run-evidence-2/evidence/shares") && method === "GET") {
+      return Response.json({ shares: [] });
+    }
+    if (url.endsWith("/assurance/runs/run-evidence-1/evidence/shares") && method === "POST") {
+      const share = {
+        grantId: "esh_1234567890123456789012",
+        packetId: "packet-evidence-1",
+        runId: "run-evidence-1",
+        createdAt: "2026-07-29T10:00:00.000Z",
+        expiresAt: "2026-08-05T10:00:00.000Z",
+        revokedAt: null,
+        accessCount: 0,
+        lastAccessedAt: null,
+        status: "active",
+      };
+      shares = [share];
+      return Response.json({
+        share,
+        shareUrl:
+          "https://rateloop-tokenless.vercel.app/evidence/share/esh_1234567890123456789012#abcdefghijklmnopqrstuvwxyzABCDEFGH123456789",
+      });
+    }
+    if (url.endsWith("/evidence/shares/esh_1234567890123456789012") && method === "DELETE") {
+      shares = [];
+      return new Response(null, { status: 204 });
+    }
     if (url.includes("/assurance/attestations?")) return Response.json({ attestations: [] });
     if (url.endsWith("/assurance/retention")) {
       return Response.json({
@@ -196,6 +226,44 @@ test("a packet reveals verification while manager-only exports and controls stay
     assert.ok(view.getByText("4 min"));
     assert.equal(view.queryByRole("heading", { name: "Compliance exports" }), null);
     assert.equal(view.queryByRole("button", { name: "Retention, keys, and delivery" }), null);
+  } finally {
+    await act(async () => cleanup());
+    restoreFetch();
+    restoreDom();
+  }
+});
+
+test("packet viewers can create a fragment-only seven-day link and revoke it directly", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup, waitFor } = await import("@testing-library/react");
+  const userEvent = (await import("@testing-library/user-event")).default;
+  const restoreFetch = installFetch([
+    {
+      runId: "run-evidence-1",
+      projectId: "project-release-controls",
+      projectName: "Release controls",
+      suiteId: "suite-production-readiness",
+      suiteName: "Production readiness",
+      suiteVersion: 1,
+      evidencePacketAvailable: true,
+    },
+  ]);
+
+  try {
+    const view = await mount(false);
+    await view.findByRole("heading", { name: "Decision packets" });
+    const user = userEvent.setup({ document });
+    assert.ok(view.getByText("Anyone with the link can open this packet for 7 days. The secret is shown once."));
+    await user.click(view.getByRole("button", { name: "Share for 7 days" }));
+    const input = (await view.findByRole("textbox", { name: "Share link" })) as HTMLInputElement;
+    const shareUrl = new URL(input.value);
+    assert.equal(shareUrl.pathname, "/evidence/share/esh_1234567890123456789012");
+    assert.equal(shareUrl.search, "");
+    assert.ok(shareUrl.hash.length > 1);
+    assert.ok(view.getByRole("button", { name: "Revoke link" }));
+
+    await user.click(view.getByRole("button", { name: "Revoke link" }));
+    await waitFor(() => assert.equal(view.queryByRole("button", { name: "Revoke link" }), null));
   } finally {
     await act(async () => cleanup());
     restoreFetch();

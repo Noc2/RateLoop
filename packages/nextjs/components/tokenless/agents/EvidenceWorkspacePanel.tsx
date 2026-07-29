@@ -84,6 +84,18 @@ type PacketRow = {
   suiteId: string;
   suiteName: string;
   suiteVersion: number;
+  shares: EvidenceShareGrant[];
+};
+type EvidenceShareGrant = {
+  grantId: string;
+  packetId: string;
+  runId: string;
+  createdAt: string;
+  expiresAt: string;
+  revokedAt: string | null;
+  accessCount: number;
+  lastAccessedAt: string | null;
+  status: "active" | "expired" | "revoked";
 };
 type Attestation = {
   jobId: string;
@@ -630,6 +642,9 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyPacket, setBusyPacket] = useState<string | null>(null);
+  const [busyShare, setBusyShare] = useState<string | null>(null);
+  const [shareUrls, setShareUrls] = useState<Record<string, string>>({});
+  const [copiedShare, setCopiedShare] = useState<string | null>(null);
   const [showAdvancedControls, setShowAdvancedControls] = useState(false);
   const [urlReady, setUrlReady] = useState(false);
   const [urlSnapshot, setUrlSnapshot] = useState<EvidenceUrlSnapshot>(() => {
@@ -690,19 +705,32 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
       const packetRows = await Promise.all(
         dashboard.runs
           .filter(run => run.evidencePacketAvailable)
-          .map(async run => ({
-            packet: await readJson<EvidencePacket>(
-              await fetch(`${base}/assurance/runs/${encodeURIComponent(run.runId)}/evidence`, {
-                cache: "no-store",
-                credentials: "same-origin",
-              }),
-            ),
-            projectId: run.projectId,
-            projectName: run.projectName,
-            suiteId: run.suiteId,
-            suiteName: run.suiteName,
-            suiteVersion: run.suiteVersion,
-          })),
+          .map(async run => {
+            const runBase = `${base}/assurance/runs/${encodeURIComponent(run.runId)}/evidence`;
+            const [packet, shares] = await Promise.all([
+              readJson<EvidencePacket>(
+                await fetch(runBase, {
+                  cache: "no-store",
+                  credentials: "same-origin",
+                }),
+              ),
+              readJson<{ shares: EvidenceShareGrant[] }>(
+                await fetch(`${runBase}/shares`, {
+                  cache: "no-store",
+                  credentials: "same-origin",
+                }),
+              ),
+            ]);
+            return {
+              packet,
+              shares: shares.shares,
+              projectId: run.projectId,
+              projectName: run.projectName,
+              suiteId: run.suiteId,
+              suiteName: run.suiteName,
+              suiteVersion: run.suiteVersion,
+            };
+          }),
       );
       setPackets(packetRows);
       if (canManage) {
@@ -895,7 +923,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
               <p className="mt-2 text-sm text-base-content/55">Clear or change the filters.</p>
             </Card>
           ) : null}
-          {visiblePackets.map(({ packet, projectName, suiteName }) => {
+          {visiblePackets.map(({ packet, projectName, shares, suiteName }) => {
             const selected =
               selectedPacket?.payload.packetId === packet.payload.packetId &&
               selectedPacket.payload.runId === packet.payload.runId;
@@ -987,8 +1015,136 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                     >
                       {busyPacket === packet.payload.packetId ? "Exporting…" : "Export packet"}
                     </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm rateloop-secondary-action"
+                      disabled={busyShare === packet.payload.packetId}
+                      aria-describedby={`share-note-${packet.payload.packetId}`}
+                      onClick={() => {
+                        setBusyShare(packet.payload.packetId);
+                        setError(null);
+                        void fetch(
+                          `${base}/assurance/runs/${encodeURIComponent(packet.payload.runId)}/evidence/shares`,
+                          {
+                            method: "POST",
+                            credentials: "same-origin",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ expiresAt: new Date(Date.now() + 7 * 86_400_000).toISOString() }),
+                          },
+                        )
+                          .then(response => readJson<{ share: EvidenceShareGrant; shareUrl: string }>(response))
+                          .then(created => {
+                            setPackets(current =>
+                              current.map(row =>
+                                packetIdentity(row) === `${packet.payload.runId}\u0000${packet.payload.packetId}`
+                                  ? { ...row, shares: [created.share, ...row.shares] }
+                                  : row,
+                              ),
+                            );
+                            setShareUrls(current => ({ ...current, [created.share.grantId]: created.shareUrl }));
+                          })
+                          .catch(cause =>
+                            setError(cause instanceof Error ? cause.message : "Unable to share evidence packet."),
+                          )
+                          .finally(() => setBusyShare(null));
+                      }}
+                    >
+                      {busyShare === packet.payload.packetId ? "Creating link…" : "Share for 7 days"}
+                    </button>
                   </div>
                 </div>
+                <p className="mt-3 text-xs leading-5 text-base-content/50" id={`share-note-${packet.payload.packetId}`}>
+                  Anyone with the link can open this packet for 7 days. The secret is shown once.
+                </p>
+                {shares.some(share => share.status === "active") ? (
+                  <div className="mt-4 space-y-3 rounded-xl border border-white/10 bg-white/[0.025] p-4">
+                    {shares
+                      .filter(share => share.status === "active")
+                      .map(share => (
+                        <div className="flex flex-col gap-2" key={share.grantId}>
+                          <p className="text-xs text-base-content/60">
+                            Shared link expires {new Date(share.expiresAt).toLocaleString()}
+                            {share.accessCount
+                              ? ` · opened ${share.accessCount} time${share.accessCount === 1 ? "" : "s"}`
+                              : ""}
+                          </p>
+                          {shareUrls[share.grantId] ? (
+                            <div className="flex flex-col gap-2 sm:flex-row">
+                              <input
+                                aria-label="Share link"
+                                className="input input-sm min-w-0 flex-1 border-white/10 bg-[var(--rateloop-field)] font-mono text-xs"
+                                readOnly
+                                value={shareUrls[share.grantId]}
+                                onFocus={event => event.currentTarget.select()}
+                              />
+                              <button
+                                className="btn btn-sm rateloop-secondary-action"
+                                type="button"
+                                onClick={() => {
+                                  if (!navigator.clipboard) {
+                                    setError("Select the share link and copy it manually.");
+                                    return;
+                                  }
+                                  void navigator.clipboard
+                                    .writeText(shareUrls[share.grantId])
+                                    .then(() => setCopiedShare(share.grantId))
+                                    .catch(() => setError("Select the share link and copy it manually."));
+                                }}
+                              >
+                                {copiedShare === share.grantId ? "Copied" : "Copy link"}
+                              </button>
+                            </div>
+                          ) : (
+                            <p className="text-xs text-base-content/50">
+                              The link secret was shown once. Revoke this link if it is no longer controlled.
+                            </p>
+                          )}
+                          <button
+                            className="btn btn-sm w-fit border-red-300/20 bg-red-300/[0.05] text-red-100"
+                            type="button"
+                            disabled={busyShare === share.grantId}
+                            onClick={() => {
+                              setBusyShare(share.grantId);
+                              void fetch(
+                                `${base}/assurance/runs/${encodeURIComponent(
+                                  packet.payload.runId,
+                                )}/evidence/shares/${encodeURIComponent(share.grantId)}`,
+                                { method: "DELETE", credentials: "same-origin" },
+                              )
+                                .then(response => {
+                                  if (!response.ok) return readJson(response);
+                                  setPackets(current =>
+                                    current.map(row =>
+                                      packetIdentity(row) === `${packet.payload.runId}\u0000${packet.payload.packetId}`
+                                        ? {
+                                            ...row,
+                                            shares: row.shares.map(item =>
+                                              item.grantId === share.grantId
+                                                ? { ...item, status: "revoked", revokedAt: new Date().toISOString() }
+                                                : item,
+                                            ),
+                                          }
+                                        : row,
+                                    ),
+                                  );
+                                  setShareUrls(current => {
+                                    const next = { ...current };
+                                    delete next[share.grantId];
+                                    return next;
+                                  });
+                                })
+                                .catch(cause =>
+                                  setError(cause instanceof Error ? cause.message : "Unable to revoke evidence share."),
+                                )
+                                .finally(() => setBusyShare(null));
+                            }}
+                          >
+                            {busyShare === share.grantId ? "Revoking…" : "Revoke link"}
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+                ) : null}
                 {newerPacket ? (
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--rateloop-blue)]/25 bg-[var(--rateloop-blue)]/[0.05] px-4 py-3 text-xs leading-5">
                     <p className="text-base-content/70">
