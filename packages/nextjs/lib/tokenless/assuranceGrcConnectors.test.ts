@@ -564,6 +564,92 @@ test("pausing a connector fences a worker before credential resolution or provid
   assert.equal(receipts.rows.length, 0);
 });
 
+test("pause and update reject an active provider reservation without holding its database transaction open", async () => {
+  const workspace = await createWorkspace({ name: "Reserved GRC delivery", ownerAddress: OWNER_A });
+  const created = await createWorkspaceGrcConnector({
+    accountAddress: OWNER_A,
+    workspaceId: workspace.workspaceId,
+    body: connectorBody(),
+    now: new Date("2026-07-14T11:00:00.000Z"),
+  });
+  await dbClient.execute({
+    sql: "UPDATE tokenless_assurance_grc_connectors SET next_reconcile_at = ? WHERE connector_id = ?",
+    args: [new Date("2026-07-15T00:00:00.000Z"), created.connectorId],
+  });
+  const deliveryStarted = deferred();
+  const releaseDelivery = deferred();
+  const processing = processDueGrcReconciliations({
+    now: new Date("2026-07-15T00:05:00.000Z"),
+    source: async () => reconciliationSourceData(),
+    credentialResolver: async () => "active-runtime-token",
+    adapters: {
+      vanta: {
+        provider: "vanta",
+        async deliver() {
+          deliveryStarted.resolve();
+          await releaseDelivery.promise;
+          return { externalReference: "vanta:delivery:reserved", recordCount: 2 };
+        },
+      },
+    },
+  });
+  await deliveryStarted.promise;
+
+  for (const mutation of [
+    () =>
+      pauseWorkspaceGrcConnector({
+        accountAddress: OWNER_A,
+        workspaceId: workspace.workspaceId,
+        connectorId: created.connectorId,
+        now: new Date("2026-07-15T00:05:01.000Z"),
+      }),
+    () =>
+      updateWorkspaceGrcConnector({
+        accountAddress: OWNER_A,
+        workspaceId: workspace.workspaceId,
+        connectorId: created.connectorId,
+        body: { ...connectorBody(), displayName: "Must wait for delivery" },
+        now: new Date("2026-07-15T00:05:02.000Z"),
+      }),
+  ]) {
+    await assert.rejects(
+      mutation,
+      (error: unknown) =>
+        error instanceof TokenlessServiceError &&
+        error.code === "grc_delivery_in_progress" &&
+        error.status === 409 &&
+        error.retryable,
+    );
+  }
+
+  releaseDelivery.resolve();
+  assert.deepEqual(await processing, { enqueued: 1, claimed: 1, succeeded: 1, retry: 0, failed: 0 });
+  await pauseWorkspaceGrcConnector({
+    accountAddress: OWNER_A,
+    workspaceId: workspace.workspaceId,
+    connectorId: created.connectorId,
+    now: new Date("2026-07-15T00:05:03.000Z"),
+  });
+  const connector = await dbClient.execute({
+    sql: `SELECT status, version, last_delivery_status
+          FROM tokenless_assurance_grc_connectors WHERE connector_id = ?`,
+    args: [created.connectorId],
+  });
+  assert.deepEqual(
+    [connector.rows[0]?.status, connector.rows[0]?.version, connector.rows[0]?.last_delivery_status],
+    ["paused", 2, null],
+  );
+  const receipt = await dbClient.execute({
+    sql: `SELECT state, external_reference
+          FROM tokenless_assurance_grc_delivery_receipts WHERE connector_id = ?`,
+    args: [created.connectorId],
+  });
+  assert.deepEqual(
+    receipt.rows.map(row => [row.state, row.external_reference]),
+    [["delivered", "vanta:delivery:reserved"]],
+  );
+});
+
 test("updating a connector fences the old version before credential resolution or provider delivery", async () => {
   const workspace = await createWorkspace({ name: "Rotated GRC worker", ownerAddress: OWNER_A });
   const created = await createWorkspaceGrcConnector({

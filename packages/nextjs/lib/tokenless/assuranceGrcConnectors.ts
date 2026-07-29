@@ -262,6 +262,35 @@ async function connectorRows(client: Queryable, workspaceId: string) {
   );
 }
 
+async function rejectActiveDeliveryReservation(
+  client: Queryable,
+  input: { workspaceId: string; connectorId: string; connectorVersion: number },
+) {
+  const active = await client.query(
+    `SELECT jobs.job_id
+     FROM tokenless_assurance_grc_reconciliation_jobs AS jobs
+     JOIN tokenless_assurance_grc_delivery_receipts AS receipts
+       ON receipts.workspace_id = jobs.workspace_id
+      AND receipts.connector_id = jobs.connector_id
+      AND receipts.job_id = jobs.job_id
+      AND receipts.artifact_kind = 'assurance_evidence_bundle'
+      AND receipts.artifact_key = jobs.job_id
+     WHERE jobs.workspace_id = $1 AND jobs.connector_id = $2
+       AND jobs.connector_version = $3 AND jobs.state = 'processing'
+       AND receipts.state = 'preparing'
+     LIMIT 1`,
+    [input.workspaceId, input.connectorId, input.connectorVersion],
+  );
+  if (active.rows.length > 0) {
+    throw new TokenlessServiceError(
+      "GRC evidence delivery is in progress. Retry after it finishes.",
+      409,
+      "grc_delivery_in_progress",
+      true,
+    );
+  }
+}
+
 async function receiptMap(client: Queryable, workspaceId: string, connectorIds: string[]) {
   const values = new Map<string, WorkspaceGrcConnector["lastReceipt"]>();
   for (const connectorId of connectorIds) {
@@ -392,6 +421,12 @@ export async function updateWorkspaceGrcConnector(input: {
     if (!current.rows[0]) {
       throw new TokenlessServiceError("GRC connector not found.", 404, "grc_connector_not_found");
     }
+    const currentVersion = integer(current.rows[0], "version");
+    await rejectActiveDeliveryReservation(client, {
+      workspaceId: input.workspaceId,
+      connectorId: input.connectorId,
+      connectorVersion: currentVersion,
+    });
     if (settings.provider !== requiredText(current.rows[0], "provider") && settings.credentialReference === null) {
       throw new TokenlessServiceError(
         "Changing the GRC provider requires a new opaque credential reference.",
@@ -401,7 +436,7 @@ export async function updateWorkspaceGrcConnector(input: {
     }
     const reference = settings.credentialReference ?? requiredText(current.rows[0], "credential_reference");
     referenceDigest = grcSha256(reference);
-    const version = integer(current.rows[0], "version") + 1;
+    const version = currentVersion + 1;
     const updated = await client.query(
       `UPDATE tokenless_assurance_grc_connectors
        SET version = $1, provider = $2, display_name = $3, credential_reference = $4,
@@ -469,12 +504,27 @@ export async function pauseWorkspaceGrcConnector(input: {
   try {
     await client.query("BEGIN");
     actor = await requireWorkspaceManager(client, input.accountAddress, input.workspaceId);
+    const current = await client.query(
+      `SELECT version FROM tokenless_assurance_grc_connectors
+       WHERE workspace_id = $1 AND connector_id = $2 FOR UPDATE`,
+      [input.workspaceId, input.connectorId],
+    );
+    if (!current.rows[0]) {
+      throw new TokenlessServiceError("GRC connector not found.", 404, "grc_connector_not_found");
+    }
+    const currentVersion = integer(current.rows[0], "version");
+    await rejectActiveDeliveryReservation(client, {
+      workspaceId: input.workspaceId,
+      connectorId: input.connectorId,
+      connectorVersion: currentVersion,
+    });
     const updated = await client.query(
       `UPDATE tokenless_assurance_grc_connectors
        SET status = 'paused', version = version + 1, last_delivery_status = NULL,
            last_error_code = NULL, updated_at = $1
-       WHERE workspace_id = $2 AND connector_id = $3 RETURNING connector_id, version`,
-      [now, input.workspaceId, input.connectorId],
+       WHERE workspace_id = $2 AND connector_id = $3 AND version = $4
+       RETURNING connector_id, version`,
+      [now, input.workspaceId, input.connectorId, currentVersion],
     );
     if (updated.rows.length !== 1) {
       throw new TokenlessServiceError("GRC connector not found.", 404, "grc_connector_not_found");
@@ -1036,57 +1086,47 @@ async function deliverAndMarkJobSucceeded(input: {
   providerConfig: DrataProviderConfig | VantaProviderConfig;
   adapter: GrcProviderAdapter;
 }) {
-  const client = await dbPool.connect();
-  try {
-    await client.query("BEGIN");
-    // Keep both fences locked through secret resolution and provider I/O. A
-    // pause or rotation can therefore return only before this claim starts the
-    // delivery or after its idempotent success has been recorded.
-    await lockActiveJobFence(client, input.row);
-    const credential = await input.credentialResolver({
-      workspaceId: requiredText(input.row, "workspace_id"),
-      connectorId: requiredText(input.row, "connector_id"),
-      provider: input.provider,
-      credentialReference: input.credentialReference,
-      credentialReferenceDigest: input.credentialReferenceDigest,
-    });
-    if (!credential.trim()) {
-      throw new TokenlessServiceError(
-        "The GRC credential resolver returned no credential.",
-        503,
-        "grc_credential_unavailable",
-        true,
-      );
-    }
-    const delivery = await input.adapter.deliver({
-      bundle: input.bundle,
-      credential,
-      idempotencyKey: requiredText(input.row, "idempotency_key"),
-      providerConfig: input.providerConfig,
-    });
-    const expectedRecordCount = input.bundle.coverageTests.length + input.bundle.documentEvidence.length;
-    if (
-      typeof delivery.externalReference !== "string" ||
-      delivery.externalReference.trim().length < 1 ||
-      delivery.externalReference.length > 500 ||
-      delivery.recordCount !== expectedRecordCount
-    ) {
-      throw new TokenlessServiceError("The GRC provider returned an invalid receipt.", 502, "grc_receipt_invalid");
-    }
-    await persistJobSuccess(client, {
-      row: input.row,
-      now: input.now,
-      bundleDigest: input.bundle.bundleDigest,
-      externalReference: delivery.externalReference,
-      recordCount: delivery.recordCount,
-    });
-    await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
+  // prepareJobReceipt commits a durable reservation while holding the connector
+  // and job fences. Connector pause/update operations inspect that reservation,
+  // so they can neither retire this exact configuration mid-delivery nor require
+  // us to retain database locks while resolving secrets or waiting on a provider.
+  const credential = await input.credentialResolver({
+    workspaceId: requiredText(input.row, "workspace_id"),
+    connectorId: requiredText(input.row, "connector_id"),
+    provider: input.provider,
+    credentialReference: input.credentialReference,
+    credentialReferenceDigest: input.credentialReferenceDigest,
+  });
+  if (!credential.trim()) {
+    throw new TokenlessServiceError(
+      "The GRC credential resolver returned no credential.",
+      503,
+      "grc_credential_unavailable",
+      true,
+    );
   }
+  const delivery = await input.adapter.deliver({
+    bundle: input.bundle,
+    credential,
+    idempotencyKey: requiredText(input.row, "idempotency_key"),
+    providerConfig: input.providerConfig,
+  });
+  const expectedRecordCount = input.bundle.coverageTests.length + input.bundle.documentEvidence.length;
+  if (
+    typeof delivery.externalReference !== "string" ||
+    delivery.externalReference.trim().length < 1 ||
+    delivery.externalReference.length > 500 ||
+    delivery.recordCount !== expectedRecordCount
+  ) {
+    throw new TokenlessServiceError("The GRC provider returned an invalid receipt.", 502, "grc_receipt_invalid");
+  }
+  await markJobSucceeded({
+    row: input.row,
+    now: input.now,
+    bundleDigest: input.bundle.bundleDigest,
+    externalReference: delivery.externalReference,
+    recordCount: delivery.recordCount,
+  });
 }
 
 async function markJobFailed(row: Row, error: unknown, now: Date): Promise<"retry" | "failed" | null> {
