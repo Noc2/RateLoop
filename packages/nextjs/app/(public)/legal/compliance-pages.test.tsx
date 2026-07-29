@@ -27,6 +27,9 @@ test("DPA includes the Article 28 processing contract essentials", async () => {
   assert.match(html, /return an available export and delete or anonymize/i);
   assert.match(html, /allow an audit by Customer or an independent auditor/i);
   assert.match(html, /does not currently hold a SOC 2 or ISO certification report/i);
+  assert.match(html, /standard security-questionnaire response, last reviewed in July 2026/i);
+  assert.match(html, /reproducible evidence-verification instructions/i);
+  assert.match(html, /against the deployed configuration rather than substituting a broad trust claim/i);
   assert.match(html, /Technical and organizational measures/i);
   assert.match(html, /authenticated envelope encryption at rest/i);
   assert.match(html, /funds are not silently forfeited/i);
@@ -38,6 +41,11 @@ test("subprocessor notice distinguishes core, conditional, and independent servi
   assert.match(html, /Railway Corp/i);
   assert.match(html, /Resend, Inc/i);
   assert.match(html, /Stripe Payments Europe/i);
+  assert.match(html, /Sigstore public Rekor service/i);
+  assert.match(html, /Customer-approved RFC 3161 timestamp authority/i);
+  assert.match(html, /Drata, Inc\. or Vanta Inc\./i);
+  assert.match(html, /Customer-designated S3-compatible storage provider/i);
+  assert.match(html, /customer record contents are not submitted/i);
   assert.doesNotMatch(html, /Amazon Web Services EMEA/i);
   assert.match(html, /Services that may be independent recipients/i);
   assert.match(html, /object within 14 days/i);

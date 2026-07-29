@@ -37,6 +37,26 @@ const conditionalProviders = [
     purpose: "Optional federated account sign-in.",
     condition: "Only when the provider is configured and the user selects it.",
   },
+  {
+    provider: "Sigstore public Rekor service",
+    purpose: "Optional public transparency-log receipt for evidence witness metadata and cryptographic digests.",
+    condition: "Only when Rekor witnessing is configured for the customer's evidence pipeline.",
+  },
+  {
+    provider: "Customer-approved RFC 3161 timestamp authority",
+    purpose: "Optional timestamp token over an evidence digest; customer record contents are not submitted.",
+    condition: "Only when a timestamp authority and its trust policy are configured.",
+  },
+  {
+    provider: "Drata, Inc. or Vanta Inc.",
+    purpose: "Optional delivery of selected governance, risk, and compliance evidence.",
+    condition: "Only when the customer connects and selects one of these GRC destinations.",
+  },
+  {
+    provider: "Customer-designated S3-compatible storage provider",
+    purpose: "Optional customer-directed export of evidence objects to the customer's selected storage account.",
+    condition: "Only when the customer configures an export destination and requests delivery.",
+  },
 ] as const;
 
 function ProviderTable({

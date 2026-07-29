@@ -125,11 +125,14 @@ export default function DataProcessingAddendumPage() {
       <p>
         RateLoop will make available information reasonably necessary to demonstrate compliance with this DPA and allow
         an audit by Customer or an independent auditor bound by confidentiality. RateLoop does not currently hold a SOC
-        2 or ISO certification report. Audits must normally use the completed security questionnaire, architecture and
-        configuration evidence, and remote evidence first; on-site access requires reasonable advance notice, must not
-        expose other customers or weaken security, and is limited to once per year unless a confirmed breach or
-        supervisory authority requires more. Each party bears its own costs, except that Customer covers unusual
-        assistance beyond RateLoop&apos;s standard evidence package.
+        2 or ISO certification report. The standard security-questionnaire response, last reviewed in July 2026,
+        consists of this DPA and its technical and organizational measures, the current subprocessor and transfer
+        notice, architecture and configuration evidence, and reproducible evidence-verification instructions. RateLoop
+        answers customer-specific follow-up questions against the deployed configuration rather than substituting a
+        broad trust claim. Audits must normally use that response and remote evidence first; on-site access requires
+        reasonable advance notice, must not expose other customers or weaken security, and is limited to once per year
+        unless a confirmed breach or supervisory authority requires more. Each party bears its own costs, except that
+        Customer covers unusual assistance beyond RateLoop&apos;s standard evidence package.
       </p>
 
       <h2>10. International transfers</h2>
