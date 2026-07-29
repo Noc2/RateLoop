@@ -1,6 +1,7 @@
 import type { PoolClient } from "pg";
 import "server-only";
 import { dbClient, dbPool } from "~~/lib/db";
+import { releaseSessionAdvisoryLocksAndConnection, tryAcquireSessionAdvisoryLock } from "~~/lib/db/advisoryLocks";
 import { type AuditEventInput, appendAuditEvent } from "~~/lib/privacy/audit";
 
 type IdentityAuditInput = AuditEventInput & { eventKey: string };
@@ -179,12 +180,12 @@ export async function drainEnterpriseIdentityAuditOutbox(now = new Date(), limit
   for (const value of due.rows) {
     const row = value as Record<string, unknown>;
     const eventKey = String(row.event_key);
+    const lockKey = `enterprise-identity-audit:${eventKey}`;
     const lock = await dbPool.connect();
+    const acquiredLockKeys: string[] = [];
     try {
-      const claimed = await lock.query("SELECT pg_try_advisory_lock(hashtext($1)) AS locked", [
-        `enterprise-identity-audit:${eventKey}`,
-      ]);
-      if (claimed.rows[0]?.locked !== true) continue;
+      if (!(await tryAcquireSessionAdvisoryLock(lock, lockKey))) continue;
+      acquiredLockKeys.push(lockKey);
       const current = await dbClient.execute({
         sql: "SELECT delivery_state FROM tokenless_enterprise_identity_audit_outbox WHERE event_key=?",
         args: [eventKey],
@@ -229,10 +230,7 @@ export async function drainEnterpriseIdentityAuditOutbox(now = new Date(), limit
         retry += 1;
       }
     } finally {
-      await lock
-        .query("SELECT pg_advisory_unlock(hashtext($1))", [`enterprise-identity-audit:${eventKey}`])
-        .catch(() => undefined);
-      lock.release();
+      await releaseSessionAdvisoryLocksAndConnection(lock, acquiredLockKeys);
     }
   }
   return { delivered, retry };

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
 import { dbPool } from "~~/lib/db";
+import { acquireSessionAdvisoryLock, releaseSessionAdvisoryLocksAndConnection } from "~~/lib/db/advisoryLocks";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import {
   type AdaptiveReviewDecisionRequest,
@@ -448,8 +449,12 @@ export async function ingestAutomatedEvalReceipt(input: {
     `automated-eval-source:${input.principal.workspaceId}:${receiptId}`,
   ].sort();
   const client = await dbPool.connect();
+  const acquiredLockKeys: string[] = [];
   try {
-    for (const lockKey of lockKeys) await client.query("SELECT pg_advisory_lock(hashtext($1))", [lockKey]);
+    for (const lockKey of lockKeys) {
+      await acquireSessionAdvisoryLock(client, lockKey);
+      acquiredLockKeys.push(lockKey);
+    }
     const existing = await findExisting(client, {
       workspaceId: input.principal.workspaceId,
       idempotencyKeyHash,
@@ -545,10 +550,7 @@ export async function ingestAutomatedEvalReceipt(input: {
     await client.query("ROLLBACK").catch(() => undefined);
     throw error;
   } finally {
-    for (const lockKey of [...lockKeys].reverse()) {
-      await client.query("SELECT pg_advisory_unlock(hashtext($1))", [lockKey]).catch(() => undefined);
-    }
-    client.release();
+    await releaseSessionAdvisoryLocksAndConnection(client, acquiredLockKeys);
   }
 }
 

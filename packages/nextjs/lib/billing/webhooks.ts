@@ -11,6 +11,7 @@ import type { PoolClient } from "pg";
 import "server-only";
 import Stripe from "stripe";
 import { dbPool } from "~~/lib/db";
+import { acquireSessionAdvisoryLock, releaseSessionAdvisoryLocksAndConnection } from "~~/lib/db/advisoryLocks";
 import { stripeRefundReversalKey } from "~~/lib/tokenless/idempotencyKeys";
 import { persistScheduledProcessorHealth } from "~~/lib/tokenless/scheduledProcessorHealth";
 
@@ -336,8 +337,10 @@ export function constructStripeEvent(rawBody: string, signature: string | null) 
 export async function processStripeWebhook(input: { event: Stripe.Event; rawBody: string }) {
   const payloadSha256 = createHash("sha256").update(input.rawBody).digest("hex");
   const client = await dbPool.connect();
+  const acquiredLockKeys: string[] = [];
   try {
-    await client.query("SELECT pg_advisory_lock(hashtext($1))", [input.event.id]);
+    await acquireSessionAdvisoryLock(client, input.event.id);
+    acquiredLockKeys.push(input.event.id);
     const existing = await client.query(
       `SELECT processing_status, payload_sha256 FROM tokenless_billing_webhook_events
        WHERE provider_event_id = $1 LIMIT 1`,
@@ -442,8 +445,7 @@ export async function processStripeWebhook(input: { event: Stripe.Event; rawBody
       throw error;
     }
   } finally {
-    await client.query("SELECT pg_advisory_unlock(hashtext($1))", [input.event.id]).catch(() => undefined);
-    client.release();
+    await releaseSessionAdvisoryLocksAndConnection(client, acquiredLockKeys);
   }
 }
 

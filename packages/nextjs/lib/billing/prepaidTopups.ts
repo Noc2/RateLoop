@@ -14,6 +14,7 @@ import "server-only";
 import type Stripe from "stripe";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient, dbPool } from "~~/lib/db";
+import { releaseSessionAdvisoryLocksAndConnection, tryAcquireSessionAdvisoryLock } from "~~/lib/db/advisoryLocks";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -870,9 +871,12 @@ export async function drainPrepaidTopupAuditOutbox(input: { limit?: number; topu
   let delivered = 0;
   for (const candidate of candidates.rows as Record<string, unknown>[]) {
     const topupId = text(candidate, "topup_id")!;
+    const lockKey = `prepaid-topup-audit:${topupId}`;
     const lock = await dbPool.connect();
+    const acquiredLockKeys: string[] = [];
     try {
-      await lock.query("SELECT pg_advisory_lock(hashtext($1))", [`prepaid-topup-audit:${topupId}`]);
+      if (!(await tryAcquireSessionAdvisoryLock(lock, lockKey))) continue;
+      acquiredLockKeys.push(lockKey);
       while (attempted < limit) {
         const pending = await lock.query(
           `SELECT outbox_id,workspace_id,topup_id,event_type,event_sequence,actor_reference,event_occurred_at
@@ -920,10 +924,7 @@ export async function drainPrepaidTopupAuditOutbox(input: { limit?: number; topu
         }
       }
     } finally {
-      await lock
-        .query("SELECT pg_advisory_unlock(hashtext($1))", [`prepaid-topup-audit:${topupId}`])
-        .catch(() => undefined);
-      lock.release();
+      await releaseSessionAdvisoryLocksAndConnection(lock, acquiredLockKeys);
     }
   }
   return { attempted, delivered };

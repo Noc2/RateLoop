@@ -17,6 +17,7 @@ import {
 } from "viem";
 import { baseSepolia } from "viem/chains";
 import { dbClient, dbPool } from "~~/lib/db";
+import { acquireSessionAdvisoryLock, releaseSessionAdvisoryLocksAndConnection } from "~~/lib/db/advisoryLocks";
 import { type TokenlessChainConfig, loadTokenlessChainConfig } from "~~/lib/tokenless/chain/config";
 import {
   type EvmTransactionLocator,
@@ -190,8 +191,11 @@ export async function reserveSurpriseBountyCapacity(input: {
     );
   }
   const client = await dbPool.connect();
+  const lockKey = `surprise-bounty:${config.deploymentKey}`;
+  const acquiredLockKeys: string[] = [];
   try {
-    await client.query("SELECT pg_advisory_lock(hashtext($1))", [`surprise-bounty:${config.deploymentKey}`]);
+    await acquireSessionAdvisoryLock(client, lockKey);
+    acquiredLockKeys.push(lockKey);
     await client.query(
       `UPDATE tokenless_surprise_bounty_rounds
        SET state = 'expired', reservation_expires_at = NULL, updated_at = $1
@@ -283,10 +287,7 @@ export async function reserveSurpriseBountyCapacity(input: {
     );
     return { bountyRoundId, maximumLiabilityAtomic: maximumLiabilityAtomic.toString() };
   } finally {
-    await client
-      .query("SELECT pg_advisory_unlock(hashtext($1))", [`surprise-bounty:${config.deploymentKey}`])
-      .catch(() => undefined);
-    client.release();
+    await releaseSessionAdvisoryLocksAndConnection(client, acquiredLockKeys);
   }
 }
 

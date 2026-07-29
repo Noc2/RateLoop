@@ -3,6 +3,7 @@ import type { PoolClient } from "pg";
 import "server-only";
 import { getAddress, isAddress, isHash, zeroAddress } from "viem";
 import { dbClient, dbPool } from "~~/lib/db";
+import { acquireSessionAdvisoryLock, releaseSessionAdvisoryLocksAndConnection } from "~~/lib/db/advisoryLocks";
 import type { PreparedHumanReviewRequest } from "~~/lib/tokenless/humanReviewRequestPreparation";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -328,8 +329,10 @@ export function createFeedbackBonusPoolService(dependencies?: FeedbackBonusPoolD
     const terms = canonicalTerms(input);
     const client = await dbPool.connect();
     const lockKey = `feedback-bonus:${terms.workspaceId}:${terms.opportunityId}`;
+    const acquiredLockKeys: string[] = [];
     try {
-      await client.query("SELECT pg_advisory_lock(hashtext($1))", [lockKey]);
+      await acquireSessionAdvisoryLock(client, lockKey);
+      acquiredLockKeys.push(lockKey);
       const frozen = await client.query(
         `SELECT p.feedback_bonus_enabled,p.feedback_bonus_pool_atomic,p.feedback_bonus_awarder_kind,
                 p.feedback_bonus_awarder_account,p.feedback_bonus_award_window_seconds,p.created_by
@@ -428,8 +431,7 @@ export function createFeedbackBonusPoolService(dependencies?: FeedbackBonusPoolD
       );
       return poolBinding(inserted.rows[0] as Row, false);
     } finally {
-      await client.query("SELECT pg_advisory_unlock(hashtext($1))", [lockKey]).catch(() => undefined);
-      client.release();
+      await releaseSessionAdvisoryLocksAndConnection(client, acquiredLockKeys);
     }
   };
 }

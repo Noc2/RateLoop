@@ -81,6 +81,13 @@ export function validateMigrationState({ hasMigrationTable, hasCoreSchema, datab
   return [];
 }
 
+export async function acquireHostedMigrationLock(client) {
+  const lock = await client.query("select pg_try_advisory_lock(hashtext($1)::bigint) as acquired", [MIGRATION_LOCK]);
+  if (lock.rows[0]?.acquired !== true) {
+    throw new Error("Hosted database migration refused because another migration is already running.");
+  }
+}
+
 async function readDatabaseState(pool) {
   const relationResult = await pool.query(`
     select
@@ -130,8 +137,10 @@ async function main() {
   if (!expectedLatest) throw new Error("The checked-in migration journal is empty.");
 
   const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+  let migrationLockAcquired = false;
   try {
-    await pool.query("select pg_advisory_lock(hashtext($1)::bigint)", [MIGRATION_LOCK]);
+    await acquireHostedMigrationLock(pool);
+    migrationLockAcquired = true;
     const identityErrors = validateHostedDatabaseIdentity(process.env);
     if (identityErrors.length > 0) {
       throw new Error(`Hosted database migration refused:\n- ${identityErrors.join("\n- ")}`);
@@ -151,7 +160,9 @@ async function main() {
     }
     console.log(`Hosted database migrations verified through ${expectedLatest.folderMillis}.`);
   } finally {
-    await pool.query("select pg_advisory_unlock(hashtext($1)::bigint)", [MIGRATION_LOCK]).catch(() => undefined);
+    if (migrationLockAcquired) {
+      await pool.query("select pg_advisory_unlock(hashtext($1)::bigint)", [MIGRATION_LOCK]).catch(() => undefined);
+    }
     await pool.end();
   }
 }

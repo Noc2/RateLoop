@@ -1,6 +1,7 @@
 import { createHash, createHmac } from "node:crypto";
 import "server-only";
 import { dbClient, dbPool } from "~~/lib/db";
+import { acquireSessionAdvisoryLock, releaseSessionAdvisoryLocksAndConnection } from "~~/lib/db/advisoryLocks";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import {
@@ -579,10 +580,10 @@ async function findProjectionAuditChain(source: AssuranceLifecycleEventSource) {
 async function projectAssuranceLifecycleEvent(source: AssuranceLifecycleEventSource, now: Date) {
   const lockKey = ["rateloop", "assurance-event", source.workspaceId, source.eventType, source.sourceEventId].join(":");
   const lockClient = await dbPool.connect();
-  let locked = false;
+  const acquiredLockKeys: string[] = [];
   try {
-    await lockClient.query("SELECT pg_advisory_lock(hashtext($1))", [lockKey]);
-    locked = true;
+    await acquireSessionAdvisoryLock(lockClient, lockKey);
+    acquiredLockKeys.push(lockKey);
     const existing = await dbClient.execute({
       sql: `SELECT event_id FROM tokenless_assurance_event_outbox
             WHERE workspace_id=? AND event_type=? AND source_event_id=? LIMIT 1`,
@@ -629,15 +630,7 @@ async function projectAssuranceLifecycleEvent(source: AssuranceLifecycleEventSou
     });
     return { eventId: queued.eventId, state: queued.replay ? ("replayed" as const) : ("projected" as const) };
   } finally {
-    if (locked) {
-      try {
-        await lockClient.query("SELECT pg_advisory_unlock(hashtext($1))", [lockKey]);
-      } catch (error) {
-        lockClient.release(error as Error);
-        throw error;
-      }
-    }
-    lockClient.release();
+    await releaseSessionAdvisoryLocksAndConnection(lockClient, acquiredLockKeys);
   }
 }
 

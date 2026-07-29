@@ -3,6 +3,7 @@ import { enqueueEnterpriseIdentityAudit } from "~~/lib/auth/enterpriseIdentityAu
 import { resolveBetterAuthPrincipal } from "~~/lib/auth/principal";
 import { AuthError } from "~~/lib/auth/session";
 import { dbClient, dbPool } from "~~/lib/db";
+import { acquireTransactionAdvisoryLock } from "~~/lib/db/advisoryLocks";
 
 type QueryRow = Record<string, unknown> | undefined;
 
@@ -364,9 +365,7 @@ export async function synchronizeScimUser(input: {
   try {
     await client.query("BEGIN ISOLATION LEVEL SERIALIZABLE");
     if (input.active) {
-      await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
-        `enterprise-scim-principal:${identity.principalId}`,
-      ]);
+      await acquireTransactionAdvisoryLock(client, `enterprise-scim-principal:${identity.principalId}`);
       const outside = await client.query(
         `SELECT workspace_id FROM tokenless_workspace_members
          WHERE account_address=$1 AND workspace_id<>$2 FOR UPDATE`,

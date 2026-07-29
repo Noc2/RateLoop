@@ -332,12 +332,6 @@ export function createMemoryDatabaseResources(): DatabaseResources {
     },
   });
   memoryDb.public.registerFunction({
-    name: "pg_advisory_lock",
-    args: [DataType.integer],
-    returns: DataType.bool,
-    implementation: () => true,
-  });
-  memoryDb.public.registerFunction({
     name: "pg_try_advisory_lock",
     args: [DataType.integer],
     returns: DataType.bool,
@@ -350,7 +344,7 @@ export function createMemoryDatabaseResources(): DatabaseResources {
     implementation: () => true,
   });
   memoryDb.public.registerFunction({
-    name: "pg_advisory_xact_lock",
+    name: "pg_try_advisory_xact_lock",
     args: [DataType.integer],
     returns: DataType.bool,
     implementation: () => true,

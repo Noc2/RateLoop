@@ -1,5 +1,6 @@
 import { TOKENLESS_VERCEL_PROJECT } from "./check-identity-deployment.mjs";
 import {
+  acquireHostedMigrationLock,
   deriveHostedDatabaseIdentity,
   hostedMigrationEnabled,
   validateHostedDatabaseIdentity,
@@ -17,6 +18,23 @@ const hostedEnv = {
   DATABASE_URL: databaseUrl,
   TOKENLESS_DATABASE_IDENTITY: deriveHostedDatabaseIdentity(databaseUrl),
 };
+
+test("hosted migration coordination fails immediately when another migrator holds the lock", async () => {
+  const queries = [];
+  const client = {
+    async query(sql, values) {
+      queries.push({ sql, values });
+      return { rows: [{ acquired: false }] };
+    },
+  };
+  await assert.rejects(acquireHostedMigrationLock(client), /another migration is already running/i);
+  assert.deepEqual(queries, [
+    {
+      sql: "select pg_try_advisory_lock(hashtext($1)::bigint) as acquired",
+      values: ["rateloop-tokenless-drizzle-migrations-v1"],
+    },
+  ]);
+});
 
 test("hosted migrations run only for the isolated production deployment", () => {
   assert.equal(hostedMigrationEnabled(hostedEnv), true);

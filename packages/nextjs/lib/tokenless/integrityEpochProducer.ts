@@ -2,6 +2,7 @@ import { createPrivateKey } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
 import { dbPool } from "~~/lib/db";
+import { acquireTransactionAdvisoryLock } from "~~/lib/db/advisoryLocks";
 import { persistIntegrityEpochSnapshotWithClient } from "~~/lib/tokenless/integrityEpochPersistence";
 import {
   type IntegrityEpochKeys,
@@ -305,7 +306,7 @@ export async function produceScheduledIntegrityEpoch(
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ");
-    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`tokenless:${id}`]);
+    await acquireTransactionAdvisoryLock(client, `tokenless:${id}`);
     const existing = await client.query(
       "SELECT epoch_id,manifest_hash FROM tokenless_integrity_epochs WHERE epoch_id=$1 LIMIT 1",
       [id],
