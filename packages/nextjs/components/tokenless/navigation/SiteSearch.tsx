@@ -2,6 +2,10 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import {
+  workspacePublicContentHref,
+  workspaceReturnPathForLocation,
+} from "~~/components/tokenless/navigation/workspaceReturnPath";
 
 const SEARCH_ROUTE = "/search";
 
@@ -40,15 +44,17 @@ function XMarkIcon({ className }: { className?: string }) {
   );
 }
 
-function searchTarget(value: string) {
+function searchTarget(value: string, returnPath: string | null) {
   const query = value.trim();
-  return query ? `${SEARCH_ROUTE}?q=${encodeURIComponent(query)}` : SEARCH_ROUTE;
+  const destination = query ? `${SEARCH_ROUTE}?q=${encodeURIComponent(query)}` : SEARCH_ROUTE;
+  return returnPath ? workspacePublicContentHref(destination, returnPath) : destination;
 }
 
 export function SiteSearch({ mobile = false }: { mobile?: boolean }) {
   const router = useRouter();
   const pathname = usePathname() ?? "";
   const searchParams = useSearchParams();
+  const returnPath = workspaceReturnPathForLocation(pathname, searchParams);
   const activeQuery = pathname === SEARCH_ROUTE ? (searchParams.get("q") ?? "") : "";
   const [query, setQuery] = useState(activeQuery);
 
@@ -57,7 +63,7 @@ export function SiteSearch({ mobile = false }: { mobile?: boolean }) {
   }, [activeQuery]);
 
   function commitSearch(value: string) {
-    const target = searchTarget(value);
+    const target = searchTarget(value, returnPath);
     if (pathname === SEARCH_ROUTE) router.replace(target, { scroll: false });
     else router.push(target);
   }

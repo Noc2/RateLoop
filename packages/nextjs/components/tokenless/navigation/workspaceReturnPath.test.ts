@@ -55,6 +55,20 @@ test("workspace return context survives navigation between public content pages"
     null,
   );
   assert.equal(workspaceReturnPathForLocation("/docs/evidence", null), null);
+  assert.equal(
+    workspaceReturnPathForLocation("/search", `?q=failed&from=workspace&returnTo=${encodeURIComponent(returnPath)}`),
+    returnPath,
+  );
+});
+
+test("workspace search links keep the exact workspace destination", () => {
+  assert.equal(
+    workspacePublicContentHref(
+      "/search?q=failed",
+      "/agents/results?workspace=workspace-1&resultStatus=failed&resultDate=30",
+    ),
+    "/search?q=failed&from=workspace&returnTo=%2Fagents%2Fresults%3Fworkspace%3Dworkspace-1%26resultStatus%3Dfailed%26resultDate%3D30",
+  );
 });
 
 test("workspace public links tolerate navigation shims without search parameters", () => {

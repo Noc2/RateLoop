@@ -8,6 +8,8 @@ test("site search routes every page to global results", () => {
   assert.match(source, /const SEARCH_ROUTE = "\/search"/);
   assert.match(source, /router\.push\(target\)/);
   assert.match(source, /router\.replace\(target, \{ scroll: false \}\)/);
+  assert.match(source, /workspaceReturnPathForLocation\(pathname, searchParams\)/);
+  assert.match(source, /workspacePublicContentHref\(destination, returnPath\)/);
   assert.match(source, /type="submit"/);
   assert.match(source, /aria-label="Search"/);
   assert.doesNotMatch(source, /SEARCH_DEBOUNCE_MS|setTimeout|startTransition/);

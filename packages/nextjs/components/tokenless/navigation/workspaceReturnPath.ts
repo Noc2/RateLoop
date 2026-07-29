@@ -4,7 +4,7 @@ export const WORKSPACE_RETURN_SOURCE = "workspace";
 export const WORKSPACE_RETURN_PARAM = "returnTo";
 
 const LOCAL_ORIGIN = "https://rateloop.local";
-const PUBLIC_CONTENT_PREFIXES = ["/docs", "/legal", "/pricing"] as const;
+const PUBLIC_CONTENT_PREFIXES = ["/docs", "/legal", "/pricing", "/search"] as const;
 
 function relativeUrl(value: string, origin = LOCAL_ORIGIN) {
   const target = new URL(value, origin);
