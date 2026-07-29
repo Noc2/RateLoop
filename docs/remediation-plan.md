@@ -9,6 +9,37 @@ gaps, and the one feature that would bring RateLoop itself inside the AI Act, ar
 [evaluation-platform-gaps.md](evaluation-platform-gaps.md). Read that second: several
 of its items depend on constraints established here, particularly 3b.7.
 
+## Implementation status — 29 July 2026
+
+All repository-owned code, copy, schema, route, CI, observability, legal-surface, and
+test-harness work in this plan is implemented on `tokenless`. Item 3b.7 remains a
+standing architecture constraint, and the items under **Deferred, with reasons**
+remain intentionally outside this remediation.
+
+The completed implementation was checked with:
+
+- the full Foundry and workspace test aggregate, including 77 Foundry tests, 2,258
+  Next.js tests, and every contracts, SDK, agent, keeper, Ponder, and promo test;
+- a fresh real-PostgreSQL migration through the current journal head plus rollback,
+  CHECK-constraint, and partial-uniqueness invariant tests;
+- repository lint, package type checks, an optimized Next.js production build, and
+  immutable dependency installation;
+- live production and development dependency audits with no audit suggestions; and
+- the dead-code scan, with no unused-file or unused-dependency finding after its
+  environment-independent entry graph was corrected.
+
+Two release actions are necessarily external:
+
+1. Item 3b.6 requires selecting and contracting an EU/EEA Trusted
+   List-qualified timestamp service. The RFC 3161 integration and release gate are
+   implemented, but `qualifiedTimestamping` remains false until procurement,
+   trust-anchor configuration, and issuance-time qualification validation are
+   complete.
+2. Fund-core changes invalidate the historical Base Sepolia artifact. A fresh
+   deployment must produce one complete deployment key and update the isolated
+   tokenless app, Ponder, and keeper services together. Release validation rejects
+   the stale or mixed bundle.
+
 ## The ordering principle
 
 The research changed the priority order. Two things emerged that the assessment did
