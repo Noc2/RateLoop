@@ -79,8 +79,10 @@ const secondEvidencePacket = {
 
 function installFetch(runs: Record<string, unknown>[]) {
   const previousFetch = globalThis.fetch;
-  globalThis.fetch = async input => {
+  let auditors: Array<Record<string, unknown>> = [];
+  globalThis.fetch = async (input, init) => {
     const url = String(input);
+    const method = init?.method ?? "GET";
     if (url.includes("/evaluations")) return Response.json(dashboard(runs));
     if (url.endsWith("/assurance/runs/run-evidence-1/evidence")) return Response.json(evidencePacket);
     if (url.endsWith("/assurance/runs/run-evidence-2/evidence")) return Response.json(secondEvidencePacket);
@@ -97,6 +99,28 @@ function installFetch(runs: Record<string, unknown>[]) {
     }
     if (url.endsWith("/assurance/trusted-keys")) {
       return Response.json({ keys: [], untrustedPacketKeyCount: 0 });
+    }
+    if (url.endsWith("/assurance/projects")) {
+      return Response.json({ projects: [{ projectId: "project-release-controls", name: "Release controls" }] });
+    }
+    if (url.endsWith("/assurance/projects/project-release-controls/auditors") && method === "GET") {
+      return Response.json({ auditors });
+    }
+    if (url.endsWith("/assurance/projects/project-release-controls/auditors") && method === "POST") {
+      const body = JSON.parse(String(init?.body)) as { expiresAt: string | null; subjectReference: string };
+      auditors = [
+        {
+          assignmentId: "paccess-auditor-1",
+          subjectReference: body.subjectReference,
+          expiresAt: body.expiresAt,
+          createdAt: "2026-07-20T10:00:00.000Z",
+        },
+      ];
+      return Response.json({ assignmentId: "paccess-auditor-1", subjectReference: body.subjectReference });
+    }
+    if (url.endsWith("/assurance/projects/project-release-controls/auditors/paccess-auditor-1")) {
+      auditors = [];
+      return new Response(null, { status: 204 });
     }
     throw new Error(`Unexpected evidence request: ${url}`);
   };
@@ -123,6 +147,8 @@ test("managers see compliance exports before opening advanced evidence controls"
     assert.ok(view.getByRole("heading", { name: "Compliance exports" }));
     assert.ok(view.getByRole("link", { name: "Audit log" }));
     assert.ok(view.getByRole("link", { name: "Coverage history" }));
+    assert.ok(await view.findByRole("heading", { name: "Project auditors" }));
+    assert.ok(view.getByRole("button", { name: "Grant read and export" }));
     assert.equal(view.queryByText("Verify an export"), null);
 
     await userEvent.setup({ document }).click(view.getByRole("button", { name: "Retention, keys, and delivery" }));

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { GrcEvidenceDelivery } from "./GrcEvidenceDelivery";
 import { MetricsEvidenceAccess } from "./MetricsEvidenceAccess";
@@ -115,6 +115,13 @@ type TrustedKey = {
   packetCount: number;
 };
 type TrustedKeyHistory = { keys: TrustedKey[]; untrustedPacketKeyCount: number };
+type AssuranceProjectOption = { projectId: string; name: string };
+type ProjectAuditor = {
+  assignmentId: string;
+  subjectReference: string;
+  expiresAt: string | null;
+  createdAt: string;
+};
 type EvidenceDeliveryKind = "worm" | "siem" | "grc" | "metrics";
 type EvidenceUrlSnapshot = {
   pathname: string;
@@ -186,6 +193,175 @@ function newerPacketsByIdentity(rows: PacketRow[]) {
       const latest = latestByLineage.get(packetLineage(row));
       return latest && latest !== row ? [[packetIdentity(row), latest] as const] : [];
     }),
+  );
+}
+
+function ProjectAuditorAccess({ workspaceId }: { workspaceId: string }) {
+  const [projects, setProjects] = useState<AssuranceProjectOption[]>([]);
+  const [projectId, setProjectId] = useState("");
+  const [auditors, setAuditors] = useState<ProjectAuditor[]>([]);
+  const [subjectReference, setSubjectReference] = useState("");
+  const [expiresAt, setExpiresAt] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const base = `/api/account/workspaces/${encodeURIComponent(workspaceId)}/assurance/projects`;
+
+  const loadAuditors = useCallback(
+    async (selectedProjectId: string) => {
+      if (!selectedProjectId) {
+        setAuditors([]);
+        return;
+      }
+      const body = await readJson<{ auditors: ProjectAuditor[] }>(
+        await fetch(`${base}/${encodeURIComponent(selectedProjectId)}/auditors`, {
+          cache: "no-store",
+          credentials: "same-origin",
+        }),
+      );
+      setAuditors(body.auditors);
+    },
+    [base],
+  );
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const body = await readJson<{ projects: AssuranceProjectOption[] }>(
+          await fetch(base, { cache: "no-store", credentials: "same-origin" }),
+        );
+        if (!active) return;
+        setProjects(body.projects);
+        const firstProjectId = body.projects[0]?.projectId ?? "";
+        setProjectId(firstProjectId);
+        await loadAuditors(firstProjectId);
+      } catch (cause) {
+        if (active) setError(cause instanceof Error ? cause.message : "Unable to load auditor access.");
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [base, loadAuditors]);
+
+  async function grant(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!projectId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await readJson(
+        await fetch(`${base}/${encodeURIComponent(projectId)}/auditors`, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            subjectReference,
+            expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
+          }),
+        }),
+      );
+      setSubjectReference("");
+      setExpiresAt("");
+      await loadAuditors(projectId);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to grant auditor access.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function revoke(assignmentId: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await fetch(
+        `${base}/${encodeURIComponent(projectId)}/auditors/${encodeURIComponent(assignmentId)}`,
+        { method: "DELETE", credentials: "same-origin" },
+      );
+      if (!response.ok) await readJson(response);
+      await loadAuditors(projectId);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to revoke auditor access.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (projects.length === 0 && !error) return null;
+  return (
+    <Card as="section" className="rounded-2xl p-6" aria-labelledby="project-auditors-heading">
+      <h2 id="project-auditors-heading" className="text-xl font-semibold">
+        Project auditors
+      </h2>
+      <form className="mt-5 grid gap-4 md:grid-cols-3" onSubmit={grant}>
+        <SelectField
+          label="Project"
+          value={projectId}
+          onChange={event => {
+            const nextProjectId = event.target.value;
+            setProjectId(nextProjectId);
+            setError(null);
+            void loadAuditors(nextProjectId).catch(cause =>
+              setError(cause instanceof Error ? cause.message : "Unable to load auditor access."),
+            );
+          }}
+          required
+        >
+          {projects.map(project => (
+            <option key={project.projectId} value={project.projectId}>
+              {project.name}
+            </option>
+          ))}
+        </SelectField>
+        <Field
+          label="Auditor account or principal ID"
+          value={subjectReference}
+          onChange={event => setSubjectReference(event.target.value)}
+          maxLength={255}
+          required
+        />
+        <Field
+          label="Expires"
+          type="datetime-local"
+          value={expiresAt}
+          onChange={event => setExpiresAt(event.target.value)}
+          min={new Date().toISOString().slice(0, 16)}
+        />
+        <button type="submit" className="btn btn-sm rateloop-gradient-action w-fit" disabled={busy || !projectId}>
+          Grant read and export
+        </button>
+      </form>
+      {error ? (
+        <p className="mt-4 text-sm text-red-100" role="alert">
+          {error}
+        </p>
+      ) : null}
+      {auditors.length > 0 ? (
+        <ul className="mt-5 divide-y divide-white/10">
+          {auditors.map(auditor => (
+            <li key={auditor.assignmentId} className="flex flex-wrap items-center justify-between gap-3 py-3">
+              <div>
+                <p className="break-all font-mono text-sm">{auditor.subjectReference}</p>
+                <p className="mt-1 text-xs text-base-content/55">
+                  {auditor.expiresAt ? `Expires ${new Date(auditor.expiresAt).toLocaleString()}` : "No expiry"}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-sm border-red-300/20 bg-red-300/[0.06] text-red-100"
+                disabled={busy}
+                onClick={() => void revoke(auditor.assignmentId)}
+              >
+                Revoke
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : projectId ? (
+        <p className="mt-5 text-sm text-base-content/55">No auditors have access to this project.</p>
+      ) : null}
+    </Card>
   );
 }
 
@@ -651,6 +827,8 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
           </div>
         </Card>
       ) : null}
+
+      {!loading && canManage ? <ProjectAuditorAccess workspaceId={workspaceId} /> : null}
 
       {!loading && !error && packetSelectionUnavailable ? (
         <Card as="section" className="rounded-2xl p-6" aria-labelledby="evidence-unavailable-heading">

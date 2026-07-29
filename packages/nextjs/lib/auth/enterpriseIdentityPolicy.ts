@@ -249,6 +249,13 @@ export async function synchronizeScimUser(input: {
         input.projection.workspaceId,
         input.projection.principalId,
       ]);
+      const revokedProjectAssignments = await client.query(
+        `UPDATE tokenless_project_access_assignments
+         SET status='revoked',revoked_at=$1,revoked_by='system:better_auth_scim'
+         WHERE workspace_id=$2 AND subject_kind='principal' AND subject_reference=$3 AND status='active'
+         RETURNING assignment_id`,
+        [now, input.projection.workspaceId, input.projection.principalId],
+      );
       await client.query(
         "UPDATE tokenless_auth_sessions SET revoked_at=$1 WHERE principal_id=$2 AND revoked_at IS NULL",
         [now, input.projection.principalId],
@@ -306,7 +313,10 @@ export async function synchronizeScimUser(input: {
           targetId: input.projection.principalId,
           targetKind: "workspace_member",
           workspaceId: input.projection.workspaceId,
-          metadata: { revokedAgentOauthFamilyCount: revokedFamilies.rowCount ?? 0 },
+          metadata: {
+            revokedAgentOauthFamilyCount: revokedFamilies.rowCount ?? 0,
+            revokedProjectAssignmentCount: revokedProjectAssignments.rowCount ?? 0,
+          },
         },
         client,
       );
@@ -440,8 +450,11 @@ export async function assertScimDeprovisionScope(
     sql: `SELECT COUNT(*)::integer AS outside_count FROM (
             SELECT DISTINCT workspace_id FROM tokenless_workspace_members
             WHERE account_address=? AND workspace_id<>?
+            UNION
+            SELECT DISTINCT workspace_id FROM tokenless_project_access_assignments
+            WHERE subject_kind='principal' AND subject_reference=? AND workspace_id<>? AND status='active'
           ) outside_memberships`,
-    args: [projection.principalId, projection.workspaceId],
+    args: [projection.principalId, projection.workspaceId, projection.principalId, projection.workspaceId],
   });
   const row = result.rows[0] as QueryRow;
   if (Number(row?.outside_count ?? 0) > 0) {

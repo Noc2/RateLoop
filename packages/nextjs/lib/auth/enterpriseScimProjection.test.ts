@@ -8,6 +8,7 @@ import { createAuthSession } from "~~/lib/auth/session";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
+import { createProjectOwnerAssignment } from "~~/lib/tokenless/projectAccess";
 
 beforeEach(() => __setDatabaseResourcesForTests(createMemoryDatabaseResources()));
 afterEach(() => __setDatabaseResourcesForTests(null));
@@ -18,6 +19,19 @@ async function seedScimUser(suffix: string) {
   const providerId = `rlscim_${suffix.padEnd(24, "0").slice(0, 24)}`;
   const identity = await resolveBetterAuthPrincipal({ betterAuthUserId, displayName: "Managed user", now });
   const workspace = await createWorkspace({ name: `SCIM ${suffix}`, ownerAddress: identity.principalId });
+  const projectId = `scim-project-${suffix}`;
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_projects
+          (project_id,workspace_id,name,data_classification,status,retention_days,created_by,created_at,updated_at)
+          VALUES (?,?,?,'confidential','active',30,?,?,?)`,
+    args: [projectId, workspace.workspaceId, `SCIM ${suffix}`, identity.principalId, now, now],
+  });
+  await createProjectOwnerAssignment({
+    accountAddress: identity.principalId,
+    projectId,
+    workspaceId: workspace.workspaceId,
+    now,
+  });
   await dbClient.execute({
     sql: `INSERT INTO tokenless_better_auth_users
           (id,name,email,email_verified,created_at,updated_at,role,banned)
@@ -98,7 +112,7 @@ async function seedScimUser(suffix: string) {
     args: [workspace.workspaceId, providerId, betterAuthUserId, identity.principalId, now, now],
   });
   const session = await createAuthSession(identity, now);
-  return { betterAuthUserId, identity, oauthClientId, providerId, session, tokenFamilyId, workspace };
+  return { betterAuthUserId, identity, oauthClientId, projectId, providerId, session, tokenFamilyId, workspace };
 }
 
 async function assertDeactivated(input: Awaited<ReturnType<typeof seedScimUser>>) {
@@ -107,6 +121,13 @@ async function assertDeactivated(input: Awaited<ReturnType<typeof seedScimUser>>
     args: [input.workspace.workspaceId, input.identity.principalId],
   });
   assert.equal(member.rowCount, 0);
+  const projectAssignment = await dbClient.execute({
+    sql: `SELECT status,revoked_by FROM tokenless_project_access_assignments
+          WHERE workspace_id=? AND project_id=? AND subject_reference=?`,
+    args: [input.workspace.workspaceId, input.projectId, input.identity.principalId],
+  });
+  assert.equal(projectAssignment.rows[0]?.status, "revoked");
+  assert.equal(projectAssignment.rows[0]?.revoked_by, "system:better_auth_scim");
   const managed = await dbClient.execute({
     sql: `SELECT status,deactivated_at FROM tokenless_enterprise_managed_members
           WHERE provider_id=? AND better_auth_user_id=?`,

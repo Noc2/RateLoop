@@ -15,6 +15,11 @@ import { dbPool } from "~~/lib/db";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { enqueueAssuranceAttestation } from "~~/lib/tokenless/assuranceAttestationPipeline";
 import { decisionExplanationRequired } from "~~/lib/tokenless/decisionPromptSampling";
+import {
+  type ProjectAccessAction,
+  type ProjectAccessRole,
+  projectRoleAllowsAction,
+} from "~~/lib/tokenless/projectAccess";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Queryable = { query: (text: string, values?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> };
@@ -59,7 +64,6 @@ type EvidenceExport = {
 
 const HASH_PATTERN = /^sha256:[0-9a-f]{64}$/;
 const SOURCES = new Set<ReviewerSource>(["customer_invited", "rateloop_network"]);
-const WRITE_ROLES = new Set(["owner", "admin", "member"]);
 const SELECTION_POLICY_MODES = new Set(["manual", "always", "fixed", "rules", "adaptive"]);
 const TERMINAL_REVIEW_STATES = new Set(["completed", "inconclusive", "failed_terminal", "cancelled_before_commit"]);
 
@@ -226,39 +230,49 @@ function tenantCommitment(workspaceId: string, key: Buffer) {
 }
 
 /**
- * Shared run-access gate: workspace write roles for reads, and the decision
- * gate (owner, admin, or `decision_owner` governance role) when
- * `options.decision` is set. Exported for oversight surfaces that must apply
- * exactly the same boundary — never reimplement it.
+ * Shared run-access gate: project assignments authorize reads, exports, and
+ * writes. The decision gate additionally requires a workspace owner, admin, or
+ * `decision_owner` governance role. Exported for oversight surfaces that must
+ * apply exactly the same boundary — never reimplement it.
  */
 export async function loadRunAccess(
   client: Queryable,
   input: { accountAddress: string; workspaceId: string; runId: string },
-  options: { lock?: boolean; decision?: boolean } = {},
+  options: { action?: ProjectAccessAction; lock?: boolean; decision?: boolean } = {},
 ) {
   const address = normalizeAddress(input.accountAddress);
+  const subjectKind = isRateLoopPrincipalId(address) ? "principal" : "account";
+  const action = options.action ?? (options.decision ? "write" : "read");
+  const now = new Date();
   if (options.lock) {
     await client.query(
       `SELECT r.run_id
        FROM tokenless_assurance_runs r
        JOIN tokenless_assurance_projects p ON p.project_id = r.project_id
        JOIN tokenless_workspaces w ON w.workspace_id = p.workspace_id AND w.status = 'active'
-       JOIN tokenless_workspace_members m ON m.workspace_id = p.workspace_id AND m.account_address = $1
+       JOIN tokenless_project_access_assignments pa
+         ON pa.project_id=p.project_id AND pa.workspace_id=p.workspace_id
+        AND pa.subject_kind=$4 AND pa.subject_reference=$1 AND pa.status='active'
+        AND (pa.expires_at IS NULL OR pa.expires_at>$5)
        WHERE r.run_id = $2 AND p.workspace_id = $3
        FOR UPDATE`,
-      [address, input.runId, input.workspaceId],
+      [address, input.runId, input.workspaceId, subjectKind, now],
     );
   }
   const result = await client.query(
     `SELECT r.*, p.workspace_id, p.data_classification,
-            m.role AS workspace_role, g.governance_role,
+            pa.role AS project_access_role,m.role AS workspace_role,g.governance_role,
             s.manifest_hash AS suite_manifest_hash, s.manifest_json AS suite_manifest_json,
             ap.policy_hash AS frozen_policy_hash, ap.policy_json,
             rb.pass_rule_json
      FROM tokenless_assurance_runs r
      JOIN tokenless_assurance_projects p ON p.project_id = r.project_id
      JOIN tokenless_workspaces w ON w.workspace_id = p.workspace_id AND w.status = 'active'
-     JOIN tokenless_workspace_members m ON m.workspace_id = p.workspace_id AND m.account_address = $1
+     JOIN tokenless_project_access_assignments pa
+       ON pa.project_id=p.project_id AND pa.workspace_id=p.workspace_id
+      AND pa.subject_kind=$4 AND pa.subject_reference=$1 AND pa.status='active'
+      AND (pa.expires_at IS NULL OR pa.expires_at>$5)
+     LEFT JOIN tokenless_workspace_members m ON m.workspace_id = p.workspace_id AND m.account_address = $1
      LEFT JOIN tokenless_workspace_member_governance g
        ON g.workspace_id = m.workspace_id AND g.account_address = m.account_address
      JOIN tokenless_assurance_suites s ON s.suite_id = r.suite_id AND s.version = r.suite_version
@@ -267,14 +281,15 @@ export async function loadRunAccess(
      JOIN tokenless_assurance_rubrics rb ON rb.rubric_id = s.rubric_id AND rb.version = s.rubric_version
      WHERE r.run_id = $2 AND p.workspace_id = $3
      LIMIT 1`,
-    [address, input.runId, input.workspaceId],
+    [address, input.runId, input.workspaceId, subjectKind, now],
   );
   const row = result.rows[0];
   if (!row) evidenceError("Assurance run not found.", "assurance_run_not_found", 404);
-  const role = rowString(row, "workspace_role");
-  if (!WRITE_ROLES.has(role ?? "")) {
+  const projectRole = rowString(row, "project_access_role") as ProjectAccessRole | null;
+  if (!projectRole || !projectRoleAllowsAction(projectRole, action)) {
     evidenceError("Assurance run not found.", "assurance_run_not_found", 404);
   }
+  const role = rowString(row, "workspace_role");
   if (
     options.decision &&
     role !== "owner" &&
@@ -1103,7 +1118,7 @@ export async function generateAssuranceEvidencePacket(input: {
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
-    const { row } = await loadRunAccess(client, input, { lock: true });
+    const { row } = await loadRunAccess(client, input, { action: "write", lock: true });
     const existing = await client.query(
       `SELECT packet_json, signing_public_key, signing_key_id
        FROM tokenless_assurance_evidence_packets WHERE run_id = $1 LIMIT 1`,
@@ -1330,7 +1345,7 @@ export async function getAssuranceEvidencePacket(input: {
 }) {
   const client = await dbPool.connect();
   try {
-    await loadRunAccess(client, input);
+    await loadRunAccess(client, input, { action: "export" });
     const result = await client.query(
       `SELECT packet_json, signing_public_key, signing_key_id
        FROM tokenless_assurance_evidence_packets WHERE run_id = $1 LIMIT 1`,
@@ -1461,7 +1476,7 @@ export async function getAssuranceClientDecision(input: {
 }) {
   const client = await dbPool.connect();
   try {
-    await loadRunAccess(client, input);
+    await loadRunAccess(client, input, { action: "read" });
     const result = await client.query(
       "SELECT decision_json FROM tokenless_assurance_client_decisions WHERE run_id = $1 LIMIT 1",
       [input.runId],
@@ -1678,7 +1693,7 @@ export async function listAssuranceOverrideDecisions(input: {
 }): Promise<AssuranceOverrideDecision[]> {
   const client = await dbPool.connect();
   try {
-    await loadRunAccess(client, input);
+    await loadRunAccess(client, input, { action: "read" });
     const packetResult = await client.query(
       "SELECT packet_digest FROM tokenless_assurance_evidence_packets WHERE run_id = $1 LIMIT 1",
       [input.runId],

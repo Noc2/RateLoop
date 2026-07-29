@@ -20,6 +20,10 @@ const ACTION_ROLES = {
 export type ProjectAccessAction = keyof typeof ACTION_ROLES;
 export type ProjectAccessSubjectKind = "account" | "principal" | "api_key";
 
+export function projectRoleAllowsAction(role: ProjectAccessRole, action: ProjectAccessAction) {
+  return ACTION_ROLES[action].has(role);
+}
+
 function rowString(row: QueryRow | undefined, key: string) {
   const value = row?.[key];
   return value === null || value === undefined ? null : String(value);
@@ -73,7 +77,7 @@ export async function authorizeProjectSubject(input: {
     throw new TokenlessServiceError("Project not found.", 404, "project_not_found");
   }
   assertRole(role);
-  if (!ACTION_ROLES[input.action].has(role)) {
+  if (!projectRoleAllowsAction(role, input.action)) {
     throw new TokenlessServiceError("Project access is not permitted.", 403, "project_access_forbidden");
   }
   return {
@@ -82,6 +86,40 @@ export async function authorizeProjectSubject(input: {
     retentionDays: Number(rowString(row, "retention_days")),
     role,
   };
+}
+
+export async function listProjectAuditorAccess(input: { listedBy: string; projectId: string; workspaceId: string }) {
+  await authorizeProjectAccount({
+    accountAddress: input.listedBy,
+    action: "manage",
+    projectId: input.projectId,
+    workspaceId: input.workspaceId,
+  });
+  const result = await dbClient.execute({
+    sql: `SELECT assignment_id,subject_kind,subject_reference,expires_at,granted_by,reason,created_at
+          FROM tokenless_project_access_assignments
+          WHERE workspace_id=? AND project_id=? AND role='auditor' AND status='active'
+            AND (expires_at IS NULL OR expires_at>?)
+          ORDER BY created_at ASC,assignment_id ASC`,
+    args: [input.workspaceId, input.projectId, new Date()],
+  });
+  return result.rows.map(value => {
+    const row = value as QueryRow;
+    const expiresAt = row.expires_at === null || row.expires_at === undefined ? null : new Date(String(row.expires_at));
+    const createdAt = new Date(String(row.created_at));
+    if (!Number.isFinite(createdAt.getTime()) || (expiresAt && !Number.isFinite(expiresAt.getTime()))) {
+      throw new Error("Stored project auditor assignment timestamps are invalid.");
+    }
+    return {
+      assignmentId: rowString(row, "assignment_id")!,
+      subjectKind: rowString(row, "subject_kind") as ProjectAccessSubjectKind,
+      subjectReference: rowString(row, "subject_reference")!,
+      expiresAt: expiresAt?.toISOString() ?? null,
+      grantedBy: rowString(row, "granted_by")!,
+      reason: rowString(row, "reason"),
+      createdAt: createdAt.toISOString(),
+    };
+  });
 }
 
 export async function authorizeProjectAccount(input: {
@@ -123,6 +161,29 @@ export async function grantProjectAccountAccess(input: {
   const now = new Date();
   if (input.expiresAt && input.expiresAt <= now) {
     throw new TokenlessServiceError("Project access expiry must be in the future.", 400, "invalid_project_expiry");
+  }
+  const existing = await dbClient.execute({
+    sql: `SELECT assignment_id,expires_at FROM tokenless_project_access_assignments
+          WHERE workspace_id=? AND project_id=? AND subject_kind=? AND subject_reference=? AND status='active'
+          LIMIT 1`,
+    args: [input.workspaceId, input.projectId, subjectKind, subjectReference],
+  });
+  const existingRow = existing.rows[0] as QueryRow | undefined;
+  const existingAssignmentId = rowString(existingRow, "assignment_id");
+  if (existingAssignmentId) {
+    const existingExpiry =
+      existingRow?.expires_at === null || existingRow?.expires_at === undefined
+        ? null
+        : new Date(String(existingRow.expires_at));
+    if (!existingExpiry || !Number.isFinite(existingExpiry.getTime()) || existingExpiry > now) {
+      throw new TokenlessServiceError("This subject already has project access.", 409, "project_assignment_exists");
+    }
+    await dbClient.execute({
+      sql: `UPDATE tokenless_project_access_assignments
+            SET status='revoked',revoked_at=?,revoked_by=?
+            WHERE assignment_id=? AND status='active'`,
+      args: [now, manager.accountReference, existingAssignmentId],
+    });
   }
   const assignmentId = `paccess_${randomUUID().replaceAll("-", "")}`;
   await dbClient.execute({

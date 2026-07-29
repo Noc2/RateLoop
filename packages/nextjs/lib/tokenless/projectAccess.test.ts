@@ -37,6 +37,7 @@ test("project assignments deny unassigned and cross-project access and enforce r
   const second = await seedProject("second");
   const assignment = await grantProjectAccountAccess({
     accountAddress: AUDITOR,
+    expiresAt: new Date("2090-01-01T00:00:00.000Z"),
     grantedBy: OWNER,
     reason: "security_review",
     role: "auditor",
@@ -58,6 +59,16 @@ test("project assignments deny unassigned and cross-project access and enforce r
   );
   await assert.rejects(
     () => authorizeProjectAccount({ accountAddress: UNASSIGNED, action: "read", ...first }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "project_not_found",
+  );
+  await assert.rejects(
+    () =>
+      authorizeProjectAccount({
+        accountAddress: AUDITOR,
+        action: "read",
+        now: new Date("2100-01-01T00:00:00.000Z"),
+        ...first,
+      }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "project_not_found",
   );
 

@@ -31,6 +31,7 @@ import {
 } from "~~/lib/tokenless/evidencePackets";
 import { canonicalizeHumanAssuranceDocument, hashHumanAssuranceDocument } from "~~/lib/tokenless/humanAssurance";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
+import { createProjectOwnerAssignment, grantProjectAccountAccess } from "~~/lib/tokenless/projectAccess";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import { seedReadyHumanReviewBinding } from "~~/lib/tokenless/testing/humanReviewBindingFixture";
 
@@ -61,7 +62,10 @@ test("locked assurance access targets the run without locking nullable joins", a
     {
       query: async (sql: string) => {
         queries.push(sql);
-        return { rows: queries.length === 1 ? [{ run_id: "run" }] : [{ workspace_role: "owner" }] };
+        return {
+          rows:
+            queries.length === 1 ? [{ run_id: "run" }] : [{ project_access_role: "admin", workspace_role: "owner" }],
+        };
       },
     } as never,
     { accountAddress: OWNER, workspaceId: "workspace", runId: "run" },
@@ -205,6 +209,7 @@ async function seedEvidenceFixture(input: {
      VALUES (?, ?, 'Evidence project', 'confidential', 'active', 30, ?, ?, ?)`,
     [projectId, workspaceId, OWNER, NOW, NOW],
   );
+  await createProjectOwnerAssignment({ accountAddress: OWNER, projectId, workspaceId, now: NOW });
   for (const [artifactId, role, marker] of [
     ["artifact_a", "baseline", "a"],
     ["artifact_b", "candidate", "b"],
@@ -485,11 +490,73 @@ async function seedEvidenceFixture(input: {
 
   return {
     workspaceId,
+    projectId,
     runId,
     admissionPolicyHash,
     reviewerAddresses: Array.from({ length: reviewerIndex }, (_, index) => address(index + 1)),
   };
 }
+
+test("project auditors can export only their assigned project and cannot generate evidence", async () => {
+  const fixture = await seedEvidenceFixture({
+    compensation: "unpaid",
+    minimumAggregationSize: 1,
+    sources: [
+      {
+        source: "customer_invited",
+        targetCount: 1,
+        responses: [{ choice: "candidate", validity: "valid" }],
+      },
+    ],
+  });
+  const signer = generateKeyPairSync("ed25519");
+  const packet = await generateAssuranceEvidencePacket({
+    accountAddress: OWNER,
+    workspaceId: fixture.workspaceId,
+    runId: fixture.runId,
+    now: NOW,
+    signer: { privateKey: signer.privateKey },
+    tenantCommitmentKey: TENANT_KEY,
+  });
+  await grantProjectAccountAccess({
+    accountAddress: DECISION_OWNER,
+    grantedBy: OWNER,
+    projectId: fixture.projectId,
+    role: "auditor",
+    workspaceId: fixture.workspaceId,
+  });
+
+  assert.equal(
+    (
+      await getAssuranceEvidencePacket({
+        accountAddress: DECISION_OWNER,
+        workspaceId: fixture.workspaceId,
+        runId: fixture.runId,
+      })
+    ).packetDigest,
+    packet.packetDigest,
+  );
+  await assert.rejects(
+    () =>
+      getAssuranceEvidencePacket({
+        accountAddress: DECISION_OWNER,
+        workspaceId: "workspace_other",
+        runId: fixture.runId,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "assurance_run_not_found",
+  );
+  await assert.rejects(
+    () =>
+      generateAssuranceEvidencePacket({
+        accountAddress: DECISION_OWNER,
+        workspaceId: fixture.workspaceId,
+        runId: fixture.runId,
+        signer: { privateKey: signer.privateKey },
+        tenantCommitmentKey: TENANT_KEY,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "assurance_run_not_found",
+  );
+});
 
 async function bindPersistedAgentReviewContext(input: {
   workspaceId: string;
@@ -1191,6 +1258,15 @@ test("client sign-off is decision-owner scoped, separate, and bound to the measu
      VALUES (?, ?, 'decision_owner', ?, ?, ?)`,
     [fixture.workspaceId, DECISION_OWNER, OWNER, NOW, NOW],
   );
+  for (const accountAddress of [DECISION_OWNER, MEMBER]) {
+    await grantProjectAccountAccess({
+      accountAddress,
+      grantedBy: OWNER,
+      projectId: fixture.projectId,
+      role: "contributor",
+      workspaceId: fixture.workspaceId,
+    });
+  }
   const signer = generateKeyPairSync("ed25519");
   const packet = await generateAssuranceEvidencePacket({
     accountAddress: OWNER,
@@ -1313,6 +1389,15 @@ test("override records are decision-scoped, append-only, audit-chained, and aggr
      VALUES (?, ?, 'decision_owner', ?, ?, ?)`,
     [fixture.workspaceId, DECISION_OWNER, OWNER, NOW, NOW],
   );
+  for (const accountAddress of [DECISION_OWNER, MEMBER]) {
+    await grantProjectAccountAccess({
+      accountAddress,
+      grantedBy: OWNER,
+      projectId: fixture.projectId,
+      role: "contributor",
+      workspaceId: fixture.workspaceId,
+    });
+  }
   const signer = generateKeyPairSync("ed25519");
   const packet = await generateAssuranceEvidencePacket({
     accountAddress: OWNER,
