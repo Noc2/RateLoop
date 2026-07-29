@@ -390,6 +390,7 @@ type MaintenanceStage = "seedScheduledWork" | "claimDueWork" | "processClaimedWo
 type MaintenanceProcessorFailure = {
   processor: keyof MaintenanceProcessors | MaintenanceStage;
   errorCode: string;
+  errorDigest: `sha256:${string}`;
 };
 
 function maintenanceProcessorErrorCode(error: unknown) {
@@ -398,6 +399,21 @@ function maintenanceProcessorErrorCode(error: unknown) {
     return error.name;
   }
   return "processor_error";
+}
+
+function maintenanceProcessorErrorEvidence(
+  error: unknown,
+  processor: keyof MaintenanceProcessors | MaintenanceStage,
+): Omit<MaintenanceProcessorFailure, "processor"> {
+  const errorCode = maintenanceProcessorErrorCode(error);
+  const errorClass = error instanceof Error ? error.name : typeof error;
+  const errorDetail = error instanceof Error ? error.message.slice(0, 1_000) : errorClass;
+  return {
+    errorCode,
+    errorDigest: `sha256:${createHash("sha256")
+      .update(`${processor}:${errorCode}:${errorClass}:${errorDetail}`)
+      .digest("hex")}`,
+  };
 }
 
 async function runIsolatedMaintenanceProcessor<T>(input: {
@@ -409,10 +425,17 @@ async function runIsolatedMaintenanceProcessor<T>(input: {
   try {
     return await input.run();
   } catch (error) {
-    input.failures.push({
+    const failure = {
       processor: input.processor,
-      errorCode: maintenanceProcessorErrorCode(error),
-    });
+      ...maintenanceProcessorErrorEvidence(error, input.processor),
+    };
+    input.failures.push(failure);
+    console.error(
+      JSON.stringify({
+        event: "tokenless_scheduled_maintenance_processor_failure",
+        ...failure,
+      }),
+    );
     return input.fallback;
   }
 }

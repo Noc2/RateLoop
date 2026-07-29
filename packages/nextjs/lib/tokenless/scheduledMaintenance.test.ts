@@ -349,35 +349,57 @@ test("a failed maintenance bucket can be reclaimed and completed exactly once", 
   assert.equal(duplicate.status, "duplicate");
 });
 
-test("one processor failure degrades the run without skipping later processors or retaining its message", async () => {
+test("one processor failure degrades the run, retains safe evidence, and logs one structured line", async () => {
   let notificationsRan = false;
-  const result = await runTokenlessScheduledMaintenance({
-    appOrigin: "https://tokenless.example.test",
-    now: NOW,
-    processors: {
-      ...processors(async () => undefined),
-      async sweepExpiredQuotes() {
-        throw new Error("private-provider-detail-must-not-persist");
+  const logLines: string[] = [];
+  const originalConsoleError = console.error;
+  console.error = (...values: unknown[]) => {
+    logLines.push(values.map(String).join(" "));
+  };
+  let result: Awaited<ReturnType<typeof runTokenlessScheduledMaintenance>>;
+  try {
+    result = await runTokenlessScheduledMaintenance({
+      appOrigin: "https://tokenless.example.test",
+      now: NOW,
+      processors: {
+        ...processors(async () => undefined),
+        async sweepExpiredQuotes() {
+          throw new Error("private-provider-detail-must-not-persist");
+        },
+        async processNotifications() {
+          notificationsRan = true;
+          return {
+            dead: 0,
+            delivered: 0,
+            enqueued: 0,
+            materialized: 0,
+            parked: 0,
+            retry: 0,
+            suppressed: 0,
+          };
+        },
       },
-      async processNotifications() {
-        notificationsRan = true;
-        return {
-          dead: 0,
-          delivered: 0,
-          enqueued: 0,
-          materialized: 0,
-          parked: 0,
-          retry: 0,
-          suppressed: 0,
-        };
-      },
-    },
-  });
+    });
+  } finally {
+    console.error = originalConsoleError;
+  }
   if (result.status === "duplicate") assert.fail("first invocation cannot be duplicate");
   assert.equal(result.status, "degraded");
   assert.equal(notificationsRan, true);
-  assert.deepEqual(result.summary.processorFailures, [{ processor: "sweepExpiredQuotes", errorCode: "Error" }]);
+  const errorDigest = `sha256:${createHash("sha256")
+    .update("sweepExpiredQuotes:Error:Error:private-provider-detail-must-not-persist")
+    .digest("hex")}`;
+  assert.deepEqual(result.summary.processorFailures, [
+    { processor: "sweepExpiredQuotes", errorCode: "Error", errorDigest },
+  ]);
   assert.doesNotMatch(JSON.stringify(result.summary), /private-provider-detail/u);
+  assert.equal(logLines.length, 1);
+  assert.deepEqual(JSON.parse(logLines[0]!), {
+    event: "tokenless_scheduled_maintenance_processor_failure",
+    processor: "sweepExpiredQuotes",
+    errorCode: "Error",
+    errorDigest,
+  });
 });
 
 test("expired public question media is swept by the cron rather than by upload traffic", async () => {
@@ -462,7 +484,10 @@ test("a failure in any scheduled-work stage is isolated instead of skipping ever
     if (result.status === "duplicate") assert.fail(`${stage.processor} invocation cannot be duplicate`);
     assert.equal(notificationsRan, true, `${stage.processor} must not skip later processors`);
     assert.equal(result.status, "degraded");
-    assert.deepEqual(result.summary.processorFailures, [{ processor: stage.processor, errorCode: "StageOutage" }]);
+    assert.equal(result.summary.processorFailures.length, 1);
+    assert.equal(result.summary.processorFailures[0]?.processor, stage.processor);
+    assert.equal(result.summary.processorFailures[0]?.errorCode, "StageOutage");
+    assert.match(result.summary.processorFailures[0]?.errorDigest ?? "", /^sha256:[0-9a-f]{64}$/u);
     assert.doesNotMatch(JSON.stringify(result.summary), /interrupted/u);
   }
 });
