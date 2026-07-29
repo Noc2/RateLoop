@@ -124,6 +124,7 @@ for (const [cwd, groupFiles] of groupTestsByCwd(files)) {
   groupFiles.sort();
 
   const nodeArgs = [
+    "--experimental-test-coverage",
     "--import",
     preloadModule,
     `--test-concurrency=${configuredTestConcurrency}`,
