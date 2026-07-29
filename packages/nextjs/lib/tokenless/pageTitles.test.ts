@@ -15,7 +15,7 @@ test("agent titles describe the selected workspace destination", () => {
   assert.equal(agentPageTitle("results"), "Results");
   assert.equal(agentPageTitle("approvals"), "Approvals");
   assert.equal(agentPageTitle("review-setup"), "Review setup");
-  assert.equal(agentPageTitle("evidence"), "Evidence");
+  assert.equal(agentPageTitle("evidence"), "Results");
   assert.equal(agentPageTitle("unknown"), "Overview");
 });
 
@@ -69,7 +69,7 @@ test("signed-in routes derive metadata from the current tab and the root app app
   assert.match(human, /generateMetadata[\s\S]*humanPageTitle\(await searchParams\)/);
   assert.match(agentSection, /generateMetadata[\s\S]*agentPageTitle\(tab \?\? "overview"\)/);
   assert.match(humanSection, /generateMetadata[\s\S]*routeSection: section/);
-  assert.match(agentContent, /<PageHeading heading=\{agentPageTitle\(tab\)\} \/>/);
+  assert.doesNotMatch(agentContent, /PageHeading|agentPageTitle/);
   assert.match(humanContent, /<PageHeading[\s\S]*Reviewer notifications[\s\S]*Reviewer profile[\s\S]*Account settings/);
   assert.doesNotMatch(agentContent, /<h1 className="sr-only">Agent workspace/);
   assert.doesNotMatch(humanContent, /<h1 className="sr-only">/);

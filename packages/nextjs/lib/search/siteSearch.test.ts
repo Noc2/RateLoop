@@ -30,7 +30,7 @@ test("site search includes canonical tasks and core pages", () => {
   assert.equal(searchSite("invite reviewer")[0]?.href, "/agents/review-setup");
   assert.equal(searchSite("review settings")[0]?.href, "/agents/review-setup");
   assert.equal(searchSite("view results")[0]?.href, "/agents/results");
-  assert.equal(searchSite("export evidence")[0]?.href, "/agents/evidence");
+  assert.equal(searchSite("export evidence")[0]?.href, "/agents/results#evidence-packets-heading");
   assert.equal(searchSite("billing")[0]?.href, "/agents/billing");
   assert.equal(searchSite("notifications")[0]?.href, "/human/settings");
   assert.equal(searchSite("reviewer access")[0]?.href, "/human/profile");

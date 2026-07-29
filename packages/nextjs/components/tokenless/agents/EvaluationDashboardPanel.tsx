@@ -69,11 +69,12 @@ function runPresentationStatus(run: EvaluationRun) {
 
 function evidenceHrefForRun(workspaceId: string, runId: string, currentSearch: string) {
   const route = new URL(
-    agentTabHref("evidence", workspaceId, new URLSearchParams(currentSearch)),
+    agentTabHref("evaluations", workspaceId, new URLSearchParams(currentSearch)),
     "https://rateloop.local",
   );
   route.search = updateEvidenceUrlSearch(route.search, { runId, packetId: null });
-  return `${route.pathname}${route.search}`;
+  route.hash = "evidence-packets-heading";
+  return `${route.pathname}${route.search}${route.hash}`;
 }
 
 function AssuranceMetricsSummary({ snapshot }: { snapshot: AssuranceMetricsSnapshot }) {

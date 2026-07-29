@@ -335,10 +335,11 @@ test("result filters restore from the URL and every evidence-backed result links
     assert.equal((view.getByRole("combobox", { name: "Outcome" }) as HTMLSelectElement).value, "failed");
     const evidence = view.getByRole("link", { name: "Open evidence" });
     const href = new URL(evidence.getAttribute("href") ?? "", "https://rateloop.local");
-    assert.equal(href.pathname, "/agents/evidence");
+    assert.equal(href.pathname, "/agents/results");
     assert.equal(href.searchParams.get("workspace"), "workspace-1");
     assert.equal(href.searchParams.get("run"), "run_failed_2");
     assert.equal(href.searchParams.get("resultStatus"), "failed");
+    assert.equal(href.hash, "#evidence-packets-heading");
   } finally {
     window.history.replaceState(null, "", "/agents/results");
     await act(async () => cleanup());

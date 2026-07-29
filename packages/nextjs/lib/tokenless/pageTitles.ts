@@ -9,7 +9,7 @@ const agentTitles: Record<string, string> = {
   connect: "Connections",
   connections: "Connections",
   evaluations: "Results",
-  evidence: "Evidence",
+  evidence: "Results",
   groups: "Review setup",
   inbox: "Approvals",
   overview: "Overview",

@@ -170,7 +170,7 @@ async function searchEvidence(accountAddress: string, terms: readonly string[]):
       area: "Evidence" as const,
       title: `${projectName} evidence`,
       description: `${workspaceName} · packet ${packetId} · run ${runId}`,
-      href: href("/agents/evidence", { workspace: workspaceId, run: runId, packet: packetId }),
+      href: href("/agents/results", { workspace: workspaceId, run: runId, packet: packetId }),
       identifiers: [packetId, runId, projectId],
       searchable: [projectName, projectId, suiteName, packetId, runId, workspaceName].join(" "),
       sortTimestamp: rowText(row, "generated_at"),

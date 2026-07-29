@@ -19,7 +19,6 @@ const panelsSource = readFileSync(new URL("./AgentWorkspacePanels.tsx", import.m
 const tabsSource = readFileSync(new URL("./AgentTabs.tsx", import.meta.url), "utf8");
 const registrySource = readFileSync(new URL("./AgentRegistryPanel.tsx", import.meta.url), "utf8");
 const editorSource = readFileSync(new URL("./AgentHumanReviewEditor.tsx", import.meta.url), "utf8");
-const reviewerInvitationSource = readFileSync(new URL("./ReviewerInvitationStart.tsx", import.meta.url), "utf8");
 const pageSource = readFileSync(new URL("../../../app/(app)/agents/AgentsSectionPage.tsx", import.meta.url), "utf8");
 const legacyPageSource = readFileSync(new URL("../../../app/(app)/agents/page.tsx", import.meta.url), "utf8");
 const sectionPageSource = readFileSync(
@@ -125,33 +124,21 @@ test("unusable OAuth integrations reconnect their saved agent unless another usa
 });
 
 test("connected navigation splits the owner stack into URL-backed task tabs", () => {
-  assert.deepEqual(connectedAgentTabs(), [
-    "overview",
-    "connect",
-    "inbox",
-    "registry",
-    "evaluations",
-    "evidence",
-    "billing",
-  ]);
-  assert.deepEqual(connectedAgentTabs({ canManage: false }), [
-    "overview",
-    "connect",
-    "evaluations",
-    "evidence",
-    "billing",
-  ]);
+  assert.deepEqual(connectedAgentTabs(), ["overview", "connect", "inbox", "registry", "evaluations", "billing"]);
+  assert.deepEqual(connectedAgentTabs({ canManage: false }), ["overview", "connect", "evaluations", "billing"]);
   assert.equal(resolveAvailableAgentTab("connect", connectedAgentTabs({ canManage: false })), "connect");
   assert.equal(resolveAgentTabParam("agents"), "connect");
   assert.equal(resolveAgentTabParam("groups"), "registry");
+  assert.equal(resolveAgentTabParam("evidence"), "evaluations");
   assert.equal(resolveAgentTabParam("unknown"), "overview");
   assert.equal(agentTabHref("inbox", "workspace one"), "/agents/approvals?workspace=workspace+one");
   assert.equal(agentTabForSection("approvals"), "inbox");
   assert.equal(agentTabForSection("connect"), "connect");
+  assert.equal(agentTabForSection("evidence"), "evaluations");
   assert.equal(agentSignInReturnTo({}), "/agents/overview");
   assert.equal(
     agentSignInReturnTo({ returning: "oauth", tab: "evidence", workspaceId: "workspace one", step: "people" }),
-    "/agents/evidence?returning=oauth&workspace=workspace+one&step=people",
+    "/agents/results?returning=oauth&workspace=workspace+one&step=people",
   );
   assert.equal(
     agentSignInReturnTo({
@@ -165,7 +152,7 @@ test("connected navigation splits the owner stack into URL-backed task tabs", ()
         packetId: "packet one",
       },
     }),
-    "/agents/evidence?workspace=workspace+one&q=release&outcome=fail&date=30&run=run+one&packet=packet+one",
+    "/agents/results?workspace=workspace+one&q=release&outcome=fail&date=30&run=run+one&packet=packet+one",
   );
   assert.equal(
     agentSignInReturnTo({
@@ -191,7 +178,7 @@ test("connected navigation splits the owner stack into URL-backed task tabs", ()
       tab: "evidence",
       workspace: "workspace one",
     }),
-    "/agents/evidence?billing=success&date=30&outcome=fail&packet=packet+one&q=release&returning=oauth&run=run+one&step=people&workspace=workspace+one",
+    "/agents/results?billing=success&date=30&outcome=fail&packet=packet+one&q=release&returning=oauth&run=run+one&step=people&workspace=workspace+one",
   );
   assert.match(pageSource, /returning === "oauth" && !requestedWorkspaceId/);
   assert.match(legacyPageSource, /redirect\(legacyAgentRouteHref\(await searchParams\)\)/);
@@ -202,6 +189,7 @@ test("connected navigation splits the owner stack into URL-backed task tabs", ()
   assert.match(tabsSource, /value: "registry", label: "Review setup"/);
   assert.match(tabsSource, /value: "evaluations", label: "Results"/);
   assert.match(tabsSource, /value: "billing", label: "Billing & settings"/);
+  assert.doesNotMatch(tabsSource, /value: "evidence"|label: "Evidence"/);
 });
 
 test("agent sections use normal route links instead of tab-widget semantics", () => {
@@ -227,6 +215,8 @@ test("the active workspace selector keeps a stable row and preserves the current
   assert.match(tabsSource, /labelClassName="sr-only"/);
   assert.match(tabsSource, /overflow-x-auto/);
   assert.match(tabsSource, /min-w-max/);
+  assert.match(tabsSource, /lg:min-w-0 lg:flex-wrap/);
+  assert.match(tabsSource, /<div className="flex justify-end">\s*<SelectField/s);
   assert.doesNotMatch(tabsSource, /flex flex-wrap gap-2/);
   assert.match(tabsSource, /workspaces\.map\(workspace =>/);
   assert.match(tabsSource, /onWorkspaceChange\(event\.target\.value\)/);
@@ -252,7 +242,8 @@ test("the server resolves onboarding before the client renders downstream panels
   assert.match(panelsSource, /return <WorkspaceSetupStart \/>/);
   assert.match(panelsSource, /const setupIncomplete = Boolean\(initialSetup && !initialSetup\.complete\)/);
   assert.match(panelsSource, /<AgentSetupFlow initialSetup=\{initialSetup\} \/>/);
-  assert.ok(panelsSource.indexOf("<AgentSetupFlow") < panelsSource.indexOf("<AgentTabs"));
+  assert.ok(panelsSource.indexOf("<AgentTabs") < panelsSource.indexOf("<WorkspaceStopBanner"));
+  assert.ok(panelsSource.indexOf("<AgentTabs") < panelsSource.indexOf("<AgentSetupFlow"));
   assert.match(panelsSource, /<AgentTabs/);
   assert.match(panelsSource, /workspaceId=\{workspaceId\}/);
   assert.match(panelsSource, /resolvedTab === "connect" && canManage/);
@@ -261,7 +252,11 @@ test("the server resolves onboarding before the client renders downstream panels
   assert.doesNotMatch(panelsSource, /view="connection"|view="reviews"/);
   assert.match(panelsSource, /<AgentReviewsPanel workspaceId=\{workspaceId\} canManage=\{canManage\} \/>/);
   assert.match(panelsSource, /resolvedTab === "evaluations"/);
-  assert.match(panelsSource, /resolvedTab === "evidence"/);
+  assert.match(
+    panelsSource,
+    /resolvedTab === "evaluations"[\s\S]*<EvaluationDashboardPanel[\s\S]*<EvidenceWorkspacePanel/,
+  );
+  assert.doesNotMatch(panelsSource, /resolvedTab === "evidence"/);
 });
 
 test("completed read-only workspaces never render connection or policy mutations", () => {
@@ -310,16 +305,12 @@ test("incomplete setup keeps workspace management reachable beside guided setup"
   assert.match(panelsSource, /<WorkspaceSettingsClient initialWorkspaceId=\{workspaceId\} \/>/);
 });
 
-test("zero-agent managers can invite reviewers without exposing downstream management", () => {
-  assert.match(panelsSource, /const noConnectedAgent = initialSetup \? initialSetup\.agent === null/);
-  assert.match(
-    panelsSource,
-    /noConnectedAgent && canManage \? <ReviewerInvitationStart workspaceId=\{workspaceId\} \/>/,
-  );
-  assert.ok(panelsSource.indexOf("<AgentSetupFlow") < panelsSource.indexOf("<ReviewerInvitationStart"));
-  assert.match(reviewerInvitationSource, /variant="secondary"/);
-  assert.match(reviewerInvitationSource, /"Invite reviewers"/);
-  assert.doesNotMatch(reviewerInvitationSource, /Invite member|Active reviewers|Pending invitations|private group/i);
+test("zero-agent setup stays focused without a reviewer invitation banner above the route content", () => {
+  assert.doesNotMatch(panelsSource, /ReviewerInvitationStart|You can invite reviewers now/);
+});
+
+test("agent tabs are the route identity without a duplicate page heading", () => {
+  assert.doesNotMatch(pageSource, /PageHeading|agentPageTitle/);
 });
 
 test("the Reviews tab opens the canonical human-review editor directly", () => {

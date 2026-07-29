@@ -12,9 +12,7 @@ import {
   selectRequestedWorkspace,
 } from "~~/components/tokenless/agents/agentWorkspaceState";
 import { parseEvidenceUrlState } from "~~/components/tokenless/agents/evidenceUrlState";
-import { PageHeading } from "~~/components/tokenless/ui/PageHeading";
 import { AUTH_SESSION_COOKIE, findAuthSession } from "~~/lib/auth/session";
-import { agentPageTitle } from "~~/lib/tokenless/pageTitles";
 import { listProductWorkspaces } from "~~/lib/tokenless/productCore";
 import { getWorkspaceAgentSetup } from "~~/lib/tokenless/workspaceAgentSetup";
 
@@ -91,7 +89,6 @@ export async function AgentsSectionPage({
 
   return (
     <AppPageShell outerClassName="pb-8" contentClassName="space-y-5">
-      {setup?.complete ? <PageHeading heading={agentPageTitle(tab)} /> : null}
       <AgentWorkspacePanels
         key={workspace?.workspaceId ?? "no-workspace"}
         activeTab={tab}

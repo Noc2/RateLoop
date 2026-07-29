@@ -33,7 +33,7 @@ const DOCS_PATHS = [
     number: "04",
     title: "Verify evidence",
     description: "Inspect completed review records and export the evidence you need.",
-    href: "/agents/evidence",
+    href: "/agents/results#evidence-packets-heading",
     label: "Open Evidence",
     color: "var(--rateloop-yellow)",
   },

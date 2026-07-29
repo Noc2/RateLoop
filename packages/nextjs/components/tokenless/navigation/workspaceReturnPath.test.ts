@@ -12,13 +12,13 @@ const ORIGIN = "https://rateloop-tokenless.vercel.app";
 test("workspace return paths preserve exact agent context and reject open redirects", () => {
   assert.equal(
     normalizeWorkspaceReturnPath(
-      "/agents/evidence?workspace=workspace-2&q=release&outcome=fail&date=30#decision-packets",
+      "/agents/results?workspace=workspace-2&q=release&outcome=fail&date=30#evidence-packets-heading",
       ORIGIN,
     ),
-    "/agents/evidence?workspace=workspace-2&q=release&outcome=fail&date=30#decision-packets",
+    "/agents/results?workspace=workspace-2&q=release&outcome=fail&date=30#evidence-packets-heading",
   );
-  assert.equal(normalizeWorkspaceReturnPath("https://evil.example/agents/evidence", ORIGIN), null);
-  assert.equal(normalizeWorkspaceReturnPath("//evil.example/agents/evidence", ORIGIN), null);
+  assert.equal(normalizeWorkspaceReturnPath("https://evil.example/agents/results", ORIGIN), null);
+  assert.equal(normalizeWorkspaceReturnPath("//evil.example/agents/results", ORIGIN), null);
   assert.equal(normalizeWorkspaceReturnPath("/\\evil.example/agents", ORIGIN), null);
   assert.equal(normalizeWorkspaceReturnPath("/human/review?assignment=secret", ORIGIN), null);
 });
@@ -27,9 +27,9 @@ test("public content links carry a validated workspace return without dropping d
   assert.equal(
     workspacePublicContentHref(
       "/docs/evidence?mode=verify#verify",
-      "/agents/evidence?workspace=workspace-2&q=release&outcome=fail",
+      "/agents/results?workspace=workspace-2&q=release&outcome=fail",
     ),
-    "/docs/evidence?mode=verify&from=workspace&returnTo=%2Fagents%2Fevidence%3Fworkspace%3Dworkspace-2%26q%3Drelease%26outcome%3Dfail#verify",
+    "/docs/evidence?mode=verify&from=workspace&returnTo=%2Fagents%2Fresults%3Fworkspace%3Dworkspace-2%26q%3Drelease%26outcome%3Dfail#verify",
   );
   assert.throws(
     () => workspacePublicContentHref("/docs/evidence", "https://evil.example/agents"),

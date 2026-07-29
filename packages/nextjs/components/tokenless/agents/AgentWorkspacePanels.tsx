@@ -16,7 +16,6 @@ import { EvidenceWorkspacePanel } from "./EvidenceWorkspacePanel";
 import { FeedbackBonusAwardInbox } from "./FeedbackBonusAwardInbox";
 import { HumanReviewApprovalInbox } from "./HumanReviewApprovalInbox";
 import { OversightAlertsPanel } from "./OversightAlertsPanel";
-import { ReviewerInvitationStart } from "./ReviewerInvitationStart";
 import { ScheduledWorkerHealthPanel } from "./ScheduledWorkerHealthPanel";
 import type { AgentConnectionHistoryEntry } from "./agentAuditHistory";
 import { agentTabHref, connectedAgentTabs, resolveAvailableAgentTab } from "./agentWorkspaceState";
@@ -92,7 +91,6 @@ export function AgentWorkspacePanels({
   }
   const canManage = workspace.role === "owner" || workspace.role === "admin";
   const setupIncomplete = Boolean(initialSetup && !initialSetup.complete);
-  const noConnectedAgent = initialSetup ? initialSetup.agent === null : !initialHasConnectedAgent;
   const visibleTabs = hasConnectedAgent
     ? connectedAgentTabs({ canManage })
     : canManage
@@ -102,10 +100,6 @@ export function AgentWorkspacePanels({
 
   return (
     <div className="space-y-5">
-      {/* Persistent across every agents tab while the workspace stop is engaged. */}
-      <WorkspaceStopBanner workspaceId={workspaceId} />
-      {setupIncomplete && initialSetup ? <AgentSetupFlow initialSetup={initialSetup} /> : null}
-      {noConnectedAgent && canManage ? <ReviewerInvitationStart workspaceId={workspaceId} /> : null}
       <AgentTabs
         active={resolvedTab}
         visibleTabs={visibleTabs}
@@ -115,6 +109,9 @@ export function AgentWorkspacePanels({
           router.push(agentTabHref(resolvedTab, nextWorkspaceId, new URLSearchParams(searchParams.toString())))
         }
       />
+      {/* Persistent across every agents tab while the workspace stop is engaged. */}
+      <WorkspaceStopBanner workspaceId={workspaceId} />
+      {setupIncomplete && initialSetup ? <AgentSetupFlow initialSetup={initialSetup} /> : null}
 
       <div key={workspaceId} id="agent-workspace-panel" className="space-y-5">
         {resolvedTab === "overview" ? (
@@ -182,10 +179,21 @@ export function AgentWorkspacePanels({
           <AgentReviewsPanel workspaceId={workspaceId} canManage={canManage} />
         ) : null}
         {hasConnectedAgent && resolvedTab === "evaluations" ? (
-          <EvaluationDashboardPanel initialWorkspaceId={workspaceId} />
-        ) : null}
-        {hasConnectedAgent && resolvedTab === "evidence" ? (
-          <EvidenceWorkspacePanel workspaceId={workspaceId} canManage={canManage} />
+          <>
+            <EvaluationDashboardPanel initialWorkspaceId={workspaceId} />
+            <EvidenceWorkspacePanel
+              key={[
+                workspaceId,
+                searchParams.get("q"),
+                searchParams.get("outcome"),
+                searchParams.get("date"),
+                searchParams.get("run"),
+                searchParams.get("packet"),
+              ].join(":")}
+              workspaceId={workspaceId}
+              canManage={canManage}
+            />
+          </>
         ) : null}
       </div>
     </div>

@@ -167,7 +167,7 @@ test("exact run, packet, project, agent, and version identifiers link to address
   );
   assert.equal(
     packet[0]?.href,
-    `/agents/evidence?workspace=${workspace}&run=${encodeURIComponent(seeded.runId)}&packet=${encodeURIComponent(
+    `/agents/results?workspace=${workspace}&run=${encodeURIComponent(seeded.runId)}&packet=${encodeURIComponent(
       seeded.packetId,
     )}`,
   );

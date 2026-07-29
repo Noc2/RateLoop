@@ -34,7 +34,7 @@ test("signed-in search renders authorized data beside the unchanged public index
         area: "Evidence",
         title: "Release review evidence",
         description: "Acme workspace · packet packet_exact · run run_exact",
-        href: "/agents/evidence?workspace=workspace-1&run=run_exact&packet=packet_exact",
+        href: "/agents/results?workspace=workspace-1&run=run_exact&packet=packet_exact",
       },
     ],
     query: "packet_exact",
@@ -43,7 +43,7 @@ test("signed-in search renders authorized data beside the unchanged public index
 
   assert.match(html, /Your workspace data/i);
   assert.match(html, /Release review evidence/i);
-  assert.match(html, /href="\/agents\/evidence\?workspace=workspace-1&amp;run=run_exact&amp;packet=packet_exact"/i);
+  assert.match(html, /href="\/agents\/results\?workspace=workspace-1&amp;run=run_exact&amp;packet=packet_exact"/i);
   assert.match(html, /RateLoop/i);
   assert.match(html, /Review work/i);
 });

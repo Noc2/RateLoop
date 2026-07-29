@@ -460,7 +460,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
     const params = new URLSearchParams();
     if (workspaceId) params.set("workspace", workspaceId);
     return {
-      pathname: "/agents/evidence",
+      pathname: "/agents/results",
       search: params.toString(),
       hash: "",
       state: DEFAULT_EVIDENCE_URL_STATE,

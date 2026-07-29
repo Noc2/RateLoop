@@ -57,8 +57,8 @@ export function connectedAgentTabs({
   canManage?: boolean;
 } = {}): AgentTab[] {
   return canManage
-    ? ["overview", "connect", "inbox", "registry", "evaluations", "evidence", "billing"]
-    : ["overview", "connect", "evaluations", "evidence", "billing"];
+    ? ["overview", "connect", "inbox", "registry", "evaluations", "billing"]
+    : ["overview", "connect", "evaluations", "billing"];
 }
 
 export function resolveAvailableAgentTab(requested: AgentTab, available: AgentTab[]): AgentTab {
@@ -66,30 +66,16 @@ export function resolveAvailableAgentTab(requested: AgentTab, available: AgentTa
   return available.includes("overview") ? "overview" : (available[0] ?? "overview");
 }
 
-const currentAgentTabs = new Set<AgentTab>([
-  "overview",
-  "connect",
-  "inbox",
-  "registry",
-  "evaluations",
-  "evidence",
-  "billing",
-]);
+const currentAgentTabs = new Set<AgentTab>(["overview", "connect", "inbox", "registry", "evaluations", "billing"]);
 
 export function resolveAgentTabParam(requested?: string): AgentTab {
   if (requested === "agents") return "connect";
   if (requested === "groups") return "registry";
+  if (requested === "evidence") return "evaluations";
   return currentAgentTabs.has(requested as AgentTab) ? (requested as AgentTab) : "overview";
 }
 
-export type AgentSection =
-  | "overview"
-  | "connections"
-  | "approvals"
-  | "review-setup"
-  | "results"
-  | "evidence"
-  | "billing";
+export type AgentSection = "overview" | "connections" | "approvals" | "review-setup" | "results" | "billing";
 
 const agentSectionByTab: Record<AgentTab, AgentSection> = {
   overview: "overview",
@@ -97,7 +83,6 @@ const agentSectionByTab: Record<AgentTab, AgentSection> = {
   inbox: "approvals",
   registry: "review-setup",
   evaluations: "results",
-  evidence: "evidence",
   billing: "billing",
 };
 
@@ -109,6 +94,7 @@ const agentTabBySection = new Map<string, AgentTab>([
   ["inbox", "inbox"],
   ["registry", "registry"],
   ["evaluations", "evaluations"],
+  ["evidence", "evaluations"],
 ]);
 
 type NavigationSearchParams = Record<string, string | string[] | undefined>;
@@ -171,6 +157,6 @@ export function agentSignInReturnTo(input: {
   if (input.step) params.set("step", input.step);
   const tab = resolveAgentTabParam(input.tab);
   const search =
-    tab === "evidence" && input.evidence ? updateEvidenceUrlSearch(params, input.evidence) : params.toString();
+    tab === "evaluations" && input.evidence ? updateEvidenceUrlSearch(params, input.evidence) : params.toString();
   return agentTabHref(tab, undefined, new URLSearchParams(search));
 }

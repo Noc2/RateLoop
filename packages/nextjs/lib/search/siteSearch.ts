@@ -39,7 +39,7 @@ export const SITE_SEARCH_INDEX: readonly SiteSearchEntry[] = [
   },
   {
     title: "Export evidence",
-    href: "/agents/evidence",
+    href: "/agents/results#evidence-packets-heading",
     area: "Task",
     description: "Inspect and export workspace review evidence.",
     keywords: ["audit", "download evidence", "verification", "records"],
