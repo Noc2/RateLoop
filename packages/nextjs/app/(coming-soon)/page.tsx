@@ -49,7 +49,8 @@ export default function ComingSoonPage() {
 
           <div
             aria-hidden="true"
-            className="relative z-0 -mx-[28vw] -mb-[24vw] mt-2 w-[156vw] sm:-mx-[18vw] sm:-mb-[18vw] sm:w-[118vw] lg:absolute lg:left-[48%] lg:top-1/2 lg:m-0 lg:w-[58rem] lg:-translate-y-1/2 xl:left-1/2 xl:w-[66rem] 2xl:w-[76rem]"
+            data-testid="relaunch-orb"
+            className="relative z-0 -mx-[28vw] -mb-[24vw] mt-2 w-[156vw] sm:-mx-[18vw] sm:-mb-[18vw] sm:w-[118vw] lg:absolute lg:-right-12 lg:top-1/2 lg:m-0 lg:w-[clamp(40rem,62vw,70rem)] lg:-translate-y-1/2"
           >
             <OrbAnimation />
           </div>

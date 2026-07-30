@@ -83,6 +83,30 @@ async function expectRouteControls(page: Page, path: string, width: number): Pro
     await expect(page.getByLabel("Open menu")).toHaveCount(0);
     await expect(page.locator("aside")).toHaveCount(0);
 
+    if (width >= 1024) {
+      const orbBounds = await page.getByTestId("relaunch-orb").evaluate(element => {
+        const lineBoxes = Array.from(element.querySelectorAll(".ell"), line => line.getBoundingClientRect());
+
+        return {
+          bottom: Math.max(...lineBoxes.map(box => box.bottom)),
+          left: Math.min(...lineBoxes.map(box => box.left)),
+          right: Math.max(...lineBoxes.map(box => box.right)),
+          top: Math.min(...lineBoxes.map(box => box.top)),
+          viewportHeight: window.innerHeight,
+          viewportWidth: window.innerWidth,
+        };
+      });
+
+      expect(orbBounds.left, "Relaunch orb should not be clipped on the left").toBeGreaterThanOrEqual(-1);
+      expect(orbBounds.right, "Relaunch orb should not be clipped on the right").toBeLessThanOrEqual(
+        orbBounds.viewportWidth + 1,
+      );
+      expect(orbBounds.top, "Relaunch orb should not be clipped at the top").toBeGreaterThanOrEqual(-1);
+      expect(orbBounds.bottom, "Relaunch orb should not be clipped at the bottom").toBeLessThanOrEqual(
+        orbBounds.viewportHeight + 1,
+      );
+    }
+
     if (width <= 390) {
       const [headingBox, viewportHeight] = await Promise.all([
         heroHeading.boundingBox(),
@@ -160,6 +184,14 @@ test.describe("Responsive layout", () => {
       }
     });
   }
+
+  test("relaunch orb stays fully visible in a short desktop viewport", async ({ connectedPage: page }) => {
+    await page.setViewportSize({ width: 1247, height: 632 });
+    await gotoWithRetry(page, "/", { skipInjectedWalletConnectionCheck: true, timeout: 45_000 });
+    await expectNoNextErrorOverlay(page);
+    await expectRouteControls(page, "/", 1247);
+    await expectNoHorizontalOverflow(page, "relaunch page at 1247x632");
+  });
 
   test("stake selector dialog fits inside a phone viewport", async ({ connectedPage: page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
