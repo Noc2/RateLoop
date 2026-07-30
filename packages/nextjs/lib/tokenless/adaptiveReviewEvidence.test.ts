@@ -344,6 +344,28 @@ async function storedResult(
     sql: "SELECT economics_json FROM tokenless_agent_asks WHERE operation_key = ?",
     args: [operationKey],
   });
+  const quotedEconomics = JSON.parse(String(ask.rows[0]?.economics_json)) as TokenlessResult["economics"];
+  const economics: TokenlessResult["economics"] = {
+    ...quotedEconomics,
+    bounty: {
+      ...quotedEconomics.bounty,
+      paidAtomic: quotedEconomics.bounty.fundedAtomic,
+    },
+    fee: {
+      ...quotedEconomics.fee,
+      paidAtomic: quotedEconomics.fee.fundedAtomic,
+    },
+    attemptReserve: {
+      ...quotedEconomics.attemptReserve,
+      refundedAtomic: quotedEconomics.attemptReserve.fundedAtomic,
+    },
+    refund: {
+      attemptReserveAtomic: quotedEconomics.attemptReserve.fundedAtomic,
+      bountyAtomic: "0",
+      feeAtomic: "0",
+      totalAtomic: quotedEconomics.attemptReserve.fundedAtomic,
+    },
+  };
   const status = input.status ?? "publishable";
   const publishable = status === "publishable";
   const result: TokenlessResult = {
@@ -356,7 +378,7 @@ async function storedResult(
     commitDeadline: "2026-07-17T12:00:00.000Z",
     requestProfile: null,
     reviewEconomics: null,
-    economics: JSON.parse(String(ask.rows[0]?.economics_json)) as TokenlessResult["economics"],
+    economics,
     audience: {
       admissionPolicyHash: ADMISSION_HASH,
       label: "RateLoop-network reviewers",
@@ -414,7 +436,10 @@ test("idempotently derives comparable yes evidence from the bound server result"
   assert.equal(first.sourcePayloadHash, __adaptiveReviewOrchestrationTestUtils.sha256(SOURCE_PAYLOAD));
   assert.equal(first.agentOutcomeCommitment, __adaptiveReviewOrchestrationTestUtils.sha256(SUGGESTION_PAYLOAD));
   assert.match(first.humanOutcomeCommitment, /^sha256:[0-9a-f]{64}$/);
-  assert.equal(first.costAtomic, "0");
+  assert.equal(
+    first.costAtomic,
+    (BigInt(result.economics.bounty.paidAtomic) + BigInt(result.economics.fee.paidAtomic)).toString(),
+  );
   assert.equal(first.finalizedAt, result.updatedAt);
 
   const stored = await observationRow(setup.decision.opportunityId);
