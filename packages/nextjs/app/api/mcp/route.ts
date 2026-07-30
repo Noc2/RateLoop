@@ -6,11 +6,11 @@ import {
   dispatchTokenlessMcp,
 } from "~~/lib/mcp/protocol";
 import { consumeMcpRateLimit } from "~~/lib/mcp/rateLimit";
+import { MAX_JSON_REQUEST_BODY_BYTES } from "~~/lib/mcp/requestBody";
+import { BoundedRequestBodyError, readBoundedJsonRequestBody } from "~~/lib/tokenless/boundedRequestBody";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-const MAX_BODY_BYTES = 64 * 1_024;
 
 function baseHeaders(extra: HeadersInit = {}) {
   const headers = new Headers(extra);
@@ -86,25 +86,20 @@ function requireProtocolVersion(request: NextRequest) {
   }
 }
 
-async function readBody(request: NextRequest) {
-  const contentLength = request.headers.get("content-length");
-  if (contentLength) {
-    const parsedLength = Number(contentLength);
-    if (!Number.isSafeInteger(parsedLength) || parsedLength < 0) {
-      throw new TokenlessMcpHttpError("Content-Length is invalid.", 400, "invalid_content_length");
-    }
-    if (parsedLength > MAX_BODY_BYTES) {
-      throw new TokenlessMcpHttpError("MCP request body exceeds 64 KiB.", 413, "request_too_large");
-    }
-  }
-  const bytes = await request.arrayBuffer();
-  if (bytes.byteLength > MAX_BODY_BYTES) {
-    throw new TokenlessMcpHttpError("MCP request body exceeds 64 KiB.", 413, "request_too_large");
-  }
+export async function readPublicMcpRequestBody(request: Pick<Request, "body" | "headers">) {
   try {
-    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) as unknown;
-  } catch {
-    throw new TokenlessMcpHttpError("Parse error", 400, "parse_error");
+    return await readBoundedJsonRequestBody(request, MAX_JSON_REQUEST_BODY_BYTES);
+  } catch (error) {
+    if (error instanceof BoundedRequestBodyError) {
+      if (error.reason === "invalid_content_length") {
+        throw new TokenlessMcpHttpError("Content-Length is invalid.", 400, "invalid_content_length");
+      }
+      if (error.reason === "body_too_large") {
+        throw new TokenlessMcpHttpError("MCP request body exceeds 64 KiB.", 413, "request_too_large");
+      }
+      throw new TokenlessMcpHttpError("Parse error", 400, "parse_error");
+    }
+    throw error;
   }
 }
 
@@ -128,7 +123,7 @@ export async function POST(request: NextRequest) {
       for (const [key, value] of cors) response.headers.set(key, value);
       return response;
     }
-    const value = await readBody(request);
+    const value = await readPublicMcpRequestBody(request);
     const result = await dispatchTokenlessMcp(value, requestOrigin(request));
     if (result === null) return new Response(null, { headers: baseHeaders(cors), status: 202 });
     return json(result, 200, cors);

@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { randomBytes } from "node:crypto";
 import { TOKENLESS_MCP_COMPAT_PROTOCOL_VERSION, TOKENLESS_MCP_PROTOCOL_VERSIONS } from "~~/lib/mcp/protocol";
 import { consumeMcpRateLimit } from "~~/lib/mcp/rateLimit";
+import { MAX_JSON_REQUEST_BODY_BYTES } from "~~/lib/mcp/requestBody";
 import {
   deliverWorkspaceMcpElicitation,
   isSuccessfulWorkspaceMcpInitializeResponse,
@@ -10,12 +11,12 @@ import {
 import { dispatchWorkspaceMcp } from "~~/lib/mcp/workspaceProtocol";
 import { authenticateAgentMcpPrincipal } from "~~/lib/tokenless/agentIntegrations";
 import { AGENT_OAUTH_SAFE_SCOPES } from "~~/lib/tokenless/agentOAuth";
+import { BoundedRequestBodyError, readBoundedJsonRequestBody } from "~~/lib/tokenless/boundedRequestBody";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const MAX_BODY_BYTES = 64 * 1_024;
 const SSE_RETRY_MS = 15_000;
 
 function json(value: unknown, status = 200, extra: HeadersInit = {}) {
@@ -98,22 +99,20 @@ function validateProtocolVersion(request: NextRequest) {
   return version;
 }
 
-async function readBody(request: NextRequest) {
-  const declared = request.headers.get("content-length");
-  if (
-    declared &&
-    (!Number.isSafeInteger(Number(declared)) || Number(declared) < 0 || Number(declared) > MAX_BODY_BYTES)
-  ) {
-    throw new TokenlessServiceError("MCP request body exceeds 64 KiB.", 413, "request_too_large");
-  }
-  const bytes = await request.arrayBuffer();
-  if (bytes.byteLength > MAX_BODY_BYTES) {
-    throw new TokenlessServiceError("MCP request body exceeds 64 KiB.", 413, "request_too_large");
-  }
+export async function readWorkspaceMcpRequestBody(request: Pick<Request, "body" | "headers">) {
   try {
-    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) as unknown;
-  } catch {
-    throw new TokenlessServiceError("Parse error", 400, "parse_error");
+    return await readBoundedJsonRequestBody(request, MAX_JSON_REQUEST_BODY_BYTES);
+  } catch (error) {
+    if (error instanceof BoundedRequestBodyError) {
+      if (error.reason === "invalid_content_length") {
+        throw new TokenlessServiceError("Content-Length is invalid.", 400, "invalid_content_length");
+      }
+      if (error.reason === "body_too_large") {
+        throw new TokenlessServiceError("MCP request body exceeds 64 KiB.", 413, "request_too_large");
+      }
+      throw new TokenlessServiceError("Parse error", 400, "parse_error");
+    }
+    throw error;
   }
 }
 
@@ -130,7 +129,7 @@ export async function POST(request: NextRequest) {
       return response;
     }
     const principal = await authenticateAgentMcpPrincipal(request.headers.get("authorization"));
-    const body = await readBody(request);
+    const body = await readWorkspaceMcpRequestBody(request);
     const method = body && typeof body === "object" && !Array.isArray(body) && "method" in body ? body.method : null;
     const initializeSessionId =
       method === "initialize" && principal.kind === "oauth"

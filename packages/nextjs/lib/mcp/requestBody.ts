@@ -1,4 +1,5 @@
 import "server-only";
+import { BoundedRequestBodyError, readBoundedJsonRequestBody } from "~~/lib/tokenless/boundedRequestBody";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 /** Every machine-facing JSON endpoint accepts the same 64 KiB body as the MCP transport. */
@@ -28,22 +29,21 @@ function tooLarge(limitBytes: number): never {
  * unauthenticated or low-trust caller cannot make the runtime buffer an unbounded payload.
  */
 export async function readJsonRequestBody(
-  request: Request,
+  request: Pick<Request, "body" | "headers">,
   limitBytes: number = MAX_JSON_REQUEST_BODY_BYTES,
 ): Promise<unknown> {
-  const declared = request.headers.get("content-length");
-  if (declared) {
-    const length = Number(declared);
-    if (!Number.isSafeInteger(length) || length < 0) {
-      throw new TokenlessServiceError("Content-Length is invalid.", 400, "invalid_content_length");
-    }
-    if (length > limitBytes) tooLarge(limitBytes);
-  }
-  const bytes = await request.arrayBuffer();
-  if (bytes.byteLength > limitBytes) tooLarge(limitBytes);
   try {
-    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) as unknown;
-  } catch {
-    throw new JsonRequestBodyError();
+    return await readBoundedJsonRequestBody(request, limitBytes);
+  } catch (error) {
+    if (error instanceof BoundedRequestBodyError) {
+      if (error.reason === "invalid_content_length") {
+        throw new TokenlessServiceError("Content-Length is invalid.", 400, "invalid_content_length");
+      }
+      if (error.reason === "body_too_large") {
+        tooLarge(limitBytes);
+      }
+      throw new JsonRequestBodyError();
+    }
+    throw error;
   }
 }

@@ -2,8 +2,14 @@ import "server-only";
 import { TokenlessMcpHttpError } from "~~/lib/mcp/errors";
 import { consumeMcpRateLimit } from "~~/lib/mcp/rateLimit";
 import { AgentOAuthError } from "~~/lib/tokenless/agentOAuth";
+import {
+  BoundedRequestBodyError,
+  readBoundedJsonRequestBody,
+  readBoundedRequestText,
+} from "~~/lib/tokenless/boundedRequestBody";
 
 export const AGENT_OAUTH_FORM_BODY_MAX_BYTES = 32 * 1_024;
+export const AGENT_OAUTH_REGISTRATION_BODY_MAX_BYTES = 32 * 1_024;
 
 export function assertAgentOAuthFormContentType(headers: Headers) {
   const mediaType = headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
@@ -31,44 +37,39 @@ export async function readAgentOAuthFormBody(
   request: Pick<Request, "body" | "headers">,
   maxBytes = AGENT_OAUTH_FORM_BODY_MAX_BYTES,
 ) {
-  const declared = request.headers.get("content-length");
-  if (declared !== null) {
-    const parsed = Number(declared);
-    if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > maxBytes) {
-      throw new AgentOAuthError("invalid_request", "The OAuth form body is too large.", 413);
-    }
-  }
-
-  if (!request.body) return new URLSearchParams();
-  const reader = request.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let totalBytes = 0;
+  let body: string;
   try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      totalBytes += value.byteLength;
-      if (totalBytes > maxBytes) {
-        try {
-          await reader.cancel();
-        } catch {
-          // The bounded rejection remains authoritative even if cancellation fails.
-        }
+    body = await readBoundedRequestText(request, maxBytes);
+  } catch (error) {
+    if (error instanceof BoundedRequestBodyError) {
+      if (error.reason === "body_too_large") {
         throw new AgentOAuthError("invalid_request", "The OAuth form body is too large.", 413);
       }
-      chunks.push(value);
+      throw new AgentOAuthError("invalid_request", "The OAuth form body is invalid.");
     }
-  } finally {
-    reader.releaseLock();
+    throw error;
   }
+  return new URLSearchParams(body);
+}
 
-  const body = new Uint8Array(totalBytes);
-  let offset = 0;
-  for (const chunk of chunks) {
-    body.set(chunk, offset);
-    offset += chunk.byteLength;
+export async function readAgentOAuthRegistrationBody(
+  request: Pick<Request, "body" | "headers">,
+  maxBytes = AGENT_OAUTH_REGISTRATION_BODY_MAX_BYTES,
+) {
+  try {
+    return await readBoundedJsonRequestBody(request, maxBytes);
+  } catch (error) {
+    if (error instanceof BoundedRequestBodyError) {
+      if (error.reason === "body_too_large") {
+        throw new AgentOAuthError("invalid_request", "The client metadata JSON is too large.", 413);
+      }
+      if (error.reason === "invalid_content_length") {
+        throw new AgentOAuthError("invalid_request", "Content-Length is invalid.");
+      }
+      throw new AgentOAuthError("invalid_request", "The client metadata JSON is invalid.");
+    }
+    throw error;
   }
-  return new URLSearchParams(new TextDecoder().decode(body));
 }
 
 export function readAgentOAuthFormField(

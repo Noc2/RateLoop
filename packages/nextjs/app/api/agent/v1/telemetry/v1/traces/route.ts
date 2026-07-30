@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { gunzipSync } from "node:zlib";
+import { BoundedRequestBodyError, readBoundedRequestBytes } from "~~/lib/tokenless/boundedRequestBody";
 import {
   OTLP_INGEST_LIMITS,
   authenticateOtlpTracePrincipal,
@@ -14,20 +15,18 @@ export const runtime = "nodejs";
 
 const PRIVATE_HEADERS = { "Cache-Control": "private, no-store, max-age=0" } as const;
 
-async function requestBody(request: NextRequest): Promise<Buffer> {
-  const declaredLength = request.headers.get("content-length");
-  if (declaredLength !== null) {
-    const parsed = Number(declaredLength);
-    if (!Number.isSafeInteger(parsed) || parsed < 0) {
-      throw new TokenlessServiceError("Content-Length is invalid.", 400, "invalid_otlp_request");
-    }
-    if (parsed > OTLP_INGEST_LIMITS.compressedBytes) {
+export async function readOtlpRequestBody(request: Pick<Request, "body" | "headers">): Promise<Buffer> {
+  let compressed: Buffer;
+  try {
+    compressed = Buffer.from(await readBoundedRequestBytes(request, OTLP_INGEST_LIMITS.compressedBytes));
+  } catch (error) {
+    if (error instanceof BoundedRequestBodyError) {
+      if (error.reason === "invalid_content_length") {
+        throw new TokenlessServiceError("Content-Length is invalid.", 400, "invalid_otlp_request");
+      }
       throw new TokenlessServiceError("OTLP request exceeds the compressed-size limit.", 413, "otlp_limit_exceeded");
     }
-  }
-  const compressed = Buffer.from(await request.arrayBuffer());
-  if (compressed.length > OTLP_INGEST_LIMITS.compressedBytes) {
-    throw new TokenlessServiceError("OTLP request exceeds the compressed-size limit.", 413, "otlp_limit_exceeded");
+    throw error;
   }
   const encoding = (request.headers.get("content-encoding") ?? "identity").trim().toLowerCase();
   if (encoding === "identity" || encoding === "none") return compressed;
@@ -48,7 +47,7 @@ async function requestBody(request: NextRequest): Promise<Buffer> {
 export async function POST(request: NextRequest) {
   try {
     const principal = await authenticateOtlpTracePrincipal(request.headers.get("authorization"));
-    const body = await requestBody(request);
+    const body = await readOtlpRequestBody(request);
     if (body.length > OTLP_INGEST_LIMITS.decompressedBytes) {
       throw new TokenlessServiceError("OTLP request exceeds the decompressed-size limit.", 413, "otlp_limit_exceeded");
     }

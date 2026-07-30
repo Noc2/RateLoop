@@ -14,7 +14,7 @@ const REQUEST_TTL_SECONDS = 5 * 60;
 const DEFAULT_CREDENTIAL_MIN_TTL_SECONDS = 30 * 24 * 60 * 60;
 const MIN_CREDENTIAL_MIN_TTL_SECONDS = 60 * 60;
 const MAX_CREDENTIAL_MIN_TTL_SECONDS = 90 * 24 * 60 * 60;
-const MAX_VERIFY_BODY_BYTES = 64 * 1024;
+export const WORLD_ID_VERIFY_BODY_MAX_BYTES = 64 * 1_024;
 const CONTEXT_RATE_WINDOW_MS = 10 * 60_000;
 const CONTEXT_RATE_LIMIT = 5;
 const REQUEST_RETENTION_MS = 30 * 24 * 60 * 60_000;
@@ -406,7 +406,7 @@ type ParsedWorldResult = {
 };
 
 function parseWorldResult(rawBody: string, request: QueryRow): ParsedWorldResult {
-  if (Buffer.byteLength(rawBody, "utf8") > MAX_VERIFY_BODY_BYTES) {
+  if (Buffer.byteLength(rawBody, "utf8") > WORLD_ID_VERIFY_BODY_MAX_BYTES) {
     throw new TokenlessServiceError("World ID result is too large.", 413, "invalid_world_id_result");
   }
   let parsed: Record<string, unknown>;
