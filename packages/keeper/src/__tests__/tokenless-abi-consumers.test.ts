@@ -2,11 +2,6 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { Abi } from "viem";
 import {
-  adapterHealthAbi,
-  feedbackBonusHealthAbi,
-  panelHealthAbi,
-} from "../../../ponder/src/deployment-health.js";
-import {
   TokenlessFeedbackBonusAbi,
   TokenlessPanelAbi,
   TokenlessX402PanelSubmitterAbi,
@@ -69,7 +64,23 @@ describe("tokenless ABI consumers", () => {
   const feedbackBonus = generatedAbi("TokenlessFeedbackBonusAbi.ts");
   const submitter = generatedAbi("X402PanelSubmitterAbi.ts");
 
-  it("binds keeper and Ponder subsets to the generated canonical ABIs", () => {
+  it("binds keeper and Ponder subsets to the generated canonical ABIs", async () => {
+    // Keep the runtime import cross-package while preventing keeper's production
+    // TypeScript build from pulling Ponder sources outside its rootDir.
+    const ponderHealthModule = new URL(
+      "../../../ponder/src/deployment-health.ts",
+      import.meta.url,
+    ).href;
+    const {
+      adapterHealthAbi,
+      feedbackBonusHealthAbi,
+      panelHealthAbi,
+    } = (await import(ponderHealthModule)) as {
+      adapterHealthAbi: Abi;
+      feedbackBonusHealthAbi: Abi;
+      panelHealthAbi: Abi;
+    };
+
     expectSubset("keeper TokenlessPanel", TokenlessPanelAbi, panel);
     expectSubset("keeper TokenlessFeedbackBonus", TokenlessFeedbackBonusAbi, feedbackBonus);
     expectSubset("keeper X402PanelSubmitter", TokenlessX402PanelSubmitterAbi, submitter);
