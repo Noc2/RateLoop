@@ -12,7 +12,7 @@ import type { PoolClient } from "pg";
 import "server-only";
 import { isRateLoopPrincipalId } from "~~/lib/auth/accountSubject";
 import { consumeWorkspaceUsageAllocations, releaseWorkspaceUsageAllocations } from "~~/lib/billing/entitlements";
-import { dbClient, dbPool } from "~~/lib/db";
+import { dbClient, dbPool, serializePoolClientQueries } from "~~/lib/db";
 import type { TokenlessWorkspaceRole } from "~~/lib/db/productSchema";
 import { assertCredentialDataPolicy, assertDataIngressPolicy } from "~~/lib/privacy/dataPolicy";
 import { promoteCompletedRunGoldQualifications } from "~~/lib/tokenless/goldQuality";
@@ -882,6 +882,7 @@ function completionSource(map: Map<string, AssuranceCompletionSource>, source: s
 }
 
 async function loadAssuranceCompletionState(client: PoolClient, runId: string): Promise<AssuranceCompletionState> {
+  client = serializePoolClientQueries(client);
   const runResult = await client.query(
     `SELECT r.status, r.policy_hash, p.policy_hash AS current_policy_hash,
             p.compensation, p.reviewer_source

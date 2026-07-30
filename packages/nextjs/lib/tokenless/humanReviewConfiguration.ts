@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
 import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/accountSubject";
-import { dbClient, dbPool } from "~~/lib/db";
+import { dbClient, dbPool, serializePoolClientQueries } from "~~/lib/db";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import {
@@ -2000,7 +2000,7 @@ export async function getHumanReviewConfigurationForOwner(input: {
   agentId: string;
 }) {
   await requireManagement(input.accountAddress, input.workspaceId);
-  const client = await dbPool.connect();
+  const client = serializePoolClientQueries(await dbPool.connect());
   try {
     const agent = await currentAgentVersion(client, input.workspaceId, input.agentId, false);
     const [bindingResult, connectionResult] = await Promise.all([

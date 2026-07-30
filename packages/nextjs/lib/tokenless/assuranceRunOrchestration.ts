@@ -4,7 +4,7 @@ import type { PoolClient } from "pg";
 import "server-only";
 import { getAddress } from "viem";
 import { reserveWorkspaceUsageAllocations } from "~~/lib/billing/entitlements";
-import { dbPool } from "~~/lib/db";
+import { dbPool, serializePoolClientQueries } from "~~/lib/db";
 import type { TokenlessWorkspaceRole } from "~~/lib/db/productSchema";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { selectGoldCasesForFrozenRun } from "~~/lib/tokenless/goldQuality";
@@ -1261,7 +1261,7 @@ export async function bindAssuranceCaseRound(input: {
 }
 
 export async function getAssuranceRunAggregateState(input: { principal: AssurancePrincipal; runId: string }) {
-  const client = await dbPool.connect();
+  const client = serializePoolClientQueries(await dbPool.connect());
   try {
     const run = await loadRunWithAccess(client, input.principal, input.runId);
     const manifestJson = rowString(run, "manifest_json");

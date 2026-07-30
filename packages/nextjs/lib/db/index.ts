@@ -1,6 +1,6 @@
 import * as schema from "./schema";
 import { drizzle as drizzleNodePg } from "drizzle-orm/node-postgres";
-import { Pool, type PoolConfig, type QueryResult, type QueryResultRow } from "pg";
+import { Pool, type PoolClient, type PoolConfig, type QueryResult, type QueryResultRow } from "pg";
 import "server-only";
 import { getDatabaseConfig } from "~~/lib/env/server";
 
@@ -105,6 +105,31 @@ function createLazyProxy<T extends object>(getValue: () => T): T {
 export const db = createLazyProxy(() => getDatabaseResources().database);
 export const dbClient = createLazyProxy(() => getDatabaseResources().client);
 export const dbPool = createLazyProxy(() => getDatabaseResources().pool);
+
+/**
+ * PostgreSQL clients only execute one query at a time. `pg` historically queued
+ * overlapping calls, but warns today and will reject them in pg 9. Keep the
+ * caller's Promise-based shape while making the sequencing explicit.
+ */
+export function serializePoolClientQueries(client: PoolClient): PoolClient {
+  let tail = Promise.resolve();
+  const query = (...args: unknown[]) => {
+    const result = tail.then(() => Reflect.apply(client.query, client, args));
+    tail = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  };
+
+  return new Proxy(client, {
+    get(target, property, receiver) {
+      if (property === "query") return query;
+      const value = Reflect.get(target, property, receiver);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
 
 export function __setDatabaseResourcesForTests(value: DatabaseResources | null) {
   resourcesOverride = value;

@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import "server-only";
 import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/accountSubject";
-import { dbPool } from "~~/lib/db";
+import { dbPool, serializePoolClientQueries } from "~~/lib/db";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { type S3CompatibleCredential, createS3CompatibleWormRuntime } from "~~/lib/tokenless/assuranceWormS3";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -576,7 +576,7 @@ export async function buildAssuranceSupervisionReport(input: {
   now?: Date;
 }) {
   const window = reportWindow(input);
-  const client = await dbPool.connect();
+  const client = serializePoolClientQueries(await dbPool.connect());
   try {
     await client.query("BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY");
     await requireManager(client, input.accountAddress, input.workspaceId);

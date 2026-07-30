@@ -2,7 +2,7 @@ import { type HumanAssuranceAudiencePolicy, parseHumanAssuranceRubric } from "@r
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
-import { dbPool } from "~~/lib/db";
+import { dbPool, serializePoolClientQueries } from "~~/lib/db";
 import {
   type CohortSource,
   assertAssuranceAssignmentSettlementAvailable,
@@ -441,7 +441,7 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
   const responses = validateResponseBatch(input.responses);
   const now = input.now ?? new Date();
   const keyrings = getAssuranceResponseKeyrings();
-  const client = await dbPool.connect();
+  const client = serializePoolClientQueries(await dbPool.connect());
   try {
     await client.query("BEGIN");
     await client.query(

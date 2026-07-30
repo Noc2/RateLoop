@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import type { PoolClient } from "pg";
 import "server-only";
-import { dbClient, dbPool } from "~~/lib/db";
+import { dbClient, dbPool, serializePoolClientQueries } from "~~/lib/db";
 import { verifySecurityAuditChain } from "~~/lib/privacy/audit";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { recordPrivacyWorkerFailure } from "~~/lib/privacy/privacyWorkerFailures";
@@ -414,6 +414,7 @@ export async function listSubjectRequests(principalId: string, now = new Date())
 }
 
 async function buildSubjectExport(client: PoolClient, principalId: string) {
+  client = serializePoolClientQueries(client);
   const [account, workspaces, reviewerAccess, rater, eligibilityDecisions, requests] = await Promise.all([
     client.query(
       `SELECT principal.principal_id,principal.status,principal.created_at,

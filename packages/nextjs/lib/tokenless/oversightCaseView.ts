@@ -1,5 +1,5 @@
 import "server-only";
-import { dbPool } from "~~/lib/db";
+import { dbPool, serializePoolClientQueries } from "~~/lib/db";
 import { decryptWorkspaceOwnedRationale } from "~~/lib/tokenless/assuranceResponses";
 import {
   type AssuranceOverrideDecision,
@@ -99,7 +99,7 @@ export async function getOversightRunCaseView(input: {
   workspaceId: string;
   runId: string;
 }): Promise<OversightRunCaseView> {
-  const client = await dbPool.connect();
+  const client = serializePoolClientQueries(await dbPool.connect());
   let view: Omit<OversightRunCaseView, "overrideDecisions">;
   try {
     const access = await loadRunAccess(client, input, { decision: true });

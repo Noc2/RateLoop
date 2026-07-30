@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
-import { dbPool } from "~~/lib/db";
+import { dbPool, serializePoolClientQueries } from "~~/lib/db";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import {
   DEFAULT_GRC_PROVIDER_ADAPTERS,
@@ -699,7 +699,7 @@ export function buildGrcEvidenceBundle(input: {
 }
 
 export const loadWorkspaceGrcEvidence: GrcEvidenceSource = async input => {
-  const client = await dbPool.connect();
+  const client = serializePoolClientQueries(await dbPool.connect());
   try {
     const [coverage, packets] = await Promise.all([
       client.query(
