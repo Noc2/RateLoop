@@ -27,7 +27,7 @@ import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type BodyReader = (request: Pick<Request, "body" | "headers">) => Promise<unknown>;
 
-const consumers: { limit: number; name: string; read: BodyReader }[] = [
+const consumers: { errorCode?: string; limit: number; name: string; read: BodyReader }[] = [
   {
     limit: MAX_ASSURANCE_RESPONSE_BATCH_BODY_BYTES,
     name: "assurance response batch",
@@ -35,6 +35,7 @@ const consumers: { limit: number; name: string; read: BodyReader }[] = [
   },
   { limit: API_JSON_REQUEST_BODY_MAX_BYTES, name: "agent registration", read: readAgentRegistrationBody },
   {
+    errorCode: "automated_eval_receipt_too_large",
     limit: MAX_AUTOMATED_EVAL_RECEIPT_BYTES,
     name: "automated evaluation receipt",
     read: request =>
@@ -81,7 +82,9 @@ test("high-cost API consumers share exact-limit and limit-plus-one body boundari
     await assert.rejects(
       consumer.read(request(consumer.limit + 1)),
       (error: unknown) =>
-        error instanceof TokenlessServiceError && error.status === 413 && error.code === "request_too_large",
+        error instanceof TokenlessServiceError &&
+        error.status === 413 &&
+        error.code === (consumer.errorCode ?? "request_too_large"),
       `${consumer.name} limit plus one`,
     );
   }
