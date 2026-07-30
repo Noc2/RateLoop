@@ -10,6 +10,7 @@ import {
   feedbackBonusRecordKey,
   resolveTokenlessDeployment,
 } from "./protocol-deployment";
+import { projectFeedbackBonusCredit } from "./feedback-bonus-projection";
 
 const deployment = resolveTokenlessDeployment();
 
@@ -285,12 +286,11 @@ ponder.on(
     await context.db.insert(tokenlessFeedbackBonusEvent).values({
       id: eventId,
       deploymentKey: deployment.deploymentKey,
-      eventType: "remainder_refunded",
+      ...projectFeedbackBonusCredit({ kind: "accrued" }),
       poolId,
       feedbackKey: null,
       responseHash: null,
       actor: funder,
-      payoutAddress: funder,
       amount,
       occurredAt: event.block.timestamp,
       blockNumber: event.block.number,
@@ -313,12 +313,11 @@ ponder.on(
     await context.db.insert(tokenlessFeedbackBonusEvent).values({
       id: eventId,
       deploymentKey: deployment.deploymentKey,
-      eventType: "credit_withdrawn",
+      ...projectFeedbackBonusCredit({ kind: "withdrawn", destination }),
       poolId: null,
       feedbackKey: null,
       responseHash: null,
       actor: recipient,
-      payoutAddress: destination,
       amount,
       occurredAt: event.block.timestamp,
       blockNumber: event.block.number,
