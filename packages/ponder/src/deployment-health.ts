@@ -7,7 +7,7 @@ import {
 } from "viem";
 import type { TokenlessDeployment } from "./protocol-deployment";
 
-const panelHealthAbi = parseAbi([
+export const panelHealthAbi = parseAbi([
   "function usdc() view returns (address)",
   "function credentialIssuer() view returns (address)",
   "function beaconVerifier() view returns (address)",
@@ -16,12 +16,12 @@ const panelHealthAbi = parseAbi([
   "function MAXIMUM_COMMITS() view returns (uint32)",
 ]);
 
-const feedbackBonusHealthAbi = parseAbi([
+export const feedbackBonusHealthAbi = parseAbi([
   "function usdc() view returns (address)",
   "function credentialIssuer() view returns (address)",
 ]);
 
-const adapterHealthAbi = parseAbi([
+export const adapterHealthAbi = parseAbi([
   "function usdc() view returns (address)",
   "function panel() view returns (address)",
 ]);
