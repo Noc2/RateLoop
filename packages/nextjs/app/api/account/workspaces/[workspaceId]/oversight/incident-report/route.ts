@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { readApiJsonRequestBody, rethrowApiRequestBodyBoundaryError } from "~~/lib/tokenless/apiRequestBody";
 import { buildIncidentReportExport } from "~~/lib/tokenless/incidentReportExport";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
@@ -22,8 +23,9 @@ export async function POST(request: NextRequest, context: Context) {
     const session = await requireBrowserSession(request, { mutation: true });
     let body: { description?: unknown; from?: unknown; to?: unknown };
     try {
-      body = (await request.json()) as typeof body;
-    } catch {
+      body = (await readApiJsonRequestBody(request)) as typeof body;
+    } catch (requestBodyError) {
+      rethrowApiRequestBodyBoundaryError(requestBodyError);
       throw new TokenlessServiceError("Incident reports must be valid JSON.", 400, "invalid_incident_report");
     }
     if (!body || typeof body !== "object" || Array.isArray(body)) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHash, timingSafeEqual } from "node:crypto";
+import { readApiJsonRequestBody, rethrowApiRequestBodyBoundaryError } from "~~/lib/tokenless/apiRequestBody";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 import {
   appendFinalizedRoundEvidence,
@@ -9,6 +10,7 @@ import {
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+export const readPipelineRequestBody = readApiJsonRequestBody;
 const OPERATION_KEY = /^[A-Za-z0-9._:-]{8,160}$/;
 const ACTIONS = new Set(["publish_finalized_round", "deliver_webhooks"]);
 
@@ -29,8 +31,9 @@ export async function POST(request: NextRequest) {
     authorize(request);
     let raw: unknown;
     try {
-      raw = (await request.json()) as unknown;
-    } catch {
+      raw = (await readPipelineRequestBody(request)) as unknown;
+    } catch (error) {
+      rethrowApiRequestBodyBoundaryError(error);
       throw new TokenlessServiceError("Pipeline request is invalid.", 400, "invalid_pipeline_request");
     }
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import { createWorkspaceGrcConnector, listWorkspaceGrcConnectors } from "~~/lib/tokenless/assuranceGrcConnectors";
 import { tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
@@ -34,7 +35,7 @@ export async function POST(request: NextRequest, context: Context) {
       await createWorkspaceGrcConnector({
         accountAddress: session.principalId,
         workspaceId,
-        body: await request.json(),
+        body: await readApiJsonRequestBody(request),
       }),
       { status: 201, headers: NO_STORE },
     );

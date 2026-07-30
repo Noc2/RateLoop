@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { readApiJsonRequestBody, rethrowApiRequestBodyBoundaryError } from "~~/lib/tokenless/apiRequestBody";
 import {
   attestOversightDesignation,
   listOversightDesignations,
@@ -40,8 +41,9 @@ export async function PUT(request: NextRequest, context: Context) {
     const session = await requireBrowserSession(request, { mutation: true });
     let body: Record<string, unknown>;
     try {
-      body = (await request.json()) as Record<string, unknown>;
-    } catch {
+      body = (await readApiJsonRequestBody(request)) as Record<string, unknown>;
+    } catch (requestBodyError) {
+      rethrowApiRequestBodyBoundaryError(requestBodyError);
       throw new TokenlessServiceError(
         "Oversight attestation request must be valid JSON.",
         400,

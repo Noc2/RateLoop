@@ -5,6 +5,7 @@ import {
   updateWorkspaceIdentityProvider,
 } from "~~/lib/auth/enterpriseIdentity";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { apiRequestBodyFallback, readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +14,10 @@ type Context = { params: Promise<{ providerId: string; workspaceId: string }> };
 const noStore = { "Cache-Control": "private, no-store, max-age=0" };
 
 async function objectBody(request: NextRequest) {
-  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const body = (await readApiJsonRequestBody(request).catch(error => apiRequestBodyFallback(error, null))) as Record<
+    string,
+    unknown
+  > | null;
   if (!body || typeof body !== "object" || Array.isArray(body)) {
     throw new TokenlessServiceError("Identity provider body must be an object.", 400, "invalid_identity_provider");
   }

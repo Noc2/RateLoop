@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { apiRequestBodyFallback, readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import {
   TOKENLESS_AGENT_SCOPES,
   type TokenlessAgentScope,
@@ -16,7 +17,10 @@ const noStore = { "Cache-Control": "private, no-store, max-age=0" };
 const scopeSet = new Set<string>(TOKENLESS_AGENT_SCOPES);
 
 async function apiKeyBody(request: NextRequest) {
-  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const body = (await readApiJsonRequestBody(request).catch(error => apiRequestBodyFallback(error, null))) as Record<
+    string,
+    unknown
+  > | null;
   if (!body || Array.isArray(body) || Object.keys(body).some(key => !["expiresAt", "name", "scopes"].includes(key))) {
     throw new TokenlessServiceError("API key body is invalid.", 400, "invalid_api_key");
   }

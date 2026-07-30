@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { apiRequestBodyFallback, readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import { getHumanReviewConfigurationForOwner } from "~~/lib/tokenless/humanReviewConfiguration";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 import {
@@ -41,7 +42,10 @@ function optionalDate(value: unknown, field: string) {
 }
 
 async function invitationBody(request: NextRequest) {
-  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const body = (await readApiJsonRequestBody(request).catch(error => apiRequestBodyFallback(error, null))) as Record<
+    string,
+    unknown
+  > | null;
   if (!body || Array.isArray(body) || Object.keys(body).some(key => !invitationKeys.has(key))) {
     throw new TokenlessServiceError("Reviewer invitation body is invalid.", 400, "invalid_workspace_reviewer");
   }

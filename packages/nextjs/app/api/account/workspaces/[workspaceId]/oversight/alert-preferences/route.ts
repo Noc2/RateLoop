@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { readApiJsonRequestBody, rethrowApiRequestBodyBoundaryError } from "~~/lib/tokenless/apiRequestBody";
 import { getWorkspaceAlertPreferences, updateWorkspaceAlertPreferences } from "~~/lib/tokenless/oversightAlerts";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
@@ -29,8 +30,9 @@ export async function PUT(request: NextRequest, context: Context) {
     const session = await requireBrowserSession(request, { mutation: true });
     let body: { preferences?: unknown };
     try {
-      body = (await request.json()) as typeof body;
-    } catch {
+      body = (await readApiJsonRequestBody(request)) as typeof body;
+    } catch (requestBodyError) {
+      rethrowApiRequestBodyBoundaryError(requestBodyError);
       throw new TokenlessServiceError("Alert preferences must be valid JSON.", 400, "invalid_alert_preferences");
     }
     const { workspaceId } = await context.params;

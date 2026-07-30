@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import {
   type AgentPublishingPolicyInput,
   createAgentPublishingPolicy,
@@ -128,7 +129,7 @@ export async function POST(request: NextRequest, context: Context) {
     const policy = await createAgentPublishingPolicy({
       accountAddress: session.principalId,
       workspaceId,
-      policy: policyBody(await request.json()),
+      policy: policyBody(await readApiJsonRequestBody(request)),
     });
     return NextResponse.json({ policy }, { status: 201 });
   } catch (error) {

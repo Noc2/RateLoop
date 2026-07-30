@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { readApiJsonRequestBody, rethrowApiRequestBodyBoundaryError } from "~~/lib/tokenless/apiRequestBody";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 import {
   engageWorkspaceStop,
@@ -31,8 +32,9 @@ export async function POST(request: NextRequest, context: Context) {
     const session = await requireBrowserSession(request, { mutation: true });
     let body: { reason?: unknown };
     try {
-      body = (await request.json()) as typeof body;
-    } catch {
+      body = (await readApiJsonRequestBody(request)) as typeof body;
+    } catch (requestBodyError) {
+      rethrowApiRequestBodyBoundaryError(requestBodyError);
       throw new TokenlessServiceError("Stop request must be valid JSON.", 400, "invalid_workspace_stop");
     }
     if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).some(key => key !== "reason")) {

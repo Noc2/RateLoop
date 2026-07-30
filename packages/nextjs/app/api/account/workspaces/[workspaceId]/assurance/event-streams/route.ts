@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { readApiJsonRequestBody, rethrowApiRequestBodyBoundaryError } from "~~/lib/tokenless/apiRequestBody";
 import {
   type AssuranceEventType,
   createAssuranceEventStream,
@@ -32,8 +33,9 @@ export async function POST(request: NextRequest, context: Context) {
     const { workspaceId } = await context.params;
     let raw: unknown;
     try {
-      raw = await request.json();
-    } catch {
+      raw = await readApiJsonRequestBody(request);
+    } catch (requestBodyError) {
+      rethrowApiRequestBodyBoundaryError(requestBodyError);
       throw new TokenlessServiceError("Event stream request is invalid.", 400, "invalid_assurance_event_stream");
     }
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) {

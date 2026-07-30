@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { apiRequestBodyFallback, readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import { configureAssuranceWormDestination, getAssuranceWormDestination } from "~~/lib/tokenless/assuranceWormExports";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
@@ -25,7 +26,7 @@ export async function PUT(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
     const { workspaceId } = await context.params;
-    const body = await request.json().catch(() => null);
+    const body = await readApiJsonRequestBody(request).catch(error => apiRequestBodyFallback(error, null));
     if (body === null) {
       throw new TokenlessServiceError("Destination settings are invalid.", 400, "invalid_worm_destination");
     }

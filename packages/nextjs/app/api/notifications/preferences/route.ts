@@ -5,6 +5,7 @@ import {
   normalizeNotificationPreferences,
   upsertTokenlessNotificationPreferences,
 } from "~~/lib/notifications/tokenless";
+import { readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import { tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
-    const body = (await request.json()) as { preferences?: unknown };
+    const body = (await readApiJsonRequestBody(request)) as { preferences?: unknown };
     const preferences = normalizeNotificationPreferences(body.preferences ?? body);
     return NextResponse.json(
       { ok: true, preferences: await upsertTokenlessNotificationPreferences(session.principalId, preferences) },

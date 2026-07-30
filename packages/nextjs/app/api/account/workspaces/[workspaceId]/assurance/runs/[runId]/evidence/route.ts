@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { API_JSON_REQUEST_BODY_MAX_BYTES, readApiRequestText } from "~~/lib/tokenless/apiRequestBody";
 import {
   assertEvidenceGenerationRequest,
   generateAssuranceEvidencePacket,
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest, context: Context) {
 export async function POST(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
-    const text = await request.text();
+    const text = await readApiRequestText(request, API_JSON_REQUEST_BODY_MAX_BYTES);
     let body: unknown;
     try {
       body = text.trim() ? JSON.parse(text) : undefined;

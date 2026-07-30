@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { readApiJsonRequestBody, rethrowApiRequestBodyBoundaryError } from "~~/lib/tokenless/apiRequestBody";
 import {
   parseConnectionMessageCopiedPayload,
   recordConnectionMessageCopied,
@@ -17,8 +18,9 @@ export async function POST(request: NextRequest, context: Context) {
     const { workspaceId } = await context.params;
     let body: unknown;
     try {
-      body = await request.json();
-    } catch {
+      body = await readApiJsonRequestBody(request);
+    } catch (requestBodyError) {
+      rethrowApiRequestBodyBoundaryError(requestBodyError);
       throw new TokenlessServiceError("Onboarding event body must be valid JSON.", 400, "invalid_onboarding_event");
     }
     parseConnectionMessageCopiedPayload(body);

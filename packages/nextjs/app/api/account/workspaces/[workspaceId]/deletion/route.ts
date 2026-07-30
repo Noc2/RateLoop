@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
 import { getWorkspaceDeletionPreview, requestWorkspaceDeletion } from "~~/lib/privacy/workspaceDeletion";
+import { readApiJsonRequestBody, rethrowApiRequestBodyBoundaryError } from "~~/lib/tokenless/apiRequestBody";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
 export const dynamic = "force-dynamic";
@@ -29,8 +30,9 @@ export async function POST(request: NextRequest, context: Context) {
     const { workspaceId } = await context.params;
     let body: unknown;
     try {
-      body = await request.json();
-    } catch {
+      body = await readApiJsonRequestBody(request);
+    } catch (requestBodyError) {
+      rethrowApiRequestBodyBoundaryError(requestBodyError);
       throw new TokenlessServiceError("Workspace deletion body must be valid JSON.", 400, "invalid_workspace_deletion");
     }
     if (!body || typeof body !== "object" || Array.isArray(body)) {

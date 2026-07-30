@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { API_JSON_REQUEST_BODY_MAX_BYTES, readApiRequestText } from "~~/lib/tokenless/apiRequestBody";
 import { recoverExpiredAudienceAssignment } from "~~/lib/tokenless/audienceAssignments";
 import { isDirectPrivateReviewAssignmentId } from "~~/lib/tokenless/privateReviewResponses";
 import { recoverPrivateUnpaidReviewAssignment } from "~~/lib/tokenless/privateUnpaidReviewAdapter";
@@ -14,7 +15,7 @@ export async function POST(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
     const { assignmentId } = await context.params;
-    const rawBody = await request.text();
+    const rawBody = await readApiRequestText(request, API_JSON_REQUEST_BODY_MAX_BYTES);
     let body: { confidentialityTermsHash?: string } = {};
     if (rawBody.trim()) {
       try {

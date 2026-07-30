@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
 import { releaseLegalHold } from "~~/lib/privacy/lifecycle";
+import { readApiJsonRequestBody, rethrowApiRequestBodyBoundaryError } from "~~/lib/tokenless/apiRequestBody";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
 export const dynamic = "force-dynamic";
@@ -16,8 +17,9 @@ export async function POST(request: NextRequest, context: Context) {
     const { holdId, projectId, workspaceId } = await context.params;
     let body: Record<string, unknown> | null;
     try {
-      body = (await request.json()) as Record<string, unknown> | null;
-    } catch {
+      body = (await readApiJsonRequestBody(request)) as Record<string, unknown> | null;
+    } catch (requestBodyError) {
+      rethrowApiRequestBodyBoundaryError(requestBodyError);
       throw new TokenlessServiceError("Legal hold release body must be valid JSON.", 400, "invalid_legal_hold");
     }
     if (!body || typeof body !== "object" || Array.isArray(body)) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
 import { approveAgentWorkspaceMove } from "~~/lib/tokenless/agentConnectionIntents";
+import { readApiJsonRequestBody, rethrowApiRequestBodyBoundaryError } from "~~/lib/tokenless/apiRequestBody";
 import { tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
 export const dynamic = "force-dynamic";
@@ -14,8 +15,9 @@ export async function POST(request: NextRequest, context: Context) {
     const { workspaceId, transferId } = await context.params;
     let body: unknown;
     try {
-      body = (await request.json()) as unknown;
-    } catch {
+      body = (await readApiJsonRequestBody(request)) as unknown;
+    } catch (requestBodyError) {
+      rethrowApiRequestBodyBoundaryError(requestBodyError);
       return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
     }
     if (

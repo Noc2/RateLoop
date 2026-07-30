@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { apiRequestBodyFallback, readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 import {
   type WorkspaceInviteAccessRole,
@@ -16,7 +17,10 @@ export async function PATCH(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
     const { workspaceId, principalId } = await context.params;
-    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const body = (await readApiJsonRequestBody(request).catch(error => apiRequestBodyFallback(error, null))) as Record<
+      string,
+      unknown
+    > | null;
     if (
       !body ||
       Array.isArray(body) ||

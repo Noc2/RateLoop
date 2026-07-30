@@ -3,13 +3,14 @@ import { publicAuthRouteError } from "~~/lib/auth/publicRouteError";
 import { requireBrowserSession } from "~~/lib/auth/request";
 import { AuthError } from "~~/lib/auth/session";
 import { createWalletBindingChallenge } from "~~/lib/auth/walletBindings";
+import { readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
-    const body = (await request.json()) as {
+    const body = (await readApiJsonRequestBody(request)) as {
       address?: unknown;
       purpose?: unknown;
       source?: unknown;

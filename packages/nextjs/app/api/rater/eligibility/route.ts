@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { readApiJsonRequestBody, rethrowApiRequestBodyBoundaryError } from "~~/lib/tokenless/apiRequestBody";
 import {
   type EligibilitySubmission,
   getPaidEligibility,
@@ -12,6 +13,9 @@ import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+export const MAX_PAID_ELIGIBILITY_REQUEST_BODY_BYTES = 1 * 1_024 * 1_024;
+export const readPaidEligibilityRequestBody = (request: Pick<Request, "body" | "headers">) =>
+  readApiJsonRequestBody(request, MAX_PAID_ELIGIBILITY_REQUEST_BODY_BYTES);
 
 export async function GET(request: NextRequest) {
   try {
@@ -30,8 +34,9 @@ export async function POST(request: NextRequest) {
     const browserSession = await requireBrowserSession(request, { mutation: true });
     let submission: Record<string, unknown>;
     try {
-      submission = (await request.json()) as Record<string, unknown>;
-    } catch {
+      submission = (await readPaidEligibilityRequestBody(request)) as Record<string, unknown>;
+    } catch (error) {
+      rethrowApiRequestBodyBoundaryError(error);
       throw new TokenlessServiceError("Eligibility request must be valid JSON.", 400, "invalid_eligibility_request");
     }
     if (submission.decision === "declined_paid_data_collection") {

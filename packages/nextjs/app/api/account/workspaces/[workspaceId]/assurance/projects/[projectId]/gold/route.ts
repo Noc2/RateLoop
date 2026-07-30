@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import {
   configureProjectGoldInjection,
   createOwnerGoldItem,
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
     const { workspaceId, projectId } = await context.params;
-    const body = (await request.json()) as Record<string, unknown>;
+    const body = (await readApiJsonRequestBody(request)) as Record<string, unknown>;
     const item = await createOwnerGoldItem({
       accountAddress: session.principalId,
       workspaceId,
@@ -49,7 +50,7 @@ export async function PATCH(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
     const { workspaceId, projectId } = await context.params;
-    const body = (await request.json()) as Record<string, unknown>;
+    const body = (await readApiJsonRequestBody(request)) as Record<string, unknown>;
     const result =
       body.action === "retire"
         ? await retireOwnerGoldItem({

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import {
   createWorkspaceReviewerExpertiseDefinition,
   listReviewerExpertiseDefinitions,
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
     const { workspaceId } = await context.params;
-    const body = (await request.json()) as Record<string, unknown>;
+    const body = (await readApiJsonRequestBody(request)) as Record<string, unknown>;
     const result = await createWorkspaceReviewerExpertiseDefinition({
       accountAddress: session.principalId,
       workspaceId,

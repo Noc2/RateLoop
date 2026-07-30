@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import { replacePrivateGroupMemberExpertise } from "~~/lib/tokenless/reviewerExpertiseAssignments";
 import { tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
@@ -14,7 +15,7 @@ export async function PUT(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
     const { workspaceId, groupId, principalAddress } = await context.params;
-    const body = (await request.json()) as { definitions?: unknown; expiresAt?: unknown };
+    const body = (await readApiJsonRequestBody(request)) as { definitions?: unknown; expiresAt?: unknown };
     const expertise = await replacePrivateGroupMemberExpertise({
       accountAddress: session.principalId,
       workspaceId,

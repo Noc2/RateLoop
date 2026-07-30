@@ -1,18 +1,21 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { readApiJsonRequestBody, rethrowApiRequestBodyBoundaryError } from "~~/lib/tokenless/apiRequestBody";
 import { type VoucherRequest, issuePaidVoucher } from "~~/lib/tokenless/paidEligibility";
 import { requireRaterSession } from "~~/lib/tokenless/raterSession";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+export const readPaidVoucherRequestBody = readApiJsonRequestBody;
 
 export async function POST(request: NextRequest) {
   try {
     const session = await requireRaterSession(request, true);
     let body: Partial<VoucherRequest>;
     try {
-      body = (await request.json()) as Partial<VoucherRequest>;
-    } catch {
+      body = (await readPaidVoucherRequestBody(request)) as Partial<VoucherRequest>;
+    } catch (error) {
+      rethrowApiRequestBodyBoundaryError(error);
       throw new TokenlessServiceError("Voucher request must be valid JSON.", 400, "invalid_voucher_request");
     }
     const idempotencyKey = request.headers.get("idempotency-key")?.trim() || body.idempotencyKey;

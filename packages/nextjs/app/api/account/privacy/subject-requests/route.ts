@@ -9,6 +9,7 @@ import {
   createSubjectRequest,
   listSubjectRequests,
 } from "~~/lib/privacy/lifecycle";
+import { readApiJsonRequestBody, rethrowApiRequestBodyBoundaryError } from "~~/lib/tokenless/apiRequestBody";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
 export const dynamic = "force-dynamic";
@@ -51,8 +52,9 @@ export async function POST(request: NextRequest) {
     const session = await requireBrowserSession(request, { mutation: true });
     let body: Record<string, unknown> | null;
     try {
-      body = (await request.json()) as Record<string, unknown> | null;
-    } catch {
+      body = (await readApiJsonRequestBody(request)) as Record<string, unknown> | null;
+    } catch (requestBodyError) {
+      rethrowApiRequestBodyBoundaryError(requestBodyError);
       throw new TokenlessServiceError("Subject request body must be valid JSON.", 400, "invalid_privacy_request");
     }
     if (!body || typeof body !== "object" || Array.isArray(body)) {

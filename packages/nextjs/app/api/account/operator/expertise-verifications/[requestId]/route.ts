@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import {
   decideExpertiseVerificationRequest,
   revokeExpertiseVerificationRequest,
@@ -14,7 +15,7 @@ export async function PATCH(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
     const { requestId } = await context.params;
-    const body = (await request.json()) as Record<string, unknown>;
+    const body = (await readApiJsonRequestBody(request)) as Record<string, unknown>;
     const result =
       body.decision === "revoked"
         ? await revokeExpertiseVerificationRequest({

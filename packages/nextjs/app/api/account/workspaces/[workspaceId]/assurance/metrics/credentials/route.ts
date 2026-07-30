@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { apiRequestBodyFallback, readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import { issueAssuranceMetricsCredential, listAssuranceMetricsCredentials } from "~~/lib/tokenless/assuranceMetrics";
 import { tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
@@ -26,7 +27,9 @@ export async function POST(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
     const { workspaceId } = await context.params;
-    const body = (await request.json().catch(() => null)) as { label?: unknown } | null;
+    const body = (await readApiJsonRequestBody(request).catch(error => apiRequestBodyFallback(error, null))) as {
+      label?: unknown;
+    } | null;
     const created = await issueAssuranceMetricsCredential({
       accountAddress: session.principalId,
       workspaceId,

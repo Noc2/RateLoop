@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import { pauseWorkspaceGrcConnector, updateWorkspaceGrcConnector } from "~~/lib/tokenless/assuranceGrcConnectors";
 import { tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
@@ -17,7 +18,7 @@ export async function PUT(request: NextRequest, context: Context) {
         accountAddress: session.principalId,
         workspaceId,
         connectorId,
-        body: await request.json(),
+        body: await readApiJsonRequestBody(request),
       }),
       { headers: NO_STORE },
     );

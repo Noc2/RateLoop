@@ -1,15 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateAgentMcpPrincipal, submitAgentRegistration } from "~~/lib/tokenless/agentIntegrations";
+import { readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
 export const runtime = "nodejs";
+export const readAgentRegistrationBody = readApiJsonRequestBody;
+
 export async function POST(request: NextRequest) {
   try {
     const principal = await authenticateAgentMcpPrincipal(request.headers.get("authorization"));
     if (principal.kind !== "pairing")
       throw new TokenlessServiceError("This credential is already active.", 409, "agent_already_active");
     return NextResponse.json(
-      await submitAgentRegistration({ pairing: principal, registration: await request.json() }),
+      await submitAgentRegistration({ pairing: principal, registration: await readAgentRegistrationBody(request) }),
       { status: 202 },
     );
   } catch (error) {

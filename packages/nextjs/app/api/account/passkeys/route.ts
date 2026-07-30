@@ -3,6 +3,7 @@ import { getBetterAuth, getBetterAuthConfiguration } from "~~/lib/auth/betterAut
 import { issuePasskeyAddProof } from "~~/lib/auth/passkeyActionProof";
 import { assertPrincipalBetterAuthUser, listPrincipalPasskeys } from "~~/lib/auth/passkeys";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { apiRequestBodyFallback, readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +25,10 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
-    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const body = (await readApiJsonRequestBody(request).catch(error => apiRequestBodyFallback(error, null))) as Record<
+      string,
+      unknown
+    > | null;
     if (!body || body.action !== "passkey_add") {
       throw new TokenlessServiceError("Passkey action is invalid.", 400, "invalid_passkey_action");
     }

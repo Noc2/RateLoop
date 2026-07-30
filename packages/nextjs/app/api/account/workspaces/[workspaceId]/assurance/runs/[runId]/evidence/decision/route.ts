@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { readApiJsonRequestBody, rethrowApiRequestBodyBoundaryError } from "~~/lib/tokenless/apiRequestBody";
 import { getAssuranceClientDecision, recordAssuranceClientDecision } from "~~/lib/tokenless/evidencePackets";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
@@ -27,8 +28,9 @@ export async function POST(request: NextRequest, context: Context) {
     const session = await requireBrowserSession(request, { mutation: true });
     let body: { decision?: "go" | "revise" | "stop"; note?: string | null };
     try {
-      body = (await request.json()) as typeof body;
-    } catch {
+      body = (await readApiJsonRequestBody(request)) as typeof body;
+    } catch (requestBodyError) {
+      rethrowApiRequestBodyBoundaryError(requestBodyError);
       throw new TokenlessServiceError("Decision request must be valid JSON.", 400, "invalid_assurance_decision");
     }
     if (

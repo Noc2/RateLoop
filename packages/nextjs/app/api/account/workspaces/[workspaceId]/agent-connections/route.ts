@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
 import { createAgentConnectionIntent, listAgentConnectionIntents } from "~~/lib/tokenless/agentConnectionIntents";
+import { API_JSON_REQUEST_BODY_MAX_BYTES, readApiRequestText } from "~~/lib/tokenless/apiRequestBody";
 import { tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +26,7 @@ export async function POST(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
     const { workspaceId } = await context.params;
-    const rawBody = await request.text();
+    const rawBody = await readApiRequestText(request, API_JSON_REQUEST_BODY_MAX_BYTES);
     let reconnectIntegrationId: string | undefined;
     if (rawBody.trim()) {
       let body: unknown;

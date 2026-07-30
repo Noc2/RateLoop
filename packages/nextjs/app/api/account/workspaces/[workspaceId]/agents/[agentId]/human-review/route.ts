@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import {
   getHumanReviewConfigurationForOwner,
   putHumanReviewConfigurationForOwner,
@@ -39,7 +40,7 @@ export async function PUT(request: NextRequest, context: Context) {
       accountAddress: session.principalId,
       workspaceId,
       agentId,
-      body: await request.json(),
+      body: await readApiJsonRequestBody(request),
     });
     return NextResponse.json(
       await getHumanReviewConfigurationForOwner({

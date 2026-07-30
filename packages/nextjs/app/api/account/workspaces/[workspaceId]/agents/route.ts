@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
 import { type AgentVersionInput, createWorkspaceAgent, listWorkspaceAgents } from "~~/lib/tokenless/agentRegistry";
+import { readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
     const { workspaceId } = await context.params;
-    const body = (await request.json()) as CreateAgentBody | null;
+    const body = (await readApiJsonRequestBody(request)) as CreateAgentBody | null;
     if (!body || typeof body !== "object") {
       throw new TokenlessServiceError("Agent request body must be an object.", 400, "invalid_agent");
     }

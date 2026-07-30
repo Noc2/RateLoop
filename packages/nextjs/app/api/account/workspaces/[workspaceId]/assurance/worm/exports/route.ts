@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { apiRequestBodyFallback, readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import {
   WORM_ARTIFACT_TYPES,
   type WormArtifactType,
@@ -14,6 +15,10 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 const NO_STORE = { "Cache-Control": "private, no-store, max-age=0" } as const;
 type Context = { params: Promise<{ workspaceId: string }> };
+export const MAX_WORM_EXPORT_REQUEST_BODY_BYTES = 5 * 1_024 * 1_024;
+
+export const readWormExportRequestBody = (request: Pick<Request, "body" | "headers">) =>
+  readApiJsonRequestBody(request, MAX_WORM_EXPORT_REQUEST_BODY_BYTES);
 
 function isoDate(value: unknown, field: string) {
   if (value === null || value === undefined) return undefined;
@@ -44,7 +49,7 @@ export async function POST(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
     const { workspaceId } = await context.params;
-    const raw = await request.json().catch(() => null);
+    const raw = await readWormExportRequestBody(request).catch(error => apiRequestBodyFallback(error, null));
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
       throw new TokenlessServiceError("Export request is invalid.", 400, "invalid_worm_export");
     }

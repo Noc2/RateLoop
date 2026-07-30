@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { apiRequestBodyFallback, readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 import {
   type WorkspaceInviteAccessRole,
@@ -14,7 +15,10 @@ type Context = { params: Promise<{ workspaceId: string }> };
 const noStore = { "Cache-Control": "private, no-store, max-age=0" };
 
 async function objectBody(request: NextRequest) {
-  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const body = (await readApiJsonRequestBody(request).catch(error => apiRequestBodyFallback(error, null))) as Record<
+    string,
+    unknown
+  > | null;
   if (!body || Array.isArray(body)) {
     throw new TokenlessServiceError("Member invitation body must be an object.", 400, "invalid_invite");
   }

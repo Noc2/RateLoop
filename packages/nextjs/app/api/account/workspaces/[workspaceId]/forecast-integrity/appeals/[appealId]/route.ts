@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { apiRequestBodyFallback, readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import {
   type ForecastAppealResolutionStatus,
   resolveWorkspaceForecastAppeal,
@@ -14,7 +15,10 @@ type Context = { params: Promise<{ workspaceId: string; appealId: string }> };
 export async function POST(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
-    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const body = (await readApiJsonRequestBody(request).catch(error => apiRequestBodyFallback(error, null))) as Record<
+      string,
+      unknown
+    > | null;
     if (
       !body ||
       Array.isArray(body) ||

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { readApiJsonRequestBody, rethrowApiRequestBodyBoundaryError } from "~~/lib/tokenless/apiRequestBody";
 import { type AssuranceCaseResponseInput, submitAssuranceResponses } from "~~/lib/tokenless/assuranceResponses";
 import {
   isDirectPrivateReviewAssignmentId,
@@ -9,8 +10,12 @@ import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+export const MAX_ASSURANCE_RESPONSE_BATCH_BODY_BYTES = 4 * 1_024 * 1_024;
 
 type Context = { params: Promise<{ assignmentId: string }> };
+
+export const readAssuranceResponseBatchBody = (request: Pick<Request, "body" | "headers">) =>
+  readApiJsonRequestBody(request, MAX_ASSURANCE_RESPONSE_BATCH_BODY_BYTES);
 
 export async function POST(request: NextRequest, context: Context) {
   try {
@@ -18,8 +23,9 @@ export async function POST(request: NextRequest, context: Context) {
     const { assignmentId } = await context.params;
     let body: { idempotencyKey?: string; responses?: AssuranceCaseResponseInput[] };
     try {
-      body = (await request.json()) as typeof body;
-    } catch {
+      body = (await readAssuranceResponseBatchBody(request)) as typeof body;
+    } catch (requestBodyError) {
+      rethrowApiRequestBodyBoundaryError(requestBodyError);
       throw new TokenlessServiceError("Response batch must be valid JSON.", 400, "invalid_assurance_response");
     }
     const result = isDirectPrivateReviewAssignmentId(assignmentId)

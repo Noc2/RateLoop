@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { apiRequestBodyFallback, readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 import { redeemWorkspaceMemberInvite } from "~~/lib/tokenless/workspaceGovernance";
 
@@ -10,7 +11,10 @@ const noStore = { "Cache-Control": "private, no-store, max-age=0" };
 export async function POST(request: NextRequest) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
-    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const body = (await readApiJsonRequestBody(request).catch(error => apiRequestBodyFallback(error, null))) as Record<
+      string,
+      unknown
+    > | null;
     if (!body || Array.isArray(body) || typeof body.token !== "string") {
       throw new TokenlessServiceError("Invitation token is required.", 400, "invalid_invite", false, "token");
     }

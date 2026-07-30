@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { readApiJsonRequestBody, rethrowApiRequestBodyBoundaryError } from "~~/lib/tokenless/apiRequestBody";
 import { grantProjectAccountAccess, listProjectAuditorAccess } from "~~/lib/tokenless/projectAccess";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
@@ -36,8 +37,9 @@ export async function POST(request: NextRequest, context: Context) {
     const session = await requireBrowserSession(request, { mutation: true });
     let value: unknown;
     try {
-      value = await request.json();
-    } catch {
+      value = await readApiJsonRequestBody(request);
+    } catch (requestBodyError) {
+      rethrowApiRequestBodyBoundaryError(requestBodyError);
       throw new TokenlessServiceError("Auditor grant must be valid JSON.", 400, "invalid_auditor_grant");
     }
     if (

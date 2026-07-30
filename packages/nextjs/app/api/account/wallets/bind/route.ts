@@ -3,13 +3,18 @@ import { publicAuthRouteError } from "~~/lib/auth/publicRouteError";
 import { requireBrowserSession } from "~~/lib/auth/request";
 import { AuthError } from "~~/lib/auth/session";
 import { completeWalletBinding } from "~~/lib/auth/walletBindings";
+import { readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
-    const body = (await request.json()) as { challengeId?: unknown; message?: unknown; signature?: unknown };
+    const body = (await readApiJsonRequestBody(request)) as {
+      challengeId?: unknown;
+      message?: unknown;
+      signature?: unknown;
+    };
     if (
       typeof body.challengeId !== "string" ||
       typeof body.message !== "string" ||

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import {
   type PrivateGroupPolicyInput,
   createPrivateGroupPolicyVersion,
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
     const { workspaceId, groupId } = await context.params;
-    const body = (await request.json()) as { policy: PrivateGroupPolicyInput };
+    const body = (await readApiJsonRequestBody(request)) as { policy: PrivateGroupPolicyInput };
     const version = await createPrivateGroupPolicyVersion({
       accountAddress: session.principalId,
       workspaceId,

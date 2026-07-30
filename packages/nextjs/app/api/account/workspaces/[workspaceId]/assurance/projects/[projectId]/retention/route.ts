@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import { requestProjectDeletion } from "~~/lib/tokenless/artifactPrivacy";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
@@ -12,7 +13,7 @@ export async function POST(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
     const { projectId, workspaceId } = await context.params;
-    const body = (await request.json()) as { executeAfter?: unknown; reason?: unknown };
+    const body = (await readApiJsonRequestBody(request)) as { executeAfter?: unknown; reason?: unknown };
     if (body.reason !== undefined && typeof body.reason !== "string") {
       throw new TokenlessServiceError("Deletion reason must be text.", 400, "invalid_deletion_request");
     }

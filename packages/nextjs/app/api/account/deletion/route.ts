@@ -3,6 +3,7 @@ import { BETTER_AUTH_SESSION_COOKIE_NAMES } from "~~/lib/auth/betterAuthCookies"
 import { requireBrowserSession } from "~~/lib/auth/request";
 import { AUTH_SESSION_COOKIE } from "~~/lib/auth/session";
 import { deleteAccount, getAccountDeletionPreview } from "~~/lib/privacy/accountDeletion";
+import { readApiJsonRequestBody, rethrowApiRequestBodyBoundaryError } from "~~/lib/tokenless/apiRequestBody";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
 export const dynamic = "force-dynamic";
@@ -25,8 +26,9 @@ export async function POST(request: NextRequest) {
     const session = await requireBrowserSession(request, { mutation: true });
     let body: unknown;
     try {
-      body = await request.json();
-    } catch {
+      body = await readApiJsonRequestBody(request);
+    } catch (requestBodyError) {
+      rethrowApiRequestBodyBoundaryError(requestBodyError);
       throw new TokenlessServiceError("Account deletion body must be valid JSON.", 400, "invalid_account_deletion");
     }
     if (!body || typeof body !== "object" || Array.isArray(body)) {

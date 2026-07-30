@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { apiRequestBodyFallback, readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import {
   attachX402Authorization,
   confirmWalletChainPayment,
@@ -51,7 +52,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ op
     const operationKey = await authorizedPaymentMutation(request, context);
     const prepared = await prepareChainPayment(operationKey);
     if (prepared.paymentMode === "wallet") {
-      const body = (await request.json()) as { transactionHash?: unknown };
+      const body = (await readApiJsonRequestBody(request)) as { transactionHash?: unknown };
       if (typeof body.transactionHash !== "string") {
         throw new TokenlessServiceError(
           "transactionHash is required for wallet confirmation.",
@@ -62,7 +63,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ op
       return NextResponse.json(await confirmWalletChainPayment(operationKey, body.transactionHash));
     }
     if (prepared.paymentMode === "x402") {
-      const body = (await request.json().catch(() => ({}))) as { authorization?: unknown };
+      const body = (await readApiJsonRequestBody(request).catch(error => apiRequestBodyFallback(error, {}))) as {
+        authorization?: unknown;
+      };
       if (body.authorization !== undefined) await attachX402Authorization(operationKey, body.authorization);
     }
     return NextResponse.json(await executeServerChainPayment(operationKey));

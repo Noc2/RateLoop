@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { apiRequestBodyFallback, readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import {
   type ForecastAppealReason,
   listPrincipalForecastIntegrity,
@@ -25,7 +26,10 @@ export async function GET(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
-    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const body = (await readApiJsonRequestBody(request).catch(error => apiRequestBodyFallback(error, null))) as Record<
+      string,
+      unknown
+    > | null;
     if (
       !body ||
       Array.isArray(body) ||
@@ -50,7 +54,10 @@ export async function DELETE(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
-    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const body = (await readApiJsonRequestBody(request).catch(error => apiRequestBodyFallback(error, null))) as Record<
+      string,
+      unknown
+    > | null;
     if (
       !body ||
       Array.isArray(body) ||

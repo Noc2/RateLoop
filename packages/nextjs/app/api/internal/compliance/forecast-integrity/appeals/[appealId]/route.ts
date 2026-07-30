@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { apiRequestBodyFallback, readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import {
   type ForecastAppealResolutionStatus,
   resolveComplianceForecastAppeal,
@@ -14,7 +15,10 @@ type Context = { params: Promise<{ appealId: string }> };
 export async function POST(request: NextRequest, context: Context) {
   try {
     authorizeComplianceOperator(request.headers.get("authorization"));
-    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const body = (await readApiJsonRequestBody(request).catch(error => apiRequestBodyFallback(error, null))) as Record<
+      string,
+      unknown
+    > | null;
     if (
       !body ||
       Array.isArray(body) ||

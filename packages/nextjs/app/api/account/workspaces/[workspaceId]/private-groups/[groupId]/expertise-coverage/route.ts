@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import { listPrivateGroupExpertiseCoverage } from "~~/lib/tokenless/reviewerExpertiseAssignments";
 import { tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
@@ -12,7 +13,7 @@ export async function POST(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request);
     const { workspaceId, groupId } = await context.params;
-    const body = (await request.json()) as { requirements?: unknown; responseDeadline?: unknown };
+    const body = (await readApiJsonRequestBody(request)) as { requirements?: unknown; responseDeadline?: unknown };
     const coverage = await listPrivateGroupExpertiseCoverage({
       accountAddress: session.principalId,
       workspaceId,

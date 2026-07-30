@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import { type CreatePrivateGroupInput, createPrivateGroup, listPrivateGroups } from "~~/lib/tokenless/privateGroups";
 import { tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
     const { workspaceId } = await context.params;
-    const body = (await request.json()) as CreateGroupBody;
+    const body = (await readApiJsonRequestBody(request)) as CreateGroupBody;
     const group = await createPrivateGroup({
       accountAddress: session.principalId,
       workspaceId,

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import {
   createAssuranceProject,
   listAssuranceProjects,
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest, context: Context) {
 export async function POST(request: NextRequest, context: Context) {
   try {
     const scopedPrincipal = await principal(request, context, true);
-    const value = await request.json();
+    const value = await readApiJsonRequestBody(request);
     if (!value || typeof value !== "object" || Array.isArray(value)) {
       throw new TokenlessServiceError("Project body is invalid.", 400, "invalid_human_assurance_input");
     }

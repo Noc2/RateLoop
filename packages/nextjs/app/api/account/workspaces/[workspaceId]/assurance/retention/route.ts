@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import {
   getWorkspaceEvidenceRetentionPolicy,
   putWorkspaceEvidenceRetentionPolicy,
@@ -33,7 +34,7 @@ export async function PUT(request: NextRequest, context: Context) {
       await putWorkspaceEvidenceRetentionPolicy({
         accountAddress: session.principalId,
         workspaceId,
-        body: await request.json(),
+        body: await readApiJsonRequestBody(request),
       }),
       { headers: NO_STORE },
     );

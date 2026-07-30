@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { apiRequestBodyFallback, readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import { removePrivateGroupMember } from "~~/lib/tokenless/privateGroups";
 import { tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
@@ -12,7 +13,9 @@ export async function DELETE(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
     const { workspaceId, groupId, principalAddress } = await context.params;
-    const body = (await request.json().catch(() => ({}))) as { reason?: string };
+    const body = (await readApiJsonRequestBody(request).catch(error => apiRequestBodyFallback(error, {}))) as {
+      reason?: string;
+    };
     const membership = await removePrivateGroupMember({
       accountAddress: session.principalId,
       workspaceId,

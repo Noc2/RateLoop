@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import { decideHumanReviewApprovalForOwner } from "~~/lib/tokenless/humanReviewApprovals";
 import { tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
@@ -18,7 +19,7 @@ export async function PUT(request: NextRequest, context: Context) {
         accountAddress: session.principalId,
         workspaceId,
         approvalId,
-        body: await request.json(),
+        body: await readApiJsonRequestBody(request),
       }),
       { headers: NO_STORE },
     );

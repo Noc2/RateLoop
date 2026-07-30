@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import { type QualificationProvenance, createReviewerInvitation } from "~~/lib/tokenless/audienceAssignments";
 import { tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
@@ -12,7 +13,7 @@ export async function POST(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
     const { projectId, workspaceId } = await context.params;
-    const body = (await request.json()) as {
+    const body = (await readApiJsonRequestBody(request)) as {
       cohortId?: string;
       expiresAt?: string;
       intendedAccountAddress?: string;

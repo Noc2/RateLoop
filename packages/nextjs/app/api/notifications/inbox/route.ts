@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
 import { REVIEWER_LIFECYCLE_NOTIFICATION_SOURCE_TYPES } from "~~/lib/notifications/reviewerInbox";
+import { readApiJsonRequestBody, rethrowApiRequestBodyBoundaryError } from "~~/lib/tokenless/apiRequestBody";
 import { listNotificationInbox, markNotificationInboxRead } from "~~/lib/tokenless/oversightAlerts";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
@@ -42,8 +43,9 @@ export async function POST(request: NextRequest) {
     const session = await requireBrowserSession(request, { mutation: true });
     let body: { notificationIds?: unknown };
     try {
-      body = (await request.json()) as typeof body;
-    } catch {
+      body = (await readApiJsonRequestBody(request)) as typeof body;
+    } catch (requestBodyError) {
+      rethrowApiRequestBodyBoundaryError(requestBodyError);
       throw new TokenlessServiceError("Read receipts must be valid JSON.", 400, "invalid_notification_read");
     }
     if (!body || typeof body !== "object" || Array.isArray(body)) {

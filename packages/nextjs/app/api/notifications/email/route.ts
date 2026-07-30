@@ -13,6 +13,7 @@ import {
   normalizeNotificationPreferences,
   upsertTokenlessEmailNotificationSettings,
 } from "~~/lib/notifications/tokenless";
+import { readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import { tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +36,7 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
-    const body = (await request.json()) as { email?: unknown; preferences?: unknown };
+    const body = (await readApiJsonRequestBody(request)) as { email?: unknown; preferences?: unknown };
     const email = normalizeNotificationEmail(body.email);
     const preferences = normalizeNotificationPreferences(body.preferences ?? body);
     const existing = await getTokenlessEmailNotificationSubscription(session.principalId);

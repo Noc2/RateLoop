@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHash, timingSafeEqual } from "node:crypto";
+import { readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import {
   getTokenlessModerationState,
   moderateTokenlessOperation,
@@ -10,6 +11,7 @@ import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+export const readModerationRequestBody = readApiJsonRequestBody;
 
 function authorize(request: NextRequest) {
   const token = process.env.TOKENLESS_PIPELINE_TOKEN?.trim();
@@ -26,7 +28,7 @@ function authorize(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     authorize(request);
-    const body = (await request.json()) as {
+    const body = (await readModerationRequestBody(request)) as {
       target?: unknown;
       operationKey?: unknown;
       responseId?: unknown;

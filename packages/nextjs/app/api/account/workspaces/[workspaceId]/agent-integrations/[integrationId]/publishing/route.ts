@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
 import { activateAgentIntegrationPublishing } from "~~/lib/tokenless/agentIntegrations";
+import { readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import { tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +18,7 @@ export async function POST(request: NextRequest, context: Context) {
         accountAddress: session.principalId,
         workspaceId,
         integrationId,
-        body: await request.json(),
+        body: await readApiJsonRequestBody(request),
       }),
       { headers: { "Cache-Control": "private, no-store, max-age=0" } },
     );

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { HumanAssuranceAudiencePolicy } from "@rateloop/sdk";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import { createAssuranceAudiencePolicy, scopeAssuranceSessionToWorkspace } from "~~/lib/tokenless/humanAssurance";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest, context: Context) {
       accountAddress: session.principalId,
       workspaceId,
     });
-    const value = await request.json();
+    const value = await readApiJsonRequestBody(request);
     if (!value || typeof value !== "object" || Array.isArray(value)) {
       throw new TokenlessServiceError("Audience policy body is invalid.", 400, "invalid_human_assurance_input");
     }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import {
   confirmFeedbackBonusAwardForHuman,
   prepareFeedbackBonusAwardForHuman,
@@ -15,7 +16,7 @@ export async function POST(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
     const { workspaceId, feedbackId } = await context.params;
-    const body = (await request.json()) as Record<string, unknown>;
+    const body = (await readApiJsonRequestBody(request)) as Record<string, unknown>;
     return NextResponse.json(
       await prepareFeedbackBonusAwardForHuman({
         accountAddress: session.principalId,
@@ -36,7 +37,7 @@ export async function PUT(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
     const { workspaceId, feedbackId } = await context.params;
-    const body = (await request.json()) as Record<string, unknown>;
+    const body = (await readApiJsonRequestBody(request)) as Record<string, unknown>;
     return NextResponse.json(
       await confirmFeedbackBonusAwardForHuman({
         accountAddress: session.principalId,
