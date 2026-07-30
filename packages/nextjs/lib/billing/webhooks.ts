@@ -11,7 +11,7 @@ import type { PoolClient } from "pg";
 import "server-only";
 import Stripe from "stripe";
 import { dbPool } from "~~/lib/db";
-import { acquireSessionAdvisoryLock, releaseSessionAdvisoryLocksAndConnection } from "~~/lib/db/advisoryLocks";
+import { AdvisoryLockUnavailableError, withTransactionAdvisoryLocks } from "~~/lib/db/advisoryLocks";
 import { stripeRefundReversalKey } from "~~/lib/tokenless/idempotencyKeys";
 import { persistScheduledProcessorHealth } from "~~/lib/tokenless/scheduledProcessorHealth";
 
@@ -292,12 +292,12 @@ async function recordEventOutcome(client: PoolClient, eventId: string, attention
  * must not retry an operator-attention event merely because the observability projection failed.
  */
 async function projectStripeWebhookHealth(
-  client: Pick<PoolClient, "query">,
+  queryable: Pick<typeof dbPool, "query">,
   now = new Date(),
   persistHealth = persistScheduledProcessorHealth,
 ) {
   try {
-    const pending = await client.query(
+    const pending = await queryable.query(
       `SELECT COUNT(*) AS count FROM tokenless_billing_webhook_events
        WHERE processing_status='failed'`,
     );
@@ -336,11 +336,9 @@ export function constructStripeEvent(rawBody: string, signature: string | null) 
 
 export async function processStripeWebhook(input: { event: Stripe.Event; rawBody: string }) {
   const payloadSha256 = createHash("sha256").update(input.rawBody).digest("hex");
-  const client = await dbPool.connect();
-  const acquiredLockKeys: string[] = [];
-  try {
-    await acquireSessionAdvisoryLock(client, input.event.id);
-    acquiredLockKeys.push(input.event.id);
+  const receivedAt = new Date();
+  const lockKeys = [`stripe-webhook:${input.event.id}`];
+  const preflight = await withTransactionAdvisoryLocks(dbPool, lockKeys, async client => {
     const existing = await client.query(
       `SELECT processing_status, payload_sha256 FROM tokenless_billing_webhook_events
        WHERE provider_event_id = $1 LIMIT 1`,
@@ -349,20 +347,17 @@ export async function processStripeWebhook(input: { event: Stripe.Event; rawBody
     if (existing.rows[0] && existing.rows[0].payload_sha256 !== payloadSha256) {
       throw new Error("event_payload_mismatch");
     }
-    if (existing.rows[0]?.processing_status === "processed") {
-      if (input.event.type.startsWith("invoice.")) {
-        const invoiceId = (input.event.data.object as Stripe.Invoice).id;
-        const topup = await client.query(
-          "SELECT topup_id FROM tokenless_prepaid_topup_intents WHERE provider='stripe' AND provider_invoice_id=$1",
-          [invoiceId],
-        );
-        const topupId = topup.rows[0]?.topup_id;
-        if (typeof topupId === "string") await drainPrepaidTopupAuditOutbox({ topupId });
-      }
-      return { duplicate: true };
+    let topupId: string | null = null;
+    if (existing.rows[0]?.processing_status === "processed" && input.event.type.startsWith("invoice.")) {
+      const invoiceId = (input.event.data.object as Stripe.Invoice).id;
+      const topup = await client.query(
+        "SELECT topup_id FROM tokenless_prepaid_topup_intents WHERE provider='stripe' AND provider_invoice_id=$1",
+        [invoiceId],
+      );
+      topupId = typeof topup.rows[0]?.topup_id === "string" ? topup.rows[0].topup_id : null;
     }
-
-    const receivedAt = new Date();
+    if (existing.rows[0]?.processing_status === "processed") return { duplicate: true as const, topupId };
+    const wasFailed = existing.rows[0]?.processing_status === "failed";
     await client.query(
       `INSERT INTO tokenless_billing_webhook_events
          (provider_event_id, event_type, payload_sha256, event_created_at, processing_status,
@@ -372,80 +367,92 @@ export async function processStripeWebhook(input: { event: Stripe.Event; rawBody
          processing_status = 'processing', error_code = NULL, received_at = EXCLUDED.received_at`,
       [input.event.id, input.event.type, payloadSha256, new Date(input.event.created * 1000), receivedAt],
     );
+    let topupInvoice = false;
+    const eventInvoice = input.event.type.startsWith("invoice.") ? (input.event.data.object as Stripe.Invoice) : null;
+    if (eventInvoice) {
+      topupInvoice = eventInvoice.metadata?.rateloop_purpose === "prepaid_topup";
+      if (!topupInvoice) {
+        const local = await client.query(
+          "SELECT topup_id FROM tokenless_prepaid_topup_intents WHERE provider='stripe' AND provider_invoice_id=$1",
+          [eventInvoice.id],
+        );
+        topupInvoice = local.rowCount === 1;
+      }
+    }
+    return { duplicate: false as const, eventInvoice, topupInvoice, wasFailed };
+  });
+  if (preflight.duplicate) {
+    if (preflight.topupId) await drainPrepaidTopupAuditOutbox({ topupId: preflight.topupId });
+    return { duplicate: true };
+  }
 
-    try {
+  try {
+    const subscription = HANDLED_EVENTS.has(input.event.type) ? await subscriptionForEvent(input.event) : null;
+    const invoice =
+      preflight.eventInvoice && preflight.topupInvoice
+        ? await getStripe().invoices.retrieve(preflight.eventInvoice.id)
+        : null;
+    const reversal = REVERSAL_EVENTS.has(input.event.type) ? await resolveReversalTarget(input.event) : null;
+    const result = await withTransactionAdvisoryLocks(dbPool, lockKeys, async client => {
+      const current = await client.query(
+        `SELECT processing_status, payload_sha256 FROM tokenless_billing_webhook_events
+         WHERE provider_event_id=$1 LIMIT 1`,
+        [input.event.id],
+      );
+      if (current.rows[0]?.payload_sha256 !== payloadSha256) throw new Error("event_payload_mismatch");
+      if (current.rows[0]?.processing_status === "processed") return { duplicate: true as const, topupId: null };
       let topupId: string | null = null;
       const attention: string[] = [];
       if (HANDLED_EVENTS.has(input.event.type)) {
-        const subscription = await subscriptionForEvent(input.event);
-        const eventInvoice = input.event.type.startsWith("invoice.")
-          ? (input.event.data.object as Stripe.Invoice)
-          : null;
-        let topupInvoice = Boolean(eventInvoice?.metadata?.rateloop_purpose === "prepaid_topup");
-        if (eventInvoice && !topupInvoice) {
-          const local = await client.query(
-            "SELECT topup_id FROM tokenless_prepaid_topup_intents WHERE provider='stripe' AND provider_invoice_id=$1",
-            [eventInvoice.id],
-          );
-          topupInvoice = local.rowCount === 1;
+        if (subscription) {
+          const unsupported = await projectSubscription(client, input.event, subscription);
+          if (unsupported) attention.push(unsupported);
         }
-        const invoice = eventInvoice && topupInvoice ? await getStripe().invoices.retrieve(eventInvoice.id) : null;
-        await client.query("BEGIN");
-        try {
-          if (subscription) {
-            const unsupported = await projectSubscription(client, input.event, subscription);
-            if (unsupported) attention.push(unsupported);
-          }
-          if (invoice) {
-            const projected = await projectPrepaidInvoice(client, {
-              eventCreatedAt: new Date(input.event.created * 1000),
-              eventId: input.event.id,
-              invoice,
-            });
-            if (projected.matched) topupId = invoice.metadata?.rateloop_topup_id ?? null;
-            if (projected.attention) attention.push(projected.attention);
-          }
-          await recordEventOutcome(client, input.event.id, attention);
-          await client.query("COMMIT");
-        } catch (error) {
-          await client.query("ROLLBACK");
-          throw error;
+        if (invoice) {
+          const projected = await projectPrepaidInvoice(client, {
+            eventCreatedAt: new Date(input.event.created * 1000),
+            eventId: input.event.id,
+            invoice,
+          });
+          if (projected.matched) topupId = invoice.metadata?.rateloop_topup_id ?? null;
+          if (projected.attention) attention.push(projected.attention);
         }
+        await recordEventOutcome(client, input.event.id, attention);
       } else if (REVERSAL_EVENTS.has(input.event.type)) {
-        const target = await resolveReversalTarget(input.event);
-        await client.query("BEGIN");
-        try {
-          if (target) {
-            const reversal = target.reinstate
-              ? await reinstatePrepaidReversal(client, target)
-              : await projectPrepaidReversal(client, target);
-            if (reversal.attention) attention.push(reversal.attention);
-          }
-          await recordEventOutcome(client, input.event.id, attention);
-          await client.query("COMMIT");
-        } catch (error) {
-          await client.query("ROLLBACK");
-          throw error;
+        if (reversal) {
+          const projection = reversal.reinstate
+            ? await reinstatePrepaidReversal(client, reversal)
+            : await projectPrepaidReversal(client, reversal);
+          if (projection.attention) attention.push(projection.attention);
         }
+        await recordEventOutcome(client, input.event.id, attention);
       } else {
         await recordEventOutcome(client, input.event.id, attention);
       }
-      if (topupId) await drainPrepaidTopupAuditOutbox({ topupId });
-      if (attention.length > 0 || existing.rows[0]?.processing_status === "failed") {
-        await projectStripeWebhookHealth(client, receivedAt);
-      }
-      return attention.length > 0 ? { attention: attention.join(","), duplicate: false } : { duplicate: false };
-    } catch (error) {
-      await client.query(
+      return attention.length > 0
+        ? { attention: attention.join(","), duplicate: false as const, projectHealth: true, topupId }
+        : {
+            duplicate: false as const,
+            projectHealth: preflight.wasFailed,
+            topupId,
+          };
+    });
+    if (result.topupId) await drainPrepaidTopupAuditOutbox({ topupId: result.topupId });
+    if (result.projectHealth) await projectStripeWebhookHealth(dbPool, receivedAt);
+    return "attention" in result
+      ? { attention: result.attention, duplicate: result.duplicate }
+      : { duplicate: result.duplicate };
+  } catch (error) {
+    if (error instanceof AdvisoryLockUnavailableError) throw error;
+    await withTransactionAdvisoryLocks(dbPool, lockKeys, client =>
+      client.query(
         `UPDATE tokenless_billing_webhook_events
          SET processing_status = 'failed', error_code = $1, processed_at = NULL
          WHERE provider_event_id = $2`,
         [boundedErrorCode(error), input.event.id],
-      );
-      throw error;
-    }
-  } finally {
-    await releaseSessionAdvisoryLocksAndConnection(client, acquiredLockKeys);
+      ),
+    );
+    throw error;
   }
 }
 

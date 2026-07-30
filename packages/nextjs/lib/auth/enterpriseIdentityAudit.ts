@@ -1,7 +1,7 @@
 import type { PoolClient } from "pg";
 import "server-only";
 import { dbClient, dbPool } from "~~/lib/db";
-import { releaseSessionAdvisoryLocksAndConnection, tryAcquireSessionAdvisoryLock } from "~~/lib/db/advisoryLocks";
+import { withTransactionAdvisoryLocks } from "~~/lib/db/advisoryLocks";
 import { type AuditEventInput, appendAuditEvent } from "~~/lib/privacy/audit";
 import { maintenanceCancellationRequested } from "~~/lib/tokenless/maintenanceCancellation";
 
@@ -184,56 +184,56 @@ export async function drainEnterpriseIdentityAuditOutbox(now = new Date(), limit
     const row = value as Record<string, unknown>;
     const eventKey = String(row.event_key);
     const lockKey = `enterprise-identity-audit:${eventKey}`;
-    const lock = await dbPool.connect();
-    const acquiredLockKeys: string[] = [];
+    const attempt = Number(row.attempt_count ?? 0) + 1;
     try {
-      if (!(await tryAcquireSessionAdvisoryLock(lock, lockKey))) continue;
-      acquiredLockKeys.push(lockKey);
-      const current = await dbClient.execute({
-        sql: "SELECT delivery_state FROM tokenless_enterprise_identity_audit_outbox WHERE event_key=?",
-        args: [eventKey],
+      const state = await withTransactionAdvisoryLocks(dbPool, [lockKey], async client => {
+        const current = await client.query(
+          "SELECT delivery_state FROM tokenless_enterprise_identity_audit_outbox WHERE event_key=$1",
+          [eventKey],
+        );
+        if (String(current.rows[0]?.delivery_state) !== "pending") return "skipped" as const;
+        await appendAuditEvent(
+          {
+            action: String(row.action),
+            actorKind: String(row.actor_kind) as AuditEventInput["actorKind"],
+            actorReference: String(row.actor_reference),
+            assuranceMethod: String(row.assurance_method),
+            idempotencyKey: eventKey,
+            metadata: JSON.parse(String(row.metadata_json ?? "{}")) as Record<string, unknown>,
+            occurredAt: new Date(String(row.occurred_at)),
+            purpose: String(row.purpose),
+            reason: String(row.reason),
+            result: String(row.result) as AuditEventInput["result"],
+            targetId: String(row.target_id),
+            targetKind: String(row.target_kind),
+            workspaceId: String(row.workspace_id),
+          },
+          client,
+        );
+        const updated = await client.query(
+          `UPDATE tokenless_enterprise_identity_audit_outbox
+           SET delivery_state='delivered',attempt_count=$1,last_error=NULL,delivered_at=$2
+           WHERE event_key=$3 AND delivery_state='pending'`,
+          [attempt, now, eventKey],
+        );
+        return updated.rowCount ? ("delivered" as const) : ("skipped" as const);
       });
-      if (String(current.rows[0]?.delivery_state) !== "pending") continue;
-      const attempt = Number(row.attempt_count ?? 0) + 1;
-      try {
-        await appendAuditEvent({
-          action: String(row.action),
-          actorKind: String(row.actor_kind) as AuditEventInput["actorKind"],
-          actorReference: String(row.actor_reference),
-          assuranceMethod: String(row.assurance_method),
-          idempotencyKey: eventKey,
-          metadata: JSON.parse(String(row.metadata_json ?? "{}")) as Record<string, unknown>,
-          occurredAt: new Date(String(row.occurred_at)),
-          purpose: String(row.purpose),
-          reason: String(row.reason),
-          result: String(row.result) as AuditEventInput["result"],
-          targetId: String(row.target_id),
-          targetKind: String(row.target_kind),
-          workspaceId: String(row.workspace_id),
-        });
-        await dbClient.execute({
-          sql: `UPDATE tokenless_enterprise_identity_audit_outbox
-                SET delivery_state='delivered',attempt_count=?,last_error=NULL,delivered_at=?
-                WHERE event_key=? AND delivery_state='pending'`,
-          args: [attempt, now, eventKey],
-        });
-        delivered += 1;
-      } catch (error) {
-        await dbClient.execute({
-          sql: `UPDATE tokenless_enterprise_identity_audit_outbox
-                SET attempt_count=?,next_attempt_at=?,last_error=?
-                WHERE event_key=? AND delivery_state='pending'`,
-          args: [
+      if (state === "delivered") delivered += 1;
+    } catch (error) {
+      await withTransactionAdvisoryLocks(dbPool, [lockKey], async client => {
+        await client.query(
+          `UPDATE tokenless_enterprise_identity_audit_outbox
+           SET attempt_count=$1,next_attempt_at=$2,last_error=$3
+           WHERE event_key=$4 AND delivery_state='pending'`,
+          [
             attempt,
             retryAt(now, attempt),
             error instanceof Error ? error.message.slice(0, 500) : "Audit delivery failed",
             eventKey,
           ],
-        });
-        retry += 1;
-      }
-    } finally {
-      await releaseSessionAdvisoryLocksAndConnection(lock, acquiredLockKeys);
+        );
+      });
+      retry += 1;
     }
   }
   return { delivered, retry };

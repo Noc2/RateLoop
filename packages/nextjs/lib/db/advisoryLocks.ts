@@ -1,7 +1,8 @@
-import type { PoolClient } from "pg";
+import type { Pool, PoolClient } from "pg";
 import "server-only";
 
-type AdvisoryLockClient = Pick<PoolClient, "query" | "release">;
+type AdvisoryLockClient = Pick<PoolClient, "query">;
+type AdvisoryLockPool = Pick<Pool, "connect">;
 
 export class AdvisoryLockUnavailableError extends Error {
   readonly code = "database_coordination_busy";
@@ -14,26 +15,6 @@ export class AdvisoryLockUnavailableError extends Error {
   }
 }
 
-export class AdvisoryLockReleaseError extends Error {
-  readonly code = "database_coordination_release_failed";
-
-  constructor() {
-    super("Database coordination could not be released safely.");
-    this.name = "AdvisoryLockReleaseError";
-  }
-}
-
-export async function tryAcquireSessionAdvisoryLock(client: AdvisoryLockClient, lockKey: string) {
-  const result = await client.query("SELECT pg_try_advisory_lock(hashtext($1)) AS acquired", [lockKey]);
-  return result.rows[0]?.acquired === true;
-}
-
-export async function acquireSessionAdvisoryLock(client: AdvisoryLockClient, lockKey: string) {
-  if (!(await tryAcquireSessionAdvisoryLock(client, lockKey))) {
-    throw new AdvisoryLockUnavailableError();
-  }
-}
-
 export async function acquireTransactionAdvisoryLock(client: AdvisoryLockClient, lockKey: string) {
   const result = await client.query("SELECT pg_try_advisory_xact_lock(hashtext($1)) AS acquired", [lockKey]);
   if (result.rows[0]?.acquired !== true) {
@@ -41,20 +22,31 @@ export async function acquireTransactionAdvisoryLock(client: AdvisoryLockClient,
   }
 }
 
-export async function releaseSessionAdvisoryLocksAndConnection(
-  client: AdvisoryLockClient,
-  acquiredLockKeys: readonly string[],
+export async function withTransactionAdvisoryLocks<T>(
+  pool: AdvisoryLockPool,
+  lockKeys: readonly string[],
+  operation: (client: PoolClient) => Promise<T>,
 ) {
+  const client = await pool.connect();
   try {
-    for (const lockKey of [...acquiredLockKeys].reverse()) {
-      const result = await client.query("SELECT pg_advisory_unlock(hashtext($1)) AS released", [lockKey]);
-      if (result.rows[0]?.released !== true) {
-        throw new AdvisoryLockReleaseError();
-      }
+    await client.query("BEGIN");
+    for (const lockKey of [...new Set(lockKeys)].sort()) {
+      await acquireTransactionAdvisoryLock(client, lockKey);
     }
+    const result = await operation(client);
+    await client.query("COMMIT");
+    client.release();
+    return result;
   } catch (error) {
-    client.release(error instanceof Error ? error : new AdvisoryLockReleaseError());
+    try {
+      await client.query("ROLLBACK");
+    } catch (rollbackError) {
+      const connectionError =
+        rollbackError instanceof Error ? rollbackError : new Error("Database coordination rollback failed.");
+      client.release(connectionError);
+      throw connectionError;
+    }
+    client.release();
     throw error;
   }
-  client.release();
 }

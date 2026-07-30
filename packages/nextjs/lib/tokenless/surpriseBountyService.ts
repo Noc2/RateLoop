@@ -17,7 +17,7 @@ import {
 } from "viem";
 import { baseSepolia } from "viem/chains";
 import { dbClient, dbPool } from "~~/lib/db";
-import { acquireSessionAdvisoryLock, releaseSessionAdvisoryLocksAndConnection } from "~~/lib/db/advisoryLocks";
+import { withTransactionAdvisoryLocks } from "~~/lib/db/advisoryLocks";
 import { type TokenlessChainConfig, loadTokenlessChainConfig } from "~~/lib/tokenless/chain/config";
 import {
   type EvmTransactionLocator,
@@ -191,12 +191,15 @@ export async function reserveSurpriseBountyCapacity(input: {
       "surprise_bonus_reservation_expired",
     );
   }
-  const client = await dbPool.connect();
   const lockKey = `surprise-bounty:${config.deploymentKey}`;
-  const acquiredLockKeys: string[] = [];
-  try {
-    await acquireSessionAdvisoryLock(client, lockKey);
-    acquiredLockKeys.push(lockKey);
+  await assertLiveTokenlessDeployment(config, runtime);
+  const onchainBalance = await runtime.publicClient.readContract({
+    abi: ERC20_ABI,
+    address: config.usdcAddress,
+    functionName: "balanceOf",
+    args: [account.address],
+  });
+  return withTransactionAdvisoryLocks(dbPool, [lockKey], async client => {
     await client.query(
       `UPDATE tokenless_surprise_bounty_rounds
        SET state = 'expired', reservation_expires_at = NULL, updated_at = $1
@@ -225,13 +228,6 @@ export async function reserveSurpriseBountyCapacity(input: {
       existingBountyRoundId = rowString(row, "bounty_round_id")!;
       renewExpiredReservation = rowString(row, "state") === "expired";
     }
-    await assertLiveTokenlessDeployment(config, runtime);
-    const onchainBalance = await runtime.publicClient.readContract({
-      abi: ERC20_ABI,
-      address: config.usdcAddress,
-      functionName: "balanceOf",
-      args: [account.address],
-    });
     const outstanding = await client.query(
       `SELECT COALESCE(SUM(
          CASE WHEN state IN ('reserved', 'funded') THEN maximum_liability_atomic
@@ -287,9 +283,7 @@ export async function reserveSurpriseBountyCapacity(input: {
       ],
     );
     return { bountyRoundId, maximumLiabilityAtomic: maximumLiabilityAtomic.toString() };
-  } finally {
-    await releaseSessionAdvisoryLocksAndConnection(client, acquiredLockKeys);
-  }
+  });
 }
 
 export async function finalizeSurpriseBountyRound(input: {

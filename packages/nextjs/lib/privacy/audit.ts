@@ -155,7 +155,7 @@ function securityScope(input: Pick<SecurityAuditEventInput, "scopeId" | "scopeKi
   return { scopeId, scopeKind: input.scopeKind };
 }
 
-export async function appendAuditEvent(input: AuditEventInput) {
+export async function appendAuditEvent(input: AuditEventInput, transactionClient?: PoolClient) {
   const occurredAt = input.occurredAt ?? new Date();
   const workspaceId = required(input.workspaceId, "Audit workspace", 160);
   const idempotencyKey = optionalIdempotencyKey(input.idempotencyKey);
@@ -180,9 +180,10 @@ export async function appendAuditEvent(input: AuditEventInput) {
     workspaceId,
   } as const;
   const metadataJson = auditMetadataJson(normalized.metadata);
-  const client = await dbPool.connect();
+  const client = transactionClient ?? (await dbPool.connect());
+  const managesTransaction = transactionClient === undefined;
   try {
-    await client.query("BEGIN");
+    if (managesTransaction) await client.query("BEGIN");
     await client.query(
       `INSERT INTO tokenless_audit_heads (workspace_id, last_sequence, last_digest, updated_at)
        VALUES ($1, 0, $2, $3) ON CONFLICT (workspace_id) DO NOTHING`,
@@ -227,7 +228,7 @@ export async function appendAuditEvent(input: AuditEventInput) {
             "audit_idempotency_conflict",
           );
         }
-        await client.query("COMMIT");
+        if (managesTransaction) await client.query("COMMIT");
         return {
           eventDigest: rowString(existing, "event_digest")!,
           eventId,
@@ -270,13 +271,13 @@ export async function appendAuditEvent(input: AuditEventInput) {
       "UPDATE tokenless_audit_heads SET last_sequence = $1, last_digest = $2, updated_at = $3 WHERE workspace_id = $4",
       [sequence, eventDigest, occurredAt, normalized.workspaceId],
     );
-    await client.query("COMMIT");
+    if (managesTransaction) await client.query("COMMIT");
     return { eventDigest, eventId, previousDigest, sequence };
   } catch (error) {
-    await client.query("ROLLBACK");
+    if (managesTransaction) await client.query("ROLLBACK");
     throw error;
   } finally {
-    client.release();
+    if (managesTransaction) client.release();
   }
 }
 

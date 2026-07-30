@@ -3,7 +3,7 @@ import type { PoolClient } from "pg";
 import "server-only";
 import { getAddress, isAddress, isHash, zeroAddress } from "viem";
 import { dbClient, dbPool } from "~~/lib/db";
-import { acquireSessionAdvisoryLock, releaseSessionAdvisoryLocksAndConnection } from "~~/lib/db/advisoryLocks";
+import { withTransactionAdvisoryLocks } from "~~/lib/db/advisoryLocks";
 import type { PreparedHumanReviewRequest } from "~~/lib/tokenless/humanReviewRequestPreparation";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -324,84 +324,88 @@ async function assertLocalFeedbackBinding(
   }
 }
 
+async function findFeedbackBonusPool(client: PoolClient, terms: ReturnType<typeof canonicalTerms>) {
+  const frozen = await client.query(
+    `SELECT p.feedback_bonus_enabled,p.feedback_bonus_pool_atomic,p.feedback_bonus_awarder_kind,
+            p.feedback_bonus_awarder_account,p.feedback_bonus_award_window_seconds,p.created_by
+     FROM tokenless_agent_review_opportunities o
+     JOIN tokenless_agent_review_request_profiles p
+       ON p.workspace_id=o.workspace_id AND p.profile_id=o.request_profile_id
+      AND p.version=o.request_profile_version AND p.profile_hash=o.request_profile_hash
+     WHERE o.workspace_id=$1 AND o.opportunity_id=$2 AND o.agent_id=$3
+       AND p.profile_id=$4 AND p.version=$5 AND p.profile_hash=$6
+     LIMIT 1`,
+    [
+      terms.workspaceId,
+      terms.opportunityId,
+      terms.agentId,
+      terms.requestProfile.id,
+      terms.requestProfile.version,
+      terms.requestProfile.hash,
+    ],
+  );
+  const profile = frozen.rows[0] as Row | undefined;
+  const configuredSubject =
+    value(profile, "feedback_bonus_awarder_kind") === "designated"
+      ? value(profile, "feedback_bonus_awarder_account")
+      : value(profile, "created_by");
+  if (
+    !profile ||
+    !(profile.feedback_bonus_enabled === true || profile.feedback_bonus_enabled === "t") ||
+    value(profile, "feedback_bonus_pool_atomic") !== terms.depositedAmountAtomic ||
+    configuredSubject !== terms.humanAwarderSubject ||
+    value(profile, "created_by") !== terms.consent.authorizedBy ||
+    Number(profile.feedback_bonus_award_window_seconds) * 1_000 !==
+      terms.awardDeadline.getTime() - terms.feedbackDeadline.getTime()
+  ) {
+    throw new TokenlessServiceError(
+      "The opportunity does not carry these exact enabled and human-authorized Feedback Bonus terms.",
+      409,
+      "feedback_bonus_profile_binding_mismatch",
+    );
+  }
+  const existing = await client.query(
+    `SELECT * FROM tokenless_feedback_bonus_pools WHERE workspace_id=$1 AND opportunity_id=$2 LIMIT 1`,
+    [terms.workspaceId, terms.opportunityId],
+  );
+  if (!existing.rows[0]) return null;
+  assertExistingPool(existing.rows[0] as Row, terms);
+  return poolBinding(existing.rows[0] as Row, true);
+}
+
 export function createFeedbackBonusPoolService(dependencies?: FeedbackBonusPoolDependencies) {
   return async function ensureFeedbackBonusPool(input: FeedbackBonusPoolTerms): Promise<FeedbackBonusPoolBinding> {
     const terms = canonicalTerms(input);
-    const client = await dbPool.connect();
     const lockKey = `feedback-bonus:${terms.workspaceId}:${terms.opportunityId}`;
-    const acquiredLockKeys: string[] = [];
-    try {
-      await acquireSessionAdvisoryLock(client, lockKey);
-      acquiredLockKeys.push(lockKey);
-      const frozen = await client.query(
-        `SELECT p.feedback_bonus_enabled,p.feedback_bonus_pool_atomic,p.feedback_bonus_awarder_kind,
-                p.feedback_bonus_awarder_account,p.feedback_bonus_award_window_seconds,p.created_by
-         FROM tokenless_agent_review_opportunities o
-         JOIN tokenless_agent_review_request_profiles p
-           ON p.workspace_id=o.workspace_id AND p.profile_id=o.request_profile_id
-          AND p.version=o.request_profile_version AND p.profile_hash=o.request_profile_hash
-         WHERE o.workspace_id=$1 AND o.opportunity_id=$2 AND o.agent_id=$3
-           AND p.profile_id=$4 AND p.version=$5 AND p.profile_hash=$6
-         LIMIT 1`,
-        [
-          terms.workspaceId,
-          terms.opportunityId,
-          terms.agentId,
-          terms.requestProfile.id,
-          terms.requestProfile.version,
-          terms.requestProfile.hash,
-        ],
+    const existing = await withTransactionAdvisoryLocks(dbPool, [lockKey], client =>
+      findFeedbackBonusPool(client, terms),
+    );
+    if (existing) return existing;
+    if (!dependencies) {
+      throw new TokenlessServiceError(
+        "Feedback Bonus funding is unavailable until the hosted service can return an exact PoolCreated receipt.",
+        503,
+        "feedback_bonus_pool_execution_unavailable",
+        true,
       );
-      const profile = frozen.rows[0] as Row | undefined;
-      const configuredSubject =
-        value(profile, "feedback_bonus_awarder_kind") === "designated"
-          ? value(profile, "feedback_bonus_awarder_account")
-          : value(profile, "created_by");
-      if (
-        !profile ||
-        !(profile.feedback_bonus_enabled === true || profile.feedback_bonus_enabled === "t") ||
-        value(profile, "feedback_bonus_pool_atomic") !== terms.depositedAmountAtomic ||
-        configuredSubject !== terms.humanAwarderSubject ||
-        value(profile, "created_by") !== terms.consent.authorizedBy ||
-        Number(profile.feedback_bonus_award_window_seconds) * 1_000 !==
-          terms.awardDeadline.getTime() - terms.feedbackDeadline.getTime()
-      ) {
-        throw new TokenlessServiceError(
-          "The opportunity does not carry these exact enabled and human-authorized Feedback Bonus terms.",
-          409,
-          "feedback_bonus_profile_binding_mismatch",
-        );
-      }
-      const existing = await client.query(
-        `SELECT * FROM tokenless_feedback_bonus_pools WHERE workspace_id=$1 AND opportunity_id=$2 LIMIT 1`,
-        [terms.workspaceId, terms.opportunityId],
-      );
-      if (existing.rows[0]) {
-        assertExistingPool(existing.rows[0] as Row, terms);
-        return poolBinding(existing.rows[0] as Row, true);
-      }
-      if (!dependencies) {
-        throw new TokenlessServiceError(
-          "Feedback Bonus funding is unavailable until the hosted service can return an exact PoolCreated receipt.",
-          503,
-          "feedback_bonus_pool_execution_unavailable",
-          true,
-        );
-      }
-      const receipt = assertPoolReceipt(
-        terms,
-        await dependencies.createAndFundPool({
-          idempotencyKey: idempotencyKey(terms),
-          reviewId: terms.reviewId,
-          contentId: terms.contentId,
-          admissionPolicyHash: terms.admissionPolicyHash,
-          amountAtomic: terms.depositedAmountAtomic,
-          feedbackDeadline: terms.feedbackDeadline,
-          awardDeadline: terms.awardDeadline,
-          funderWallet: terms.funderWallet,
-          awarderWallet: terms.awarderWallet,
-        }),
-      );
+    }
+    const receipt = assertPoolReceipt(
+      terms,
+      await dependencies.createAndFundPool({
+        idempotencyKey: idempotencyKey(terms),
+        reviewId: terms.reviewId,
+        contentId: terms.contentId,
+        admissionPolicyHash: terms.admissionPolicyHash,
+        amountAtomic: terms.depositedAmountAtomic,
+        feedbackDeadline: terms.feedbackDeadline,
+        awardDeadline: terms.awardDeadline,
+        funderWallet: terms.funderWallet,
+        awarderWallet: terms.awarderWallet,
+      }),
+    );
+    return withTransactionAdvisoryLocks(dbPool, [lockKey], async client => {
+      const replay = await findFeedbackBonusPool(client, terms);
+      if (replay) return replay;
       const inserted = await client.query(
         `INSERT INTO tokenless_feedback_bonus_pools
          (workspace_id,opportunity_id,agent_id,request_profile_id,request_profile_version,request_profile_hash,
@@ -430,9 +434,7 @@ export function createFeedbackBonusPoolService(dependencies?: FeedbackBonusPoolD
         ],
       );
       return poolBinding(inserted.rows[0] as Row, false);
-    } finally {
-      await releaseSessionAdvisoryLocksAndConnection(client, acquiredLockKeys);
-    }
+    });
   };
 }
 

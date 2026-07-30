@@ -8,12 +8,9 @@ import { synchronizeScimUser } from "~~/lib/auth/enterpriseIdentityPolicy";
 import { drainPrepaidTopupAuditOutbox } from "~~/lib/billing/prepaidTopups";
 import { processStripeWebhook } from "~~/lib/billing/webhooks";
 import {
-  AdvisoryLockReleaseError,
   AdvisoryLockUnavailableError,
-  acquireSessionAdvisoryLock,
   acquireTransactionAdvisoryLock,
-  releaseSessionAdvisoryLocksAndConnection,
-  tryAcquireSessionAdvisoryLock,
+  withTransactionAdvisoryLocks,
 } from "~~/lib/db/advisoryLocks";
 import { projectAssuranceLifecycleEvents } from "~~/lib/tokenless/assuranceEventStreaming";
 import { ingestAutomatedEvalReceipt } from "~~/lib/tokenless/automatedEvalReceipts";
@@ -41,65 +38,83 @@ function lockClient(results: QueryResult[]) {
 }
 
 test("successful acquisition uses only non-blocking PostgreSQL primitives", async () => {
-  const session = lockClient([{ rows: [{ acquired: true }] }]);
-  await acquireSessionAdvisoryLock(session.client, "session-key");
-  assert.equal(session.queries[0]?.sql, "SELECT pg_try_advisory_lock(hashtext($1)) AS acquired");
-
   const transaction = lockClient([{ rows: [{ acquired: true }] }]);
   await acquireTransactionAdvisoryLock(transaction.client, "transaction-key");
   assert.equal(transaction.queries[0]?.sql, "SELECT pg_try_advisory_xact_lock(hashtext($1)) AS acquired");
 });
 
-test("session and transaction acquisition fail immediately when coordination is busy", async () => {
-  const session = lockClient([{ rows: [{ acquired: false }] }]);
-  assert.equal(await tryAcquireSessionAdvisoryLock(session.client, "session-key"), false);
-  assert.deepEqual(session.queries, [
-    {
-      sql: "SELECT pg_try_advisory_lock(hashtext($1)) AS acquired",
-      values: ["session-key"],
-    },
-  ]);
-
-  const requiredSession = lockClient([{ rows: [{ acquired: false }] }]);
+test("transaction acquisition fails immediately when coordination is busy", async () => {
+  const transaction = lockClient([{ rows: [{ acquired: false }] }]);
   await assert.rejects(
-    acquireSessionAdvisoryLock(requiredSession.client, "session-key"),
+    acquireTransactionAdvisoryLock(transaction.client, "transaction-key"),
     (error: unknown) =>
       error instanceof AdvisoryLockUnavailableError &&
       error.code === "database_coordination_busy" &&
       error.retryable &&
       error.status === 503,
   );
-
-  const transaction = lockClient([{ rows: [{ acquired: false }] }]);
-  await assert.rejects(
-    acquireTransactionAdvisoryLock(transaction.client, "transaction-key"),
-    AdvisoryLockUnavailableError,
-  );
   assert.equal(transaction.queries[0]?.sql, "SELECT pg_try_advisory_xact_lock(hashtext($1)) AS acquired");
 });
 
-test("session locks release in reverse order before returning the connection", async () => {
-  const connection = lockClient([{ rows: [{ released: true }] }, { rows: [{ released: true }] }]);
-  await releaseSessionAdvisoryLocksAndConnection(connection.client, ["first", "second"]);
+test("transaction coordination sorts and deduplicates locks on the operation client", async () => {
+  const connection = lockClient([
+    { rows: [] },
+    { rows: [{ acquired: true }] },
+    { rows: [{ acquired: true }] },
+    { rows: [{ value: "same-client" }] },
+    { rows: [] },
+  ]);
+  const pool = { connect: async () => connection.client as PoolClient };
+  const result = await withTransactionAdvisoryLocks(pool, ["z-key", "a-key", "z-key"], async client => {
+    const query = await client.query("SELECT 'same-client' AS value");
+    return query.rows[0]?.value;
+  });
+
+  assert.equal(result, "same-client");
   assert.deepEqual(
-    connection.queries.map(query => query.values[0]),
-    ["second", "first"],
+    connection.queries.map(query => [query.sql, query.values]),
+    [
+      ["BEGIN", []],
+      ["SELECT pg_try_advisory_xact_lock(hashtext($1)) AS acquired", ["a-key"]],
+      ["SELECT pg_try_advisory_xact_lock(hashtext($1)) AS acquired", ["z-key"]],
+      ["SELECT 'same-client' AS value", []],
+      ["COMMIT", []],
+    ],
   );
   assert.deepEqual(connection.releases, [undefined]);
 });
 
-test("a busy optional worker lock returns its connection without issuing an unmatched unlock", async () => {
-  const connection = lockClient([]);
-  await releaseSessionAdvisoryLocksAndConnection(connection.client, []);
-  assert.deepEqual(connection.queries, []);
+test("transaction coordination rolls back and returns the operation client after failure", async () => {
+  const failure = new Error("operation failed");
+  const connection = lockClient([{ rows: [] }, { rows: [{ acquired: true }] }, { rows: [] }]);
+  const pool = { connect: async () => connection.client as PoolClient };
+
+  await assert.rejects(
+    withTransactionAdvisoryLocks(pool, ["key"], async () => {
+      throw failure;
+    }),
+    failure,
+  );
+  assert.deepEqual(
+    connection.queries.map(query => query.sql),
+    ["BEGIN", "SELECT pg_try_advisory_xact_lock(hashtext($1)) AS acquired", "ROLLBACK"],
+  );
   assert.deepEqual(connection.releases, [undefined]);
 });
 
-test("an unlock failure destroys the connection instead of returning a held lock to the pool", async () => {
-  const connection = lockClient([{ rows: [{ released: false }] }]);
-  await assert.rejects(releaseSessionAdvisoryLocksAndConnection(connection.client, ["held"]), AdvisoryLockReleaseError);
+test("transaction coordination destroys a connection when rollback fails", async () => {
+  const connection = lockClient([{ rows: [] }, { rows: [{ acquired: true }] }]);
+  const pool = { connect: async () => connection.client as PoolClient };
+
+  await assert.rejects(
+    withTransactionAdvisoryLocks(pool, ["key"], async () => {
+      throw new Error("operation failed");
+    }),
+    /Unexpected advisory-lock query/u,
+  );
   assert.equal(connection.releases.length, 1);
-  assert.ok(connection.releases[0] instanceof AdvisoryLockReleaseError);
+  assert.ok(connection.releases[0] instanceof Error);
+  assert.match((connection.releases[0] as Error).message, /Unexpected advisory-lock query/u);
 });
 
 test("all advisory-lock consumers share the fail-fast coordination boundary", () => {
@@ -144,6 +159,13 @@ test("all advisory-lock consumers share the fail-fast coordination boundary", ()
     .map(path => path.split("/packages/nextjs/")[1])
     .sort();
   assert.deepEqual(directTryLockCallers, ["lib/db/advisoryLocks.ts", "scripts/migrate-hosted-database.mjs"]);
+
+  const sessionLockConsumers = productionFiles
+    .filter(path => !path.endsWith("/lib/db/advisoryLocks.ts"))
+    .filter(path => /\b(?:acquire|tryAcquire|release)SessionAdvisoryLock/u.test(readFileSync(path, "utf8")))
+    .map(path => path.split("/packages/nextjs/")[1])
+    .sort();
+  assert.deepEqual(sessionLockConsumers, []);
 });
 
 function sourceFiles(rootUrl: URL): string[] {

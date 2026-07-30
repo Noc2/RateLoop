@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
 import { dbPool } from "~~/lib/db";
-import { acquireSessionAdvisoryLock, releaseSessionAdvisoryLocksAndConnection } from "~~/lib/db/advisoryLocks";
+import { withTransactionAdvisoryLocks } from "~~/lib/db/advisoryLocks";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import {
   type AdaptiveReviewDecisionRequest,
@@ -448,13 +448,8 @@ export async function ingestAutomatedEvalReceipt(input: {
     `automated-eval-idempotency:${input.principal.workspaceId}:${idempotencyKeyHash}`,
     `automated-eval-source:${input.principal.workspaceId}:${receiptId}`,
   ].sort();
-  const client = await dbPool.connect();
-  const acquiredLockKeys: string[] = [];
-  try {
-    for (const lockKey of lockKeys) {
-      await acquireSessionAdvisoryLock(client, lockKey);
-      acquiredLockKeys.push(lockKey);
-    }
+  let receiptReplayed = false;
+  const stored = await withTransactionAdvisoryLocks(dbPool, lockKeys, async client => {
     const existing = await findExisting(client, {
       workspaceId: input.principal.workspaceId,
       idempotencyKeyHash,
@@ -465,9 +460,9 @@ export async function ingestAutomatedEvalReceipt(input: {
     if (existing && text(existing, "receipt_hash") !== receiptHash) {
       return assertReplay(existing, receiptHash);
     }
+    receiptReplayed = Boolean(existing);
 
     if (!existing) {
-      await client.query("BEGIN");
       await client.query(
         `INSERT INTO tokenless_assurance_automated_eval_receipts
          (receipt_id,workspace_id,agent_id,agent_version_id,provider,external_reference_hash,
@@ -495,26 +490,38 @@ export async function ingestAutomatedEvalReceipt(input: {
           now,
         ],
       );
-      await client.query("COMMIT");
     } else if (receipt.evaluation.outcome !== "uncertain" || text(existing, "opportunity_id")) {
       return assertReplay(existing, receiptHash);
     }
+    return null;
+  });
+  if (stored) return stored;
 
-    let opportunityId: string | null = null;
-    if (receipt.evaluation.outcome === "uncertain") {
-      requireProductPrincipalScope(input.principal, "review:decide");
-      const decision = await (input.evaluateReview ?? evaluateAdaptiveReviewRequirement)({
-        principal: input.principal,
-        request: reviewRequest(receiptId, receiptHash, receipt),
-      });
-      if (!decision.required || decision.decision !== "required") {
-        throw new Error("Guardrail uncertainty did not produce a required human-review opportunity.");
-      }
-      opportunityId = decision.opportunityId;
+  let opportunityId: string | null = null;
+  if (receipt.evaluation.outcome === "uncertain") {
+    requireProductPrincipalScope(input.principal, "review:decide");
+    const decision = await (input.evaluateReview ?? evaluateAdaptiveReviewRequirement)({
+      principal: input.principal,
+      request: reviewRequest(receiptId, receiptHash, receipt),
+    });
+    if (!decision.required || decision.decision !== "required") {
+      throw new Error("Guardrail uncertainty did not produce a required human-review opportunity.");
     }
+    opportunityId = decision.opportunityId;
+  }
 
-    if (opportunityId) {
-      await client.query("BEGIN");
+  if (opportunityId) {
+    const replay = await withTransactionAdvisoryLocks(dbPool, lockKeys, async client => {
+      const existing = await findExisting(client, {
+        workspaceId: input.principal.workspaceId,
+        idempotencyKeyHash,
+        provider: receipt.provider,
+        externalReferenceHash: receipt.externalReferenceHash,
+        checkName: receipt.evaluation.checkName,
+      });
+      if (!existing) throw new Error("Automated evaluation receipt disappeared before escalation.");
+      if (text(existing, "receipt_hash") !== receiptHash) return assertReplay(existing, receiptHash);
+      if (text(existing, "opportunity_id")) return assertReplay(existing, receiptHash);
       await client.query(
         `INSERT INTO tokenless_assurance_automated_eval_escalations
          (escalation_id,workspace_id,receipt_id,opportunity_id,trigger_kind,state,created_at)
@@ -527,31 +534,27 @@ export async function ingestAutomatedEvalReceipt(input: {
           now,
         ],
       );
-      await client.query("COMMIT");
-    }
-    return {
-      schemaVersion: AUTOMATED_EVAL_INGEST_RESULT_SCHEMA_VERSION,
-      receiptId,
-      receiptHash,
-      provider: receipt.provider,
-      automatedSignal: {
-        sourceKind: "automated_evaluation",
-        outcome: receipt.evaluation.outcome,
-        scoreBps: receipt.evaluation.scoreBps ?? null,
-        thresholdBps: receipt.evaluation.thresholdBps ?? null,
-        humanVerdict: null,
-      },
-      humanReview: opportunityId
-        ? { required: true, trigger: "guardrail_uncertain", opportunityId, decision: "required" }
-        : null,
-      replayed: Boolean(existing),
-    };
-  } catch (error) {
-    await client.query("ROLLBACK").catch(() => undefined);
-    throw error;
-  } finally {
-    await releaseSessionAdvisoryLocksAndConnection(client, acquiredLockKeys);
+      return null;
+    });
+    if (replay) return replay;
   }
+  return {
+    schemaVersion: AUTOMATED_EVAL_INGEST_RESULT_SCHEMA_VERSION,
+    receiptId,
+    receiptHash,
+    provider: receipt.provider,
+    automatedSignal: {
+      sourceKind: "automated_evaluation",
+      outcome: receipt.evaluation.outcome,
+      scoreBps: receipt.evaluation.scoreBps ?? null,
+      thresholdBps: receipt.evaluation.thresholdBps ?? null,
+      humanVerdict: null,
+    },
+    humanReview: opportunityId
+      ? { required: true, trigger: "guardrail_uncertain", opportunityId, decision: "required" }
+      : null,
+    replayed: receiptReplayed,
+  };
 }
 
 function exportBoundary(value: Date | undefined, name: string) {

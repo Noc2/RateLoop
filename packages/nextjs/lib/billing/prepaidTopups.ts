@@ -15,7 +15,7 @@ import "server-only";
 import type Stripe from "stripe";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient, dbPool } from "~~/lib/db";
-import { releaseSessionAdvisoryLocksAndConnection, tryAcquireSessionAdvisoryLock } from "~~/lib/db/advisoryLocks";
+import { withTransactionAdvisoryLocks } from "~~/lib/db/advisoryLocks";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { maintenanceCancellationRequested } from "~~/lib/tokenless/maintenanceCancellation";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -879,59 +879,69 @@ export async function drainPrepaidTopupAuditOutbox(
     if (maintenanceCancellationRequested(input.signal)) break;
     const topupId = text(candidate, "topup_id")!;
     const lockKey = `prepaid-topup-audit:${topupId}`;
-    const lock = await dbPool.connect();
-    const acquiredLockKeys: string[] = [];
-    try {
-      if (!(await tryAcquireSessionAdvisoryLock(lock, lockKey))) continue;
-      acquiredLockKeys.push(lockKey);
-      while (attempted < limit) {
-        const pending = await lock.query(
-          `SELECT outbox_id,workspace_id,topup_id,event_type,event_sequence,actor_reference,event_occurred_at
+    while (attempted < limit) {
+      if (maintenanceCancellationRequested(input.signal)) break;
+      let attemptedOutboxId: string | null = null;
+      try {
+        const state = await withTransactionAdvisoryLocks(dbPool, [lockKey], async client => {
+          const pending = await client.query(
+            `SELECT outbox_id,workspace_id,topup_id,event_type,event_sequence,actor_reference,event_occurred_at
            FROM tokenless_prepaid_topup_audit_outbox
            WHERE topup_id=$1 AND state='pending' AND next_attempt_at <= $2
            ORDER BY event_sequence ASC LIMIT 1`,
-          [topupId, new Date()],
-        );
-        const row = pending.rows[0] as QueryRow;
-        if (!row) break;
-        attempted += 1;
-        const occurredAt = new Date(text(row, "event_occurred_at")!);
-        try {
-          const audit = await appendAuditEvent({
-            action: `billing.prepaid_topup.${text(row, "event_type")}`,
-            actorKind: text(row, "actor_reference")!.startsWith("system:") ? "system" : "principal",
-            actorReference: text(row, "actor_reference")!,
-            assuranceMethod: text(row, "actor_reference")!.startsWith("system:") ? "stripe_webhook" : "browser_session",
-            idempotencyKey: `prepaid_topup:${text(row, "topup_id")}:${text(row, "event_type")}`,
-            metadata: { currency: "usd", eventType: text(row, "event_type") },
-            occurredAt,
-            purpose: "workspace_funding",
-            reason: `prepaid_topup_${text(row, "event_type")}`,
-            result: text(row, "event_type") === "failed" ? "failure" : "success",
-            targetId: text(row, "topup_id")!,
-            targetKind: "prepaid_topup",
-            workspaceId: text(row, "workspace_id")!,
-          });
+            [topupId, new Date()],
+          );
+          const row = pending.rows[0] as QueryRow;
+          if (!row) return "empty" as const;
+          attemptedOutboxId = text(row, "outbox_id");
+          attempted += 1;
+          const occurredAt = new Date(text(row, "event_occurred_at")!);
+          const audit = await appendAuditEvent(
+            {
+              action: `billing.prepaid_topup.${text(row, "event_type")}`,
+              actorKind: text(row, "actor_reference")!.startsWith("system:") ? "system" : "principal",
+              actorReference: text(row, "actor_reference")!,
+              assuranceMethod: text(row, "actor_reference")!.startsWith("system:")
+                ? "stripe_webhook"
+                : "browser_session",
+              idempotencyKey: `prepaid_topup:${text(row, "topup_id")}:${text(row, "event_type")}`,
+              metadata: { currency: "usd", eventType: text(row, "event_type") },
+              occurredAt,
+              purpose: "workspace_funding",
+              reason: `prepaid_topup_${text(row, "event_type")}`,
+              result: text(row, "event_type") === "failed" ? "failure" : "success",
+              targetId: text(row, "topup_id")!,
+              targetKind: "prepaid_topup",
+              workspaceId: text(row, "workspace_id")!,
+            },
+            client,
+          );
           const deliveredAt = new Date();
-          await lock.query(
+          const updated = await client.query(
             `UPDATE tokenless_prepaid_topup_audit_outbox SET state='delivered',attempt_count=attempt_count+1,
              last_error_code=NULL,audit_event_id=$1,audit_event_digest=$2,delivered_at=$3,updated_at=$3
              WHERE outbox_id=$4 AND state='pending'`,
             [audit.eventId, audit.eventDigest, deliveredAt, text(row, "outbox_id")],
           );
+          return updated.rowCount ? ("delivered" as const) : ("empty" as const);
+        });
+        if (state === "empty") break;
+        if (state === "delivered") {
           delivered += 1;
-        } catch (error) {
-          const retryAt = new Date(Date.now() + RECONCILE_DELAY_MS);
-          await lock.query(
-            `UPDATE tokenless_prepaid_topup_audit_outbox SET attempt_count=attempt_count+1,
-             last_error_code=$1,next_attempt_at=$2,updated_at=$3 WHERE outbox_id=$4 AND state='pending'`,
-            [boundedAuditError(error), retryAt, new Date(), text(row, "outbox_id")],
-          );
-          break;
         }
+      } catch (error) {
+        if (attemptedOutboxId) {
+          const retryAt = new Date(Date.now() + RECONCILE_DELAY_MS);
+          await withTransactionAdvisoryLocks(dbPool, [lockKey], client =>
+            client.query(
+              `UPDATE tokenless_prepaid_topup_audit_outbox SET attempt_count=attempt_count+1,
+               last_error_code=$1,next_attempt_at=$2,updated_at=$3 WHERE outbox_id=$4 AND state='pending'`,
+              [boundedAuditError(error), retryAt, new Date(), attemptedOutboxId],
+            ),
+          );
+        }
+        break;
       }
-    } finally {
-      await releaseSessionAdvisoryLocksAndConnection(lock, acquiredLockKeys);
     }
   }
   return { attempted, delivered };

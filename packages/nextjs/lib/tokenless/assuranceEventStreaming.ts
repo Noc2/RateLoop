@@ -1,7 +1,8 @@
 import { createHash, createHmac } from "node:crypto";
+import type { PoolClient } from "pg";
 import "server-only";
 import { dbClient, dbPool } from "~~/lib/db";
-import { acquireSessionAdvisoryLock, releaseSessionAdvisoryLocksAndConnection } from "~~/lib/db/advisoryLocks";
+import { withTransactionAdvisoryLocks } from "~~/lib/db/advisoryLocks";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import {
   maintenanceCancellationRequested,
@@ -453,16 +454,19 @@ export async function deactivateAssuranceEventStream(input: {
   await deactivateWorkspaceWebhook(input);
 }
 
-export async function enqueueAssuranceEvent(input: {
-  workspaceId: string;
-  sourceEventId: string;
-  eventType: AssuranceEventType;
-  subject?: string;
-  evidenceReference: AssuranceEvidenceReference;
-  evidenceChain: AssuranceEvidenceChainReference;
-  occurredAt: Date;
-  now?: Date;
-}) {
+export async function enqueueAssuranceEvent(
+  input: {
+    workspaceId: string;
+    sourceEventId: string;
+    eventType: AssuranceEventType;
+    subject?: string;
+    evidenceReference: AssuranceEvidenceReference;
+    evidenceChain: AssuranceEvidenceChainReference;
+    occurredAt: Date;
+    now?: Date;
+  },
+  transactionClient?: PoolClient,
+) {
   const { event, ocsf } = buildAssuranceCloudEvent(input);
   const cloudEventJson = stableTransparencyJson(event);
   const ocsfJson = stableTransparencyJson(ocsf);
@@ -472,9 +476,10 @@ export async function enqueueAssuranceEvent(input: {
   if (!Number.isFinite(now.getTime())) {
     throw new TokenlessServiceError("Queue time is invalid.", 400, "invalid_assurance_event");
   }
-  const client = await dbPool.connect();
+  const client = transactionClient ?? (await dbPool.connect());
+  const managesTransaction = transactionClient === undefined;
   try {
-    await client.query("BEGIN");
+    if (managesTransaction) await client.query("BEGIN");
     const workspace = await client.query(
       "SELECT workspace_id FROM tokenless_workspaces WHERE workspace_id = $1 AND status = 'active' LIMIT 1",
       [input.workspaceId],
@@ -495,7 +500,7 @@ export async function enqueueAssuranceEvent(input: {
           "assurance_event_conflict",
         );
       }
-      await client.query("COMMIT");
+      if (managesTransaction) await client.query("COMMIT");
       return { eventId: text(replayCandidate.rows[0] as Row, "event_id")!, deliveryCount: 0, replay: true };
     }
     const inserted = await client.query(
@@ -535,7 +540,7 @@ export async function enqueueAssuranceEvent(input: {
           "assurance_event_conflict",
         );
       }
-      await client.query("COMMIT");
+      if (managesTransaction) await client.query("COMMIT");
       return { eventId: text(existing.rows[0] as Row, "event_id")!, deliveryCount: 0, replay: true };
     }
 
@@ -561,66 +566,66 @@ export async function enqueueAssuranceEvent(input: {
       );
       deliveryCount += delivery.rows.length;
     }
-    await client.query("COMMIT");
+    if (managesTransaction) await client.query("COMMIT");
     return { eventId: event.id, deliveryCount, replay: false };
   } catch (error) {
-    await client.query("ROLLBACK");
+    if (managesTransaction) await client.query("ROLLBACK");
     throw error;
   } finally {
-    client.release();
+    if (managesTransaction) client.release();
   }
 }
 
-async function findProjectionAuditChain(source: AssuranceLifecycleEventSource) {
-  const result = await dbClient.execute({
-    sql: `SELECT event_digest,previous_digest,sequence
-          FROM tokenless_audit_events
-          WHERE workspace_id=? AND action=? AND target_kind=? AND target_id=?
-          ORDER BY sequence ASC LIMIT 1`,
-    args: [source.workspaceId, EVENT_PROJECTION_AUDIT_ACTION, EVENT_PROJECTION_AUDIT_TARGET, source.sourceEventId],
-  });
+async function findProjectionAuditChain(source: AssuranceLifecycleEventSource, transactionClient?: PoolClient) {
+  const sql = `SELECT event_digest,previous_digest,sequence
+               FROM tokenless_audit_events
+               WHERE workspace_id=$1 AND action=$2 AND target_kind=$3 AND target_id=$4
+               ORDER BY sequence ASC LIMIT 1`;
+  const args = [source.workspaceId, EVENT_PROJECTION_AUDIT_ACTION, EVENT_PROJECTION_AUDIT_TARGET, source.sourceEventId];
+  const result = transactionClient
+    ? await transactionClient.query(sql, args)
+    : await dbClient.execute({ sql: sql.replaceAll(/\$\d+/gu, "?"), args });
   return result.rows[0] ? evidenceChainFromAuditRow(result.rows[0] as Row) : null;
 }
 
 async function projectAssuranceLifecycleEvent(source: AssuranceLifecycleEventSource, now: Date) {
   const lockKey = ["rateloop", "assurance-event", source.workspaceId, source.eventType, source.sourceEventId].join(":");
-  const lockClient = await dbPool.connect();
-  const acquiredLockKeys: string[] = [];
-  try {
-    await acquireSessionAdvisoryLock(lockClient, lockKey);
-    acquiredLockKeys.push(lockKey);
-    const existing = await dbClient.execute({
-      sql: `SELECT event_id FROM tokenless_assurance_event_outbox
-            WHERE workspace_id=? AND event_type=? AND source_event_id=? LIMIT 1`,
-      args: [source.workspaceId, source.eventType, source.sourceEventId],
-    });
+  return withTransactionAdvisoryLocks(dbPool, [lockKey], async client => {
+    const existing = await client.query(
+      `SELECT event_id FROM tokenless_assurance_event_outbox
+       WHERE workspace_id=$1 AND event_type=$2 AND source_event_id=$3 LIMIT 1`,
+      [source.workspaceId, source.eventType, source.sourceEventId],
+    );
     if (existing.rows[0]) {
       return { eventId: text(existing.rows[0] as Row, "event_id")!, state: "replayed" as const };
     }
 
-    let chain = await findProjectionAuditChain(source);
+    let chain = await findProjectionAuditChain(source, client);
     if (!chain) {
-      const appended = await appendAuditEvent({
-        workspaceId: source.workspaceId,
-        actorKind: "system",
-        actorReference: "rateloop:assurance-event-projector",
-        assuranceMethod: "scheduled_lifecycle_projection",
-        action: EVENT_PROJECTION_AUDIT_ACTION,
-        targetKind: EVENT_PROJECTION_AUDIT_TARGET,
-        targetId: source.sourceEventId,
-        purpose: "compliance_evidence_delivery",
-        reason: "projected_assurance_lifecycle_event",
-        requestCorrelation: source.sourceEventId,
-        result: "success",
-        metadata: {
-          eventType: source.eventType,
-          evidenceReferenceDigest: source.evidenceReference.digest,
-          evidenceReferenceKind: source.evidenceReference.kind,
-          sourceOccurredAt: source.occurredAt.toISOString(),
-          subject: source.subject,
+      const appended = await appendAuditEvent(
+        {
+          workspaceId: source.workspaceId,
+          actorKind: "system",
+          actorReference: "rateloop:assurance-event-projector",
+          assuranceMethod: "scheduled_lifecycle_projection",
+          action: EVENT_PROJECTION_AUDIT_ACTION,
+          targetKind: EVENT_PROJECTION_AUDIT_TARGET,
+          targetId: source.sourceEventId,
+          purpose: "compliance_evidence_delivery",
+          reason: "projected_assurance_lifecycle_event",
+          requestCorrelation: source.sourceEventId,
+          result: "success",
+          metadata: {
+            eventType: source.eventType,
+            evidenceReferenceDigest: source.evidenceReference.digest,
+            evidenceReferenceKind: source.evidenceReference.kind,
+            sourceOccurredAt: source.occurredAt.toISOString(),
+            subject: source.subject,
+          },
+          occurredAt: now,
         },
-        occurredAt: now,
-      });
+        client,
+      );
       chain = evidenceChain({
         schemaVersion: "rateloop.audit-chain-reference.v1",
         eventHash: appended.eventDigest,
@@ -628,15 +633,16 @@ async function projectAssuranceLifecycleEvent(source: AssuranceLifecycleEventSou
         sequence: appended.sequence,
       });
     }
-    const queued = await enqueueAssuranceEvent({
-      ...source,
-      evidenceChain: chain,
-      now,
-    });
+    const queued = await enqueueAssuranceEvent(
+      {
+        ...source,
+        evidenceChain: chain,
+        now,
+      },
+      client,
+    );
     return { eventId: queued.eventId, state: queued.replay ? ("replayed" as const) : ("projected" as const) };
-  } finally {
-    await releaseSessionAdvisoryLocksAndConnection(lockClient, acquiredLockKeys);
-  }
+  });
 }
 
 export async function projectAssuranceLifecycleEvents(
