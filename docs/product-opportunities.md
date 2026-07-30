@@ -121,18 +121,51 @@ engineering one**, and it narrows GDPR Article 28 exposure at the same time.
 
 ---
 
-## C. Make the product do more for the customer it already has
+## C. Make the evaluation story true
 
-Reachability, mostly. Several of these exist and are wired only to the switched-off lane.
+A code audit found the evaluation positioning outruns the product in five specific
+places. These are ordered by how much each closes that gap, and **C0–C2 are the ones
+that make the pitch honest.** Effort is a rough order of magnitude, not an estimate.
 
-### C1. Expose suites, cases and deterministic checks to the live lane
+### C0. Let a customer compare two versions of the same agent — days
 
-Assurance suites, case import and the five deterministic check operators are implemented
-— and reachable **only from the gated paid network lane**. `createAssuranceSuite`,
-`importAssuranceCases` and `recordDeterministicCheckResult` have no production callers.
+Every quality surface is bound to current versions. Ship a v2 and v1's endorsement rate,
+alpha, dissent and stage history vanish from the UI, though the rows survive in the
+database with no read path back.
 
-A customer on the live lane cannot build a test set or attach an automated check. This
-is the single largest gap between what the code can do and what a customer can do.
+**This kills "did my agent get better?" outright**, which is the first question anyone
+evaluating an agent asks. It is a read-path problem, not a data problem.
+
+### C0b. Collect human labels outside the uncertain band — days
+
+Only automated-eval receipts marked `uncertain` escalate to a human; `pass` and `fail`
+never do. So a customer can never measure their evaluator's false-positive or
+false-negative rate — the exact number judge calibration means — and the labels they do
+get are drawn from the band where the evaluator is least accurate and least
+representative.
+
+Sample a small fraction of `pass` and `fail` too. Then compute the confusion matrix and
+weight by the inclusion probability already recorded per opportunity. **Those two steps
+turn a labelled-data faucet into judge calibration**, which is the strongest available
+claim and currently not implemented at all.
+
+### C0c. Fix or disclose the sampling bias — days to disclose, longer to fix
+
+Forced strata union the deterministic draw, and the sampling rate is lowered _because_
+past agreement passed a threshold — selection on the dependent variable. Inclusion
+probabilities are recorded per decision and never used to weight anything, so every
+published rate is an unweighted count over a non-representative sample.
+
+Cheapest honest fix: report the weighted estimate alongside the raw one, and say plainly
+in the UI that the figure describes reviewed outputs. A statistically literate buyer
+notices this in one meeting; better they hear it from the product.
+
+### C1. Expose suites, cases and gold items to the live lane — weeks
+
+Suite creation, case import, expected answers and owner adjudication are fully
+implemented, tested, and reachable only through a function with no production caller.
+There is no UI for gold at all. A customer on the live lane cannot build a test set or
+record a known-correct answer.
 
 ### C2. Expose version comparison
 
@@ -192,39 +225,11 @@ open and a system that tells them.
 
 ## D. Things that break as soon as anyone uses it
 
-### D1. There is no admin interface at all
-
-No admin UI exists anywhere. Operator power is a handful of curl endpoints, environment
-variables and five raw hex signer keys with no key-management service — rotation means
-editing environment values and redeploying. At one customer this is fine. At ten it is
-the constraint on everything else.
-
-### D2. Nothing pages anyone
-
-No error tracking, no alerting, no on-call path. The maintenance cron now returns 503
-after repeated processor failures, which is good — but **nothing watches it**. The
-health endpoint is per-workspace and owner-gated; there is no platform-wide operator
-view.
-
-### D3. Multi-tenancy is per-route discipline
-
-No row-level security across 163 migrations, and membership checks re-implemented across
-dozens of files. The failure mode is a future route forgetting the check, and the blast
-radius is another customer's data. A shared policy module, or database-level enforcement,
-is the highest-consequence latent risk in the codebase.
-
-### D4. Unbounded queries on user-triggered paths
-
-Roughly 200 ordered statements have no limit, including a subject-access export that
-issues about thirty consecutive unbounded selects, and evidence packet generation that
-loads every case and response uncapped. Both are customer-triggerable.
-
-### D5. Single points of failure in settlement
-
-The keeper and the indexer each run one replica. Both are load-bearing for on-chain
-settlement and indexing.
-
----
+No admin UI, no error tracking, no on-call path, no row-level security, roughly 200
+unbounded ordered queries, and single replicas on the keeper and indexer. These are
+engineering risks rather than product opportunities and live in
+[remediation-plan.md](remediation-plan.md); they are named here only so the build list
+is not read as the whole picture.
 
 ## E. Deliberately not doing
 
@@ -249,15 +254,15 @@ there is no evidence of it appearing in European tenders. Revisit in 2027.
 
 ## Suggested order
 
-| Phase | Items             | Rationale                                                                        |
-| ----- | ----------------- | -------------------------------------------------------------------------------- |
-| 1     | A1–A3             | Revenue is impossible until these land, and A3 needs the pricing decision first. |
-| 2     | B1, B3, B4        | Cheap, compounding, and they make the product presentable to a buyer.            |
-| 3     | C1, C2            | The largest gap between what the code does and what a customer can reach.        |
-| 4     | B2, B5            | Procurement unlocks. B2 is a purchase order; B5 is a supported configuration.    |
-| 5     | C3, C7, C6        | Distribution to the engineer persona. C7 is an afternoon.                        |
-| 6     | D1, D2            | Before the tenth customer, not after.                                            |
-| 7     | C4, C5, C8, D3–D5 | Real value, no deadline. D3 is the one to bring forward if usage grows.          |
+| Phase | Items        | Rationale                                                                     |
+| ----- | ------------ | ----------------------------------------------------------------------------- |
+| 1     | A1–A3        | Revenue is impossible until these land, and A3 waits on the pricing decision. |
+| 2     | C0, C0b, C0c | Make the evaluation pitch true before anyone hears it. Days each.             |
+| 3     | C3           | The only real switching cost in the list. Moved up from last.                 |
+| 4     | B1, B3, B4   | Cheap, compounding, and they make the product presentable.                    |
+| 5     | C1, C2       | The largest gap between what the code does and what a customer reaches.       |
+| 6     | B2, B5, B3b  | Procurement unlocks. B2 is a purchase order; B3b is drafting.                 |
+| 7     | C4–C8        | Real value, no deadline.                                                      |
 
-Phase 1 is sequenced behind a pricing decision, not behind engineering. Phase 2 can run
-in parallel with it.
+Engineering defects and honesty fixes are in [remediation-plan.md](remediation-plan.md)
+and deliberately not repeated here.
