@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useReducer, useState } from "react";
+import { type ReactNode, useCallback, useReducer, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { WorkspaceSettingsClient } from "../WorkspaceSettingsClient";
@@ -30,6 +30,16 @@ import { Card } from "~~/components/tokenless/ui/Card";
 import type { WorkspaceAgentSetupView } from "~~/lib/tokenless/workspaceAgentSetup";
 
 type Workspace = { workspaceId: string; name: string; role: string };
+
+export function AfterGuidedAgentSetup({
+  children,
+  setupIncomplete,
+}: {
+  children: ReactNode;
+  setupIncomplete: boolean;
+}) {
+  return setupIncomplete ? null : children;
+}
 
 export function AgentWorkspacePanels({
   activeTab,
@@ -127,13 +137,15 @@ export function AgentWorkspacePanels({
         ) : null}
         {resolvedTab === "billing" ? <WorkspaceSettingsClient initialWorkspaceId={workspaceId} /> : null}
         {resolvedTab === "connect" && canManage ? (
-          <AgentConnectionPanel
-            workspaceId={workspaceId}
-            publishingRevision={publishingRevision}
-            onAgentApproved={refreshAgents}
-            onConnectionStateChange={handleConnectionState}
-            onConnectionHistoryChange={handleConnectionHistoryChange}
-          />
+          <AfterGuidedAgentSetup setupIncomplete={setupIncomplete}>
+            <AgentConnectionPanel
+              workspaceId={workspaceId}
+              publishingRevision={publishingRevision}
+              onAgentApproved={refreshAgents}
+              onConnectionStateChange={handleConnectionState}
+              onConnectionHistoryChange={handleConnectionHistoryChange}
+            />
+          </AfterGuidedAgentSetup>
         ) : null}
         {hasConnectedAgent && resolvedTab === "connect" ? (
           <Card as="section" className="rounded-2xl p-5" aria-labelledby="agent-version-management-heading">

@@ -260,6 +260,7 @@ test("the server resolves onboarding before the client renders downstream panels
   assert.match(panelsSource, /return <WorkspaceSetupStart \/>/);
   assert.match(panelsSource, /const setupIncomplete = Boolean\(initialSetup && !initialSetup\.complete\)/);
   assert.match(panelsSource, /<AgentSetupFlow initialSetup=\{initialSetup\} \/>/);
+  assert.match(panelsSource, /<AfterGuidedAgentSetup setupIncomplete=\{setupIncomplete\}>/);
   assert.ok(panelsSource.indexOf("<AgentTabs") < panelsSource.indexOf("<WorkspaceStopBanner"));
   assert.ok(panelsSource.indexOf("<AgentTabs") < panelsSource.indexOf("<AgentSetupFlow"));
   assert.match(panelsSource, /<AgentTabs/);
@@ -319,6 +320,7 @@ test("billing has a direct destination and an unconnected workspace starts with 
 test("incomplete setup keeps workspace management reachable beside guided setup", () => {
   assert.doesNotMatch(panelsSource, /if \(initialSetup && !initialSetup\.complete\) \{\s*return/);
   assert.match(panelsSource, /setupIncomplete && initialSetup \? <AgentSetupFlow/);
+  assert.match(panelsSource, /<AfterGuidedAgentSetup setupIncomplete=\{setupIncomplete\}>/);
   assert.match(panelsSource, /resolvedTab === "billing"/);
   assert.match(panelsSource, /<WorkspaceSettingsClient initialWorkspaceId=\{workspaceId\} \/>/);
 });
