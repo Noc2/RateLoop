@@ -13,6 +13,7 @@ export const QUICKNET_T_PERIOD_SECONDS = 3n;
 export const QUICKNET_T_SCORING_MARGIN_SECONDS = 24n * 60n * 60n;
 export const QUICKNET_T_MINIMUM_REVEAL_WINDOW_SECONDS = 5n * 60n;
 export const QUICKNET_T_MINIMUM_BEACON_GRACE_SECONDS = 6n * 60n * 60n;
+export const DRAND_RELAY_REQUEST_TIMEOUT_MS = 5_000;
 
 const MAX_UINT64 = (1n << 64n) - 1n;
 
@@ -138,9 +139,15 @@ export class FailoverChainClient implements ChainClient {
   readonly options: ChainClient["options"];
   private preferredIndex = 0;
 
-  constructor(private readonly clients: readonly ChainClient[]) {
+  constructor(
+    private readonly clients: readonly ChainClient[],
+    private readonly requestTimeoutMs = DRAND_RELAY_REQUEST_TIMEOUT_MS,
+  ) {
     if (clients.length === 0) {
       throw new Error("FailoverChainClient requires at least one relay client");
+    }
+    if (!Number.isSafeInteger(requestTimeoutMs) || requestTimeoutMs <= 0) {
+      throw new Error("Drand relay request timeout must be positive");
     }
     this.options = clients[0].options;
   }
@@ -151,7 +158,7 @@ export class FailoverChainClient implements ChainClient {
 
   get(roundNumber: number): ReturnType<ChainClient["get"]> {
     return this.withFailover(`beacon round ${roundNumber}`, (client) =>
-      client.get(roundNumber)
+      client.get(roundNumber),
     );
   }
 
@@ -165,21 +172,21 @@ export class FailoverChainClient implements ChainClient {
 
   private async withFailover<T>(
     label: string,
-    request: (client: ChainClient) => Promise<T>
+    request: (client: ChainClient) => Promise<T>,
   ) {
     const failures: string[] = [];
     for (let attempt = 0; attempt < this.clients.length; attempt += 1) {
       const index = (this.preferredIndex + attempt) % this.clients.length;
       const client = this.clients[index];
       try {
-        const value = await request(client);
+        const value = await this.withDeadline(label, client, request);
         this.preferredIndex = index;
         return value;
       } catch (error) {
         failures.push(
           `${client.chain().baseUrl}: ${
             error instanceof Error ? error.message : String(error)
-          }`
+          }`,
         );
         if (attempt < this.clients.length - 1) {
           incrementCounter("keeper_drand_relay_failovers_total");
@@ -187,8 +194,34 @@ export class FailoverChainClient implements ChainClient {
       }
     }
     throw new DrandUnavailableError(
-      `All drand relays failed fetching ${label}: ${failures.join("; ")}`
+      `All drand relays failed fetching ${label}: ${failures.join("; ")}`,
     );
+  }
+
+  private withDeadline<T>(
+    label: string,
+    client: ChainClient,
+    request: (client: ChainClient) => Promise<T>,
+  ) {
+    return new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(
+          new Error(`${label} timed out after ${this.requestTimeoutMs}ms`),
+        );
+      }, this.requestTimeoutMs);
+      void Promise.resolve()
+        .then(() => request(client))
+        .then(
+          (value) => {
+            clearTimeout(timer);
+            resolve(value);
+          },
+          (error: unknown) => {
+            clearTimeout(timer);
+            reject(error);
+          },
+        );
+    });
   }
 }
 
@@ -214,13 +247,13 @@ export function resetTlockClientCacheForTests() {
 }
 
 export function resolveTlockClientForDrandChain(
-  chainHash: `0x${string}` | string
+  chainHash: `0x${string}` | string,
 ) {
   const normalized = normalizeDrandChainHash(chainHash);
   const configuredChainId = Number(process.env.CHAIN_ID ?? 0);
   if (configuredChainId === 84532 && normalized !== QUICKNET_T_CHAIN_HASH) {
     throw new Error(
-      `Base Sepolia tokenless keeper requires quicknet-t chain 0x${QUICKNET_T_CHAIN_HASH}.`
+      `Base Sepolia tokenless keeper requires quicknet-t chain 0x${QUICKNET_T_CHAIN_HASH}.`,
     );
   }
   const spec = CHAINS.find((candidate) => candidate.chainHash === normalized);
@@ -230,7 +263,7 @@ export function resolveTlockClientForDrandChain(
   let client = cache.get(normalized);
   if (!client) {
     client = new FailoverChainClient(
-      spec.relayHosts.map((host) => relayClient(spec, host))
+      spec.relayHosts.map((host) => relayClient(spec, host)),
     );
     cache.set(normalized, client);
   }
@@ -244,7 +277,7 @@ export interface VerifiedDrandBeacon {
 
 export function validateDrandBeaconEvidence(
   beacon: { round: number; randomness: string; signature: string },
-  expectedRound: number
+  expectedRound: number,
 ): VerifiedDrandBeacon {
   if (
     beacon.round !== expectedRound ||
@@ -256,7 +289,9 @@ export function validateDrandBeaconEvidence(
   const proof = `0x${beacon.signature}` as Hex;
   const randomness = `0x${beacon.randomness}` as Hex;
   if (sha256(proof).toLowerCase() !== randomness.toLowerCase()) {
-    throw new Error("Verified drand relay returned inconsistent beacon randomness.");
+    throw new Error(
+      "Verified drand relay returned inconsistent beacon randomness.",
+    );
   }
   return { randomness, proof };
 }
@@ -265,14 +300,13 @@ export function validateDrandBeaconEvidence(
 /// signature is forwarded as the proof for the panel's immutable on-chain verifier.
 export async function fetchVerifiedDrandBeacon(
   chainHash: Hex,
-  round: bigint
+  round: bigint,
 ): Promise<VerifiedDrandBeacon> {
   const roundNumber = Number(round);
   if (!Number.isSafeInteger(roundNumber) || roundNumber <= 0) {
     throw new Error("Drand round is outside the supported safe-integer range.");
   }
-  const beacon = await resolveTlockClientForDrandChain(chainHash).get(
-    roundNumber
-  );
+  const beacon =
+    await resolveTlockClientForDrandChain(chainHash).get(roundNumber);
   return validateDrandBeaconEvidence(beacon, roundNumber);
 }

@@ -1,5 +1,10 @@
+import type { ChainClient } from "tlock-js";
 import { describe, expect, it } from "vitest";
-import { validateDrandBeaconEvidence } from "../drand.js";
+import {
+  DrandUnavailableError,
+  FailoverChainClient,
+  validateDrandBeaconEvidence,
+} from "../drand.js";
 
 const ROUND_1_SIGNATURE =
   "81d347e1c4be0e4277112de281d3a52aa1190bbd2f0ad7954e22799d168e61b60b4a0c46fc5a2777963cb739a0243e21";
@@ -10,6 +15,22 @@ const ROUND_12345678_SIGNATURE =
 const ROUND_12345678_RANDOMNESS =
   "c8788d522aa63a9fd2e715499097597dc94f33ee2bd0f78c5367e11ce825227b";
 
+function relay(baseUrl: string, get: ChainClient["get"]): ChainClient {
+  return {
+    options: {},
+    chain: () => ({
+      baseUrl,
+      info: async () => {
+        throw new Error("unused");
+      },
+    }),
+    get,
+    latest: async () => {
+      throw new Error("unused");
+    },
+  } as unknown as ChainClient;
+}
+
 describe("quicknet-t beacon evidence", () => {
   it("preserves the live raw 48-byte proof and sha256 randomness", () => {
     for (const [round, randomness, signature] of [
@@ -17,7 +38,7 @@ describe("quicknet-t beacon evidence", () => {
       [12_345_678, ROUND_12345678_RANDOMNESS, ROUND_12345678_SIGNATURE],
     ] as const) {
       expect(
-        validateDrandBeaconEvidence({ round, randomness, signature }, round)
+        validateDrandBeaconEvidence({ round, randomness, signature }, round),
       ).toEqual({
         randomness: `0x${randomness}`,
         proof: `0x${signature}`,
@@ -34,8 +55,8 @@ describe("quicknet-t beacon evidence", () => {
       expect(() =>
         validateDrandBeaconEvidence(
           { round: 1, randomness: ROUND_1_RANDOMNESS, signature },
-          1
-        )
+          1,
+        ),
       ).toThrow(/malformed beacon evidence/);
     }
   });
@@ -48,8 +69,8 @@ describe("quicknet-t beacon evidence", () => {
           randomness: ROUND_1_RANDOMNESS,
           signature: ROUND_1_SIGNATURE,
         },
-        1
-      )
+        1,
+      ),
     ).toThrow(/malformed beacon evidence/);
 
     expect(() =>
@@ -59,8 +80,42 @@ describe("quicknet-t beacon evidence", () => {
           randomness: "00".repeat(32),
           signature: ROUND_1_SIGNATURE,
         },
-        1
-      )
+        1,
+      ),
     ).toThrow(/inconsistent beacon randomness/);
+  });
+});
+
+describe("drand relay failover", () => {
+  it("abandons a hung preferred relay and uses the next verified relay", async () => {
+    const expected = {
+      round: 1,
+      randomness: ROUND_1_RANDOMNESS,
+      signature: ROUND_1_SIGNATURE,
+    };
+    const client = new FailoverChainClient(
+      [
+        relay("https://hung.example", () => new Promise(() => undefined)),
+        relay("https://healthy.example", async () => expected),
+      ],
+      5,
+    );
+
+    await expect(client.get(1)).resolves.toEqual(expected);
+  });
+
+  it("fails in bounded time when every relay hangs", async () => {
+    const client = new FailoverChainClient(
+      [
+        relay("https://hung-1.example", () => new Promise(() => undefined)),
+        relay("https://hung-2.example", () => new Promise(() => undefined)),
+      ],
+      5,
+    );
+
+    await expect(client.get(1)).rejects.toMatchObject({
+      name: DrandUnavailableError.name,
+      message: expect.stringMatching(/timed out after 5ms/u),
+    });
   });
 });
