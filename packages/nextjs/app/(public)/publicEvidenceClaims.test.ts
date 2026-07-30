@@ -1,3 +1,4 @@
+import { tokenlessDeployedContracts, tokenlessDeploymentStatus } from "@rateloop/contracts";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
@@ -20,6 +21,14 @@ const COMPONENTS_DIRECTORY = path.resolve(PUBLIC_APP_DIRECTORY, "../../component
 const TOKENLESS_COMPONENTS_DIRECTORY = path.join(COMPONENTS_DIRECTORY, "tokenless");
 const REPOSITORY_DIRECTORY = path.resolve(NEXTJS_DIRECTORY, "../..");
 const PLUGINS_DIRECTORY = path.join(REPOSITORY_DIRECTORY, "plugins");
+
+const TOKENLESS_DEPLOYMENT_CLAIM_FILES = [
+  path.join(REPOSITORY_DIRECTORY, "docs/tokenless-immutable-implementation-plan-2026-07.md"),
+  path.join(REPOSITORY_DIRECTORY, "docs/tokenless-environment-parity.md"),
+  path.join(REPOSITORY_DIRECTORY, "packages/contracts/README.md"),
+  path.join(REPOSITORY_DIRECTORY, "packages/foundry/README.md"),
+  path.join(REPOSITORY_DIRECTORY, "packages/nextjs/public/docs/smart-contracts.md"),
+] as const;
 
 function filesBelow(directory: string, extension: ".md" | ".tsx"): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
@@ -65,6 +74,25 @@ function publicComponentDependencies(publicAppFiles: string[]) {
   }
   return [...discovered];
 }
+
+test("the unreleased deployment registry and every deployment claim fail closed together", () => {
+  assert.deepEqual(tokenlessDeploymentStatus, {
+    schemaVersion: "rateloop-tokenless-deployment-v4",
+    status: "unreleased",
+    reason: "fresh_deployment_required",
+  });
+  assert.deepEqual(Object.keys(tokenlessDeployedContracts), []);
+
+  for (const file of TOKENLESS_DEPLOYMENT_CLAIM_FILES) {
+    const source = readFileSync(file, "utf8");
+    assert.match(
+      source,
+      /fresh (?:Base Sepolia )?(?:test-profile )?(?:complete )?deployment|fresh deployment required/iu,
+      file,
+    );
+    assert.doesNotMatch(source, /active disposable Base Sepolia|release status:\s*`released`/iu, file);
+  }
+});
 
 test("the public evidence claims matrix is fail-closed and has explicit prerequisites", () => {
   assert.equal(new Set(PUBLIC_EVIDENCE_CLAIMS_MATRIX.map(rule => rule.id)).size, PUBLIC_EVIDENCE_CLAIMS_MATRIX.length);

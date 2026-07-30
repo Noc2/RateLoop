@@ -27,7 +27,6 @@ type AbiEntry = {
 };
 
 const deployment = tokenlessHistoricalDeployments[84532];
-const activeDeployment = tokenlessDeployedContracts[84532];
 const nonZeroAddress = /^0x(?!0{40}$)[0-9a-f]{40}$/u;
 
 function names(abi: readonly AbiEntry[], type: string) {
@@ -58,34 +57,14 @@ function tupleComponentNames(
   return new Set(parameter.components?.map((component) => component.name));
 }
 
-test("keeps historical v2 separate from the released v4 registry", () => {
+test("fails closed until a fresh v4 deployment replaces the historical registries", () => {
   assert.equal(tokenlessDeploymentSchema, "rateloop-tokenless-deployment-v4");
   assert.deepEqual(tokenlessDeploymentStatus, {
     schemaVersion: "rateloop-tokenless-deployment-v4",
-    status: "released",
-    chainId: 84_532,
-    deploymentKey:
-      "tokenless-v4:84532:0x377f8631030a06e997cee78bdf649106a90bba46:0xe7f214be85002a6776874e6b624f7cfee98b89d9:0xa33f747ca2e83b12cb67ca407aa4999bf7e68dcc:0xa0c1f730aad6b7cb78eaeaca39743f6430dc57b0",
+    status: "unreleased",
+    reason: "fresh_deployment_required",
   });
-  assert.deepEqual(Object.keys(tokenlessDeployedContracts), ["84532"]);
-  assert.equal(activeDeployment.schemaVersion, tokenlessDeploymentSchema);
-  assert.equal(activeDeployment.deploymentBlockNumber, 44_390_557);
-  assert.equal(activeDeployment.runtimeCodeEvidenceComplete, true);
-  assert.deepEqual(Object.keys(activeDeployment.contracts).sort(), [
-    "CredentialIssuer",
-    "TestUSDC",
-    "TokenlessFeedbackBonus",
-    "TokenlessPanel",
-    "X402PanelSubmitter",
-  ]);
-  assert.equal(
-    activeDeployment.beaconVerifier,
-    "0xCE1E909b374B8AA53feDee189968e5Defa6c9b8f",
-  );
-  for (const contract of Object.values(activeDeployment.contracts)) {
-    assert.match(contract.address, nonZeroAddress);
-    assert.equal(contract.deployedOnBlock, activeDeployment.deploymentBlockNumber);
-  }
+  assert.deepEqual(Object.keys(tokenlessDeployedContracts), []);
   assert.equal(
     tokenlessHistoricalDeploymentSchema,
     "rateloop-tokenless-deployment-v2",

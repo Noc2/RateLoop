@@ -34,16 +34,16 @@ The active package graph is tokenless-only:
 The ordered application migration source of truth is
 [`packages/nextjs/drizzle/meta/_journal.json`](../packages/nextjs/drizzle/meta/_journal.json); its final entry is the
 authoritative head. Read that entry directly rather than trusting a head number copied into prose here, which drifts as
-migrations land. The runtime deployment schema is `tokenless-v4`, whose complete identity adds
-the Feedback Bonus address as a fifth slot. The active disposable Base Sepolia test bundle was deployed at block
-`44390557`, with complete key:
+migrations land. The runtime deployment schema target is `tokenless-v4`, whose complete identity adds
+the Feedback Bonus address as a fifth slot. No active bundle currently matches the fund core. The checked-in Base
+Sepolia artifact at block `44390557`, with the following former key, is historical and stale:
 
 ```text
 tokenless-v4:84532:0x377f8631030a06e997cee78bdf649106a90bba46:0xe7f214be85002a6776874e6b624f7cfee98b89d9:0xa33f747ca2e83b12cb67ca407aa4999bf7e68dcc:0xa0c1f730aad6b7cb78eaeaca39743f6430dc57b0
 ```
 
-This is a test-profile deployment, not a compatibility anchor or real-money release. Any fund-core change invalidates
-the artifact and every hosted address until contracts and all consumers are redeployed together.
+It is not a compatibility anchor or release input. A fresh test-profile deployment must regenerate the artifact and
+update every hosted address together before any chain-backed workflow can be promoted.
 
 ## Trust and authority
 

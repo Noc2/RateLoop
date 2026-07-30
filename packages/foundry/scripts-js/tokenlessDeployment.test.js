@@ -501,6 +501,23 @@ test("source-only ABI generation cannot emit or replace deployment metadata", ()
   }
 });
 
+test("the checked-in stale v4 artifact cannot regenerate an active release registry", () => {
+  const artifact = JSON.parse(
+    readFileSync(
+      new URL("../deployments/tokenless-v4/84532.json", import.meta.url),
+      "utf8",
+    ),
+  );
+
+  assert.throws(
+    () =>
+      buildTokenlessGeneratedSources(artifact, {
+        abiLoader: () => [],
+      }),
+    /feeRecipient must be a non-zero address/u,
+  );
+});
+
 test("full artifact generation rejects historical v1 deployment metadata", () => {
   const historical = reconstructTokenlessDeploymentFromBroadcast(
     completeBroadcast({ includeAdapter: true }),
