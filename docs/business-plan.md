@@ -48,10 +48,31 @@ their own agents. The differentiator is that the record is cryptographically sig
 independently verifiable without trusting RateLoop, and exportable in formats an
 auditor recognises.
 
-Across roughly thirty vendors examined in four adjacent markets — LLM evaluation,
-annotation, AI governance, content moderation — **none emits signed or tamper-evident
-evidence of human review decisions**. The state of the art is a mutable application log
-plus a CSV export. That gap is real and unoccupied.
+An earlier draft of this section claimed no vendor emits signed evidence of human
+review. **That is false, and the corrected claim is narrower but sharper.**
+
+What survives a hard search: across roughly twelve evaluation platforms, twenty
+governance platforms including all thirteen in Gartner's inaugural June 2026 Magic
+Quadrant, fifteen human-in-the-loop vendors and ten agent-QA vendors, **not one routes
+an individual output to a named human reviewer and emits verifiable evidence.** Human
+labelling everywhere is offline after-the-fact sampling feeding eval datasets — a
+different product shape, not merely fewer features.
+
+What breaks it: a handful of pre-seed vendors do ship signed, hash-chained AI evidence.
+The most developed is Monaco-based **KLA Digital**, which signs governance receipts with
+Ed25519, anchors with OpenTimestamps, cites AI Act Article 12, and already publishes a
+comparison page attacking Langfuse on evidence export. It sells from **€5,000 per
+application with no free tier and no self-serve**.
+
+**The genuinely unclaimed differentiator is one level deeper: binding the reviewer's
+competence, training and authority into the signed artefact.** KLA signs _that an
+approval happened_. Nothing found signs _who was qualified to make it_ — which is
+exactly what Article 26(2) asks a deployer to demonstrate. Lead with that. "Signed
+evidence" is now table stakes among the micro-vendors.
+
+Be honest about the moat's shape, too: hash-chaining an annotation table is a sprint,
+not a rebuild. The defensibility is the attestation model, the compliance framing and
+the buyer relationship — not the cryptography.
 
 **What it is not:** a prompt-development platform, an evaluation framework, or a
 compliance certification. And it is not a marketplace — see §7.
@@ -94,9 +115,25 @@ security review to survive. It is cited nowhere in the product today.
 
 ### What might bite sooner than the AI Act
 
-GDPR Article 22 (in force since 2018, with seven-figure enforcement), DSA Articles 17
-and 20(6), and the Platform Work Directive, whose member-state transposition is due
-2 December 2026 — a full year before Annex III.
+Two live hooks fit better than Article 26(2), and both are available now.
+
+**Article 50(4) is, almost word for word, the product.** The disclosure duty for
+AI-generated text published to inform the public does not apply where the content
+underwent human review with a natural person holding editorial responsibility. The
+signed packet is the artefact proving entitlement to that carve-out. Article 50 applies
+from **2 August 2026** and was not deferred; the Commission issued transparency
+guidelines on 20 July 2026.
+
+**The DSA is the strongest live demand signal found anywhere in this research.** The
+public transparency database holds **over 3.35 billion statements of reasons from 359
+content-moderation providers, roughly 43% of them fully automated decisions** — per
+decision, machine-readable, human-versus-automated, already mandated at scale. That is
+a countable, nameable, addressable market. Enforcement is escalating: **€550m against
+AliExpress in July 2026**, €200m Temu, €120m X, with the Commission signalling it
+discounted for the early stage of enforcement.
+
+Also live: GDPR Article 22, in force since 2018 with active post-_SCHUFA_ litigation,
+and the Platform Work Directive from 2 December 2026 — a full year before Annex III.
 
 ---
 
@@ -130,11 +167,23 @@ being charged for is the one that shrinks.**
 
 ### The frame to price in
 
-Signed evidentiary artefacts price 25–400× higher than review orchestration. DocuSign
-charges $0.50–$8 per envelope for the same underlying act — a human looked at something
-and it was recorded — because the output is a legally usable artefact. Identity
-verification runs $0.80–$5 per check, and both categories **monetise retention
-separately**, as does LangSmith with extended traces.
+The comparison is stark once the right cohort is used. **Commodity human review** runs
+$0.03 per object at Amazon A2I and $0.10 per row at Labelbox. **Regulated evidence**
+runs €1.25 per verification at Stripe Identity, $1.35–1.85 at Sumsub, €4–5 for a
+qualified signature at Skribble, and $30–95 per report at Checkr. Same structural
+product — a human looked at something and a record was produced — priced **10–40×
+higher because the artefact is regulator-facing.**
+
+At $0.116 per decision RateLoop sits in the commodity cohort while competitively
+resembling the evidence cohort. Both categories also **monetise retention separately**,
+as LangSmith does with extended traces.
+
+**Skribble and DocuSign are the sharpest precedent and the sharpest warning.** Both sell
+a per-unit, cryptographically signed, legally recognised record binding a named human to
+a specific item, at roughly 79% gross margin. The model works. But it also means a
+qualified trust service provider is architecturally three feet away and **already holds
+the eIDAS standing RateLoop lacks** — which makes the qualified-timestamp procurement
+both a credibility fix and a defensive one.
 
 ### Recommended ladder
 
@@ -184,10 +233,33 @@ and Drata. Contract data puts Vanta around a $20k median and Drata around $25k. 
 serve compliance officers, hold the certifications RateLoop lacks, and produce policy
 documentation rather than per-decision evidence.
 
-**The honest competitive statement:** RateLoop competes with a spreadsheet and a Slack
-thread, not with these vendors. The buyer's alternative is reviewing outputs informally
-and writing it up later. What RateLoop sells against that is an artefact nobody can
-quietly edit afterwards.
+**Two competitors that matter more than the categories above.**
+
+**KLA Digital** (§2) is the only vendor found shipping signed human-approval evidence
+with AI Act framing. Pre-seed, Monaco, no free tier, from €5,000 per application. **The
+self-serve price lane below them is empty** — and HumanLayer, which owned the
+human-approval-API lane, pivoted away entirely to an AI coding IDE on $500k of seed
+funding. Read that as a vacated lane or as a verdict; note they never tried the
+compliance framing, so their exit does not test this one.
+
+**Appen already sells "EU AI Act Conformity Evaluation"** — structured human testing of
+high-risk outputs plus audit-trail documentation, marketed as "the human audit trail that
+regulators and enterprise procurement teams require." They planted the flag first. **The
+deliverable is a consultant-written report: mutable, batch-delivered.** Inline runtime
+gate returning a signed packet per output versus a periodic audit engagement is the
+distinction, and it now has to be made explicitly rather than assumed.
+
+**The honest competitive statement:** for most buyers RateLoop still competes with a
+spreadsheet and a Slack thread. The alternative is reviewing outputs informally and
+writing it up later. What RateLoop sells against that is an artefact nobody can quietly
+edit afterwards.
+
+**And the category is small.** Gartner sizes AI governance platform spend at **$492M for
+2026**; Forrester projects $15.8B by 2030. Both are Tier A, published for overlapping
+scopes, and **sixteen times apart** with no reconciliation. Anyone citing "the AI
+governance market" is picking a number rather than reporting one. On the Gartner figure,
+0.1% of the category is about $492k of annual revenue — which at $29/month needs roughly
+1,400 accounts.
 
 **One unverified lead worth chasing:** a product appearing in search results at
 $4,000–$15,000/month claiming cryptographic signing. The pricing page returned 403. If
@@ -314,14 +386,22 @@ applies to one buyer.
 
 1. **The open verifier and the MIT SDK** as the top of funnel. Developer trust first,
    compliance conversation second.
-2. **MCP and agent-host directories.** Nine host adapters, two MCP servers, OAuth device
-   flow and framework adapters already exist — this is a genuinely broad distribution
-   surface that costs nothing more to exploit.
-3. **The limitations register as a sales asset.** The product's published candour about
-   what it does not hold is unusual and will survive diligence that competitors' pages
-   will not. It currently reads as apology; it should read as method.
-4. **EU enterprise via the prepaid invoice path** that is already built and unused —
-   bank transfer and verified-business gating suit European procurement.
+2. **Agent-host directories, with realistic expectations.** Nine host adapters, two MCP
+   servers, OAuth device flow and framework adapters already exist. But Glama lists
+   **64,762 MCP servers** and even directory-featured entries top out in the low tens of
+   thousands of uses, so the median listing gets approximately nothing. List anyway — it
+   is nearly free — but do not model revenue from it. The **Claude connector directory**
+   is the exception worth real effort: roughly 100–200 curated connectors, open to
+   submission, and about 400× scarcer than a Glama listing.
+
+2b. **Be the evidence source inside Vanta and Drata.** Both support ISO 42001 as a
+framework and **neither has an EU AI Act integration category**. Drata's public API
+and custom connections are explicitly built for automated evidence collection.
+Pitching as an ISO 42001 evidence source will open more doors than pitching the AI
+Act, and it is a better position than competing with Credo AI head-on. 3. **The limitations register as a sales asset.** The product's published candour about
+what it does not hold is unusual and will survive diligence that competitors' pages
+will not. It currently reads as apology; it should read as method. 4. **EU enterprise via the prepaid invoice path** that is already built and unused —
+bank transfer and verified-business gating suit European procurement.
 
 **Deprioritise the innovation-budget route.** Corporate open-innovation programmes
 convert screened startups to scaled projects at roughly 1.4%, and the security review is
@@ -382,6 +462,13 @@ at ten.
 membership checks are re-implemented across dozens of files. The failure mode is a
 future route forgetting the check, and the blast radius is customer data.
 
+**Sub-$100 pricing may be structurally unable to expand.** Retention data across SaaS
+shows accounts under $10/month ARPA reach only 65% top-quartile net revenue retention,
+with just 2.7% of companies clearing 100% — against 41% for accounts over $500/month.
+At $29 the business would have to replace churn before it could grow, and compliance
+buyers churn when a deadline passes. The deferral and the retention arithmetic compound
+each other unfavourably.
+
 **Stale npm packages.** The published SDK and agents packages predate the tokenless
 work. Anyone installing today gets a different product — an own-goal for a
 developer-led distribution strategy.
@@ -400,13 +487,23 @@ should not hide shipped work.
 1. **Reprice** to the §4 ladder and change the meter to agents plus retention. Mostly a
    configuration and copy change; three of the four meters already exist.
 2. **Fix the pricing page's decision-allowance claim**, which the code does not support.
-3. **Run the demand test.** Take Business and Enterprise to ten named EU companies that
-   are both provider and deployer of a customer-facing agent. Lead with Article 25(4).
-   Ask for $599/month or $25,000/year **today**, with no deadline forcing them.
+3. **Run the demand test.** Take Business and Enterprise to ten named accounts. Prefer
+   **DSA-obligated content-moderation providers** — there are 359 of them, they are
+   named publicly, and they already file per-decision human-versus-automated records at
+   scale — over the abstract "EU company with an agent". Lead with Article 50(4) or the
+   DSA rather than the deferred Article 26. Ask for $599/month or $25,000/year **today**,
+   with no deadline forcing them.
 4. **Then, and only then, unblock revenue:** turn on Stripe, build a real
    business-verification path, and wire metering to whatever meter survives step 1.
 5. **Ship the standalone open-source verifier** and publish the CSA STAR Level 1
    self-assessment. Both are cheap and both compound.
+
+**Verify before any of this becomes customer-facing copy.** Three claims are
+load-bearing and rest on secondary sources: the exact wording of DSA Article 20(6) (if
+it says internal complaint decisions must not be taken solely by automated means, it is
+a better product fit than anything in the AI Act), the scoping of Article 26 against the
+consolidated text, and the Article 50(4) exemption wording. All three were blocked
+behind access restrictions during research.
 
 **The decision rule:** if three of ten will pay, the model works and the rest is
 execution. If none will, the pricing was never the problem — the product needs a buyer
