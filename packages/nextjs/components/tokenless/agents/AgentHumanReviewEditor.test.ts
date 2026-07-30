@@ -9,9 +9,13 @@ test("the contextual editor owns every human-review dimension through one canoni
   assert.match(source, /agents\/\$\{encodeURIComponent\(agentId\)\}\/human-review/);
   assert.match(source, /method: "PUT"/);
   assert.match(source, /expectedBindingVersion: view\.bindingRevision/);
-  for (const label of ["Review question", "When to review", "Advanced review limits"]) {
+  for (const label of ["Review question", "When to review"]) {
     assert.match(source, new RegExp(label));
   }
+  assert.doesNotMatch(source, /Advanced review limits|<details/);
+  assert.match(source, /draft\.mode === "adaptive" \|\| draft\.mode === "fixed"/);
+  assert.match(source, /reviewPolicyCopy\.limits\.fixedRate/);
+  assert.match(source, /reviewPolicyCopy\.limits\.maximumGap/);
   assert.match(source, /reviewPolicyCopy\.question\.criterion/);
   assert.match(source, /reviewPolicyCopy\.limits\.adaptiveDetail/);
   assert.match(source, /reviewPolicyCopy\.timing\.responseWindow/);
@@ -56,7 +60,6 @@ test("the contextual editor owns every human-review dimension through one canoni
   assert.match(routingSource, /disabled=\{automaticUnavailable\}/);
   assert.match(source, /mode === "manual" \? "check_only"/);
   assert.match(source, /enforcementMode: draft\.mode === "manual" \? "advisory"/);
-  assert.match(source, /draft\.mode !== "manual"/);
   assert.match(source, /requiredExpertiseKeys: strings\(currentRequestProfile\.requiredExpertiseKeys, \[\]\)/);
   assert.match(source, /Array\.isArray\(currentRequestProfile\.expertiseRequirements\)/);
   assert.match(source, /humanReviewConfirmationMessage\(\{/);

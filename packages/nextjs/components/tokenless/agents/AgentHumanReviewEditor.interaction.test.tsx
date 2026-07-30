@@ -122,17 +122,13 @@ test("the editor uses workspace reviewer readiness without exposing legacy group
     await screen.findByRole("heading", { name: "Human review" });
     assert.equal(screen.queryByRole("combobox", { name: "Invited reviewer group" }), null);
 
-    const advancedSummary = screen.getByText("Advanced review limits");
-    const advancedDetails = advancedSummary.closest("details");
-    assert.ok(advancedDetails);
-    await userEvent.setup().click(advancedSummary);
     const rate = screen.getByRole("spinbutton", { name: "Outputs reviewed (%)" });
+    const maximumGap = screen.getByRole("spinbutton", { name: "Maximum outputs between reviews" });
+    assert.equal(screen.queryByText("Advanced review limits"), null);
+    assert.equal((maximumGap as HTMLInputElement).value, "20");
     await userEvent.setup().clear(rate);
-    await userEvent.setup().click(advancedSummary);
-    assert.equal(advancedDetails.open, false);
     await userEvent.setup().click(screen.getByRole("button", { name: "Save changes" }));
     assert.ok(await screen.findByText("Fixed review rate must be between 0.01% and 100%."));
-    assert.equal(advancedDetails.open, true);
     assert.equal(rate.getAttribute("aria-invalid"), "true");
     assert.equal(savedBody, null);
 

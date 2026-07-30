@@ -395,7 +395,6 @@ export function AgentHumanReviewEditor({
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
-  const [advancedLimitsOpen, setAdvancedLimitsOpen] = useState(false);
   const { confirm, confirmationDialog } = useConfirmDialog();
   const { capture, clear, fieldErrors, formError } = useFormErrors();
 
@@ -496,12 +495,6 @@ export function AgentHumanReviewEditor({
       setStatus(savedStatus(saved, draft.authority));
       onSaved?.();
     } catch (cause) {
-      if (
-        cause instanceof FormFieldError &&
-        ["ratePercent", "maximumUnreviewedGap", "requiredRiskTiers", "minimumConfidencePercent"].includes(cause.field)
-      ) {
-        setAdvancedLimitsOpen(true);
-      }
       capture(cause, "Unable to save human review.");
     } finally {
       setBusy(false);
@@ -662,61 +655,50 @@ export function AgentHumanReviewEditor({
               </InfoPopover>
             </div>
           ) : null}
-          {draft.mode !== "manual" ? (
-            <details
-              className="rounded-xl border border-white/10 p-4"
-              open={advancedLimitsOpen}
-              onToggle={event => setAdvancedLimitsOpen(event.currentTarget.open)}
-            >
-              <summary className="cursor-pointer text-sm font-medium">Advanced review limits</summary>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                {draft.mode === "adaptive" || draft.mode === "fixed" ? (
-                  <Field
-                    label={
-                      draft.mode === "adaptive"
-                        ? reviewPolicyCopy.limits.adaptiveRate
-                        : reviewPolicyCopy.limits.fixedRate
-                    }
-                    type="number"
-                    min={draft.mode === "adaptive" ? 25 : 0.01}
-                    max={100}
-                    step="0.01"
-                    value={draft.ratePercent}
-                    error={fieldErrors.ratePercent}
-                    onChange={event => update("ratePercent", event.target.value)}
-                    disabled={draft.mode === "adaptive"}
-                  />
-                ) : null}
-                <Field
-                  label={reviewPolicyCopy.limits.maximumGap}
-                  type="number"
-                  min={1}
-                  max={10000}
-                  value={draft.maximumUnreviewedGap}
-                  error={fieldErrors.maximumUnreviewedGap}
-                  onChange={event => update("maximumUnreviewedGap", event.target.value)}
-                />
-                {draft.mode === "rules" ? (
-                  <>
-                    <Field
-                      label={reviewPolicyCopy.limits.riskTiers}
-                      value={draft.requiredRiskTiers}
-                      error={fieldErrors.requiredRiskTiers}
-                      onChange={event => update("requiredRiskTiers", event.target.value)}
-                    />
-                    <Field
-                      label={reviewPolicyCopy.limits.confidence}
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={draft.minimumConfidencePercent}
-                      error={fieldErrors.minimumConfidencePercent}
-                      onChange={event => update("minimumConfidencePercent", event.target.value)}
-                    />
-                  </>
-                ) : null}
-              </div>
-            </details>
+          {draft.mode === "adaptive" || draft.mode === "fixed" ? (
+            <div className="grid gap-4 rounded-xl border border-white/10 p-4 sm:grid-cols-2">
+              <Field
+                label={
+                  draft.mode === "adaptive" ? reviewPolicyCopy.limits.adaptiveRate : reviewPolicyCopy.limits.fixedRate
+                }
+                type="number"
+                min={draft.mode === "fixed" ? 0.01 : undefined}
+                max={100}
+                step="0.01"
+                value={draft.ratePercent}
+                error={fieldErrors.ratePercent}
+                onChange={event => update("ratePercent", event.target.value)}
+                disabled={draft.mode === "adaptive"}
+              />
+              <Field
+                label={reviewPolicyCopy.limits.maximumGap}
+                type="number"
+                min={1}
+                max={10000}
+                value={draft.maximumUnreviewedGap}
+                error={fieldErrors.maximumUnreviewedGap}
+                onChange={event => update("maximumUnreviewedGap", event.target.value)}
+              />
+            </div>
+          ) : null}
+          {draft.mode === "rules" ? (
+            <div className="grid gap-4 rounded-xl border border-white/10 p-4 sm:grid-cols-2">
+              <Field
+                label={reviewPolicyCopy.limits.riskTiers}
+                value={draft.requiredRiskTiers}
+                error={fieldErrors.requiredRiskTiers}
+                onChange={event => update("requiredRiskTiers", event.target.value)}
+              />
+              <Field
+                label={reviewPolicyCopy.limits.confidence}
+                type="number"
+                min={0}
+                max={100}
+                value={draft.minimumConfidencePercent}
+                error={fieldErrors.minimumConfidencePercent}
+                onChange={event => update("minimumConfidencePercent", event.target.value)}
+              />
+            </div>
           ) : null}
         </section>
 
