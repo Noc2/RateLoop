@@ -143,4 +143,20 @@ test("receipt route rejects unsupported media and oversized bodies before parsin
   const response = await POST_RECEIPT(oversized);
   assert.equal(response.status, 413);
   assert.equal((await response.json()).code, "automated_eval_receipt_too_large");
+
+  const streamedOversized = new NextRequest(
+    "https://rateloop-tokenless.vercel.app/api/assurance/v1/evaluations/receipts",
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${setupData.token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ value: "x".repeat(65_536) }),
+    },
+  );
+  assert.equal(streamedOversized.headers.get("content-length"), null);
+  const streamedResponse = await POST_RECEIPT(streamedOversized);
+  assert.equal(streamedResponse.status, 413);
+  assert.equal((await streamedResponse.json()).code, "automated_eval_receipt_too_large");
 });

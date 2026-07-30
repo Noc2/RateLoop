@@ -14,7 +14,19 @@ export async function readAutomatedEvalReceiptBody(request: Pick<Request, "body"
   if (contentType !== "application/json") {
     throw new TokenlessServiceError("Content-Type must be application/json.", 415, "invalid_automated_eval_receipt");
   }
-  const body = await readApiRequestText(request, MAX_AUTOMATED_EVAL_RECEIPT_BYTES);
+  let body: string;
+  try {
+    body = await readApiRequestText(request, MAX_AUTOMATED_EVAL_RECEIPT_BYTES);
+  } catch (error) {
+    if (error instanceof TokenlessServiceError && error.code === "request_too_large") {
+      throw new TokenlessServiceError(
+        "Automated-eval receipt exceeds 64 KiB.",
+        413,
+        "automated_eval_receipt_too_large",
+      );
+    }
+    throw error;
+  }
   try {
     return JSON.parse(body) as unknown;
   } catch {
