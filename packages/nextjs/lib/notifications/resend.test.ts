@@ -1,4 +1,6 @@
 import {
+  RESEND_REQUEST_TIMEOUT_MS,
+  __resendTestUtils,
   normalizeResendFromEmail,
   sendTokenlessLoginOtpEmail,
   sendTokenlessNotificationEmail,
@@ -15,6 +17,21 @@ test("Resend sender accepts verified addresses and display names", () => {
   );
   assert.equal(normalizeResendFromEmail("notifications@example.com"), "notifications@example.com");
   assert.equal(normalizeResendFromEmail("not-an-email"), null);
+});
+
+test("Resend signals enforce the provider deadline and preserve parent cancellation", async () => {
+  const deadline = __resendTestUtils.resendRequestSignal(undefined, 1);
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(deadline.aborted, true);
+  assert.ok(deadline.reason instanceof DOMException);
+  assert.equal(deadline.reason.name, "TimeoutError");
+
+  const controller = new AbortController();
+  const composed = __resendTestUtils.resendRequestSignal(controller.signal, RESEND_REQUEST_TIMEOUT_MS);
+  const cancellation = new Error("maintenance cancelled");
+  controller.abort(cancellation);
+  assert.equal(composed.aborted, true);
+  assert.equal(composed.reason, cancellation);
 });
 
 test("sign-in email uses the branded RateLoop code design", async () => {

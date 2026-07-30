@@ -6,9 +6,11 @@ import { maintenanceRequestSignal, throwIfMaintenanceCancelled } from "~~/lib/to
 const EMAIL_PATTERN = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
 export const RESEND_REQUEST_TIMEOUT_MS = 10_000;
 
-function resendRequestSignal(signal?: AbortSignal) {
-  return maintenanceRequestSignal(signal, RESEND_REQUEST_TIMEOUT_MS);
+function resendRequestSignal(signal?: AbortSignal, timeoutMs = RESEND_REQUEST_TIMEOUT_MS) {
+  return maintenanceRequestSignal(signal, timeoutMs);
 }
+
+export const __resendTestUtils = { resendRequestSignal };
 
 export function normalizeResendFromEmail(value: string | undefined) {
   const trimmed = value?.trim();
