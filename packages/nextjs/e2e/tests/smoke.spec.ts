@@ -12,23 +12,11 @@ import { setupWallet } from "../helpers/wallet-session";
 import { expect, test } from "@playwright/test";
 
 test.describe("Smoke tests", () => {
-  // E2E-1 (2026-05-21 testnet-readiness audit): pre-dismiss the BetaNoticeBanner so it
-  // doesn't render above the landing-page heading. The banner reads localStorage; setting the
-  // dismissed flag before any page navigation removes the possibility that the banner masks the
-  // "Level Up Your Agent" heading on the navigate-back-to-landing test below.
-  test.beforeEach(async ({ page }) => {
-    await page.addInitScript(() => {
-      try {
-        window.localStorage.setItem("rateloop:beta-notice-dismissed", "true");
-      } catch {
-        // localStorage may be unavailable in some test contexts; the test still runs.
-      }
-    });
-  });
-
   test("landing page loads without wallet", async ({ page }) => {
     await page.goto("/");
-    await expect(page).toHaveTitle(/RateLoop/i);
+    await expect(page).toHaveTitle("RateLoop — Relaunching");
+    await expect(page.getByRole("heading", { name: "RateLoop Will Relaunch." })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Follow on X" })).toHaveAttribute("href", "https://x.com/RateLoop");
   });
 
   test("wallet auto-connects via the localhost thirdweb test wallet", async ({ page }) => {
@@ -57,7 +45,7 @@ test.describe("Smoke tests", () => {
     await expect(getVisibleAuthConnectButton(page)).toHaveCount(0);
   });
 
-  test("brand link can reopen landing page without redirecting connected users back to rate", async ({ page }) => {
+  test("brand link opens the relaunch page for connected users", async ({ page }) => {
     test.setTimeout(120_000);
 
     await setupWallet(page, ANVIL_ACCOUNTS.account2.privateKey);
@@ -69,26 +57,9 @@ test.describe("Smoke tests", () => {
     await expect(brandLink).toBeVisible({ timeout: 10_000 });
     await brandLink.evaluate((link: HTMLAnchorElement) => link.click());
     await expect.poll(() => page.url(), { timeout: 60_000 }).toMatch(/\/(?:\?landing=1)?$/);
-    await expect(page.getByRole("heading", { name: /Level Up Your Agent/i }).first()).toBeVisible({
+    await expect(page.getByRole("heading", { name: "RateLoop Will Relaunch." })).toBeVisible({
       timeout: 60_000,
     });
-  });
-
-  test("promo video is click-to-play", async ({ page }) => {
-    await gotoWithRetry(page, "/?landing=1");
-
-    const video = page.locator('video[poster="/videos/rateloop-promo-poster.jpg"]');
-    await expect(video).toBeVisible();
-    await expect(video).toHaveAttribute("preload", "none");
-    await expect(video.locator('source[src="/videos/rateloop-promo.mp4"][type="video/mp4"]')).toHaveCount(1);
-    await expect(video).toHaveJSProperty("controls", false);
-
-    const playButton = page.getByRole("button", { name: "Play the RateLoop intro video" });
-    await expect(playButton).toBeVisible();
-    await expect(async () => {
-      await playButton.click({ timeout: 5_000 });
-      await expect(video).toHaveJSProperty("controls", true, { timeout: 5_000 });
-    }).toPass({ timeout: 30_000, intervals: [500, 1_000, 2_000] });
   });
 
   test("navigation to ask page works", async ({ page }) => {

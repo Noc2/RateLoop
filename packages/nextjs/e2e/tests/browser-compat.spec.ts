@@ -9,7 +9,7 @@ import {
 } from "../helpers/wait-helpers";
 
 const PUBLIC_ROUTES = [
-  { path: "/", content: /Level Up Your\s+Agent|Rate|Vote/i },
+  { path: "/", content: /RateLoop Will Relaunch\./i },
   { path: "/docs", content: /Introduction/i },
   { path: "/legal", content: /^Legal$/i },
   { path: "/legal/terms", content: /Terms of Service/i },

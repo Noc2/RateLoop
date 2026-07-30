@@ -75,30 +75,13 @@ async function expectRouteControls(page: Page, path: string, width: number): Pro
   }
 
   if (path === "/") {
-    const heroHeading = main.getByRole("heading", { name: /Level Up Your\s+Agent/i }).first();
-    const heroDeck = page.getByTestId("landing-hero-deck");
-    await expectNavigationForViewport(page, width);
-    await expect(heroHeading).toBeVisible({
-      timeout: 15_000,
-    });
-    await expect(heroDeck).toBeVisible({ timeout: 15_000 });
-
-    if (width >= 1024 && width < 1536) {
-      const heroDeckMetrics = await heroDeck.evaluate(element => {
-        const rect = element.getBoundingClientRect();
-        const lineHeight = Number.parseFloat(window.getComputedStyle(element).lineHeight);
-
-        return {
-          height: rect.height,
-          lineHeight,
-        };
-      });
-
-      expect(
-        heroDeckMetrics.height,
-        "Landing hero deck should split across two lines beside the side animation",
-      ).toBeGreaterThan(heroDeckMetrics.lineHeight * 1.5);
-    }
+    const heroHeading = main.getByRole("heading", { name: "RateLoop Will Relaunch." });
+    const followLink = main.getByRole("link", { name: "Follow on X" });
+    await expect(heroHeading).toBeVisible({ timeout: 15_000 });
+    await expect(followLink).toBeVisible({ timeout: 15_000 });
+    await expect(followLink).toHaveAttribute("href", "https://x.com/RateLoop");
+    await expect(page.getByLabel("Open menu")).toHaveCount(0);
+    await expect(page.locator("aside")).toHaveCount(0);
 
     if (width <= 390) {
       const [headingBox, viewportHeight] = await Promise.all([
