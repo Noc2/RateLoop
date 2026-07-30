@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
 import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/accountSubject";
-import { dbClient, dbPool } from "~~/lib/db";
+import { dbClient, dbPool, serializePoolClientQueries } from "~~/lib/db";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 export type AuditEventInput = Readonly<{
@@ -439,9 +439,10 @@ export async function verifySecurityAuditChain(
   transactionClient?: PoolClient,
 ) {
   const scope = securityScope(input);
-  const [result, headResult] = transactionClient
+  const transactionQueryClient = transactionClient ? serializePoolClientQueries(transactionClient) : null;
+  const [result, headResult] = transactionQueryClient
     ? await Promise.all([
-        transactionClient.query(
+        transactionQueryClient.query(
           `SELECT event_id, sequence, previous_digest, event_digest, home_region, actor_kind, actor_reference,
                   assurance_method, action, target_kind, target_id, purpose, reason, request_correlation,
                   result, metadata_json, occurred_at
@@ -449,7 +450,7 @@ export async function verifySecurityAuditChain(
            WHERE scope_kind = $1 AND scope_id = $2 ORDER BY sequence ASC`,
           [scope.scopeKind, scope.scopeId],
         ),
-        transactionClient.query(
+        transactionQueryClient.query(
           `SELECT last_sequence, last_digest FROM tokenless_security_audit_heads
            WHERE scope_kind = $1 AND scope_id = $2 LIMIT 1`,
           [scope.scopeKind, scope.scopeId],

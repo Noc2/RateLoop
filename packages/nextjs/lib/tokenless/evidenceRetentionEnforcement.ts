@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import "server-only";
-import { dbClient, dbPool } from "~~/lib/db";
+import { dbClient, dbPool, serializePoolClientQueries } from "~~/lib/db";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 
 type Row = Record<string, unknown>;
@@ -303,7 +303,7 @@ async function pruneRun(row: Row, now: Date, itemLimit: number) {
   const workspaceId = string(row, "workspace_id")!;
   const evidenceCutoff = new Date(string(row, "evidence_cutoff_at")!);
   const auditCutoff = new Date(string(row, "audit_cutoff_at")!);
-  const client = await dbPool.connect();
+  const client = serializePoolClientQueries(await dbPool.connect());
   try {
     await client.query("BEGIN");
     const claim = await client.query(
