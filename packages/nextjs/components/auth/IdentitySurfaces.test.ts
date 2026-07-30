@@ -9,6 +9,11 @@ const profile = readFileSync(new URL("../tokenless/account/ProfileClient.tsx", i
 const wallets = readFileSync(new URL("./WalletBindingsClient.tsx", import.meta.url), "utf8");
 const walletSettings = readFileSync(new URL("../../app/(app)/settings/wallets/page.tsx", import.meta.url), "utf8");
 const privacy = readFileSync(new URL("../../app/(public)/legal/privacy/page.tsx", import.meta.url), "utf8");
+const machineSkill = readFileSync(new URL("../../public/skill.md", import.meta.url), "utf8");
+const productionReadiness = readFileSync(
+  new URL("../../scripts/check-tokenless-production-readiness.mjs", import.meta.url),
+  "utf8",
+);
 
 test("account sign-in is Better Auth first and explicitly creates no wallet", () => {
   assert.match(signIn, /betterAuthClient\.emailOtp\.sendVerificationOtp/);
@@ -62,9 +67,12 @@ test("wallet setup is explicit, purpose-bound, and keeps managed wallets disable
   );
 });
 
-test("privacy copy separates account identity, thirdweb processing, and public-chain linkability", () => {
+test("hosted wallet issuance stays disabled across runtime, privacy, and machine guidance", () => {
   assert.match(privacy, /self-hosted Better Auth service/);
   assert.match(privacy, /do not create or require a wallet/);
-  assert.match(privacy, /five-minute, audience-bound JWT/);
+  assert.match(privacy, /Managed app-wallet creation and recovery through thirdweb are disabled in the hosted service/);
+  assert.doesNotMatch(privacy, /five-minute, audience-bound JWT/);
+  assert.match(machineSkill, /does not create or recover managed thirdweb app wallets/);
+  assert.match(productionReadiness, /TOKENLESS_THIRDWEB_WALLET_ENABLED must remain false for hosted releases/);
   assert.match(privacy, /Reusing\s+a\s+funding\s+or\s+payout\s+address\s+can\s+link\s+paid\s+activity/);
 });

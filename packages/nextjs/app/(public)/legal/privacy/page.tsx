@@ -107,13 +107,11 @@ export default function PrivacyPage() {
       </p>
       <h2 id="optional-wallets">Optional wallets</h2>
       <p>
-        A signed-in user may explicitly connect a self-custodial wallet or ask thirdweb to create an app-scoped wallet
-        for public USDC funding, payout, or recovery. RateLoop sends thirdweb a five-minute, audience-bound JWT whose
-        subject is only the opaque principal identifier; the token does not include an email address or display name.
-        The wallet must then sign a one-time proof bound to the RateLoop domain, principal, configured Base chain,
-        wallet address, selected purpose, nonce, and expiry. Each binding is revocable and never authorizes general
-        account or workspace access. thirdweb processes wallet creation and recovery under its own terms. Users of a
-        self-custodial wallet remain responsible for their keys and recovery method.
+        A signed-in user may explicitly connect an existing self-custodial wallet for public USDC funding or payout.
+        Managed app-wallet creation and recovery through thirdweb are disabled in the hosted service. The connected
+        wallet must sign a one-time proof bound to the RateLoop domain, principal, configured Base chain, wallet
+        address, selected purpose, nonce, and expiry. Each binding is revocable and never authorizes general account or
+        workspace access. Users remain responsible for their wallet keys, provider, and recovery method.
       </p>
       <h2>Subscription billing</h2>
       <p>

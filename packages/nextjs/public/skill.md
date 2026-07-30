@@ -25,8 +25,8 @@ publication or spend, reuse the exact same question on retry, and never include 
 hidden reasoning, or internal/confidential/restricted/regulated material in it.
 
 Browser authentication is account-first: Better Auth resolves an opaque RateLoop principal and no wallet is required.
-Only an authenticated user entering a funding, payout, or recovery flow connects a self-custodial wallet or creates an
-optional thirdweb app wallet. A wallet binding never grants workspace access.
+Only an authenticated user entering a funding or payout flow connects an existing self-custodial wallet. The hosted
+service does not create or recover managed thirdweb app wallets. A wallet binding never grants workspace access.
 
 Private material must stay within the buyer's declared classification and permitted-use policy. Assigned reviewers can
 read their leased material, while public-chain commitments and settlement records remain publicly verifiable.
