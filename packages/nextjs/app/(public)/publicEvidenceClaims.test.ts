@@ -30,6 +30,11 @@ const TOKENLESS_DEPLOYMENT_CLAIM_FILES = [
   path.join(REPOSITORY_DIRECTORY, "packages/nextjs/public/docs/smart-contracts.md"),
 ] as const;
 
+const MACHINE_INTEGRATION_GUIDES = [
+  path.join(REPOSITORY_DIRECTORY, "packages/nextjs/public/llms.txt"),
+  path.join(REPOSITORY_DIRECTORY, "packages/nextjs/public/skill.md"),
+] as const;
+
 function filesBelow(directory: string, extension: ".md" | ".tsx"): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
     const absolutePath = path.join(directory, entry.name);
@@ -92,6 +97,20 @@ test("the unreleased deployment registry and every deployment claim fail closed 
     );
     assert.doesNotMatch(source, /active disposable Base Sepolia|release status:\s*`released`/iu, file);
   }
+});
+
+test("machine integration guides present the hosted unpaid lane before gated fund-backed references", () => {
+  for (const file of MACHINE_INTEGRATION_GUIDES) {
+    const source = readFileSync(file, "utf8");
+    assert.match(
+      source,
+      /(?:private,\s*unpaid|unpaid.*private).*invited|invited.*(?:private,\s*unpaid|unpaid)/iu,
+      file,
+    );
+    assert.match(source, /separately gated/iu, file);
+    assert.doesNotMatch(source, /RateLoop provides paid, blinded human assurance panels/iu, file);
+  }
+  assert.match(readFileSync(MACHINE_INTEGRATION_GUIDES[1], "utf8"), /only when RateLoop explicitly reports/iu);
 });
 
 test("the public evidence claims matrix is fail-closed and has explicit prerequisites", () => {
