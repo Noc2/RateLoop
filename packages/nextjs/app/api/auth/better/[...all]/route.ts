@@ -8,7 +8,7 @@ import {
   synchronizeScimUser,
 } from "~~/lib/auth/enterpriseIdentityPolicy";
 import { publicAuthRouteError } from "~~/lib/auth/publicRouteError";
-import { appendSecurityAuditEvent } from "~~/lib/privacy/audit";
+import { appendSecurityAuditEventOrReportFailure } from "~~/lib/privacy/audit";
 
 export const runtime = "nodejs";
 const BLOCKED_MANAGEMENT_PATHS = new Set([
@@ -104,7 +104,7 @@ async function handler(
       }
     }
     if (request.method !== "GET" && response.status >= 400) {
-      await appendSecurityAuditEvent({
+      await appendSecurityAuditEventOrReportFailure({
         action: "auth.provider_request_denied",
         actorKind: "system",
         actorReference: "anonymous",
@@ -118,11 +118,11 @@ async function handler(
         scopeKind: "system",
         targetId: "better_auth",
         targetKind: "identity_provider",
-      }).catch(() => undefined);
+      });
     }
     return response;
   } catch (error) {
-    await appendSecurityAuditEvent({
+    await appendSecurityAuditEventOrReportFailure({
       action: "auth.provider_unavailable",
       actorKind: "system",
       actorReference: "system:better_auth",
@@ -135,7 +135,7 @@ async function handler(
       scopeKind: "system",
       targetId: "better_auth",
       targetKind: "identity_provider",
-    }).catch(() => undefined);
+    });
     const failure = publicAuthRouteError(error, {
       event: "better_auth_provider_unavailable",
       fallbackMessage: "Authentication is temporarily unavailable.",

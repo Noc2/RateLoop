@@ -3,7 +3,7 @@ import { getBetterAuth } from "~~/lib/auth/betterAuth";
 import { assertEnterpriseSignInAllowed } from "~~/lib/auth/enterpriseIdentityPolicy";
 import { resolveBetterAuthPrincipal } from "~~/lib/auth/principal";
 import { AUTH_SESSION_COOKIE, AuthError, assertAuthRequestOrigin, createAuthSession } from "~~/lib/auth/session";
-import { appendSecurityAuditEvent } from "~~/lib/privacy/audit";
+import { appendSecurityAuditEvent, appendSecurityAuditEventOrReportFailure } from "~~/lib/privacy/audit";
 
 export const runtime = "nodejs";
 
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
     response.headers.set("Cache-Control", "no-store");
     return response;
   } catch (error) {
-    await appendSecurityAuditEvent({
+    await appendSecurityAuditEventOrReportFailure({
       action: "auth.session_exchange_failed",
       actorKind: "system",
       actorReference: "anonymous",
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
       scopeKind: "system",
       targetId: "rateloop_session",
       targetKind: "application_session",
-    }).catch(() => undefined);
+    });
     const status = error instanceof AuthError ? error.status : 503;
     const message =
       error instanceof AuthError ? error.message : "Unable to establish the RateLoop application session.";

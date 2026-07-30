@@ -39,6 +39,16 @@ export type SecurityAuditEventInput = Readonly<{
   occurredAt?: Date;
 }>;
 
+export type SecurityAuditAppendFailure = Readonly<{
+  event: "security_audit_append_failure";
+  action: string;
+  result: SecurityAuditEventInput["result"];
+  scopeKind: SecurityAuditEventInput["scopeKind"];
+  errorClass: string;
+  errorCode: string;
+  errorDigest: `sha256:${string}`;
+}>;
+
 type QueryRow = Record<string, unknown>;
 const GENESIS_DIGEST = `sha256:${"0".repeat(64)}`;
 const MAX_AUDIT_METADATA_BYTES = 16 * 1024;
@@ -367,6 +377,46 @@ export async function appendSecurityAuditEvent(input: SecurityAuditEventInput, t
     throw error;
   } finally {
     if (ownsTransaction) client.release();
+  }
+}
+
+/**
+ * Failed and denied authentication requests must remain denied even when the
+ * audit database is unavailable. They must not, however, lose the only signal
+ * that the canonical security event could not be written.
+ *
+ * The fallback is deliberately metadata-free and hashes the error detail so
+ * provider responses, request data, and credentials cannot reach logs.
+ */
+export async function appendSecurityAuditEventOrReportFailure(
+  input: SecurityAuditEventInput,
+  runtime: {
+    append?: typeof appendSecurityAuditEvent;
+    report?: (failure: SecurityAuditAppendFailure) => void;
+  } = {},
+) {
+  try {
+    return await (runtime.append ?? appendSecurityAuditEvent)(input);
+  } catch (error) {
+    const safeSignalToken = (value: unknown, fallback: string) =>
+      typeof value === "string" && /^[A-Za-z][A-Za-z0-9._:-]{0,119}$/u.test(value) ? value : fallback;
+    const errorClass = safeSignalToken(error instanceof Error ? error.name : typeof error, "unknown_error");
+    const errorCode =
+      error && typeof error === "object" && "code" in error ? safeSignalToken(error.code, errorClass) : errorClass;
+    const errorDetail = error instanceof Error ? error.message : errorClass;
+    const failure: SecurityAuditAppendFailure = {
+      event: "security_audit_append_failure",
+      action: safeSignalToken(input.action, "invalid_audit_action"),
+      result: input.result,
+      scopeKind: input.scopeKind,
+      errorClass,
+      errorCode,
+      errorDigest: `sha256:${createHash("sha256")
+        .update(`${input.action}:${errorCode}:${errorClass}:${errorDetail}`)
+        .digest("hex")}`,
+    };
+    (runtime.report ?? (value => console.error(JSON.stringify(value))))(failure);
+    return null;
   }
 }
 
