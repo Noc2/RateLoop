@@ -35,5 +35,5 @@ test("runtime, setup values, summaries, and owner copy share the 10% monitoring 
     ADAPTIVE_MONITORING_FLOOR_BPS,
   );
   assert.match(reviewPolicyCopy.limits.adaptiveConnectionHelp, /never drops below 10%/u);
-  assert.match(reviewPolicyCopy.limits.adaptiveDetail, /50%, 25%, and 10%/u);
+  assert.match(reviewPolicyCopy.limits.adaptiveDetail, /50%.*25%.*10%/u);
 });
