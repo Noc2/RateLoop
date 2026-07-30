@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import "server-only";
 import { dbClient, dbPool } from "~~/lib/db";
+import { releasePoolClient, rollbackAndReleasePoolClient } from "~~/lib/db/transactionCleanup";
 import {
   TOKENLESS_MCP_PROTOCOL_VERSION,
   TOKENLESS_MCP_PROTOCOL_VERSIONS,
@@ -335,10 +336,9 @@ export async function requireWorkspaceMcpSession(input: {
       elicitationMode: text(row, "elicitation_mode") as "none" | "form",
     };
   } catch (error) {
-    await client.query("ROLLBACK").catch(() => undefined);
-    throw error;
+    return rollbackAndReleasePoolClient(client, error);
   } finally {
-    client.release();
+    releasePoolClient(client);
   }
 }
 
@@ -455,10 +455,9 @@ export async function deliverWorkspaceMcpElicitation(input: {
       request: JSON.parse(text(deliveredRow, "request_json")!) as unknown,
     };
   } catch (error) {
-    await client.query("ROLLBACK").catch(() => undefined);
-    throw error;
+    return rollbackAndReleasePoolClient(client, error);
   } finally {
-    client.release();
+    releasePoolClient(client);
   }
 }
 
@@ -509,10 +508,9 @@ export async function handleWorkspaceMcpElicitationResponse(input: {
     await client.query("COMMIT");
     row = candidate;
   } catch (error) {
-    await client.query("ROLLBACK").catch(() => undefined);
-    throw error;
+    return rollbackAndReleasePoolClient(client, error);
   } finally {
-    client.release();
+    releasePoolClient(client);
   }
 
   if (decision.action === "approve" || decision.action === "reject") {

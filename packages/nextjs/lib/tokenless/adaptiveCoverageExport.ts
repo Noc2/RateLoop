@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import "server-only";
 import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbPool } from "~~/lib/db";
+import { releasePoolClient, rollbackAndReleasePoolClient } from "~~/lib/db/transactionCleanup";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { enqueueAssuranceAttestation } from "~~/lib/tokenless/assuranceAttestationPipeline";
 import { summarizeOversightDesignationsForExport } from "~~/lib/tokenless/oversightAttestations";
@@ -512,10 +513,10 @@ export async function exportAdaptiveCoverage(input: {
     });
     return exported;
   } catch (error) {
-    if (transactionOpen) await client.query("ROLLBACK").catch(() => undefined);
+    if (transactionOpen) return rollbackAndReleasePoolClient(client, error);
     throw error;
   } finally {
-    client.release();
+    releasePoolClient(client);
   }
 }
 

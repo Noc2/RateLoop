@@ -1,5 +1,6 @@
 import type { Pool, PoolClient } from "pg";
 import "server-only";
+import { releasePoolClient, rollbackAndReleasePoolClient } from "~~/lib/db/transactionCleanup";
 
 type AdvisoryLockClient = Pick<PoolClient, "query">;
 type AdvisoryLockPool = Pick<Pool, "connect">;
@@ -35,18 +36,9 @@ export async function withTransactionAdvisoryLocks<T>(
     }
     const result = await operation(client);
     await client.query("COMMIT");
-    client.release();
+    releasePoolClient(client);
     return result;
   } catch (error) {
-    try {
-      await client.query("ROLLBACK");
-    } catch (rollbackError) {
-      const connectionError =
-        rollbackError instanceof Error ? rollbackError : new Error("Database coordination rollback failed.");
-      client.release(connectionError);
-      throw connectionError;
-    }
-    client.release();
-    throw error;
+    return rollbackAndReleasePoolClient(client, error);
   }
 }

@@ -12,6 +12,7 @@ import {
   acquireTransactionAdvisoryLock,
   withTransactionAdvisoryLocks,
 } from "~~/lib/db/advisoryLocks";
+import { DatabaseRollbackError } from "~~/lib/db/transactionCleanup";
 import { projectAssuranceLifecycleEvents } from "~~/lib/tokenless/assuranceEventStreaming";
 import { ingestAutomatedEvalReceipt } from "~~/lib/tokenless/automatedEvalReceipts";
 import { ensureFeedbackBonusPool } from "~~/lib/tokenless/feedbackBonusPoolProjection";
@@ -110,7 +111,10 @@ test("transaction coordination destroys a connection when rollback fails", async
     withTransactionAdvisoryLocks(pool, ["key"], async () => {
       throw new Error("operation failed");
     }),
-    /Unexpected advisory-lock query/u,
+    (error: unknown) =>
+      error instanceof DatabaseRollbackError &&
+      error.cause instanceof Error &&
+      /Unexpected advisory-lock query/u.test(error.cause.message),
   );
   assert.equal(connection.releases.length, 1);
   assert.ok(connection.releases[0] instanceof Error);

@@ -1,6 +1,7 @@
 import "server-only";
 import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient, dbPool } from "~~/lib/db";
+import { releasePoolClient, rollbackAndReleasePoolClient } from "~~/lib/db/transactionCleanup";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { revokeWorkspaceHumanReviewContinuations } from "~~/lib/tokenless/humanReviewContinuations";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -172,10 +173,9 @@ export async function engageWorkspaceStop(input: {
       revokedContinuations,
     };
   } catch (error) {
-    await client.query("ROLLBACK").catch(() => undefined);
-    throw error;
+    return rollbackAndReleasePoolClient(client, error);
   } finally {
-    client.release();
+    releasePoolClient(client);
   }
   await appendStopAuditEvent({
     workspaceId: input.workspaceId,

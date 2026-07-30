@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import "server-only";
 import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbPool, serializePoolClientQueries } from "~~/lib/db";
+import { releasePoolClient, rollbackAndReleasePoolClient } from "~~/lib/db/transactionCleanup";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { type S3CompatibleCredential, createS3CompatibleWormRuntime } from "~~/lib/tokenless/assuranceWormS3";
 import {
@@ -550,10 +551,9 @@ export async function disableAssuranceWormDestination(input: {
     });
     return destinationFromRow(updated.rows[0]);
   } catch (error) {
-    await client.query("ROLLBACK").catch(() => undefined);
-    throw error;
+    return rollbackAndReleasePoolClient(client, error);
   } finally {
-    client.release();
+    releasePoolClient(client);
   }
 }
 
@@ -660,10 +660,9 @@ export async function buildAssuranceSupervisionReport(input: {
     await client.query("COMMIT");
     return report;
   } catch (error) {
-    await client.query("ROLLBACK").catch(() => undefined);
-    throw error;
+    return rollbackAndReleasePoolClient(client, error);
   } finally {
-    client.release();
+    releasePoolClient(client);
   }
 }
 
@@ -833,10 +832,9 @@ async function persistVerifiedWormReceipt(input: {
     await client.query("COMMIT");
     return persisted.rows[0] as Row;
   } catch (error) {
-    await client.query("ROLLBACK").catch(() => undefined);
-    throw error;
+    return rollbackAndReleasePoolClient(client, error);
   } finally {
-    client.release();
+    releasePoolClient(client);
   }
 }
 
@@ -978,10 +976,9 @@ export async function enqueueAssuranceWormExport(input: {
     job = jobFromRow(inserted.rows[0]!);
     await client.query("COMMIT");
   } catch (error) {
-    await client.query("ROLLBACK").catch(() => undefined);
-    throw error;
+    return rollbackAndReleasePoolClient(client, error);
   } finally {
-    client.release();
+    releasePoolClient(client);
   }
   await appendAuditEvent({
     workspaceId: input.workspaceId,
@@ -1055,10 +1052,9 @@ export async function processAssuranceWormExportJob(input: { jobId: string; now?
     leased.lease_generation = leaseGeneration;
     await client.query("COMMIT");
   } catch (error) {
-    await client.query("ROLLBACK").catch(() => undefined);
-    throw error;
+    return rollbackAndReleasePoolClient(client, error);
   } finally {
-    client.release();
+    releasePoolClient(client);
   }
 
   let auditStage = false;

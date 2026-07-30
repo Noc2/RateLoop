@@ -15,6 +15,7 @@ import {
   serializeSignature,
 } from "viem";
 import { dbClient, dbPool } from "~~/lib/db";
+import { releasePoolClient, rollbackAndReleasePoolClient } from "~~/lib/db/transactionCleanup";
 import type { TokenlessChainRuntime } from "~~/lib/tokenless/chain/runtime";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -408,10 +409,9 @@ async function persistTransactionVersion(input: {
       signedTransaction: input.transaction.signedTransaction,
     } satisfies DurableEvmTransaction;
   } catch (error) {
-    await client.query("ROLLBACK").catch(() => undefined);
-    throw error;
+    return rollbackAndReleasePoolClient(client, error);
   } finally {
-    client.release();
+    releasePoolClient(client);
   }
 }
 

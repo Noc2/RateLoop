@@ -43,6 +43,7 @@ import {
 } from "viem";
 import { baseSepolia } from "viem/chains";
 import { dbClient, dbPool } from "~~/lib/db";
+import { releasePoolClient, rollbackAndReleasePoolClient } from "~~/lib/db/transactionCleanup";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { throwIfMaintenanceCancelled } from "~~/lib/tokenless/maintenanceCancellation";
 import { requirePaidLaneComplianceApproval } from "~~/lib/tokenless/paidLaneCompliance";
@@ -1455,10 +1456,9 @@ async function claimChainExecution(
     await client.query("COMMIT");
     return { status: "claimed", claim: { fencingToken, owner, token } };
   } catch (error) {
-    await client.query("ROLLBACK").catch(() => undefined);
-    throw error;
+    return rollbackAndReleasePoolClient(client, error);
   } finally {
-    client.release();
+    releasePoolClient(client);
   }
 }
 
