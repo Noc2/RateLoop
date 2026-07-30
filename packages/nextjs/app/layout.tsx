@@ -6,9 +6,9 @@ import "~~/styles/globals.css";
 import { getMetadata } from "~~/utils/scaffold-eth/getMetadata";
 
 export const metadata = getMetadata({
-  title: "RateLoop — Relaunching",
+  title: "RateLoop — The Next Loop Begins Soon",
   description:
-    "RateLoop will relaunch. Thank you to everyone who contributed, tested early ideas, and shared thoughtful feedback.",
+    "The next loop begins soon. Thank you to everyone who contributed, tested early ideas, and shared thoughtful feedback.",
 });
 
 const isProduction = process.env.NODE_ENV === "production";

@@ -10,8 +10,10 @@ test.describe("Page smoke tests", () => {
 
   test("landing page loads", async ({ page }) => {
     await gotoPath(page, "/");
-    await expect(page).toHaveTitle("RateLoop — Relaunching");
-    await expect(page.getByRole("heading", { name: "RateLoop Will Relaunch." })).toBeVisible({ timeout: 15_000 });
+    await expect(page).toHaveTitle("RateLoop — The Next Loop Begins Soon");
+    await expect(page.getByRole("heading", { name: "The Next Loop Begins Soon." })).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(
       page.getByText("Thank you to everyone who contributed, tested early ideas, and shared thoughtful feedback."),
     ).toBeVisible();

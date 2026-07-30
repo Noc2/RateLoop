@@ -75,7 +75,7 @@ async function expectRouteControls(page: Page, path: string, width: number): Pro
   }
 
   if (path === "/") {
-    const heroHeading = main.getByRole("heading", { name: "RateLoop Will Relaunch." });
+    const heroHeading = main.getByRole("heading", { name: "The Next Loop Begins Soon." });
     const followLink = main.getByRole("link", { name: "Follow on X" });
     await expect(heroHeading).toBeVisible({ timeout: 15_000 });
     await expect(followLink).toBeVisible({ timeout: 15_000 });
@@ -84,7 +84,7 @@ async function expectRouteControls(page: Page, path: string, width: number): Pro
     await expect(page.locator("aside")).toHaveCount(0);
 
     if (width >= 1024) {
-      const orbBounds = await page.getByTestId("relaunch-orb").evaluate(element => {
+      const orbBounds = await page.getByTestId("coming-soon-orb").evaluate(element => {
         const lineBoxes = Array.from(element.querySelectorAll(".ell"), line => line.getBoundingClientRect());
 
         return {
@@ -185,12 +185,12 @@ test.describe("Responsive layout", () => {
     });
   }
 
-  test("relaunch orb stays fully visible in a short desktop viewport", async ({ connectedPage: page }) => {
+  test("coming-soon orb stays fully visible in a short desktop viewport", async ({ connectedPage: page }) => {
     await page.setViewportSize({ width: 1247, height: 632 });
     await gotoWithRetry(page, "/", { skipInjectedWalletConnectionCheck: true, timeout: 45_000 });
     await expectNoNextErrorOverlay(page);
     await expectRouteControls(page, "/", 1247);
-    await expectNoHorizontalOverflow(page, "relaunch page at 1247x632");
+    await expectNoHorizontalOverflow(page, "coming-soon page at 1247x632");
   });
 
   test("stake selector dialog fits inside a phone viewport", async ({ connectedPage: page }) => {

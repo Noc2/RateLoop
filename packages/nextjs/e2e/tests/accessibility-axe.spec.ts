@@ -4,7 +4,7 @@ import { openAdvancedQuestionSettings } from "../helpers/ask-form";
 import { expectNoNextErrorOverlay } from "../helpers/layout";
 
 const PUBLIC_PAGES = [
-  { path: "/", heading: /RateLoop Will Relaunch\./i },
+  { path: "/", heading: /The Next Loop Begins Soon\./i },
   { path: "/docs", heading: /RateLoop\s+Introduction|Introduction/i },
   { path: "/legal", heading: /^Legal$/i },
   { path: "/legal/terms", heading: /Terms of Service/i },

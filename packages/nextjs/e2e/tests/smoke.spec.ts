@@ -14,8 +14,8 @@ import { expect, test } from "@playwright/test";
 test.describe("Smoke tests", () => {
   test("landing page loads without wallet", async ({ page }) => {
     await page.goto("/");
-    await expect(page).toHaveTitle("RateLoop — Relaunching");
-    await expect(page.getByRole("heading", { name: "RateLoop Will Relaunch." })).toBeVisible();
+    await expect(page).toHaveTitle("RateLoop — The Next Loop Begins Soon");
+    await expect(page.getByRole("heading", { name: "The Next Loop Begins Soon." })).toBeVisible();
     await expect(page.getByRole("link", { name: "Follow on X" })).toHaveAttribute("href", "https://x.com/RateLoop");
   });
 
@@ -45,7 +45,7 @@ test.describe("Smoke tests", () => {
     await expect(getVisibleAuthConnectButton(page)).toHaveCount(0);
   });
 
-  test("brand link opens the relaunch page for connected users", async ({ page }) => {
+  test("brand link opens the coming-soon page for connected users", async ({ page }) => {
     test.setTimeout(120_000);
 
     await setupWallet(page, ANVIL_ACCOUNTS.account2.privateKey);
@@ -57,7 +57,7 @@ test.describe("Smoke tests", () => {
     await expect(brandLink).toBeVisible({ timeout: 10_000 });
     await brandLink.evaluate((link: HTMLAnchorElement) => link.click());
     await expect.poll(() => page.url(), { timeout: 60_000 }).toMatch(/\/(?:\?landing=1)?$/);
-    await expect(page.getByRole("heading", { name: "RateLoop Will Relaunch." })).toBeVisible({
+    await expect(page.getByRole("heading", { name: "The Next Loop Begins Soon." })).toBeVisible({
       timeout: 60_000,
     });
   });

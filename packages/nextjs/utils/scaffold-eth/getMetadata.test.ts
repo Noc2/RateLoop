@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import test from "node:test";
 
 const socialImageAlt =
-  "RateLoop social image with the RateLoop wordmark, the message RateLoop Will Relaunch, and the orbital loop mark";
+  "RateLoop social image with the RateLoop wordmark, the message The Next Loop Begins Soon, and the orbital loop mark";
 
 type MetadataSnapshot = {
   description?: string | null;
@@ -164,8 +164,8 @@ test("getMetadata uses localhost URLs and the updated brand copy when no product
   });
   assert.equal(metadata.description, "AI Asks, Humans Earn");
   assert.equal(metadata.openGraph?.description, "AI Asks, Humans Earn");
-  assert.equal(metadata.openGraph?.images?.[0]?.url, "http://localhost:4321/og-image.jpg?v=20260730a");
-  assert.equal(metadata.twitter?.images?.[0]?.url, "http://localhost:4321/twitter-image.jpg?v=20260730a");
+  assert.equal(metadata.openGraph?.images?.[0]?.url, "http://localhost:4321/og-image.jpg?v=20260730b");
+  assert.equal(metadata.twitter?.images?.[0]?.url, "http://localhost:4321/twitter-image.jpg?v=20260730b");
   assert.equal(metadata.openGraph?.images?.[0]?.alt, socialImageAlt);
   assert.equal(metadata.twitter?.images?.[0]?.alt, socialImageAlt);
   assert.equal(metadata.icons?.icon?.[0]?.url, "/favicon.png");
@@ -192,8 +192,8 @@ test("getMetadata prefers the production hostname for social metadata", () => {
   );
 
   assert.equal(metadata.metadataBase, "https://rateloop.app/");
-  assert.equal(metadata.openGraph?.images?.[0]?.url, "https://rateloop.app/og-image.jpg?v=20260730a");
-  assert.equal(metadata.twitter?.images?.[0]?.url, "https://rateloop.app/twitter-image.jpg?v=20260730a");
+  assert.equal(metadata.openGraph?.images?.[0]?.url, "https://rateloop.app/og-image.jpg?v=20260730b");
+  assert.equal(metadata.twitter?.images?.[0]?.url, "https://rateloop.app/twitter-image.jpg?v=20260730b");
   assert.deepEqual(metadata.title, {
     default: "RateLoop — AI Asks, Humans Earn",
     template: "%s | RateLoop",
@@ -216,6 +216,6 @@ test("getMetadata uses the preview hostname when production metadata is unavaila
   );
 
   assert.equal(metadata.metadataBase, "https://rateloop-preview.vercel.app/");
-  assert.equal(metadata.openGraph?.images?.[0]?.url, "https://rateloop-preview.vercel.app/og-image.jpg?v=20260730a");
-  assert.equal(metadata.twitter?.images?.[0]?.url, "https://rateloop-preview.vercel.app/twitter-image.jpg?v=20260730a");
+  assert.equal(metadata.openGraph?.images?.[0]?.url, "https://rateloop-preview.vercel.app/og-image.jpg?v=20260730b");
+  assert.equal(metadata.twitter?.images?.[0]?.url, "https://rateloop-preview.vercel.app/twitter-image.jpg?v=20260730b");
 });
