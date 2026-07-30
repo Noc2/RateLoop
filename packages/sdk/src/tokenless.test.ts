@@ -52,6 +52,7 @@ test("package root exposes only the tokenless client, schema, types, and generic
     [
       "RateLoopApiError",
       "RateLoopSdkError",
+      "TokenlessImmutableRoundTermsValidationError",
       "HUMAN_ASSURANCE_ARTIFACT_JSON_SCHEMA",
       "HUMAN_ASSURANCE_AUDIENCE_POLICY_JSON_SCHEMA",
       "HUMAN_ASSURANCE_CAPABILITIES",
@@ -71,11 +72,23 @@ test("package root exposes only the tokenless client, schema, types, and generic
       "HUMAN_REVIEW_RESULT_TERMINAL_STATES",
       "HUMAN_REVIEW_TERMINAL_EVIDENCE_SCHEMA_VERSION",
       "TOKENLESS_EIP3009_TYPES",
+      "TOKENLESS_BASE_PAY_BPS",
       "TOKENLESS_DATA_CLASSIFICATIONS",
+      "TOKENLESS_MAXIMUM_BEACON_FAILURE_HORIZON_SECONDS",
+      "TOKENLESS_MAXIMUM_CLAIM_GRACE_SECONDS",
+      "TOKENLESS_MAXIMUM_COMMITS",
+      "TOKENLESS_MAXIMUM_FEE_BPS",
+      "TOKENLESS_MAXIMUM_REVEAL_HORIZON_SECONDS",
       "TOKENLESS_MAX_IMAGE_ALT_LENGTH",
       "TOKENLESS_MAX_PROMPT_LENGTH",
       "TOKENLESS_MAX_QUESTION_IMAGES",
+      "TOKENLESS_MAX_UINT256",
+      "TOKENLESS_MAX_UINT32",
+      "TOKENLESS_MAX_UINT64",
       "TOKENLESS_MINIMUM_BEACON_FAILURE_GRACE_SECONDS",
+      "TOKENLESS_MINIMUM_COMMIT_WINDOW_SECONDS",
+      "TOKENLESS_MINIMUM_REVEALS",
+      "TOKENLESS_MINIMUM_REVEAL_WINDOW_SECONDS",
       "TOKENLESS_PAYMENT_AUTHORIZATION_SCHEMA_VERSION",
       "TOKENLESS_PUBLIC_DATA_CLASSIFICATIONS",
       "TOKENLESS_QUICKNET_T_CHAIN_HASH",
@@ -92,6 +105,7 @@ test("package root exposes only the tokenless client, schema, types, and generic
       "TOKENLESS_VERDICT_STATUSES",
       "TOKENLESS_VISIBILITIES",
       "TOKENLESS_X402_DOMAIN",
+      "TOKENLESS_X402_ROUND_AUTHORIZATION_DOMAIN",
       "buildTokenlessEip3009TypedData",
       "buildTokenlessPrivateReviewCommitmentQuestion",
       "buildTokenlessQuoteIntent",
@@ -133,6 +147,7 @@ test("package root exposes only the tokenless client, schema, types, and generic
       "serializeTokenlessX402Authorization",
       "tokenlessFirstQuicknetRoundAfter",
       "tokenlessQuicknetTimestamp",
+      "validateTokenlessImmutableRoundTerms",
       "validateTokenlessPaymentInstructions",
     ].sort(),
   );
@@ -1020,7 +1035,7 @@ test("tokenless quote validation rejects ambiguous mechanisms before HTTP", () =
 
 test("direct B2B clients authenticate payment preparation without exposing API keys in browser clients", async () => {
   const requests: { url: string; init: RequestInit }[] = [];
-  const commitDeadline = 2_000_000_000n;
+  const commitDeadline = BigInt(Math.floor(Date.now() / 1_000)) + 60n * 60n;
   const revealDeadline = commitDeadline + 300n;
   const beaconRound = tokenlessFirstQuicknetRoundAfter(commitDeadline);
   const scoringBeaconRound = tokenlessFirstQuicknetRoundAfter(
@@ -1035,8 +1050,8 @@ test("direct B2B clients authenticate payment preparation without exposing API k
     beaconNetworkHash: TOKENLESS_QUICKNET_T_CHAIN_HASH,
     bountyAmount: "25000000",
     feeAmount: "1875000",
-    attemptReserve: "5000000",
-    attemptCompensation: "333333",
+    attemptReserve: "20000000",
+    attemptCompensation: "1333332",
     minimumReveals: 12,
     maximumCommits: 15,
     admissionPolicyHash: `0x${"44".repeat(32)}`,
@@ -1059,7 +1074,7 @@ test("direct B2B clients authenticate payment preparation without exposing API k
     x402SubmitterAddress: "0x3333333333333333333333333333333333333333",
     usdcAddress: "0x4444444444444444444444444444444444444444",
     funderAddress: "0x5555555555555555555555555555555555555555",
-    totalFundedAtomic: "31875000",
+    totalFundedAtomic: "46875000",
     roundTerms: terms,
     roundId: null,
     transactionHash: null,

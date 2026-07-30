@@ -26,7 +26,7 @@ const addresses = {
 function instructions(
   overrides: Partial<TokenlessPaymentInstructions> = {},
 ): TokenlessPaymentInstructions {
-  const commitDeadline = 2_000_000_000n;
+  const commitDeadline = BigInt(Math.floor(Date.now() / 1_000)) + 60n * 60n;
   const revealDeadline = commitDeadline + 300n;
   const beaconRound = tokenlessFirstQuicknetRoundAfter(commitDeadline);
   const scoringBeaconRound = tokenlessFirstQuicknetRoundAfter(
@@ -42,15 +42,15 @@ function instructions(
     deploymentKey: "tokenless-v3:84532:0x1111:0x2222:0x3333",
     chainId: 84532,
     ...addresses,
-    totalFundedAtomic: "31875000",
+    totalFundedAtomic: "46875000",
     roundTerms: {
       contentId: `0x${"11".repeat(32)}`,
       termsHash: `0x${"22".repeat(32)}`,
       beaconNetworkHash: TOKENLESS_QUICKNET_T_CHAIN_HASH,
       bountyAmount: "25000000",
       feeAmount: "1875000",
-      attemptReserve: "5000000",
-      attemptCompensation: "333333",
+      attemptReserve: "20000000",
+      attemptCompensation: "1333332",
       minimumReveals: 12,
       maximumCommits: 15,
       admissionPolicyHash: `0x${"44".repeat(32)}`,
@@ -93,7 +93,10 @@ test("reconstructs the Solidity RoundTerms and two x402 typed-data envelopes", (
   assert.equal(roundTerms.primaryType, "RoundTerms");
   assert.equal(roundTerms.message.bountyAmount, 25_000_000n);
   assert.equal(roundTerms.message.minimumReveals, 12);
-  assert.equal(roundTerms.message.commitDeadline, 2_000_000_000n);
+  assert.equal(
+    roundTerms.message.commitDeadline,
+    BigInt(payment.roundTerms.commitDeadline),
+  );
   assert.equal(
     roundTerms.message.scoringBeaconRound,
     tokenlessFirstQuicknetRoundAfter(
@@ -106,7 +109,7 @@ test("reconstructs the Solidity RoundTerms and two x402 typed-data envelopes", (
   assert.equal(eip3009.domain.verifyingContract, addresses.usdcAddress);
   assert.equal(eip3009.message.from, addresses.funderAddress);
   assert.equal(eip3009.message.to, addresses.x402SubmitterAddress);
-  assert.equal(eip3009.message.value, 31_875_000n);
+  assert.equal(eip3009.message.value, 46_875_000n);
   assert.equal(eip3009.message.nonce, authorizationSpec.nonce);
 
   const roundAuthorization = buildTokenlessRoundAuthorizationTypedData(payment);

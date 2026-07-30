@@ -15,10 +15,13 @@ import { TokenlessPanelAbi, TokenlessTestUSDCAbi, X402PanelSubmitterAbi } from "
 import {
   TOKENLESS_PAYMENT_AUTHORIZATION_SCHEMA_VERSION,
   TOKENLESS_SCORING_BEACON_SAFETY_MARGIN_SECONDS,
+  TOKENLESS_X402_ROUND_AUTHORIZATION_DOMAIN,
+  TokenlessImmutableRoundTermsValidationError,
   type TokenlessPaymentInstructions,
   type TokenlessQuoteResponse,
   tokenlessFirstQuicknetRoundAfter,
   tokenlessQuicknetTimestamp,
+  validateTokenlessImmutableRoundTerms,
 } from "@rateloop/sdk";
 import { randomBytes, randomUUID } from "node:crypto";
 import "server-only";
@@ -133,6 +136,28 @@ export type ChainPaymentInstructions = {
   transactionHash: Hash | null;
   authorizationSpec?: TokenlessPaymentInstructions["authorizationSpec"];
 };
+
+export function validateChainPaymentTerms(
+  input: Pick<ChainPaymentInstructions, "authorizationSpec" | "paymentMode" | "roundTerms" | "totalFundedAtomic">,
+  nowSeconds: bigint,
+  x402RoundAuthorizationDomain: { name: string; version: string } | undefined = input.authorizationSpec
+    ?.roundAuthorizationDomain,
+) {
+  try {
+    return validateTokenlessImmutableRoundTerms({
+      nowSeconds,
+      paymentMode: input.paymentMode,
+      roundTerms: input.roundTerms,
+      totalFundedAtomic: input.totalFundedAtomic,
+      x402RoundAuthorizationDomain,
+    });
+  } catch (error) {
+    if (error instanceof TokenlessImmutableRoundTermsValidationError) {
+      throw new TokenlessServiceError(error.message, 409, "invalid_round_terms");
+    }
+    throw error;
+  }
+}
 
 function rowString(row: QueryRow | undefined, key: string) {
   const value = row?.[key];
@@ -495,6 +520,15 @@ export async function prepareChainPayment(
     BigInt(terms.attemptReserve)
   ).toString();
   const authorizationNow = Math.floor((options.now ?? new Date()).getTime() / 1_000);
+  validateChainPaymentTerms(
+    {
+      paymentMode,
+      roundTerms: terms,
+      totalFundedAtomic,
+    },
+    BigInt(authorizationNow),
+    paymentMode === "x402" ? TOKENLESS_X402_ROUND_AUTHORIZATION_DOMAIN : undefined,
+  );
   const authorizationValidAfter = (authorizationNow - 30).toString();
   const authorizationValidBefore = (authorizationNow + 10 * 60).toString();
   const authorizationNonce = `0x${randomBytes(32).toString("hex")}` as Hex;

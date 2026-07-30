@@ -6,42 +6,28 @@ import {
   type TokenlessPaymentInstructions,
   type TokenlessX402AuthorizationSpec,
 } from "./tokenlessTypes";
+import {
+  TOKENLESS_MAX_UINT64,
+  TOKENLESS_X402_ROUND_AUTHORIZATION_DOMAIN,
+  TokenlessImmutableRoundTermsValidationError,
+  validateTokenlessImmutableRoundTerms,
+} from "./tokenlessRoundTerms";
 
 const ADDRESS_PATTERN = /^0x[0-9a-fA-F]{40}$/;
 const BYTES32_PATTERN = /^0x[0-9a-fA-F]{64}$/;
 const SIGNATURE_PATTERN = /^0x[0-9a-fA-F]{130}$/;
-const MAX_UINT32 = 4_294_967_295n;
-const MAX_UINT64 = 18_446_744_073_709_551_615n;
 
-export const TOKENLESS_QUICKNET_T_CHAIN_HASH =
-  "0xcc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5";
-export const TOKENLESS_QUICKNET_T_GENESIS_SECONDS = 1_689_232_296n;
-export const TOKENLESS_QUICKNET_T_PERIOD_SECONDS = 3n;
-export const TOKENLESS_SCORING_BEACON_SAFETY_MARGIN_SECONDS = 24n * 60n * 60n;
-export const TOKENLESS_MINIMUM_BEACON_FAILURE_GRACE_SECONDS = 6n * 60n * 60n;
+export {
+  TOKENLESS_MINIMUM_BEACON_FAILURE_GRACE_SECONDS,
+  TOKENLESS_QUICKNET_T_CHAIN_HASH,
+  TOKENLESS_QUICKNET_T_GENESIS_SECONDS,
+  TOKENLESS_QUICKNET_T_PERIOD_SECONDS,
+  TOKENLESS_SCORING_BEACON_SAFETY_MARGIN_SECONDS,
+  tokenlessFirstQuicknetRoundAfter,
+  tokenlessQuicknetTimestamp,
+} from "./tokenlessRoundTerms";
 
-export function tokenlessFirstQuicknetRoundAfter(timestamp: bigint): bigint {
-  if (timestamp < TOKENLESS_QUICKNET_T_GENESIS_SECONDS) return 1n;
-  return (
-    (timestamp - TOKENLESS_QUICKNET_T_GENESIS_SECONDS) /
-      TOKENLESS_QUICKNET_T_PERIOD_SECONDS +
-    2n
-  );
-}
-
-export function tokenlessQuicknetTimestamp(round: bigint): bigint {
-  if (round < 1n || round > MAX_UINT64)
-    fail("quicknet-t round must be a valid uint64.");
-  return (
-    TOKENLESS_QUICKNET_T_GENESIS_SECONDS +
-    (round - 1n) * TOKENLESS_QUICKNET_T_PERIOD_SECONDS
-  );
-}
-
-export const TOKENLESS_X402_DOMAIN = {
-  name: "RateLoop X402 Panel Submitter",
-  version: "1",
-} as const;
+export const TOKENLESS_X402_DOMAIN = TOKENLESS_X402_ROUND_AUTHORIZATION_DOMAIN;
 
 export const TOKENLESS_EIP3009_TYPES = {
   ReceiveWithAuthorization: [
@@ -220,6 +206,7 @@ function assertDomain(
 function assertInstructions(
   instructions: TokenlessPaymentInstructions,
   deployment?: TokenlessDeploymentIdentity,
+  nowSeconds = BigInt(Math.floor(Date.now() / 1_000)),
 ) {
   if (instructions.paymentMode !== "x402") fail("paymentMode must be x402.");
   if (!instructions.deploymentKey.trim()) fail("deploymentKey is required.");
@@ -231,92 +218,6 @@ function assertInstructions(
   address(instructions.usdcAddress, "usdcAddress");
   address(instructions.funderAddress, "funderAddress");
   const terms = instructions.roundTerms;
-  bytes32(terms.contentId, "roundTerms.contentId");
-  bytes32(terms.termsHash, "roundTerms.termsHash");
-  bytes32(terms.beaconNetworkHash, "roundTerms.beaconNetworkHash");
-  bytes32(terms.admissionPolicyHash, "roundTerms.admissionPolicyHash");
-  address(terms.feeRecipient, "roundTerms.feeRecipient");
-  const total = amount(instructions.totalFundedAtomic, "totalFundedAtomic");
-  const expectedTotal =
-    amount(terms.bountyAmount, "roundTerms.bountyAmount") +
-    amount(terms.feeAmount, "roundTerms.feeAmount") +
-    amount(terms.attemptReserve, "roundTerms.attemptReserve");
-  if (total !== expectedTotal) {
-    fail(
-      "totalFundedAtomic must equal bountyAmount + feeAmount + attemptReserve.",
-    );
-  }
-  if (
-    !Number.isSafeInteger(terms.minimumReveals) ||
-    terms.minimumReveals < 1 ||
-    BigInt(terms.minimumReveals) > MAX_UINT32
-  ) {
-    fail("roundTerms.minimumReveals must be a valid uint32.");
-  }
-  if (
-    !Number.isSafeInteger(terms.maximumCommits) ||
-    terms.maximumCommits < 1 ||
-    BigInt(terms.maximumCommits) > MAX_UINT32
-  ) {
-    fail("roundTerms.maximumCommits must be a valid uint32.");
-  }
-  const commitDeadline = amount(
-    terms.commitDeadline,
-    "roundTerms.commitDeadline",
-    MAX_UINT64,
-  );
-  const revealDeadline = amount(
-    terms.revealDeadline,
-    "roundTerms.revealDeadline",
-    MAX_UINT64,
-  );
-  const beaconFailureDeadline = amount(
-    terms.beaconFailureDeadline,
-    "roundTerms.beaconFailureDeadline",
-    MAX_UINT64,
-  );
-  const beaconRound = amount(
-    terms.beaconRound,
-    "roundTerms.beaconRound",
-    MAX_UINT64,
-  );
-  const scoringBeaconRound = amount(
-    terms.scoringBeaconRound,
-    "roundTerms.scoringBeaconRound",
-    MAX_UINT64,
-  );
-  amount(terms.claimGracePeriod, "roundTerms.claimGracePeriod", MAX_UINT64);
-  if (
-    terms.beaconNetworkHash.toLowerCase() !== TOKENLESS_QUICKNET_T_CHAIN_HASH
-  ) {
-    fail("roundTerms.beaconNetworkHash must pin drand quicknet-t.");
-  }
-  const expectedDisclosureRound =
-    tokenlessFirstQuicknetRoundAfter(commitDeadline);
-  const protectedScoringCutoff =
-    revealDeadline + TOKENLESS_SCORING_BEACON_SAFETY_MARGIN_SECONDS;
-  const expectedScoringRound = tokenlessFirstQuicknetRoundAfter(
-    protectedScoringCutoff,
-  );
-  const scoringTimestamp = tokenlessQuicknetTimestamp(expectedScoringRound);
-  if (beaconRound !== expectedDisclosureRound) {
-    fail(
-      "roundTerms.beaconRound is not the first quicknet-t round after the commit deadline.",
-    );
-  }
-  if (scoringBeaconRound !== expectedScoringRound) {
-    fail(
-      "roundTerms.scoringBeaconRound is not the first protected quicknet-t round after reveal closure.",
-    );
-  }
-  if (
-    beaconFailureDeadline <
-    scoringTimestamp + TOKENLESS_MINIMUM_BEACON_FAILURE_GRACE_SECONDS
-  ) {
-    fail(
-      "roundTerms.beaconFailureDeadline is shorter than the immutable scoring-beacon grace.",
-    );
-  }
   const spec = instructions.authorizationSpec;
   if (!spec)
     fail("authorizationSpec is required for x402 payment instructions.");
@@ -335,6 +236,20 @@ function assertInstructions(
     instructions.x402SubmitterAddress,
     "authorizationSpec.roundAuthorizationDomain",
   );
+  try {
+    validateTokenlessImmutableRoundTerms({
+      nowSeconds,
+      paymentMode: instructions.paymentMode,
+      roundTerms: terms,
+      totalFundedAtomic: instructions.totalFundedAtomic,
+      x402RoundAuthorizationDomain: spec.roundAuthorizationDomain,
+    });
+  } catch (error) {
+    if (error instanceof TokenlessImmutableRoundTermsValidationError) {
+      fail(error.message);
+    }
+    throw error;
+  }
   if (deployment) {
     if (instructions.deploymentKey !== deployment.deploymentKey)
       fail("deploymentKey does not match the active deployment.");
@@ -398,8 +313,9 @@ function resolveWindow(
 export function validateTokenlessPaymentInstructions(
   instructions: TokenlessPaymentInstructions,
   deployment?: TokenlessDeploymentIdentity,
+  options: { nowSeconds?: bigint } = {},
 ) {
-  return assertInstructions(instructions, deployment);
+  return assertInstructions(instructions, deployment, options.nowSeconds);
 }
 
 export function buildTokenlessRoundTermsMessage(
@@ -431,32 +347,32 @@ export function buildTokenlessRoundTermsMessage(
     commitDeadline: amount(
       terms.commitDeadline,
       "roundTerms.commitDeadline",
-      MAX_UINT64,
+      TOKENLESS_MAX_UINT64,
     ),
     revealDeadline: amount(
       terms.revealDeadline,
       "roundTerms.revealDeadline",
-      MAX_UINT64,
+      TOKENLESS_MAX_UINT64,
     ),
     beaconFailureDeadline: amount(
       terms.beaconFailureDeadline,
       "roundTerms.beaconFailureDeadline",
-      MAX_UINT64,
+      TOKENLESS_MAX_UINT64,
     ),
     beaconRound: amount(
       terms.beaconRound,
       "roundTerms.beaconRound",
-      MAX_UINT64,
+      TOKENLESS_MAX_UINT64,
     ),
     scoringBeaconRound: amount(
       terms.scoringBeaconRound,
       "roundTerms.scoringBeaconRound",
-      MAX_UINT64,
+      TOKENLESS_MAX_UINT64,
     ),
     claimGracePeriod: amount(
       terms.claimGracePeriod,
       "roundTerms.claimGracePeriod",
-      MAX_UINT64,
+      TOKENLESS_MAX_UINT64,
     ),
     feeRecipient: address(terms.feeRecipient, "roundTerms.feeRecipient"),
   };
