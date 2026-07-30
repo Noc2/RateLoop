@@ -75,6 +75,13 @@ Roughly €0.50–2.50 per token.
 Consider a qualified electronic seal under Article 35(2) alongside it. Do **not** pursue
 becoming a trust service provider.
 
+**Decide this before December 2026.** eIDAS 2.0's qualified electronic ledgers give
+records "the presumption of their unique and accurate sequential chronological ordering
+and of their integrity" — which describes this product's core claim, with a legal
+presumption attached. Services are expected from December 2026, offered by supervised
+providers already on EU Trusted Lists and already selling to the same buyers. Partner
+with one rather than competing; the moat is the review semantics, not the hash chain.
+
 ### B3. Stop hiding capabilities that work
 
 Roughly five shipped, deployed, working features are pinned false in the public-claim
@@ -84,6 +91,17 @@ offline packet verifier, OTLP ingest, and the attestation paths.
 The claim gate is a genuine asset and should not be weakened — but it now makes the
 product look _less_ capable than it is. Flip the flags for what is genuinely deployed
 and exercised, and keep the gate for what is not.
+
+### B3b. Write the MCC-AI annex pack
+
+The Commission's Model Contractual Clauses for AI ship with **Annex F, "Measures to
+ensure human oversight"** — a blank box every AI supplier to an EU public body has to
+fill — plus Annex E for transparency and an Annex D item on log collection. The Light
+version keeps all three even for non-high-risk systems.
+
+A pre-drafted, clause-referenced pack answers a buyer's own contract template in their
+own vocabulary. Days of writing, no engineering, and it removes friction inside live
+public-sector deals.
 
 ### B4. Publish a CSA STAR Level 1 self-assessment
 

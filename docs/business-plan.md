@@ -403,6 +403,70 @@ what it does not hold is unusual and will survive diligence that competitors' pa
 will not. It currently reads as apology; it should read as method. 4. **EU enterprise via the prepaid invoice path** that is already built and unused —
 bank transfer and verified-business gating suit European procurement.
 
+### EU specifics worth acting on
+
+**Germany raised the direct-award threshold to €50,000 net on 1 July 2026.** The
+Vergabebeschleunigungsgesetz lifted the federal `Direktauftrag` limit from €15,000, with
+negotiated procedure to roughly €100,000. **A €50k contract with a German federal body
+can now be signed with no tender and no publication.** For a German-domiciled solo
+vendor this does more than any framework agreement, and it sits exactly at the Business
+tier's annual value. Above-threshold open tendering — €140k central, €216k sub-central —
+is not realistic for one person: the bar is audited accounts, comparable references,
+ISO 27001, insurance and a 3–6 month cycle per bid.
+
+**The MCC-AI annexes are a free sales artefact.** The Commission's Model Contractual
+Clauses for AI ship with **Annex F, "Measures to ensure human oversight" — a blank box
+every AI supplier to an EU public body has to fill in**, alongside Annex E for
+transparency and an Annex D item on log collection. The Light version keeps
+record-keeping and human oversight even for non-high-risk systems, which is what buyers
+will use before December 2027. A pre-drafted, clause-referenced annex pack answers the
+buyer's own template in the buyer's own vocabulary. It removes friction inside a live
+deal; it does not generate demand, and "MCC-AI ready" is self-asserted with no registry
+or logo behind it.
+
+**Sell against ISO/IEC 42001 before the AI Act.** Controls **A.6.2.8** (AI system event
+logs) and **A.9.4** (documented human-oversight criteria) map directly onto what the
+product emits. Unlike Article 26 the deadline exists _now_ — audits are being scheduled
+in 2026 — the budget line exists, and it is jurisdiction-agnostic, so a UK, Swiss or US
+deal is the same product. That de-risks a plan otherwise resting on one deferred
+regulation. Both Vanta and Drata already support 42001 and neither has an AI Act
+category.
+
+Be ready for the obvious auditor question. ISO 42001 is a management-system standard;
+sampled records and process documentation satisfy it, and cryptographic verifiability
+will read as over-engineering to many auditors. **The answer that works without using
+the word cryptographic:** the evidence survives a change of vendor, the deployer can
+show it to a third party the deployer does not control, and it is tamper-evident against
+the very operator whose diligence is in question.
+
+**Refuse white-label and OEM, explicitly.** The product sells evidence that is
+_independent of the party being reviewed_. Evidence rebadged as the output of the
+integrator who built the AI system and wrote the governance framework is not
+independent. This is a positioning rule, not a pricing preference.
+
+**Channel is a consequence of traction, not a substitute for it.** No European systems
+integrator publishes a door below roughly €1M ARR — that is Capgemini Ventures' stated
+bar and the only published threshold found anywhere. Certification bodies cannot resell
+into accounts they certify, under ISO/IEC 17021-1 and 17065 impartiality rules. Notified
+bodies are irrelevant: Article 43 routes Annex III points 2–8 through internal control
+with no notified body at all. **The realistic year-one channel is subcontracting into
+AI-governance practices at a day rate, plus 10–20% referral agreements.**
+
+**Two cheap credibility moves.** Join the national mirror committee for CEN-CENELEC
+JTC 21 — the standard defining human oversight, prEN 18229-3, is still in drafting, and
+Article 62 explicitly encourages SME participation. And use the Commission's free AI Act
+Service Desk rather than competing with it.
+
+**On funding, the honest answer is that there is almost none.** A text search of the
+314-page Horizon Europe Cluster 4 work programme for 2026–27 returns five incidental
+hits on AI Act, conformity assessment and human oversight — **no topic funds AI-Act
+compliance tooling**. The EU funds AI capability, AI adoption, and the state's own
+compliance apparatus. Germany's ZIM stopped accepting applications on 7 July 2026.
+EXIST would be ideal — roughly €36k, zero dilution, explicitly solo-eligible — but it
+requires the company not to exist yet, so an incorporated vendor is out. What remains
+reachable: **EDIH hubs as a supplier into their test-before-invest catalogue**, and
+**cascade funding**, the only EU money sized for one person at €60k–€300k per single SME.
+
 **Deprioritise the innovation-budget route.** Corporate open-innovation programmes
 convert screened startups to scaled projects at roughly 1.4%, and the security review is
 deferred rather than avoided — resurfacing at renewal when sponsor enthusiasm has
@@ -461,6 +525,24 @@ at ten.
 **Multi-tenancy is per-route discipline.** No row-level security across 163 migrations;
 membership checks are re-implemented across dozens of files. The failure mode is a
 future route forgetting the check, and the blast radius is customer data.
+
+**A regulated substitute arrives in December 2026.** eIDAS 2.0 created _qualified
+electronic ledgers_, and Article 45l gives their records "the presumption of their
+unique and accurate sequential chronological ordering and of their integrity" — a
+near-verbatim statutory description of what this product claims, **with a legal
+presumption a self-hosted signed log does not have**. The implementing regulation
+landed in December 2025 and services are expected from December 2026.
+
+That is simultaneously the best available upgrade and the sharpest threat. Binding
+review records to a qualified timestamp turns "cryptographically signed", which a
+buyer's lawyer must evaluate, into "carries an EU-wide rebuttable presumption", which
+their lawyer already accepts. But from December 2026 qualified trust service providers —
+supervised, audited, already on EU Trusted Lists, already selling to the same
+enterprises — can offer tamper-evident sequenced ledgers as a regulated service.
+
+**Riding them is strictly better than competing with them.** The defensible ground was
+never the tamper-evidence primitive; it is the review semantics — who was assigned, what
+they saw, what they decided, and their competence and authority under Article 26(2).
 
 **Sub-$100 pricing may be structurally unable to expand.** Retention data across SaaS
 shows accounts under $10/month ARPA reach only 65% top-quartile net revenue retention,
