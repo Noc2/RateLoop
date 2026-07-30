@@ -75,29 +75,36 @@ async function expectRouteControls(page: Page, path: string, width: number): Pro
   }
 
   if (path === "/") {
-    const heroHeading = main.getByRole("heading", { name: /Level Up Your\s+Agent/i }).first();
-    const heroDeck = page.getByTestId("landing-hero-deck");
-    await expectNavigationForViewport(page, width);
-    await expect(heroHeading).toBeVisible({
-      timeout: 15_000,
-    });
-    await expect(heroDeck).toBeVisible({ timeout: 15_000 });
+    const heroHeading = main.getByRole("heading", { name: "RateLoop Will Relaunch." });
+    const followLink = main.getByRole("link", { name: "Follow on X" });
+    await expect(heroHeading).toBeVisible({ timeout: 15_000 });
+    await expect(followLink).toBeVisible({ timeout: 15_000 });
+    await expect(followLink).toHaveAttribute("href", "https://x.com/RateLoop");
+    await expect(page.getByLabel("Open menu")).toHaveCount(0);
+    await expect(page.locator("aside")).toHaveCount(0);
 
-    if (width >= 1024 && width < 1536) {
-      const heroDeckMetrics = await heroDeck.evaluate(element => {
-        const rect = element.getBoundingClientRect();
-        const lineHeight = Number.parseFloat(window.getComputedStyle(element).lineHeight);
+    if (width >= 1024) {
+      const orbBounds = await page.getByTestId("relaunch-orb").evaluate(element => {
+        const lineBoxes = Array.from(element.querySelectorAll(".ell"), line => line.getBoundingClientRect());
 
         return {
-          height: rect.height,
-          lineHeight,
+          bottom: Math.max(...lineBoxes.map(box => box.bottom)),
+          left: Math.min(...lineBoxes.map(box => box.left)),
+          right: Math.max(...lineBoxes.map(box => box.right)),
+          top: Math.min(...lineBoxes.map(box => box.top)),
+          viewportHeight: window.innerHeight,
+          viewportWidth: window.innerWidth,
         };
       });
 
-      expect(
-        heroDeckMetrics.height,
-        "Landing hero deck should split across two lines beside the side animation",
-      ).toBeGreaterThan(heroDeckMetrics.lineHeight * 1.5);
+      expect(orbBounds.left, "Relaunch orb should not be clipped on the left").toBeGreaterThanOrEqual(-1);
+      expect(orbBounds.right, "Relaunch orb should not be clipped on the right").toBeLessThanOrEqual(
+        orbBounds.viewportWidth + 1,
+      );
+      expect(orbBounds.top, "Relaunch orb should not be clipped at the top").toBeGreaterThanOrEqual(-1);
+      expect(orbBounds.bottom, "Relaunch orb should not be clipped at the bottom").toBeLessThanOrEqual(
+        orbBounds.viewportHeight + 1,
+      );
     }
 
     if (width <= 390) {
@@ -177,6 +184,14 @@ test.describe("Responsive layout", () => {
       }
     });
   }
+
+  test("relaunch orb stays fully visible in a short desktop viewport", async ({ connectedPage: page }) => {
+    await page.setViewportSize({ width: 1247, height: 632 });
+    await gotoWithRetry(page, "/", { skipInjectedWalletConnectionCheck: true, timeout: 45_000 });
+    await expectNoNextErrorOverlay(page);
+    await expectRouteControls(page, "/", 1247);
+    await expectNoHorizontalOverflow(page, "relaunch page at 1247x632");
+  });
 
   test("stake selector dialog fits inside a phone viewport", async ({ connectedPage: page }) => {
     await page.setViewportSize({ width: 390, height: 844 });

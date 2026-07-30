@@ -1196,61 +1196,6 @@ test.describe("Mobile viewport (phone)", () => {
     await expectHeaderTabsStable();
   });
 
-  test("mobile landing header hides and returns during programmatic scroll", async ({ page }) => {
-    await gotoWithRetry(page, "/?landing=1", { skipInjectedWalletConnectionCheck: true, timeout: 45_000 });
-    await expect(page.getByRole("heading", { name: /Level Up Your Agent/i }).first()).toBeVisible({
-      timeout: 10_000,
-    });
-
-    const mobileHeader = page.locator('[data-mobile-header="true"]');
-    await mobileHeader.waitFor({ state: "visible", timeout: 10_000 });
-    await page.waitForLoadState("networkidle", { timeout: 15_000 });
-    const scrollWindowTo = async (top: number) => {
-      await page.evaluate(async scrollTop => {
-        const dispatchRootScroll = () => {
-          window.scrollTo({ top: scrollTop, left: 0, behavior: "auto" });
-          document.scrollingElement?.scrollTo({ top: scrollTop, left: 0, behavior: "auto" });
-          document.documentElement.scrollTop = scrollTop;
-          document.body.scrollTop = scrollTop;
-
-          for (const target of [window, document, document.documentElement, document.body]) {
-            target.dispatchEvent(new Event("scroll", { bubbles: true }));
-          }
-        };
-
-        dispatchRootScroll();
-        await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
-        dispatchRootScroll();
-      }, top);
-    };
-
-    const canScroll = await page.evaluate(() => document.documentElement.scrollHeight > window.innerHeight + 200);
-    expect(canScroll).toBe(true);
-
-    await page.evaluate(async () => {
-      window.history.scrollRestoration = "manual";
-      for (const scrollTop of [120, 0]) {
-        window.scrollTo({ top: scrollTop, left: 0, behavior: "auto" });
-        document.scrollingElement?.scrollTo({ top: scrollTop, left: 0, behavior: "auto" });
-        window.dispatchEvent(new Event("scroll"));
-        await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
-      }
-      window.dispatchEvent(new Event("scroll"));
-    });
-    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
-    await expect(mobileHeader).toHaveAttribute("data-visible", "true");
-
-    await page.waitForTimeout(320);
-    await scrollWindowTo(900);
-    await page.waitForFunction(() => window.scrollY >= 800);
-    await expect.poll(() => mobileHeader.getAttribute("data-visible"), { timeout: 10_000 }).toBe("false");
-
-    await page.waitForTimeout(320);
-    await scrollWindowTo(320);
-    await page.waitForFunction(() => window.scrollY <= 340);
-    await expect.poll(() => mobileHeader.getAttribute("data-visible"), { timeout: 10_000 }).toBe("true");
-  });
-
   test("hamburger menu navigation works", async ({ connectedPage: page }) => {
     await gotoWithRetry(page, "/rate", { ensureWalletConnected: true, timeout: 45_000 });
     await waitForFeedLoaded(page, 30_000);
@@ -1479,34 +1424,5 @@ test.describe("Mobile viewport (phone)", () => {
       return document.documentElement.scrollWidth > document.documentElement.clientWidth;
     });
     expect(hasOverflow).toBe(false);
-  });
-});
-
-test.describe("Public mobile header (phone)", () => {
-  test.beforeEach(async ({ page }) => {
-    await dismissBetaNotice(page);
-  });
-
-  test("mobile menu closes after navigating from a menu link", async ({ page }) => {
-    await gotoWithRetry(page, "/?landing=1", { skipInjectedWalletConnectionCheck: true, timeout: 45_000 });
-    await expect(page.getByRole("heading", { name: /Level Up Your Agent/i }).first()).toBeVisible({
-      timeout: 10_000,
-    });
-
-    const menu = page.locator("header details.dropdown").first();
-    await page.locator('[data-mobile-header="true"]').getByLabel("Open menu").click();
-    await expect(menu).toHaveAttribute("open", "");
-
-    const docsLink = page
-      .locator('[data-mobile-header="true"] .dropdown-content')
-      .first()
-      .getByRole("link", { name: /Docs/i });
-    await expect(docsLink).toBeVisible({ timeout: 5_000 });
-    await Promise.all([page.waitForURL(/\/docs/, { timeout: 15_000 }), docsLink.click()]);
-    await expect(page.getByRole("heading", { name: /RateLoop\s+Introduction|Introduction/i }).first()).toBeVisible({
-      timeout: 10_000,
-    });
-    await expect(menu).not.toHaveAttribute("open", "");
-    await expect(page.locator("header .dropdown-content").first()).toBeHidden();
   });
 });

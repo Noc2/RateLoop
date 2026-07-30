@@ -10,19 +10,12 @@ test.describe("Page smoke tests", () => {
 
   test("landing page loads", async ({ page }) => {
     await gotoPath(page, "/");
-    // The page title should contain "RateLoop" regardless of redirects
-    await expect(page).toHaveTitle(/RateLoop/i);
-
-    // The landing page may redirect to /governance or /rate if a test wallet
-    // session is already active. Either the hero section or a redirected page is acceptable.
-    const heroHeading = page.getByRole("heading", { name: /Level Up Your Agent/i }).first();
-    const governancePage = page.getByRole("button", { name: /Profile|Leaderboard|Faucet/i }).first();
-    const feedPage = page
-      .getByRole("button", { name: /Predict final rating|Vote (?:thumbs )?(?:up|down)/i })
-      .first();
-
-    const landingOrRedirect = heroHeading.or(governancePage).or(feedPage);
-    await expect(landingOrRedirect.first()).toBeVisible({ timeout: 15_000 });
+    await expect(page).toHaveTitle("RateLoop — Relaunching");
+    await expect(page.getByRole("heading", { name: "RateLoop Will Relaunch." })).toBeVisible({ timeout: 15_000 });
+    await expect(
+      page.getByText("Thank you to everyone who contributed, tested early ideas, and shared thoughtful feedback."),
+    ).toBeVisible();
+    await expect(page.getByRole("link", { name: "Follow on X" })).toHaveAttribute("href", "https://x.com/RateLoop");
   });
 
   test("docs page renders documentation", async ({ page }) => {
