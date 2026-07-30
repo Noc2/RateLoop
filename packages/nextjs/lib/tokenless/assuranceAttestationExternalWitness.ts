@@ -11,6 +11,7 @@ import type {
   Rfc3161TimestampAuthority,
 } from "~~/lib/tokenless/assuranceAttestationPipeline";
 import { canonicalAttestationJson } from "~~/lib/tokenless/assuranceAttestations";
+import { maintenanceRequestSignal } from "~~/lib/tokenless/maintenanceCancellation";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import {
   REKOR_RECEIPT_SCHEMA_VERSION,
@@ -164,7 +165,7 @@ export function createRekorDssePublisher(input: {
     .toString();
   createPublicKey(input.trustedRekorPublicKeyPem);
   return {
-    async publish({ envelope }) {
+    async publish({ envelope, signal }) {
       const request = {
         apiVersion: "0.0.1",
         kind: "dsse",
@@ -181,7 +182,7 @@ export function createRekorDssePublisher(input: {
         body: canonicalAttestationJson(request),
         cache: "no-store",
         redirect: "error",
-        signal: AbortSignal.timeout(15_000),
+        signal: maintenanceRequestSignal(signal, 15_000),
       });
       if (response.status === 409) {
         const location = response.headers.get("location");
@@ -197,7 +198,7 @@ export function createRekorDssePublisher(input: {
           headers: { accept: "application/json" },
           cache: "no-store",
           redirect: "error",
-          signal: AbortSignal.timeout(15_000),
+          signal: maintenanceRequestSignal(signal, 15_000),
         });
       }
       if (!response.ok) {
@@ -338,7 +339,7 @@ export function createRfc3161TimestampAuthority(input: {
         body: request,
         cache: "no-store",
         redirect: "error",
-        signal: AbortSignal.timeout(15_000),
+        signal: maintenanceRequestSignal(boundary.signal, 15_000),
       });
       const token = await responseBytes(response, "RFC 3161 authority");
       if (!response.ok) {

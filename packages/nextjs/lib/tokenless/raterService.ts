@@ -35,6 +35,7 @@ import {
 import { baseSepolia } from "viem/chains";
 import { dbClient, dbPool } from "~~/lib/db";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
+import { throwIfMaintenanceCancelled } from "~~/lib/tokenless/maintenanceCancellation";
 import { markNetworkVoucherConsumed } from "~~/lib/tokenless/networkAssignmentSettlement";
 import { requirePaidLaneComplianceApproval } from "~~/lib/tokenless/paidLaneCompliance";
 import { consumePrivatePaidReviewVoucherForCommit } from "~~/lib/tokenless/paidReviewVoucherReceipts";
@@ -970,7 +971,8 @@ export async function relayPaidRaterCommit(input: { principalId: string; request
   return publicCommit(stored.rows[0] as Row);
 }
 
-export async function reconcilePaidRaterCommit(commitId: string) {
+export async function reconcilePaidRaterCommit(commitId: string, signal?: AbortSignal) {
+  throwIfMaintenanceCancelled(signal);
   const result = await dbClient.execute({
     sql: `SELECT c.*, v.voucher_json, v.voucher_signature
           FROM tokenless_rater_commits c
@@ -978,6 +980,7 @@ export async function reconcilePaidRaterCommit(commitId: string) {
           WHERE c.commit_id = ? LIMIT 1`,
     args: [commitId],
   });
+  throwIfMaintenanceCancelled(signal);
   const row = result.rows[0] as Row | undefined;
   if (!row) return null;
   const state = rowString(row, "state");
@@ -992,8 +995,10 @@ export async function reconcilePaidRaterCommit(commitId: string) {
   if (state === "failed") return publicCommit(row);
   if (state === "submitted") {
     const config = loadTokenlessChainConfig();
-    const runtime = getTokenlessChainRuntime(config);
+    const runtime = getTokenlessChainRuntime(config, signal);
+    throwIfMaintenanceCancelled(signal);
     const reconciled = await reconcileSubmittedRaterCommitReceipt(row, runtime.publicClient);
+    throwIfMaintenanceCancelled(signal);
     if (rowString(reconciled, "state") === "confirmed") {
       await consumePrivatePaidReviewVoucherForCommit({
         voucherId: rowString(reconciled, "voucher_id")!,
@@ -1047,12 +1052,14 @@ export async function reconcilePaidRaterCommit(commitId: string) {
       "rater_signed_transaction_mismatch",
     );
   }
-  const runtime = getTokenlessChainRuntime(config);
+  const runtime = getTokenlessChainRuntime(config, signal);
   if (!runtime.relayerAccount || !runtime.relayerWallet) {
     throw new TokenlessServiceError("Sponsored commit relay is unavailable.", 503, "commit_relayer_unavailable", true);
   }
   assertIsolatedCommitRelayer(runtime);
+  throwIfMaintenanceCancelled(signal);
   await assertLiveTokenlessDeployment(config, runtime);
+  throwIfMaintenanceCancelled(signal);
   const locator = {
     businessKey: commitId,
     businessKind: "rater_commit",
@@ -1069,14 +1076,17 @@ export async function reconcilePaidRaterCommit(commitId: string) {
     wallet: runtime.relayerWallet,
     locator,
   });
+  throwIfMaintenanceCancelled(signal);
   transaction = await maybeReplaceUnobservedEvmTransaction({
     account: runtime.relayerAccount,
     locator,
     publicClient: runtime.publicClient,
     transaction,
   });
+  throwIfMaintenanceCancelled(signal);
   try {
     await broadcastPersistedRaterTransaction(runtime.relayerWallet, runtime.publicClient, transaction);
+    throwIfMaintenanceCancelled(signal);
   } catch (error) {
     await markRaterTransactionRetry(commitId, transaction);
     throw error;

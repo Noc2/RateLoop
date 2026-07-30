@@ -1,12 +1,13 @@
 import "server-only";
 import { getOptionalAppUrl, getResendConfig } from "~~/lib/env/server";
 import { buildRateLoopEmailHtml } from "~~/lib/notifications/emailTemplate";
+import { maintenanceRequestSignal, throwIfMaintenanceCancelled } from "~~/lib/tokenless/maintenanceCancellation";
 
 const EMAIL_PATTERN = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
 export const RESEND_REQUEST_TIMEOUT_MS = 10_000;
 
-function resendRequestSignal() {
-  return AbortSignal.timeout(RESEND_REQUEST_TIMEOUT_MS);
+function resendRequestSignal(signal?: AbortSignal) {
+  return maintenanceRequestSignal(signal, RESEND_REQUEST_TIMEOUT_MS);
 }
 
 export function normalizeResendFromEmail(value: string | undefined) {
@@ -96,14 +97,16 @@ export async function sendTokenlessNotificationEmail(
     unsubscribeUrl: string;
   },
   fetchImpl: typeof fetch = fetch,
+  signal?: AbortSignal,
 ) {
+  throwIfMaintenanceCancelled(signal);
   const { apiKey, fromEmail: configuredFromEmail } = getResendConfig();
   const fromEmail = normalizeResendFromEmail(configuredFromEmail);
   if (!apiKey || !fromEmail) throw new Error("Resend is not configured");
 
   const response = await fetchImpl("https://api.resend.com/emails", {
     method: "POST",
-    signal: resendRequestSignal(),
+    signal: resendRequestSignal(signal),
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
@@ -143,7 +146,9 @@ export async function sendTokenlessNotificationEmail(
 export async function sendWorkspaceReviewerInvitationEmail(
   params: { destinationUrl: string; email: string; invitationId: string },
   fetchImpl: typeof fetch = fetch,
+  signal?: AbortSignal,
 ) {
+  throwIfMaintenanceCancelled(signal);
   const { apiKey, fromEmail: configuredFromEmail } = getResendConfig();
   const fromEmail = normalizeResendFromEmail(configuredFromEmail);
   if (!apiKey || !fromEmail) throw new Error("Resend is not configured");
@@ -153,7 +158,7 @@ export async function sendWorkspaceReviewerInvitationEmail(
   }
   const response = await fetchImpl("https://api.resend.com/emails", {
     method: "POST",
-    signal: resendRequestSignal(),
+    signal: resendRequestSignal(signal),
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",

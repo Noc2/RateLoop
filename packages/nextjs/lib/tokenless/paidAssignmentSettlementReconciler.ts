@@ -4,6 +4,7 @@ import "server-only";
 import { getAddress, isAddress, isHash } from "viem";
 import { dbPool } from "~~/lib/db";
 import { loadTokenlessChainConfig } from "~~/lib/tokenless/chain/config";
+import { maintenanceCancellationRequested, maintenanceRequestSignal } from "~~/lib/tokenless/maintenanceCancellation";
 import { tokenlessCommitKey } from "~~/lib/tokenless/rater/settlementRecovery";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -85,12 +86,12 @@ function endpoint(base: URL, path: string) {
   return url;
 }
 
-async function fetchJson(fetchImpl: typeof fetch, url: URL) {
+async function fetchJson(fetchImpl: typeof fetch, url: URL, signal?: AbortSignal) {
   const response = await fetchImpl(url, {
     headers: { accept: "application/json" },
     cache: "no-store",
     redirect: "error",
-    signal: AbortSignal.timeout(10_000),
+    signal: maintenanceRequestSignal(signal, 10_000),
   });
   if (!response.ok) throw new Error(`Settlement index returned ${response.status}.`);
   return (await response.json()) as unknown;
@@ -107,6 +108,7 @@ async function indexedOperationSettlement(input: {
   ponderUrl: URL;
   operation: Row;
   seats: Row[];
+  signal?: AbortSignal;
 }) {
   const roundId = text(input.operation, "round_id")!;
   const commitKeys = input.seats.flatMap(seat => {
@@ -115,7 +117,11 @@ async function indexedOperationSettlement(input: {
       ? [tokenlessCommitKey(BigInt(roundId), getAddress(voteKey)).toLowerCase()]
       : [];
   });
-  const roundPromise = fetchJson(input.fetchImpl, endpoint(input.ponderUrl, `/rounds/${encodeURIComponent(roundId)}`));
+  const roundPromise = fetchJson(
+    input.fetchImpl,
+    endpoint(input.ponderUrl, `/rounds/${encodeURIComponent(roundId)}`),
+    input.signal,
+  );
   const settlementsPromise =
     commitKeys.length === 0
       ? Promise.resolve({
@@ -128,7 +134,7 @@ async function indexedOperationSettlement(input: {
       : (() => {
           const url = endpoint(input.ponderUrl, "/settlements");
           url.searchParams.set("commitKeys", commitKeys.join(","));
-          return fetchJson(input.fetchImpl, url);
+          return fetchJson(input.fetchImpl, url, input.signal);
         })();
   const [roundValue, settlementValue] = await Promise.all([roundPromise, settlementsPromise]);
   const round = record(roundValue, "round");
@@ -418,7 +424,13 @@ function terminalOutcome(input: {
   return null;
 }
 
-async function reconcileOperation(input: { operationId: string; now: Date; fetchImpl: typeof fetch; ponderUrl: URL }) {
+async function reconcileOperation(input: {
+  operationId: string;
+  now: Date;
+  fetchImpl: typeof fetch;
+  ponderUrl: URL;
+  signal?: AbortSignal;
+}) {
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
@@ -449,6 +461,7 @@ async function reconcileOperation(input: { operationId: string; now: Date; fetch
       ponderUrl: input.ponderUrl,
       operation,
       seats,
+      signal: input.signal,
     });
     const roundState = integer(indexed.round.state, "round state");
     const roundTerminal = TERMINAL_ROUND_STATES.has(roundState);
@@ -668,6 +681,7 @@ export async function reconcilePaidAssignmentSettlements(
     limit?: number;
     fetchImpl?: typeof fetch;
     ponderUrl?: string;
+    signal?: AbortSignal;
   } = {},
 ) {
   const now = input.now ?? new Date();
@@ -690,6 +704,7 @@ export async function reconcilePaidAssignmentSettlements(
   };
   const ponderUrl = configuredPonderUrl(input.ponderUrl);
   for (const value of due.rows) {
+    if (maintenanceCancellationRequested(input.signal)) break;
     const operationId = text(value as Row, "operation_id")!;
     try {
       const result = await reconcileOperation({
@@ -697,6 +712,7 @@ export async function reconcilePaidAssignmentSettlements(
         now,
         fetchImpl: input.fetchImpl ?? fetch,
         ponderUrl,
+        signal: input.signal,
       });
       summary.transitionedSeats += result.transitionedSeats;
       if (result.operationState === "terminal") summary.terminalOperations += 1;

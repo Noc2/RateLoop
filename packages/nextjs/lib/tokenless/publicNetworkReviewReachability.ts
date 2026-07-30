@@ -19,6 +19,7 @@ import {
 } from "~~/lib/tokenless/humanAssurance";
 import type { FrozenBinaryReviewQuestion } from "~~/lib/tokenless/humanReviewQuestions";
 import type { PreparedHumanReviewRequest } from "~~/lib/tokenless/humanReviewRequestPreparation";
+import { throwIfMaintenanceCancelled } from "~~/lib/tokenless/maintenanceCancellation";
 import { reconcileNetworkAssignmentSettlements } from "~~/lib/tokenless/networkAssignmentSettlement";
 import { prepareAndReserveNetworkRunAudience } from "~~/lib/tokenless/networkAudienceOrchestration";
 import type { PreparedProductAsk } from "~~/lib/tokenless/productCore";
@@ -760,10 +761,12 @@ export async function bindPublicNetworkReviewOperation(
   return row;
 }
 
-export async function abandonStalePublicNetworkFoundation(bindingId: string, now = new Date()) {
+export async function abandonStalePublicNetworkFoundation(bindingId: string, now = new Date(), signal?: AbortSignal) {
+  throwIfMaintenanceCancelled(signal);
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
+    throwIfMaintenanceCancelled(signal);
     const result = await client.query(
       `SELECT b.state,b.operation_key,b.run_id,o.operation_key AS opportunity_operation
        FROM tokenless_public_network_review_bindings b
@@ -772,6 +775,7 @@ export async function abandonStalePublicNetworkFoundation(bindingId: string, now
        WHERE b.binding_id=$1 AND b.created_at <= $2 LIMIT 1 FOR UPDATE`,
       [bindingId, new Date(now.getTime() - PUBLIC_NETWORK_FOUNDATION_ORPHAN_TTL_MS)],
     );
+    throwIfMaintenanceCancelled(signal);
     const row = result.rows[0] as Row | undefined;
     if (
       !row ||
@@ -791,6 +795,7 @@ export async function abandonStalePublicNetworkFoundation(bindingId: string, now
          )`,
       [now, text(row, "run_id")],
     );
+    throwIfMaintenanceCancelled(signal);
     const abandoned = await client.query(
       `UPDATE tokenless_public_network_review_bindings
        SET state='abandoned',abandoned_at=$1,updated_at=$1
@@ -1495,11 +1500,18 @@ export async function readReadyPublicNetworkReviewChild(bindingId: string): Prom
   };
 }
 
-export async function preparePublicNetworkAudienceForBinding(bindingId: string, now = new Date()) {
+export async function preparePublicNetworkAudienceForBinding(
+  bindingId: string,
+  now = new Date(),
+  signal?: AbortSignal,
+) {
   try {
+    throwIfMaintenanceCancelled(signal);
     const completed = await loadCompletedAudienceRound(bindingId);
+    throwIfMaintenanceCancelled(signal);
     if (completed) {
       await verifyCompletedAudience(completed);
+      throwIfMaintenanceCancelled(signal);
       return {
         bindingId,
         state: "audience_ready" as const,
@@ -1509,10 +1521,12 @@ export async function preparePublicNetworkAudienceForBinding(bindingId: string, 
       };
     }
     const round = await loadConfirmedNetworkRound(bindingId, now);
+    throwIfMaintenanceCancelled(signal);
     const managerClient = await dbPool.connect();
     let manager: WorkspaceManager;
     try {
       manager = await loadWorkspaceManager(managerClient, round.workspaceId, round.projectId);
+      throwIfMaintenanceCancelled(signal);
     } finally {
       managerClient.release();
     }
@@ -1534,6 +1548,7 @@ export async function preparePublicNetworkAudienceForBinding(bindingId: string, 
         now,
       },
     });
+    throwIfMaintenanceCancelled(signal);
     if (
       bound.contentId?.toLowerCase() !== round.productContentId ||
       bound.admissionPolicyHash?.toLowerCase() !== round.admissionPolicyHash
@@ -1545,6 +1560,7 @@ export async function preparePublicNetworkAudienceForBinding(bindingId: string, 
       );
     }
     await persistExactConfirmedRound(round, now);
+    throwIfMaintenanceCancelled(signal);
     await prepareAndReserveNetworkRunAudience({
       accountAddress: manager.accountAddress,
       workspaceId: round.workspaceId,
@@ -1553,7 +1569,9 @@ export async function preparePublicNetworkAudienceForBinding(bindingId: string, 
       confidentialityTermsHash: round.confidentialityTermsHash,
       now,
     });
+    throwIfMaintenanceCancelled(signal);
     const live = await loadConfirmedNetworkRound(bindingId, now);
+    throwIfMaintenanceCancelled(signal);
     if (
       live.deploymentKey !== round.deploymentKey ||
       live.roundId !== round.roundId ||
@@ -1568,6 +1586,7 @@ export async function preparePublicNetworkAudienceForBinding(bindingId: string, 
       );
     }
     await verifyReservedAudience(round, now);
+    throwIfMaintenanceCancelled(signal);
     const ready = await dbClient.execute({
       sql: `UPDATE tokenless_public_network_review_bindings
             SET state='audience_ready',audience_ready_at=?,worker_next_attempt_at=NULL,

@@ -4,6 +4,7 @@ import { type Address, getAddress } from "viem";
 import { dbClient } from "~~/lib/db";
 import { type TokenlessChainConfig, loadTokenlessChainConfig } from "~~/lib/tokenless/chain/config";
 import { type TokenlessChainRuntime, getTokenlessChainRuntime } from "~~/lib/tokenless/chain/runtime";
+import { maintenanceCancellationRequested } from "~~/lib/tokenless/maintenanceCancellation";
 
 type Row = Record<string, unknown>;
 type ManagedNonceRole = "prepaid_funder" | "gas_only_relayer" | "surprise_bonus_funder";
@@ -225,6 +226,7 @@ export async function sweepManagedEvmNonceDrift(
     limit?: number;
     now?: Date;
     runtime?: TokenlessChainRuntime;
+    signal?: AbortSignal;
   } = {},
 ) {
   const config = input.config ?? loadTokenlessChainConfig();
@@ -243,6 +245,7 @@ export async function sweepManagedEvmNonceDrift(
   ].filter((value): value is { address: Address; role: ManagedNonceRole } => value !== null);
   const summary = { checked: 0, pending: 0, reconciliationRequired: 0, reopened: 0, unavailable: 0 };
   for (const role of roles) {
+    if (maintenanceCancellationRequested(input.signal)) break;
     summary.checked += 1;
     let networkPendingNonce: number;
     try {

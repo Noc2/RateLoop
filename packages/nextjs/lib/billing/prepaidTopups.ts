@@ -17,6 +17,7 @@ import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient, dbPool } from "~~/lib/db";
 import { releaseSessionAdvisoryLocksAndConnection, tryAcquireSessionAdvisoryLock } from "~~/lib/db/advisoryLocks";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
+import { maintenanceCancellationRequested } from "~~/lib/tokenless/maintenanceCancellation";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type QueryRow = Record<string, unknown> | undefined;
@@ -766,7 +767,7 @@ export async function reinstatePrepaidReversal(
   return { matched: true, reversedAtomic: "0" };
 }
 
-export async function reconcilePrepaidTopups(input: { limit?: number; now?: Date } = {}) {
+export async function reconcilePrepaidTopups(input: { limit?: number; now?: Date; signal?: AbortSignal } = {}) {
   if (!prepaidTopupsEnabled()) return { attempted: 0, credited: 0, failed: 0 };
   assertPrepaidTopupConfiguration();
   const now = input.now ?? new Date();
@@ -780,6 +781,7 @@ export async function reconcilePrepaidTopups(input: { limit?: number; now?: Date
   let credited = 0;
   let failed = 0;
   for (const candidate of candidates.rows as Record<string, unknown>[]) {
+    if (maintenanceCancellationRequested(input.signal)) break;
     const invoiceId = text(candidate, "provider_invoice_id");
     if (!invoiceId) continue;
     try {
@@ -860,7 +862,9 @@ function boundedAuditError(error: unknown) {
   return /^[a-z0-9_]{1,80}$/u.test(message) ? message : "audit_delivery_failed";
 }
 
-export async function drainPrepaidTopupAuditOutbox(input: { limit?: number; topupId?: string } = {}) {
+export async function drainPrepaidTopupAuditOutbox(
+  input: { limit?: number; topupId?: string; signal?: AbortSignal } = {},
+) {
   const limit = Math.max(1, Math.min(input.limit ?? 25, 100));
   const candidates = await dbClient.execute({
     sql: `SELECT topup_id,MIN(event_sequence) AS first_sequence
@@ -872,6 +876,7 @@ export async function drainPrepaidTopupAuditOutbox(input: { limit?: number; topu
   let attempted = 0;
   let delivered = 0;
   for (const candidate of candidates.rows as Record<string, unknown>[]) {
+    if (maintenanceCancellationRequested(input.signal)) break;
     const topupId = text(candidate, "topup_id")!;
     const lockKey = `prepaid-topup-audit:${topupId}`;
     const lock = await dbPool.connect();

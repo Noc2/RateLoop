@@ -31,6 +31,7 @@ import {
   assertLiveTokenlessDeployment,
   getTokenlessChainRuntime,
 } from "~~/lib/tokenless/chain/runtime";
+import { maintenanceCancellationRequested, maintenanceRequestSignal } from "~~/lib/tokenless/maintenanceCancellation";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import {
   DEFAULT_SURPRISE_MINIMUM_SAMPLE,
@@ -436,7 +437,12 @@ function configuredPonderUrl(raw = process.env.TOKENLESS_PONDER_URL ?? process.e
   return url;
 }
 
-async function fetchClaims(input: { roundId: string; ponderUrl?: string; fetchImpl?: typeof fetch }) {
+async function fetchClaims(input: {
+  roundId: string;
+  ponderUrl?: string;
+  fetchImpl?: typeof fetch;
+  signal?: AbortSignal;
+}) {
   const url = configuredPonderUrl(input.ponderUrl);
   url.pathname = `${url.pathname.replace(/\/$/, "")}/rounds/${encodeURIComponent(input.roundId)}/claims`;
   url.search = "";
@@ -445,7 +451,7 @@ async function fetchClaims(input: { roundId: string; ponderUrl?: string; fetchIm
     response = await (input.fetchImpl ?? fetch)(url, {
       headers: { accept: "application/json" },
       redirect: "error",
-      signal: AbortSignal.timeout(10_000),
+      signal: maintenanceRequestSignal(input.signal, 10_000),
     });
   } catch {
     throw new TokenlessServiceError("Indexed claims are not available.", 409, "indexed_claims_pending", true);
@@ -791,6 +797,7 @@ export async function processSurpriseBountyPayments(
     runtime?: TokenlessChainRuntime;
     claimSource?: (roundId: string) => Promise<SurpriseBountyClaim[]>;
     payer?: (payment: SurprisePayment) => Promise<Hash>;
+    signal?: AbortSignal;
   } = {},
 ) {
   const now = input.now ?? new Date();
@@ -809,6 +816,7 @@ export async function processSurpriseBountyPayments(
   const claimCache = new Map<string, Promise<SurpriseBountyClaim[]>>();
   const summary = { paid: 0, pendingClaim: 0, retry: 0, reconciliationRequired: 0 };
   for (const value of due.rows) {
+    if (maintenanceCancellationRequested(input.signal)) break;
     const row = value as Row;
     const entitlementId = rowString(row, "entitlement_id")!;
     const roundId = rowString(row, "round_id")!;
@@ -826,7 +834,12 @@ export async function processSurpriseBountyPayments(
       if (!claims) {
         claims = input.claimSource
           ? input.claimSource(roundId)
-          : fetchClaims({ roundId, ponderUrl: input.ponderUrl, fetchImpl: input.fetchImpl });
+          : fetchClaims({
+              roundId,
+              ponderUrl: input.ponderUrl,
+              fetchImpl: input.fetchImpl,
+              signal: input.signal,
+            });
         claimCache.set(roundId, claims);
       }
       const claim = (await claims).find(

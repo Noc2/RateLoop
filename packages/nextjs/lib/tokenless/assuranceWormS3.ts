@@ -5,6 +5,7 @@ import type {
   WormDestinationPreflight,
   WormDestinationSpec,
 } from "~~/lib/tokenless/assuranceWormExports";
+import { maintenanceRequestSignal, throwIfMaintenanceCancelled } from "~~/lib/tokenless/maintenanceCancellation";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 export type S3CompatibleCredential = {
@@ -87,6 +88,7 @@ async function signedRequest(input: {
   objectKey?: string;
   body?: Uint8Array;
   headers?: Record<string, string>;
+  signal?: AbortSignal;
 }) {
   const endpoint = new URL(input.spec.endpointOrigin);
   const pathname = `/${encodePath(input.spec.bucketName)}${input.objectKey ? `/${encodePath(input.objectKey)}` : ""}`;
@@ -117,13 +119,14 @@ async function signedRequest(input: {
   const signingKey = hmac(serviceKey, "aws4_request");
   const signature = createHmac("sha256", signingKey).update(stringToSign).digest("hex");
   headers.authorization = `AWS4-HMAC-SHA256 Credential=${input.credential.accessKeyId}/${scope}, SignedHeaders=${canonical.names}, Signature=${signature}`;
+  throwIfMaintenanceCancelled(input.signal);
   const response = await input.fetch(url, {
     method: input.method,
     headers,
     body: input.method === "PUT" ? body : undefined,
     cache: "no-store",
     redirect: "error",
-    signal: AbortSignal.timeout(15_000),
+    signal: maintenanceRequestSignal(input.signal, 15_000),
   });
   const responseBody = input.method === "HEAD" ? "" : await response.text();
   if (!response.ok) {
@@ -192,6 +195,7 @@ export function createS3CompatibleWormRuntime(input: {
       };
     },
     async putLockedObject(object) {
+      throwIfMaintenanceCancelled(object.signal);
       const resolved = credential(await input.resolveCredential(object.spec.credentialReference));
       const uploaded = await signedRequest({
         method: "PUT",
@@ -208,6 +212,7 @@ export function createS3CompatibleWormRuntime(input: {
           "x-amz-object-lock-mode": "COMPLIANCE",
           "x-amz-object-lock-retain-until-date": object.retentionUntil,
         },
+        signal: object.signal,
       });
       const versionId = uploaded.response.headers.get("x-amz-version-id");
       if (!versionId) {
@@ -228,6 +233,7 @@ export function createS3CompatibleWormRuntime(input: {
         objectKey: object.objectKey,
         query: { versionId },
         headers: { "x-amz-checksum-mode": "ENABLED" },
+        signal: object.signal,
       });
       const verifiedVersionId = verified.response.headers.get("x-amz-version-id");
       const etag = verified.response.headers.get("etag");

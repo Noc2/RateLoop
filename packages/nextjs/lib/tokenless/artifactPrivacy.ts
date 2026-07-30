@@ -30,7 +30,7 @@ type QueryRow = Record<string, unknown>;
 
 export type PrivateArtifactStore = {
   /** Delete is idempotent: an already-absent reference is a successful outcome. */
-  delete(reference: string): Promise<void>;
+  delete(reference: string, signal?: AbortSignal): Promise<void>;
   get(reference: string): Promise<Uint8Array>;
   put(pathname: string, body: Uint8Array): Promise<string>;
 };
@@ -87,8 +87,8 @@ function decodeMasterKey(value: string | undefined) {
 
 function createVercelBlobStore(): PrivateArtifactStore {
   return {
-    async delete(reference) {
-      await privateBlobStorage.delete(reference);
+    async delete(reference, signal) {
+      await privateBlobStorage.delete(reference, signal);
     },
     async get(reference) {
       const bytes = await privateBlobStorage.get(reference);
@@ -1249,7 +1249,7 @@ async function completeArtifactDeletionAudit(objectId: string, now: Date, runtim
   return rowString(current.rows[0] as QueryRow | undefined, "state") === "completed";
 }
 
-export async function processArtifactDeletionByObjectId(objectId: string, now = new Date()) {
+export async function processArtifactDeletionByObjectId(objectId: string, now = new Date(), signal?: AbortSignal) {
   const runtime = getRuntime();
   const claim = await claimArtifactDeletion(objectId, now);
   if (claim.kind === "done") return true;
@@ -1259,7 +1259,7 @@ export async function processArtifactDeletionByObjectId(objectId: string, now = 
     try {
       // The irreversible provider call is deliberately outside every database
       // transaction; retries are safe because provider deletion is idempotent.
-      await runtime.store.delete(rowString(claim.row, "storage_ref")!);
+      await runtime.store.delete(rowString(claim.row, "storage_ref")!, signal);
       await runtime.deletionHook?.("after_provider_delete");
     } catch (error) {
       await releaseArtifactDeletionClaim(objectId, claim.leaseToken, now, error);

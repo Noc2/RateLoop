@@ -4,6 +4,7 @@ import "server-only";
 import { dbPool } from "~~/lib/db";
 import { generateAssuranceEvidencePacket } from "~~/lib/tokenless/evidencePackets";
 import { canonicalizeHumanAssuranceDocument, hashHumanAssuranceDocument } from "~~/lib/tokenless/humanAssurance";
+import { throwIfMaintenanceCancelled } from "~~/lib/tokenless/maintenanceCancellation";
 import {
   enqueueTokenlessScheduledWorkInTransaction,
   tokenlessScheduledWorkItemId,
@@ -572,7 +573,9 @@ export async function projectDirectPrivateReviewDecisionEvidence(input: {
   deliveryId: string;
   now?: Date;
   packetGenerator?: PacketGenerator;
+  signal?: AbortSignal;
 }) {
+  throwIfMaintenanceCancelled(input.signal);
   const now = input.now ?? new Date();
   const client = await dbPool.connect();
   let workspaceId = "";
@@ -581,11 +584,13 @@ export async function projectDirectPrivateReviewDecisionEvidence(input: {
   let projected = false;
   try {
     await client.query("BEGIN");
+    throwIfMaintenanceCancelled(input.signal);
     const source = await loadProjectionSource(client, input.deliveryId);
     workspaceId = text(source, "workspace_id")!;
     owner = text(source, "projection_owner")!;
     projected = !text(source, "run_id");
     runId = await insertProjection(client, source, now);
+    throwIfMaintenanceCancelled(input.signal);
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");
@@ -595,12 +600,15 @@ export async function projectDirectPrivateReviewDecisionEvidence(input: {
   }
 
   try {
+    throwIfMaintenanceCancelled(input.signal);
     await (input.packetGenerator ?? generateAssuranceEvidencePacket)({
       accountAddress: owner,
       workspaceId,
       runId,
       now,
+      signal: input.signal,
     });
+    throwIfMaintenanceCancelled(input.signal);
     await dbPool.query(
       `UPDATE tokenless_private_unpaid_review_deliveries
        SET evidence_projection_state='completed',

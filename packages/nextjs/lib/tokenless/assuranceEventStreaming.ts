@@ -3,6 +3,11 @@ import "server-only";
 import { dbClient, dbPool } from "~~/lib/db";
 import { acquireSessionAdvisoryLock, releaseSessionAdvisoryLocksAndConnection } from "~~/lib/db/advisoryLocks";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
+import {
+  maintenanceCancellationRequested,
+  maintenanceRequestSignal,
+  throwIfMaintenanceCancelled,
+} from "~~/lib/tokenless/maintenanceCancellation";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import {
   type ResolveHostname,
@@ -811,6 +816,7 @@ export async function deliverPendingAssuranceEvents(
     encryptionKey?: string;
     resolveHostname?: ResolveHostname;
     workspaceId?: string;
+    signal?: AbortSignal;
   } = {},
 ) {
   const fetchImpl = input.fetchImpl ?? deliverOverPinnedAddress;
@@ -831,6 +837,7 @@ export async function deliverPendingAssuranceEvents(
   });
   const outcomes: Array<{ deliveryId: string; state: "delivered" | "retry" | "dead" }> = [];
   for (const value of due.rows) {
+    if (maintenanceCancellationRequested(input.signal)) break;
     const row = value as Row;
     const deliveryId = text(row, "delivery_id")!;
     const leaseExpiresAt = new Date(now.getTime() + DELIVERY_LEASE_MS);
@@ -858,6 +865,7 @@ export async function deliverPendingAssuranceEvents(
         .digest("hex")}`;
       const url = text(row, "url")!;
       const pinnedAddress = await assertPublicWebhookDestination(url, input.resolveHostname);
+      throwIfMaintenanceCancelled(input.signal);
       const response = await fetchImpl(url, {
         method: "POST",
         headers: {
@@ -869,7 +877,7 @@ export async function deliverPendingAssuranceEvents(
         },
         body: payload,
         redirect: "error",
-        signal: AbortSignal.timeout(10_000),
+        signal: maintenanceRequestSignal(input.signal, 10_000),
         pinnedAddress,
       });
       if (!response.ok) throw Object.assign(new Error(`HTTP ${response.status}`), { responseStatus: response.status });

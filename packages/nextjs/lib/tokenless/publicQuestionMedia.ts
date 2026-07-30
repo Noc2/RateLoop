@@ -4,6 +4,7 @@ import type { PoolClient } from "pg";
 import "server-only";
 import sharp from "sharp";
 import { dbClient, dbPool } from "~~/lib/db";
+import { maintenanceCancellationRequested } from "~~/lib/tokenless/maintenanceCancellation";
 import { privateBlobStorage } from "~~/lib/tokenless/privateBlobStorage";
 import {
   PUBLIC_QUESTION_MEDIA_PREVIEW_MAX_TTL_MS,
@@ -26,7 +27,7 @@ const acceptedFormats = new Set(["jpeg", "png", "webp"]);
 type Row = Record<string, unknown>;
 
 export interface PublicQuestionMediaStore {
-  delete(reference: string): Promise<void>;
+  delete(reference: string, signal?: AbortSignal): Promise<void>;
   get(reference: string): Promise<Uint8Array>;
   put(pathname: string, body: Uint8Array, contentType: string): Promise<string>;
 }
@@ -40,8 +41,8 @@ let runtimeOverride: PublicQuestionMediaRuntime | null = null;
 
 function createVercelBlobStore(): PublicQuestionMediaStore {
   return {
-    async delete(reference) {
-      await privateBlobStorage.delete(reference);
+    async delete(reference, signal) {
+      await privateBlobStorage.delete(reference, signal);
     },
     async get(reference) {
       const bytes = await privateBlobStorage.get(reference);
@@ -356,7 +357,9 @@ export async function stagePublicQuestionImage(input: {
   }
 }
 
-export async function sweepExpiredPublicQuestionMedia(input: { limit?: number; now?: Date } = {}) {
+export async function sweepExpiredPublicQuestionMedia(
+  input: { limit?: number; now?: Date; signal?: AbortSignal } = {},
+) {
   const limit = input.limit ?? 100;
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 500) {
     throw new TokenlessServiceError("Media sweep limit is invalid.", 400, "invalid_public_media_sweep");
@@ -371,6 +374,7 @@ export async function sweepExpiredPublicQuestionMedia(input: { limit?: number; n
   let deleted = 0;
   const failed: string[] = [];
   for (const value of candidates.rows) {
+    if (maintenanceCancellationRequested(input.signal)) break;
     const assetId = rowString(value as Row, "asset_id");
     if (!assetId) continue;
     const client = await dbPool.connect();
@@ -387,7 +391,7 @@ export async function sweepExpiredPublicQuestionMedia(input: { limit?: number; n
         await client.query("COMMIT");
         continue;
       }
-      await runtime().store.delete(storageRef);
+      await runtime().store.delete(storageRef, input.signal);
       await client.query(
         `UPDATE tokenless_public_question_media
          SET technical_status = 'deleted', storage_ref = $1, original_filename = 'deleted', updated_at = $2
@@ -406,7 +410,11 @@ export async function sweepExpiredPublicQuestionMedia(input: { limit?: number; n
   return { deleted, failed };
 }
 
-export async function processPublicQuestionMediaDeletionByAssetId(assetId: string, now = new Date()) {
+export async function processPublicQuestionMediaDeletionByAssetId(
+  assetId: string,
+  now = new Date(),
+  signal?: AbortSignal,
+) {
   const result = await dbClient.execute({
     sql: `SELECT media.asset_id, media.workspace_id, media.storage_ref, media.technical_status,
                  media.deletion_requested_at
@@ -435,7 +443,7 @@ export async function processPublicQuestionMediaDeletionByAssetId(assetId: strin
   const storageRef = rowString(row, "storage_ref");
   if (!storageRef)
     throw new TokenlessServiceError("Stored public media is invalid.", 500, "invalid_public_media_state");
-  await runtime().store.delete(storageRef);
+  await runtime().store.delete(storageRef, signal);
   const deleted = await dbClient.execute({
     sql: `UPDATE tokenless_public_question_media
           SET technical_status = 'deleted', storage_ref = ?, original_filename = 'deleted', updated_at = ?

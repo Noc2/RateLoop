@@ -4,6 +4,7 @@ import { dbClient } from "~~/lib/db";
 import { isResendConfigured, sendTokenlessNotificationEmail } from "~~/lib/notifications/resend";
 import { type TokenlessNotificationKey, buildTokenlessSignedUnsubscribeToken } from "~~/lib/notifications/tokenless";
 import { deliverPendingWorkspaceReviewerInvitationEmails } from "~~/lib/notifications/workspaceReviewerInvitations";
+import { maintenanceCancellationRequested } from "~~/lib/tokenless/maintenanceCancellation";
 import { materializeOversightAlertNotifications } from "~~/lib/tokenless/oversightAlerts";
 import { listRaterSettlementNotificationCandidates } from "~~/lib/tokenless/raterSettlementService";
 
@@ -102,7 +103,7 @@ function workspaceHref(row: Row, tab: "overview" | "evaluations") {
 async function loadLifecycleCandidates(
   now: Date,
   limit: number,
-  settlementSource: { fetchImpl?: typeof fetch; ponderUrl?: string } = {},
+  settlementSource: { fetchImpl?: typeof fetch; ponderUrl?: string; signal?: AbortSignal } = {},
 ) {
   // Each source may fill the whole bounded batch. The final interleave still
   // enforces fairness without limiting assignment production to a fraction
@@ -113,6 +114,7 @@ async function loadLifecycleCandidates(
     limit: perSource,
     now,
     ponderUrl: settlementSource.ponderUrl,
+    signal: settlementSource.signal,
   }).catch(error => {
     console.error("[tokenless-notifications] Settlement notices deferred.", error);
     return [];
@@ -349,12 +351,13 @@ async function insertLifecycleCandidates(candidates: readonly LifecycleCandidate
 }
 
 export async function materializeTokenlessLifecycleNotifications(
-  input: { fetchImpl?: typeof fetch; limit?: number; now?: Date; ponderUrl?: string } = {},
+  input: { fetchImpl?: typeof fetch; limit?: number; now?: Date; ponderUrl?: string; signal?: AbortSignal } = {},
 ) {
   const now = input.now ?? new Date();
   const candidates = await loadLifecycleCandidates(now, bounded(input.limit), {
     fetchImpl: input.fetchImpl,
     ponderUrl: input.ponderUrl,
+    signal: input.signal,
   });
   return { candidates: candidates.length, inserted: await insertLifecycleCandidates(candidates, now) };
 }
@@ -477,6 +480,7 @@ export async function deliverPendingTokenlessNotificationEmails(input: {
   limit?: number;
   now?: Date;
   send?: typeof sendTokenlessNotificationEmail;
+  signal?: AbortSignal;
   unsubscribeSecret?: string;
 }) {
   const now = input.now ?? new Date();
@@ -519,6 +523,7 @@ export async function deliverPendingTokenlessNotificationEmails(input: {
   });
   const outcomes: Array<{ deliveryId: string; state: DeliveryState }> = [];
   for (const value of due.rows) {
+    if (maintenanceCancellationRequested(input.signal)) break;
     const row = value as Row;
     const id = rowString(row, "delivery_id")!;
     const claimed = await dbClient.execute({
@@ -560,14 +565,18 @@ export async function deliverPendingTokenlessNotificationEmails(input: {
       );
       const unsubscribeUrl = new URL("/api/notifications/email/unsubscribe", configuration.origin!);
       unsubscribeUrl.searchParams.set("token", token);
-      const sent = await (input.send ?? sendTokenlessNotificationEmail)({
-        actionUrl: actionUrl(configuration.origin!, rowString(row, "href")),
-        body: rowString(row, "body") ?? "A RateLoop update is ready.",
-        email: rowString(row, "email")!,
-        idempotencyKey: id,
-        title: rowString(row, "title") ?? "RateLoop update",
-        unsubscribeUrl: unsubscribeUrl.toString(),
-      });
+      const sent = await (input.send ?? sendTokenlessNotificationEmail)(
+        {
+          actionUrl: actionUrl(configuration.origin!, rowString(row, "href")),
+          body: rowString(row, "body") ?? "A RateLoop update is ready.",
+          email: rowString(row, "email")!,
+          idempotencyKey: id,
+          title: rowString(row, "title") ?? "RateLoop update",
+          unsubscribeUrl: unsubscribeUrl.toString(),
+        },
+        undefined,
+        input.signal,
+      );
       await dbClient.execute({
         sql: `UPDATE tokenless_notification_email_deliveries
               SET state = 'delivered', attempt_count = ?, provider_message_id = ?, last_error = NULL,
@@ -614,18 +623,37 @@ export async function deliverPendingTokenlessNotificationEmails(input: {
   return outcomes;
 }
 
-export async function runTokenlessNotificationCycle(input: { appOrigin: string; limit?: number; now?: Date }) {
+export async function runTokenlessNotificationCycle(input: {
+  appOrigin: string;
+  limit?: number;
+  now?: Date;
+  signal?: AbortSignal;
+}) {
   const now = input.now ?? new Date();
   const limit = bounded(input.limit);
-  const materialized = await materializeTokenlessLifecycleNotifications({ now, limit });
-  const alerts = await materializeOversightAlertNotifications({ now, limit });
-  const enqueued = await enqueueTokenlessNotificationEmails({ now, limit });
-  const outcomes = await deliverPendingTokenlessNotificationEmails({ appOrigin: input.appOrigin, now, limit });
-  const invitationOutcomes = await deliverPendingWorkspaceReviewerInvitationEmails({
-    appOrigin: input.appOrigin,
-    now,
-    limit,
-  });
+  const materialized = await materializeTokenlessLifecycleNotifications({ now, limit, signal: input.signal });
+  const alerts = maintenanceCancellationRequested(input.signal)
+    ? { inserted: 0 }
+    : await materializeOversightAlertNotifications({ now, limit });
+  const enqueued = maintenanceCancellationRequested(input.signal)
+    ? { inserted: 0 }
+    : await enqueueTokenlessNotificationEmails({ now, limit });
+  const outcomes = maintenanceCancellationRequested(input.signal)
+    ? []
+    : await deliverPendingTokenlessNotificationEmails({
+        appOrigin: input.appOrigin,
+        now,
+        limit,
+        signal: input.signal,
+      });
+  const invitationOutcomes = maintenanceCancellationRequested(input.signal)
+    ? []
+    : await deliverPendingWorkspaceReviewerInvitationEmails({
+        appOrigin: input.appOrigin,
+        now,
+        limit,
+        signal: input.signal,
+      });
   const allOutcomes = [...outcomes, ...invitationOutcomes];
   const [notificationBacklog, invitationBacklog] = await Promise.all([
     dbClient.execute({

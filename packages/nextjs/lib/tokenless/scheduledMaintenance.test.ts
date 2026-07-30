@@ -498,6 +498,7 @@ test("the invocation deadline stops cumulative processor work and records one bo
       runtime: {
         monotonicNow: () => elapsedMs,
         processingBudgetMs: 50,
+        scheduleDeadlineAbort: () => () => undefined,
       },
     });
   } finally {
@@ -512,6 +513,46 @@ test("the invocation deadline stops cumulative processor work and records one bo
   assert.equal(result.summary.processorFailures[0]?.errorCode, "maintenance_deadline_exhausted");
   assert.match(result.summary.processorFailures[0]?.errorDigest ?? "", /^sha256:[0-9a-f]{64}$/u);
   assert.equal(logLines.length, 1);
+});
+
+test("the invocation deadline cooperatively aborts an in-flight processor", async () => {
+  let observedSignal: AbortSignal | undefined;
+  let laterProcessorRan = false;
+  const originalConsoleError = console.error;
+  console.error = () => undefined;
+  let result: Awaited<ReturnType<typeof runTokenlessScheduledMaintenance>>;
+  try {
+    result = await runTokenlessScheduledMaintenance({
+      appOrigin: "https://tokenless.example.test",
+      now: NOW,
+      processors: {
+        ...processors(async () => undefined),
+        async sweepExpiredQuotes() {
+          return { deleted: 0, scanned: 0 };
+        },
+        async sweepExpiredPublicMedia(input) {
+          observedSignal = input?.signal;
+          assert.ok(observedSignal);
+          await new Promise<void>(resolve =>
+            observedSignal!.addEventListener("abort", () => resolve(), { once: true }),
+          );
+          return { deleted: 0, failed: [] };
+        },
+        async revivePrivacyWorkerFailures() {
+          laterProcessorRan = true;
+          return { revived: 0 };
+        },
+      },
+      runtime: { processingBudgetMs: 25 },
+    });
+  } finally {
+    console.error = originalConsoleError;
+  }
+  if (result.status === "duplicate") assert.fail("first invocation cannot be duplicate");
+  assert.equal(observedSignal?.aborted, true);
+  assert.equal(laterProcessorRan, false);
+  assert.equal(result.status, "degraded");
+  assert.equal(result.summary.processorFailures[0]?.errorCode, "maintenance_deadline_exhausted");
 });
 
 test("the invocation deadline releases unstarted claimed work without consuming an attempt", async () => {
@@ -543,6 +584,7 @@ test("the invocation deadline releases unstarted claimed work without consuming 
       runtime: {
         monotonicNow: () => elapsedMs,
         processingBudgetMs: 50,
+        scheduleDeadlineAbort: () => () => undefined,
       },
     });
   } finally {

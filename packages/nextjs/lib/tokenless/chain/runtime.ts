@@ -31,16 +31,24 @@ export function createOrderedRpcFallbackTransport(transports: readonly Transport
   return fallback(transports, { rank: false, retryCount: 0 });
 }
 
-function createConfiguredRpcTransport(rpcUrls: readonly string[]) {
-  return createOrderedRpcFallbackTransport(rpcUrls.map(url => http(url, { retryCount: 0, timeout: RPC_TIMEOUT_MS })));
+export function createConfiguredRpcTransport(rpcUrls: readonly string[], signal?: AbortSignal) {
+  return createOrderedRpcFallbackTransport(
+    rpcUrls.map(url =>
+      http(url, {
+        retryCount: 0,
+        timeout: RPC_TIMEOUT_MS,
+        ...(signal ? { fetchOptions: { signal } } : {}),
+      }),
+    ),
+  );
 }
 
-function createBasePublicClient(rpcUrls: readonly string[]) {
-  return createPublicClient({ chain: baseSepolia, transport: createConfiguredRpcTransport(rpcUrls) });
+function createBasePublicClient(rpcUrls: readonly string[], signal?: AbortSignal) {
+  return createPublicClient({ chain: baseSepolia, transport: createConfiguredRpcTransport(rpcUrls, signal) });
 }
 
-function createBaseWalletClient(account: Account, rpcUrls: readonly string[]) {
-  return createWalletClient({ account, chain: baseSepolia, transport: createConfiguredRpcTransport(rpcUrls) });
+function createBaseWalletClient(account: Account, rpcUrls: readonly string[], signal?: AbortSignal) {
+  return createWalletClient({ account, chain: baseSepolia, transport: createConfiguredRpcTransport(rpcUrls, signal) });
 }
 
 export type TokenlessPublicClient = ReturnType<typeof createBasePublicClient>;
@@ -107,32 +115,40 @@ export function loadTokenlessEvidenceFinalityPolicy(
 let runtimeCache: { rpcKey: string; runtime: TokenlessChainRuntime } | null = null;
 let runtimeOverride: TokenlessChainRuntime | null = null;
 
-function wallet(signer: TokenlessSignerConfig, rpcUrls: readonly string[]) {
+function wallet(signer: TokenlessSignerConfig, rpcUrls: readonly string[], signal?: AbortSignal) {
   const account = createPlatformSecretEthereumAccount({
     configuration: signer.configuration,
   });
   return {
     account,
-    client: createBaseWalletClient(account, rpcUrls),
+    client: createBaseWalletClient(account, rpcUrls, signal),
   };
 }
 
-export function getTokenlessChainRuntime(config: TokenlessChainConfig): TokenlessChainRuntime {
-  if (runtimeOverride) return runtimeOverride;
+function createTokenlessChainRuntime(config: TokenlessChainConfig, signal?: AbortSignal) {
   const rpcUrls = [config.rpcUrl, ...config.rpcFallbackUrls];
-  const rpcKey = JSON.stringify(rpcUrls);
-  if (runtimeCache?.rpcKey === rpcKey) return runtimeCache.runtime;
-  const prepaid = config.prepaidFunderSigner ? wallet(config.prepaidFunderSigner, rpcUrls) : null;
-  const relayer = config.relayerSigner ? wallet(config.relayerSigner, rpcUrls) : null;
-  const surpriseBonus = config.surpriseBonusFunderSigner ? wallet(config.surpriseBonusFunderSigner, rpcUrls) : null;
-  const runtime: TokenlessChainRuntime = {
-    publicClient: createBasePublicClient(rpcUrls),
+  const prepaid = config.prepaidFunderSigner ? wallet(config.prepaidFunderSigner, rpcUrls, signal) : null;
+  const relayer = config.relayerSigner ? wallet(config.relayerSigner, rpcUrls, signal) : null;
+  const surpriseBonus = config.surpriseBonusFunderSigner
+    ? wallet(config.surpriseBonusFunderSigner, rpcUrls, signal)
+    : null;
+  return {
+    publicClient: createBasePublicClient(rpcUrls, signal),
     ...(prepaid ? { prepaidAccount: prepaid.account, prepaidWallet: prepaid.client } : {}),
     ...(relayer ? { relayerAccount: relayer.account, relayerWallet: relayer.client } : {}),
     ...(surpriseBonus
       ? { surpriseBonusAccount: surpriseBonus.account, surpriseBonusWallet: surpriseBonus.client }
       : {}),
   };
+}
+
+export function getTokenlessChainRuntime(config: TokenlessChainConfig, signal?: AbortSignal): TokenlessChainRuntime {
+  if (runtimeOverride) return runtimeOverride;
+  const rpcUrls = [config.rpcUrl, ...config.rpcFallbackUrls];
+  if (signal) return createTokenlessChainRuntime(config, signal);
+  const rpcKey = JSON.stringify(rpcUrls);
+  if (runtimeCache?.rpcKey === rpcKey) return runtimeCache.runtime;
+  const runtime = createTokenlessChainRuntime(config);
   runtimeCache = { rpcKey, runtime };
   return runtime;
 }

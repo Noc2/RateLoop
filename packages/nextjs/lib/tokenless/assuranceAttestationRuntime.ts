@@ -127,6 +127,7 @@ export async function processDueAssuranceAttestations(input: {
   now?: Date;
   limit?: number;
   env?: AttestationEnvironment;
+  signal?: AbortSignal;
 }) {
   const now = input.now ?? new Date();
   const due = await countDueAssuranceAttestationJobs(now);
@@ -147,6 +148,7 @@ export async function processDueAssuranceAttestations(input: {
     ...runtime,
     now,
     limit: input.limit,
+    signal: input.signal,
   });
   return {
     configured: true,

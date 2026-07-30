@@ -11,6 +11,7 @@ import {
   createAssuranceDsseEnvelope,
   verifyAssuranceDsseEnvelope,
 } from "~~/lib/tokenless/assuranceAttestations";
+import { maintenanceCancellationRequested } from "~~/lib/tokenless/maintenanceCancellation";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import {
   EXTERNAL_WITNESS_SCHEMA_VERSION,
@@ -34,7 +35,7 @@ export type ManagedAttestationSigner = {
 };
 
 export type RekorPublisher = {
-  publish(input: { envelope: DsseEnvelope; statement: AssuranceAttestationStatement }): Promise<{
+  publish(input: { envelope: DsseEnvelope; statement: AssuranceAttestationStatement; signal?: AbortSignal }): Promise<{
     entryUuid: string;
     logIndex: string;
     inclusionBundle: Record<string, unknown>;
@@ -42,7 +43,7 @@ export type RekorPublisher = {
 };
 
 export type Rfc3161TimestampAuthority = {
-  timestamp(input: { artifactDigest: string; boundaryAt: string }): Promise<{ token: Buffer }>;
+  timestamp(input: { artifactDigest: string; boundaryAt: string; signal?: AbortSignal }): Promise<{ token: Buffer }>;
 };
 
 function text(row: Row | undefined, key: string) {
@@ -352,6 +353,7 @@ async function publishClaimedAttestation(input: {
   rekor: RekorPublisher;
   tsa: Rfc3161TimestampAuthority;
   now: Date;
+  signal?: AbortSignal;
 }) {
   const jobId = text(input.row, "job_id")!;
   const leaseGeneration = storedInteger(input.row, "lease_generation");
@@ -362,7 +364,11 @@ async function publishClaimedAttestation(input: {
   // checked-out connection or row lock. Rekor publication is content-addressed
   // and its adapter resolves an existing-entry conflict as the same receipt.
   const rekor = validateRekorReceipt(
-    await input.rekor.publish({ envelope: input.envelope, statement: input.statement }),
+    await input.rekor.publish({
+      envelope: input.envelope,
+      statement: input.statement,
+      signal: input.signal,
+    }),
   );
   if (!(await attestationClaimIsCurrent(claim))) return false;
 
@@ -371,6 +377,7 @@ async function publishClaimedAttestation(input: {
     ? await input.tsa.timestamp({
         artifactDigest: text(input.row, "artifact_digest")!,
         boundaryAt: new Date(String(input.row.boundary_at)).toISOString(),
+        signal: input.signal,
       })
     : null;
   if (timestamp && (!Buffer.isBuffer(timestamp.token) || timestamp.token.byteLength < 32)) {
@@ -453,6 +460,7 @@ export async function processAssuranceAttestationJobs(input: {
   now?: Date;
   limit?: number;
   workspaceId?: string;
+  signal?: AbortSignal;
 }) {
   validateManagedSigner(input.signer);
   const now = validDate(input.now ?? new Date(), "Attestation processing time");
@@ -489,6 +497,7 @@ export async function processAssuranceAttestationJobs(input: {
     value => ({ jobId: text(value, "job_id")!, state: "dead" as const }),
   );
   for (const value of due.rows) {
+    if (maintenanceCancellationRequested(input.signal)) break;
     const jobId = text(value as Row, "job_id")!;
     const claimed = await dbClient.execute({
       sql: `UPDATE tokenless_assurance_attestation_jobs
@@ -525,6 +534,7 @@ export async function processAssuranceAttestationJobs(input: {
         rekor: input.rekor,
         tsa: input.tsa,
         now,
+        signal: input.signal,
       });
       if (completed) outcomes.push({ jobId, state: "completed" });
     } catch (error) {

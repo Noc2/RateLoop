@@ -2,6 +2,7 @@ import { loadTokenlessChainConfig } from "./chain/config";
 import "server-only";
 import { type Address, encodeAbiParameters, getAddress, isAddress, isHash, keccak256, parseAbiParameters } from "viem";
 import { dbClient } from "~~/lib/db";
+import { maintenanceRequestSignal } from "~~/lib/tokenless/maintenanceCancellation";
 import { type RaterSettlementSnapshot, tokenlessCommitKey } from "~~/lib/tokenless/rater/settlementRecovery";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -125,14 +126,14 @@ function endpoint(base: URL, path: string) {
   return url;
 }
 
-async function fetchJson(fetchImpl: typeof fetch, url: URL, label: string) {
+async function fetchJson(fetchImpl: typeof fetch, url: URL, label: string, signal?: AbortSignal) {
   let response: Response;
   try {
     response = await fetchImpl(url, {
       headers: { accept: "application/json" },
       cache: "no-store",
       redirect: "error",
-      signal: AbortSignal.timeout(10_000),
+      signal: maintenanceRequestSignal(signal, 10_000),
     });
   } catch {
     throw new TokenlessServiceError(`${label} is not available yet.`, 409, "indexed_settlement_pending", true);
@@ -268,6 +269,7 @@ export async function getRaterSettlementSnapshot(input: {
   fetchImpl?: typeof fetch;
   ponderUrl?: string;
   now?: Date;
+  signal?: AbortSignal;
 }) {
   if (!/^[1-9][0-9]*$/u.test(input.roundId) || !isAddress(input.voteKey)) {
     throw new TokenlessServiceError("Settlement lookup is malformed.", 400, "invalid_settlement_lookup");
@@ -291,9 +293,9 @@ export async function getRaterSettlementSnapshot(input: {
   commitsUrl.searchParams.set("limit", "500");
   const fetchImpl = input.fetchImpl ?? fetch;
   const [deployment, round, commits] = await Promise.all([
-    fetchJson(fetchImpl, endpoint(base, "/deployment"), "Indexed deployment"),
-    fetchJson(fetchImpl, endpoint(base, `/rounds/${encodeURIComponent(input.roundId)}`), "Indexed round"),
-    fetchJson(fetchImpl, commitsUrl, "Indexed commits"),
+    fetchJson(fetchImpl, endpoint(base, "/deployment"), "Indexed deployment", input.signal),
+    fetchJson(fetchImpl, endpoint(base, `/rounds/${encodeURIComponent(input.roundId)}`), "Indexed round", input.signal),
+    fetchJson(fetchImpl, commitsUrl, "Indexed commits", input.signal),
   ]);
   return deriveRaterSettlementSnapshot({
     chain: {
@@ -322,6 +324,7 @@ export async function listRaterSettlementNotificationCandidates(
     limit?: number;
     now?: Date;
     ponderUrl?: string;
+    signal?: AbortSignal;
   } = {},
 ): Promise<RaterSettlementNotificationCandidate[]> {
   const rawLimit = input.limit ?? 20;
@@ -370,7 +373,7 @@ export async function listRaterSettlementNotificationCandidates(
   const settlementsUrl = endpoint(configuredPonderUrl(input.ponderUrl), "/settlements");
   settlementsUrl.searchParams.set("commitKeys", [...localByCommitKey.keys()].join(","));
   const indexed = record(
-    await fetchJson(input.fetchImpl ?? fetch, settlementsUrl, "Indexed settlements"),
+    await fetchJson(input.fetchImpl ?? fetch, settlementsUrl, "Indexed settlements", input.signal),
     "Indexed settlements",
   );
   if (

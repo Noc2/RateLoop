@@ -44,6 +44,7 @@ import {
 import { baseSepolia } from "viem/chains";
 import { dbClient, dbPool } from "~~/lib/db";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
+import { throwIfMaintenanceCancelled } from "~~/lib/tokenless/maintenanceCancellation";
 import { requirePaidLaneComplianceApproval } from "~~/lib/tokenless/paidLaneCompliance";
 import { normalizedX402Authorization } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -1872,14 +1873,27 @@ export async function attachX402Authorization(operationKey: string, value: unkno
 
 export async function reconcileChainPayment(
   operationKey: string,
-  options: { config?: TokenlessChainConfig; runtime?: TokenlessChainRuntime } = {},
+  options: { config?: TokenlessChainConfig; runtime?: TokenlessChainRuntime; signal?: AbortSignal } = {},
 ) {
+  throwIfMaintenanceCancelled(options.signal);
   const existing = await executionRow(operationKey);
   if (!existing) return null;
-  const current = await prepareChainPayment(operationKey, options);
+  throwIfMaintenanceCancelled(options.signal);
+  const config = options.config ?? loadTokenlessChainConfig();
+  const scopedOptions = {
+    ...options,
+    config,
+    runtime: options.runtime ?? getTokenlessChainRuntime(config, options.signal),
+  };
+  const current = await prepareChainPayment(operationKey, scopedOptions);
+  throwIfMaintenanceCancelled(options.signal);
   if (current.paymentState === "confirmed") return current;
   if (current.paymentMode === "x402" && current.paymentState === "awaiting_authorization") return current;
-  if (current.paymentMode !== "wallet") return executeServerChainPayment(operationKey, options);
+  if (current.paymentMode !== "wallet") {
+    const executed = await executeServerChainPayment(operationKey, scopedOptions);
+    throwIfMaintenanceCancelled(options.signal);
+    return executed;
+  }
   return current;
 }
 

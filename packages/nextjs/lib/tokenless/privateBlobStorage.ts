@@ -1,4 +1,5 @@
 import type { get as getBlob } from "@vercel/blob";
+import { maintenanceRequestSignal, throwIfMaintenanceCancelled } from "~~/lib/tokenless/maintenanceCancellation";
 
 export const VERCEL_BLOB_OPERATION_TIMEOUT_MS = 30_000;
 
@@ -37,24 +38,27 @@ export function createPrivateBlobStorage(options: { loadApi?: BlobApiLoader; tim
   }
 
   return {
-    async delete(reference: string) {
+    async delete(reference: string, signal?: AbortSignal) {
+      throwIfMaintenanceCancelled(signal);
       const api = await loadApi();
-      await api.del(reference, { abortSignal: AbortSignal.timeout(timeoutMs) });
+      await api.del(reference, { abortSignal: maintenanceRequestSignal(signal, timeoutMs) });
     },
-    async get(reference: string) {
+    async get(reference: string, signal?: AbortSignal) {
+      throwIfMaintenanceCancelled(signal);
       const api = await loadApi();
       const result = await api.get(reference, {
-        abortSignal: AbortSignal.timeout(timeoutMs),
+        abortSignal: maintenanceRequestSignal(signal, timeoutMs),
         access: "private",
         useCache: false,
       });
       if (!result || result.statusCode !== 200 || !result.stream) return null;
       return new Uint8Array(await new Response(result.stream).arrayBuffer());
     },
-    async put(pathname: string, body: Uint8Array, contentType: string) {
+    async put(pathname: string, body: Uint8Array, contentType: string, signal?: AbortSignal) {
+      throwIfMaintenanceCancelled(signal);
       const api = await loadApi();
       const result = await api.put(pathname, Buffer.from(body), {
-        abortSignal: AbortSignal.timeout(timeoutMs),
+        abortSignal: maintenanceRequestSignal(signal, timeoutMs),
         access: "private",
         addRandomSuffix: false,
         contentType,

@@ -15,6 +15,11 @@ import {
 } from "~~/lib/tokenless/chain/runtime";
 import { aggregatePublicForecastRound } from "~~/lib/tokenless/crowdForecastPersistence";
 import {
+  maintenanceCancellationRequested,
+  maintenanceRequestSignal,
+  throwIfMaintenanceCancelled,
+} from "~~/lib/tokenless/maintenanceCancellation";
+import {
   type PostRoundIntegrityPolicy,
   type PostRoundIntegrityReport,
   evaluatePostRoundIntegrity,
@@ -145,7 +150,7 @@ function digest(value: string) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-async function requireCanonicalEvidenceFinality(evidence: IndexedFinalizedEvidence) {
+async function requireCanonicalEvidenceFinality(evidence: IndexedFinalizedEvidence, signal?: AbortSignal) {
   try {
     const config = loadTokenlessChainConfig();
     await assertCanonicalTokenlessEvidenceBlock({
@@ -154,7 +159,7 @@ async function requireCanonicalEvidenceFinality(evidence: IndexedFinalizedEviden
       config,
       deploymentKey: evidence.deploymentKey,
       policy: loadTokenlessEvidenceFinalityPolicy(),
-      runtime: getTokenlessChainRuntime(config),
+      runtime: getTokenlessChainRuntime(config, signal),
     });
   } catch (error) {
     if (error instanceof TokenlessEvidenceFinalityPendingError) {
@@ -374,13 +379,13 @@ function ponderEndpoint(base: URL, path: string) {
   return url;
 }
 
-async function fetchPonderJson(fetchImpl: typeof fetch, url: URL, name: string) {
+async function fetchPonderJson(fetchImpl: typeof fetch, url: URL, name: string, signal?: AbortSignal) {
   let response: Response;
   try {
     response = await fetchImpl(url, {
       headers: { accept: "application/json" },
       redirect: "error",
-      signal: AbortSignal.timeout(10_000),
+      signal: maintenanceRequestSignal(signal, 10_000),
     });
   } catch {
     throw new TokenlessServiceError(`${name} is not available.`, 409, "indexed_evidence_pending", true);
@@ -1074,6 +1079,7 @@ async function deriveFinalizedRoundEvidenceBundle(input: {
   operationKey: string;
   fetchImpl?: typeof fetch;
   ponderUrl?: string;
+  signal?: AbortSignal;
 }) {
   const source = await dbClient.execute({
     sql: `SELECT o.workspace_id, e.*, a.economics_json
@@ -1097,9 +1103,9 @@ async function deriveFinalizedRoundEvidenceBundle(input: {
   commitsUrl.searchParams.set("limit", String(MAX_PONDER_COMMITS));
   const fetchImpl = input.fetchImpl ?? fetch;
   const [rawDeployment, rawRound, rawCommits] = await Promise.all([
-    fetchPonderJson(fetchImpl, ponderEndpoint(base, "/deployment"), "Ponder deployment"),
-    fetchPonderJson(fetchImpl, roundUrl, "Indexed round"),
-    fetchPonderJson(fetchImpl, commitsUrl, "Indexed commits"),
+    fetchPonderJson(fetchImpl, ponderEndpoint(base, "/deployment"), "Ponder deployment", input.signal),
+    fetchPonderJson(fetchImpl, roundUrl, "Indexed round", input.signal),
+    fetchPonderJson(fetchImpl, commitsUrl, "Indexed commits", input.signal),
   ]);
   const deployment = objectValue(rawDeployment, "Ponder deployment") as unknown as PonderDeployment;
   const round = objectValue(rawRound, "Indexed round") as PonderRound;
@@ -1473,6 +1479,7 @@ export async function deriveFinalizedRoundEvidence(input: {
   operationKey: string;
   fetchImpl?: typeof fetch;
   ponderUrl?: string;
+  signal?: AbortSignal;
 }) {
   return (await deriveFinalizedRoundEvidenceBundle(input)).evidence;
 }
@@ -1509,9 +1516,10 @@ export async function appendFinalizedRoundEvidence(input: {
   operationKey: string;
   fetchImpl?: typeof fetch;
   ponderUrl?: string;
+  signal?: AbortSignal;
 }) {
   const { evidence, integrityInput, surpriseReports } = await deriveFinalizedRoundEvidenceBundle(input);
-  await requireCanonicalEvidenceFinality(evidence);
+  await requireCanonicalEvidenceFinality(evidence, input.signal);
   await finalizeSurpriseBountyRound({
     operationKey: input.operationKey,
     deploymentKey: evidence.deploymentKey,
@@ -1676,13 +1684,20 @@ export function wilsonIntervalBps(successes: number, sampleSize: number) {
   };
 }
 
-export async function reviewAndPublishResult(input: { operationKey: string; appOrigin: string; now?: Date }) {
+export async function reviewAndPublishResult(input: {
+  operationKey: string;
+  appOrigin: string;
+  now?: Date;
+  signal?: AbortSignal;
+}) {
+  throwIfMaintenanceCancelled(input.signal);
   const now = input.now ?? new Date();
   const eventResult = await dbClient.execute({
     sql: `SELECT evidence_json, evidence_hash FROM tokenless_transparency_events
           WHERE operation_key = ? AND event_type = 'round.finalized' ORDER BY sequence ASC`,
     args: [input.operationKey],
   });
+  throwIfMaintenanceCancelled(input.signal);
   if (eventResult.rows.length === 0)
     throw new TokenlessServiceError("Finalized round evidence is not indexed.", 409, "evidence_pending");
   const evidence = JSON.parse(
@@ -1697,6 +1712,7 @@ export async function reviewAndPublishResult(input: { operationKey: string; appO
           ORDER BY input_version DESC LIMIT 1`,
     args: [input.operationKey, rowString(eventResult.rows.at(-1) as Row, "evidence_hash")!],
   });
+  throwIfMaintenanceCancelled(input.signal);
   const integrity = integrityResult.rows[0] as Row | undefined;
   if (!integrity) {
     throw new TokenlessServiceError(
@@ -1723,6 +1739,7 @@ export async function reviewAndPublishResult(input: { operationKey: string; appO
           WHERE a.operation_key = ? LIMIT 1`,
     args: [input.operationKey],
   });
+  throwIfMaintenanceCancelled(input.signal);
   const ask = askResult.rows[0] as Row | undefined;
   if (!ask) throw new TokenlessServiceError("Ask not found.", 404, "ask_not_found");
   const quote = JSON.parse(rowString(ask, "response_json")!) as Row;
@@ -1737,6 +1754,7 @@ export async function reviewAndPublishResult(input: { operationKey: string; appO
   const intervalBps = wilsonIntervalBps(evidence.upVotes, evidence.revealCount);
   const terminal = evaluation.status !== "pending";
   const feedback = await listAuthorizedTerminalPublicFeedback({ operationKey: input.operationKey, terminal });
+  throwIfMaintenanceCancelled(input.signal);
   const result = parseTokenlessResult({
     schemaVersion: TOKENLESS_SCHEMA_VERSION,
     operationKey: input.operationKey,
@@ -1767,6 +1785,7 @@ export async function reviewAndPublishResult(input: { operationKey: string; appO
     updatedAt: now.toISOString(),
   });
   if (existingReview.rows.length === 0) {
+    throwIfMaintenanceCancelled(input.signal);
     const versionResult = await dbClient.execute({
       sql: "SELECT COALESCE(MAX(review_version), 0) + 1 AS review_version FROM tokenless_analytics_reviews WHERE operation_key = ?",
       args: [input.operationKey],
@@ -1814,6 +1833,7 @@ export async function reviewAndPublishResult(input: { operationKey: string; appO
           FROM tokenless_result_publications WHERE operation_key = ? LIMIT 1`,
     args: [input.operationKey],
   });
+  throwIfMaintenanceCancelled(input.signal);
   const existing = existingPublication.rows[0] as Row | undefined;
   if (existing) {
     if (
@@ -1830,7 +1850,9 @@ export async function reviewAndPublishResult(input: { operationKey: string; appO
       result: parseTokenlessResult(JSON.parse(rowString(existing, "result_json")!)),
     };
   }
+  throwIfMaintenanceCancelled(input.signal);
   await requireCanonicalEvidenceFinality(evidence);
+  throwIfMaintenanceCancelled(input.signal);
   const publicationId = `pub_${digest(`${input.operationKey}:${root}:${evaluation.evaluationHash}`).slice(0, 32)}`;
   await dbClient.execute({
     sql: `INSERT INTO tokenless_result_publications
@@ -1856,6 +1878,7 @@ export async function reviewAndPublishResult(input: { operationKey: string; appO
     result,
     appOrigin: input.appOrigin,
     now,
+    signal: input.signal,
   });
   return { evidenceRoot: root, publicationId, reasonCodes: evaluation.reasonCodes, evaluation, result };
 }
@@ -1866,7 +1889,9 @@ async function enqueuePublicationWebhooks(input: {
   result: TokenlessResult;
   appOrigin: string;
   now: Date;
+  signal?: AbortSignal;
 }) {
+  throwIfMaintenanceCancelled(input.signal);
   const subscriptions = await dbClient.execute({
     sql: `SELECT s.endpoint_id, s.event_types_json FROM tokenless_ask_webhook_subscriptions s
           JOIN tokenless_webhook_endpoints e ON e.endpoint_id = s.endpoint_id
@@ -1874,6 +1899,7 @@ async function enqueuePublicationWebhooks(input: {
     args: [input.operationKey],
   });
   for (const value of subscriptions.rows) {
+    throwIfMaintenanceCancelled(input.signal);
     const row = value as Row;
     const events = new Set<string>(JSON.parse(rowString(row, "event_types_json") ?? "[]"));
     if (!events.has("result.ready")) continue;
@@ -1915,6 +1941,7 @@ export async function deliverPendingWebhooks(
     encryptionKey?: string;
     resolveHostname?: ResolveHostname;
     operationKey?: string;
+    signal?: AbortSignal;
   } = {},
 ) {
   const fetchImpl = input.fetchImpl ?? deliverOverPinnedAddress;
@@ -1941,6 +1968,7 @@ export async function deliverPendingWebhooks(
   });
   const outcomes = [];
   for (const value of due.rows) {
+    if (maintenanceCancellationRequested(input.signal)) break;
     const row = value as Row;
     const deliveryId = rowString(row, "delivery_id")!;
     // Claim the row with a fresh lease generation, reclaiming any delivering row
@@ -1969,6 +1997,7 @@ export async function deliverPendingWebhooks(
         .update(`${timestamp}.${payload}`)
         .digest("hex")}`;
       const pinnedAddress = await assertPublicWebhookDestination(rowString(row, "url")!, input.resolveHostname);
+      throwIfMaintenanceCancelled(input.signal);
       const response = await fetchImpl(rowString(row, "url")!, {
         method: "POST",
         headers: {
@@ -1979,7 +2008,7 @@ export async function deliverPendingWebhooks(
         },
         body: payload,
         redirect: "error",
-        signal: AbortSignal.timeout(10_000),
+        signal: maintenanceRequestSignal(input.signal, 10_000),
         pinnedAddress,
       });
       if (response.ok) {

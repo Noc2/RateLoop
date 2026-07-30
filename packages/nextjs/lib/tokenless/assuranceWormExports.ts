@@ -4,6 +4,10 @@ import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/acco
 import { dbPool, serializePoolClientQueries } from "~~/lib/db";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { type S3CompatibleCredential, createS3CompatibleWormRuntime } from "~~/lib/tokenless/assuranceWormS3";
+import {
+  maintenanceCancellationRequested,
+  throwIfMaintenanceCancelled,
+} from "~~/lib/tokenless/maintenanceCancellation";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import { verifyAuditExport } from "~~/scripts/audit-export-core.mjs";
 
@@ -65,6 +69,7 @@ export type AssuranceWormRuntime = {
     checksumSha256Base64: string;
     retentionUntil: string;
     idempotencyKey: string;
+    signal?: AbortSignal;
   }): Promise<WormPutReceipt>;
   verifySettlementReceipt?(input: {
     workspaceId: string;
@@ -999,7 +1004,8 @@ function retryDelay(attempt: number) {
   return Math.min(60 * 60_000, 5_000 * 2 ** Math.max(0, attempt - 1));
 }
 
-export async function processAssuranceWormExportJob(input: { jobId: string; now?: Date }) {
+export async function processAssuranceWormExportJob(input: { jobId: string; now?: Date; signal?: AbortSignal }) {
+  throwIfMaintenanceCancelled(input.signal);
   const now = input.now ?? new Date();
   const client = await dbPool.connect();
   let leased: Row;
@@ -1073,6 +1079,7 @@ export async function processAssuranceWormExportJob(input: { jobId: string; now?
         checksumSha256Base64: createHash("sha256").update(payload).digest("base64"),
         retentionUntil: new Date(String(leased.retention_until)).toISOString(),
         idempotencyKey: text(leased, "idempotency_key")!,
+        signal: input.signal,
       });
       const receiptRetention = new Date(receipt.retentionUntil);
       if (
@@ -1219,7 +1226,7 @@ export async function listAssuranceWormExports(
   }
 }
 
-export async function processDueAssuranceWormExports(input: { now?: Date; limit?: number } = {}) {
+export async function processDueAssuranceWormExports(input: { now?: Date; limit?: number; signal?: AbortSignal } = {}) {
   const now = input.now ?? new Date();
   const limit = input.limit ?? 20;
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
@@ -1234,8 +1241,13 @@ export async function processDueAssuranceWormExports(input: { now?: Date; limit?
   );
   const summary = { due: due.rows.length, delivered: 0, retry: 0, dead: 0, skipped: 0 };
   for (const row of due.rows as Row[]) {
+    if (maintenanceCancellationRequested(input.signal)) break;
     try {
-      const job = await processAssuranceWormExportJob({ jobId: text(row, "job_id")!, now });
+      const job = await processAssuranceWormExportJob({
+        jobId: text(row, "job_id")!,
+        now,
+        signal: input.signal,
+      });
       if (job.state === "delivered") summary.delivered += 1;
       else if (job.state === "dead") summary.dead += 1;
       else if (job.state === "retry") summary.retry += 1;

@@ -5,6 +5,7 @@ import { getAddress } from "viem";
 import { dbPool } from "~~/lib/db";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { assuranceReviewerKey, getAssuranceResponseKeyrings } from "~~/lib/tokenless/assuranceResponses";
+import { maintenanceCancellationRequested } from "~~/lib/tokenless/maintenanceCancellation";
 import { type RaterSettlementSnapshot, tokenlessCommitKey } from "~~/lib/tokenless/rater/settlementRecovery";
 import { getRaterSettlementSnapshot } from "~~/lib/tokenless/raterSettlementService";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -884,6 +885,7 @@ type NetworkSettlementLoad = (input: {
   roundId: string;
   voteKey: string;
   now: Date;
+  signal?: AbortSignal;
 }) => Promise<RaterSettlementSnapshot>;
 
 function expiredSelectionTerminalOutcome(assignmentStatus: string | null, confidentialityAcceptedAt: unknown) {
@@ -1036,7 +1038,7 @@ async function resolveNetworkSettlementFailure(client: Pick<PoolClient, "query">
 }
 
 export async function reconcileNetworkAssignmentSettlements(
-  input: { now?: Date; limit?: number; loadSettlement?: NetworkSettlementLoad } = {},
+  input: { now?: Date; limit?: number; loadSettlement?: NetworkSettlementLoad; signal?: AbortSignal } = {},
 ) {
   const now = input.now ?? new Date();
   const limit = Math.min(Math.max(input.limit ?? 20, 1), 100);
@@ -1048,6 +1050,7 @@ export async function reconcileNetworkAssignmentSettlements(
         roundId: value.roundId,
         voteKey: value.voteKey,
         now: value.now,
+        signal: value.signal,
       }));
   const expiredSelections = await dbPool.query(
     `SELECT settlement.binding_id,settlement.assignment_id,settlement.selection_binding_hash,
@@ -1077,6 +1080,7 @@ export async function reconcileNetworkAssignmentSettlements(
   );
   let terminal = 0;
   for (const value of expiredSelections.rows) {
+    if (maintenanceCancellationRequested(input.signal)) break;
     const candidate = value as Row;
     const client = await dbPool.connect();
     try {
@@ -1353,6 +1357,7 @@ export async function reconcileNetworkAssignmentSettlements(
   );
   let retry = 0;
   for (const value of due.rows) {
+    if (maintenanceCancellationRequested(input.signal)) break;
     const row = value as Row;
     try {
       if (!committedPersistenceIdentityMatches(row)) {
@@ -1370,6 +1375,7 @@ export async function reconcileNetworkAssignmentSettlements(
         roundId: text(row, "round_id")!,
         voteKey: text(row, "commit_vote_key")!,
         now,
+        signal: input.signal,
       });
       if (!committedSnapshotIdentityMatches(row, snapshot)) {
         throw new TokenlessServiceError(

@@ -3,6 +3,7 @@ import type { PoolClient } from "pg";
 import "server-only";
 import { dbClient } from "~~/lib/db";
 import { isResendConfigured, sendWorkspaceReviewerInvitationEmail } from "~~/lib/notifications/resend";
+import { maintenanceCancellationRequested } from "~~/lib/tokenless/maintenanceCancellation";
 
 type Row = Record<string, unknown>;
 type DeliveryState = "dead" | "delivered" | "parked" | "retry" | "suppressed";
@@ -183,6 +184,7 @@ export async function deliverPendingWorkspaceReviewerInvitationEmails(input: {
   limit?: number;
   now?: Date;
   send?: typeof sendWorkspaceReviewerInvitationEmail;
+  signal?: AbortSignal;
 }) {
   const now = input.now ?? new Date();
   const limit = bounded(input.limit);
@@ -212,6 +214,7 @@ export async function deliverPendingWorkspaceReviewerInvitationEmails(input: {
     args: [now, limit],
   });
   for (const value of unavailable.rows) {
+    if (maintenanceCancellationRequested(input.signal)) break;
     const id = rowString(value as Row, "delivery_id")!;
     const suppressed = await dbClient.execute({
       sql: `UPDATE tokenless_workspace_reviewer_invitation_email_deliveries
@@ -233,6 +236,7 @@ export async function deliverPendingWorkspaceReviewerInvitationEmails(input: {
     args: [now, limit],
   });
   for (const value of due.rows) {
+    if (maintenanceCancellationRequested(input.signal)) break;
     const row = value as Row;
     const id = rowString(row, "delivery_id")!;
     const claimed = await dbClient.execute({
@@ -287,11 +291,15 @@ export async function deliverPendingWorkspaceReviewerInvitationEmails(input: {
       ) {
         throw new Error("Invitation email payload no longer matches its invitation.");
       }
-      const sent = await (input.send ?? sendWorkspaceReviewerInvitationEmail)({
-        destinationUrl: destination.toString(),
-        email,
-        invitationId: rowString(row, "invitation_id")!,
-      });
+      const sent = await (input.send ?? sendWorkspaceReviewerInvitationEmail)(
+        {
+          destinationUrl: destination.toString(),
+          email,
+          invitationId: rowString(row, "invitation_id")!,
+        },
+        undefined,
+        input.signal,
+      );
       await dbClient.execute({
         sql: `UPDATE tokenless_workspace_reviewer_invitation_email_deliveries
               SET state='delivered',attempt_count=?,payload_ciphertext=NULL,payload_key_version=NULL,

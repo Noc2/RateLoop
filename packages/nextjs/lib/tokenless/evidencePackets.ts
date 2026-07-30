@@ -15,6 +15,7 @@ import { dbPool } from "~~/lib/db";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { enqueueAssuranceAttestation } from "~~/lib/tokenless/assuranceAttestationPipeline";
 import { decisionExplanationRequired } from "~~/lib/tokenless/decisionPromptSampling";
+import { throwIfMaintenanceCancelled } from "~~/lib/tokenless/maintenanceCancellation";
 import {
   type ProjectAccessAction,
   type ProjectAccessRole,
@@ -1114,19 +1115,25 @@ export async function generateAssuranceEvidencePacket(input: {
   now?: Date;
   signer?: EvidenceSigner;
   tenantCommitmentKey?: Buffer;
+  signal?: AbortSignal;
 }) {
+  throwIfMaintenanceCancelled(input.signal);
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
+    throwIfMaintenanceCancelled(input.signal);
     const { row } = await loadRunAccess(client, input, { action: "write", lock: true });
     const existing = await client.query(
       `SELECT packet_json, signing_public_key, signing_key_id
        FROM tokenless_assurance_evidence_packets WHERE run_id = $1 LIMIT 1`,
       [input.runId],
     );
+    throwIfMaintenanceCancelled(input.signal);
     if (existing.rows[0]) {
       const packet = await parseStoredPacket(existing.rows[0]);
+      throwIfMaintenanceCancelled(input.signal);
       await client.query("COMMIT");
+      throwIfMaintenanceCancelled(input.signal);
       await enqueueAssuranceAttestation({
         workspaceId: input.workspaceId,
         kind: "decision_packet",
@@ -1154,6 +1161,7 @@ export async function generateAssuranceEvidencePacket(input: {
       `SELECT case_id FROM tokenless_assurance_run_gold_items WHERE run_id=$1 ORDER BY injection_ordinal`,
       [input.runId],
     );
+    throwIfMaintenanceCancelled(input.signal);
     if (caseResult.rows.length === 0) evidenceError("The completed run has no frozen cases.");
     const goldCaseIds = new Set(goldResult.rows.map(value => rowString(value as QueryRow, "case_id")!));
     const aggregationCases = caseResult.rows.filter(
@@ -1295,7 +1303,9 @@ export async function generateAssuranceEvidencePacket(input: {
         ...recomputation,
       },
     };
+    throwIfMaintenanceCancelled(input.signal);
     const packet = await signPacket(payload, input.signer ?? loadEvidenceSigner());
+    throwIfMaintenanceCancelled(input.signal);
     await client.query(
       `INSERT INTO tokenless_assurance_evidence_packets
        (packet_id, run_id, manifest_hash, case_root, response_root, aggregation_version,
@@ -1322,6 +1332,7 @@ export async function generateAssuranceEvidencePacket(input: {
       ],
     );
     await client.query("COMMIT");
+    throwIfMaintenanceCancelled(input.signal);
     await enqueueAssuranceAttestation({
       workspaceId: input.workspaceId,
       kind: "decision_packet",

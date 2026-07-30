@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import "server-only";
 import { drataGrcSessionId, vantaGrcDocumentFileName } from "~~/lib/tokenless/idempotencyKeys";
+import { maintenanceRequestSignal, throwIfMaintenanceCancelled } from "~~/lib/tokenless/maintenanceCancellation";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 export type GrcProvider = "drata" | "vanta";
@@ -82,6 +83,7 @@ export type GrcProviderAdapter = {
     credential: string;
     idempotencyKey: string;
     providerConfig: DrataProviderConfig | VantaProviderConfig;
+    signal?: AbortSignal;
   }): Promise<GrcProviderDelivery>;
 };
 
@@ -94,8 +96,8 @@ const HASH = /^sha256:[0-9a-f]{64}$/u;
 const DRATA_BATCH_SIZE = 250;
 const PROVIDER_TIMEOUT_MS = 8_000;
 
-function providerSignal() {
-  return AbortSignal.timeout(PROVIDER_TIMEOUT_MS);
+function providerSignal(signal?: AbortSignal) {
+  return maintenanceRequestSignal(signal, PROVIDER_TIMEOUT_MS);
 }
 
 export function canonicalGrcJson(value: unknown): string {
@@ -278,6 +280,7 @@ export function createDrataGrcAdapter(fetchImpl: Fetch = fetch): GrcProviderAdap
   return {
     provider: "drata",
     async deliver(input) {
+      throwIfMaintenanceCancelled(input.signal);
       const config = parseGrcProviderConfig("drata", input.providerConfig) as DrataProviderConfig;
       const sessionId = drataGrcSessionId(input.idempotencyKey);
       const base = `https://public-api.drata.com/public/v2/custom-connections/${config.connectionId}/resources/${config.resourceId}`;
@@ -286,7 +289,7 @@ export function createDrataGrcAdapter(fetchImpl: Fetch = fetch): GrcProviderAdap
         method: "GET",
         headers,
         redirect: "error",
-        signal: providerSignal(),
+        signal: providerSignal(input.signal),
       });
       const sessionsJson = await optionalJson(sessionsResponse);
       const sessions = [...arrayAt(sessionsJson, "data"), ...arrayAt(sessionsJson, "results", "data")] as JsonRecord[];
@@ -294,12 +297,13 @@ export function createDrataGrcAdapter(fetchImpl: Fetch = fetch): GrcProviderAdap
       if (String(existing?.status).toUpperCase() !== "ACTIVE") {
         const records = [...input.bundle.coverageTests, ...input.bundle.documentEvidence].map(drataRecord);
         for (let index = 0; index < records.length; index += DRATA_BATCH_SIZE) {
+          throwIfMaintenanceCancelled(input.signal);
           await providerRequest(fetchImpl, "drata", "session upload", `${base}/sessions/${sessionId}`, {
             method: "POST",
             headers: { ...headers, "Content-Type": "application/json" },
             body: canonicalGrcJson({ data: records.slice(index, index + DRATA_BATCH_SIZE) }),
             redirect: "error",
-            signal: providerSignal(),
+            signal: providerSignal(input.signal),
           });
         }
         await providerRequest(fetchImpl, "drata", "session completion", `${base}/sessions/${sessionId}/actions`, {
@@ -307,7 +311,7 @@ export function createDrataGrcAdapter(fetchImpl: Fetch = fetch): GrcProviderAdap
           headers: { ...headers, "Content-Type": "application/json" },
           body: canonicalGrcJson({ action: "complete" }),
           redirect: "error",
-          signal: providerSignal(),
+          signal: providerSignal(input.signal),
         });
       }
       return {
@@ -322,6 +326,7 @@ export function createVantaGrcAdapter(fetchImpl: Fetch = fetch): GrcProviderAdap
   return {
     provider: "vanta",
     async deliver(input) {
+      throwIfMaintenanceCancelled(input.signal);
       const config = parseGrcProviderConfig("vanta", input.providerConfig) as VantaProviderConfig;
       const fileName = vantaGrcDocumentFileName(input.bundle.bundleId);
       const base = `https://api.vanta.com/v1/documents/${encodeURIComponent(config.documentId)}`;
@@ -335,7 +340,7 @@ export function createVantaGrcAdapter(fetchImpl: Fetch = fetch): GrcProviderAdap
           method: "GET",
           headers,
           redirect: "error",
-          signal: providerSignal(),
+          signal: providerSignal(input.signal),
         },
       );
       const uploadsJson = await optionalJson(uploadsResponse);
@@ -353,7 +358,7 @@ export function createVantaGrcAdapter(fetchImpl: Fetch = fetch): GrcProviderAdap
           headers,
           body: form,
           redirect: "error",
-          signal: providerSignal(),
+          signal: providerSignal(input.signal),
         });
         const uploaded = await optionalJson(uploadedResponse);
         uploadId = uploaded?.id;
@@ -364,7 +369,7 @@ export function createVantaGrcAdapter(fetchImpl: Fetch = fetch): GrcProviderAdap
         method: "POST",
         headers,
         redirect: "error",
-        signal: providerSignal(),
+        signal: providerSignal(input.signal),
       });
       const reference =
         typeof uploadId === "string" && IDENTIFIER.test(uploadId)

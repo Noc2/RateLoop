@@ -18,6 +18,7 @@ import {
   parseGrcControlMappings,
   parseGrcProviderConfig,
 } from "~~/lib/tokenless/assuranceGrcProviders";
+import { maintenanceCancellationRequested } from "~~/lib/tokenless/maintenanceCancellation";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Row = Record<string, unknown>;
@@ -1085,6 +1086,7 @@ async function deliverAndMarkJobSucceeded(input: {
   credentialResolver: GrcCredentialResolver;
   providerConfig: DrataProviderConfig | VantaProviderConfig;
   adapter: GrcProviderAdapter;
+  signal?: AbortSignal;
 }) {
   // prepareJobReceipt commits a durable reservation while holding the connector
   // and job fences. Connector pause/update operations inspect that reservation,
@@ -1110,6 +1112,7 @@ async function deliverAndMarkJobSucceeded(input: {
     credential,
     idempotencyKey: requiredText(input.row, "idempotency_key"),
     providerConfig: input.providerConfig,
+    signal: input.signal,
   });
   const expectedRecordCount = input.bundle.coverageTests.length + input.bundle.documentEvidence.length;
   if (
@@ -1200,6 +1203,7 @@ export async function processDueGrcReconciliations(input: {
   source?: GrcEvidenceSource;
   credentialResolver?: GrcCredentialResolver;
   adapters?: Partial<Record<GrcProvider, GrcProviderAdapter>>;
+  signal?: AbortSignal;
 }) {
   const now = input.now ?? new Date();
   const limit = input.limit ?? 10;
@@ -1207,12 +1211,14 @@ export async function processDueGrcReconciliations(input: {
     throw new Error("GRC reconciliation worker settings are invalid.");
   }
   const enqueued = await enqueueDueReconciliations(now, limit);
-  const claimed = await claimReconciliations(now, limit);
-  const summary = { enqueued, claimed: claimed.length, succeeded: 0, retry: 0, failed: 0 };
+  const summary = { enqueued, claimed: 0, succeeded: 0, retry: 0, failed: 0 };
   const source = input.source ?? loadWorkspaceGrcEvidence;
   const credentialResolver = input.credentialResolver ?? resolveGrcCredentialReference;
   const adapters = { ...DEFAULT_GRC_PROVIDER_ADAPTERS, ...input.adapters };
-  for (const row of claimed) {
+  while (summary.claimed < limit && !maintenanceCancellationRequested(input.signal)) {
+    const row = (await claimReconciliations(now, 1))[0];
+    if (!row) break;
+    summary.claimed += 1;
     try {
       const workspaceId = requiredText(row, "workspace_id");
       const connectorId = requiredText(row, "connector_id");
@@ -1286,10 +1292,19 @@ export async function processDueGrcReconciliations(input: {
         credentialResolver,
         providerConfig,
         adapter,
+        signal: input.signal,
       });
       summary.succeeded += 1;
     } catch (error) {
-      const state = await markJobFailed(row, error, now);
+      const effectiveError = maintenanceCancellationRequested(input.signal)
+        ? new TokenlessServiceError(
+            "GRC delivery was interrupted by the maintenance deadline.",
+            503,
+            "maintenance_deadline_exhausted",
+            true,
+          )
+        : error;
+      const state = await markJobFailed(row, effectiveError, now);
       if (state !== null) summary[state] += 1;
     }
   }

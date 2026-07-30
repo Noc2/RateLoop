@@ -3,6 +3,7 @@ import "server-only";
 import { dbClient, dbPool } from "~~/lib/db";
 import { releaseSessionAdvisoryLocksAndConnection, tryAcquireSessionAdvisoryLock } from "~~/lib/db/advisoryLocks";
 import { type AuditEventInput, appendAuditEvent } from "~~/lib/privacy/audit";
+import { maintenanceCancellationRequested } from "~~/lib/tokenless/maintenanceCancellation";
 
 type IdentityAuditInput = AuditEventInput & { eventKey: string };
 let activationHookForTests: ((eventKey: string) => Promise<void>) | null = null;
@@ -139,7 +140,7 @@ export async function enterpriseIdentityAuditReservation(eventKey: string) {
   return { metadata, state };
 }
 
-export async function reconcileEnterpriseIdentityAuditReservations(limit = 50) {
+export async function reconcileEnterpriseIdentityAuditReservations(limit = 50, signal?: AbortSignal) {
   const reservations = await dbClient.execute({
     sql: `SELECT event_key,workspace_id,action,target_id
           FROM tokenless_enterprise_identity_audit_outbox
@@ -150,6 +151,7 @@ export async function reconcileEnterpriseIdentityAuditReservations(limit = 50) {
   });
   let activated = 0;
   for (const row of reservations.rows) {
+    if (maintenanceCancellationRequested(signal)) break;
     const action = String(row.action);
     const table =
       action === "identity.provider.deleted"
@@ -166,7 +168,7 @@ export async function reconcileEnterpriseIdentityAuditReservations(limit = 50) {
   return { activated, inspected: reservations.rowCount };
 }
 
-export async function drainEnterpriseIdentityAuditOutbox(now = new Date(), limit = 50) {
+export async function drainEnterpriseIdentityAuditOutbox(now = new Date(), limit = 50, signal?: AbortSignal) {
   const due = await dbClient.execute({
     sql: `SELECT event_key,workspace_id,action,actor_kind,actor_reference,assurance_method,target_kind,target_id,
                  purpose,reason,result,metadata_json,attempt_count,occurred_at
@@ -178,6 +180,7 @@ export async function drainEnterpriseIdentityAuditOutbox(now = new Date(), limit
   let delivered = 0;
   let retry = 0;
   for (const value of due.rows) {
+    if (maintenanceCancellationRequested(signal)) break;
     const row = value as Record<string, unknown>;
     const eventKey = String(row.event_key);
     const lockKey = `enterprise-identity-audit:${eventKey}`;

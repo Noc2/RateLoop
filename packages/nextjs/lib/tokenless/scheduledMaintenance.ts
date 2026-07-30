@@ -33,6 +33,7 @@ import {
   produceScheduledIntegrityEpoch,
   purgeExpiredIntegrityEpochPrivateFeatures,
 } from "~~/lib/tokenless/integrityEpochProducer";
+import { MaintenanceCancellationError, throwIfMaintenanceCancelled } from "~~/lib/tokenless/maintenanceCancellation";
 import { refreshCompletedAssuranceMechanismHealth } from "~~/lib/tokenless/mechanismHealth";
 import { reconcileNetworkAssignmentSettlements } from "~~/lib/tokenless/networkAssignmentSettlement";
 import { sweepManagedEvmNonceDrift, unresolvedManagedEvmNonceFindings } from "~~/lib/tokenless/nonceRecovery";
@@ -357,9 +358,16 @@ type MaintenanceProcessors = {
   deletePublicMedia: typeof processPublicQuestionMediaDeletionByAssetId;
   preparePublicNetworkAudience: typeof preparePublicNetworkAudienceForBinding;
   cleanupPublicNetworkFoundation: typeof abandonStalePublicNetworkFoundation;
-  publishFinalizedRound: (input: { operationKey: string; appOrigin: string; now: Date }) => Promise<void>;
-  recoverChainExecution: (input: { operationKey: string }) => Promise<{ paymentState: string } | null>;
-  recoverRaterCommit: (commitId: string) => Promise<{ state: string | null } | null>;
+  publishFinalizedRound: (input: {
+    operationKey: string;
+    appOrigin: string;
+    now: Date;
+    signal?: AbortSignal;
+  }) => Promise<void>;
+  recoverChainExecution: (input: { operationKey: string; signal?: AbortSignal }) => Promise<{
+    paymentState: string;
+  } | null>;
+  recoverRaterCommit: (commitId: string, signal?: AbortSignal) => Promise<{ state: string | null } | null>;
   deliverWebhooks: typeof deliverPendingWebhooks;
   processNotifications: typeof runTokenlessNotificationCycle;
   processSurpriseBounties: typeof processSurpriseBountyPayments;
@@ -424,6 +432,7 @@ type IsolatedMaintenanceProcessorInput<T> = {
 type MaintenanceProcessingDeadline = {
   reached: () => boolean;
   recordExhaustion: () => void;
+  signal: AbortSignal;
 };
 
 function maintenanceProcessorErrorCode(error: unknown) {
@@ -488,12 +497,13 @@ const defaultProcessors: MaintenanceProcessors = {
   deletePublicMedia: processPublicQuestionMediaDeletionByAssetId,
   preparePublicNetworkAudience: preparePublicNetworkAudienceForBinding,
   cleanupPublicNetworkFoundation: abandonStalePublicNetworkFoundation,
-  async publishFinalizedRound({ operationKey, appOrigin, now }) {
-    await appendFinalizedRoundEvidence({ operationKey });
-    await reviewAndPublishResult({ operationKey, appOrigin, now });
+  async publishFinalizedRound({ operationKey, appOrigin, now, signal }) {
+    await appendFinalizedRoundEvidence({ operationKey, signal });
+    await reviewAndPublishResult({ operationKey, appOrigin, now, signal });
   },
-  async recoverChainExecution({ operationKey }) {
-    return reconcileChainPayment(operationKey);
+  async recoverChainExecution({ operationKey, signal }) {
+    throwIfMaintenanceCancelled(signal);
+    return reconcileChainPayment(operationKey, { signal });
   },
   recoverRaterCommit: reconcilePaidRaterCommit,
   deliverWebhooks: deliverPendingWebhooks,
@@ -630,9 +640,13 @@ async function processClaimedWork(input: {
           operationKey: subjectKey,
           appOrigin: input.appOrigin,
           now: input.now,
+          signal: input.deadline?.signal,
         });
       } else if (kind === "recover_chain_execution") {
-        const recovered = await input.processors.recoverChainExecution({ operationKey: subjectKey });
+        const recovered = await input.processors.recoverChainExecution({
+          operationKey: subjectKey,
+          signal: input.deadline?.signal,
+        });
         if (recovered?.paymentState !== "confirmed") {
           throw new TokenlessServiceError(
             "Chain execution recovery is still pending.",
@@ -642,7 +656,7 @@ async function processClaimedWork(input: {
           );
         }
       } else if (kind === "recover_rater_commit") {
-        const recovered = await input.processors.recoverRaterCommit(subjectKey);
+        const recovered = await input.processors.recoverRaterCommit(subjectKey, input.deadline?.signal);
         if (!new Set(["confirmed", "failed"]).has(recovered?.state ?? "")) {
           throw new TokenlessServiceError(
             "Rater commit recovery is still pending.",
@@ -652,23 +666,24 @@ async function processClaimedWork(input: {
           );
         }
       } else if (kind === "delete_artifact") {
-        const deleted = await input.processors.deleteArtifact(subjectKey, input.now);
+        const deleted = await input.processors.deleteArtifact(subjectKey, input.now, input.deadline?.signal);
         if (!deleted) {
           throw new TokenlessServiceError("Artifact deletion is still pending.", 409, "deletion_not_due", true);
         }
       } else if (kind === "delete_public_media") {
-        const deleted = await input.processors.deletePublicMedia(subjectKey, input.now);
+        const deleted = await input.processors.deletePublicMedia(subjectKey, input.now, input.deadline?.signal);
         if (!deleted) {
           throw new TokenlessServiceError("Public media deletion is still pending.", 409, "deletion_not_due", true);
         }
       } else if (kind === "prepare_public_network_audience") {
-        await input.processors.preparePublicNetworkAudience(subjectKey, input.now);
+        await input.processors.preparePublicNetworkAudience(subjectKey, input.now, input.deadline?.signal);
       } else if (kind === "cleanup_public_network_foundation") {
-        await input.processors.cleanupPublicNetworkFoundation(subjectKey, input.now);
+        await input.processors.cleanupPublicNetworkFoundation(subjectKey, input.now, input.deadline?.signal);
       } else if (kind === "project_private_review_evidence") {
         const result = await input.processors.projectDirectPrivateReviewEvidence({
           deliveryId: subjectKey,
           now: input.now,
+          signal: input.deadline?.signal,
         });
         if (result.packet !== "ready") throw new Error(result.error);
         if (result.projected) summary.privateReviewEvidence.projected += 1;
@@ -848,6 +863,7 @@ export async function runTokenlessScheduledMaintenance(input: {
   runtime?: {
     monotonicNow?: () => number;
     processingBudgetMs?: number;
+    scheduleDeadlineAbort?: (onDeadline: () => void, delayMs: number) => () => void;
   };
 }) {
   const monotonicNow = input.runtime?.monotonicNow ?? Date.now;
@@ -894,12 +910,30 @@ export async function runTokenlessScheduledMaintenance(input: {
     if (started.rowCount !== 1) return { runId, status: "duplicate" as const };
   }
 
+  let cancelDeadlineAbort: () => void = () => undefined;
   try {
     const processors: MaintenanceProcessors = { ...defaultProcessors, ...input.processors };
     const processorFailures: MaintenanceProcessorFailure[] = [];
     const processorHealth = new Map<string, ScheduledProcessorHealthObservation>();
     let processingDeadlineExhausted = false;
-    const deadlineReached = () => monotonicNow() >= processingDeadlineAt;
+    const deadlineController = new AbortController();
+    const abortForDeadline = () => {
+      if (!deadlineController.signal.aborted) {
+        deadlineController.abort(new MaintenanceCancellationError());
+      }
+    };
+    const scheduleDeadlineAbort =
+      input.runtime?.scheduleDeadlineAbort ??
+      ((onDeadline: () => void, delayMs: number) => {
+        const timer = setTimeout(onDeadline, delayMs);
+        timer.unref();
+        return () => clearTimeout(timer);
+      });
+    cancelDeadlineAbort = scheduleDeadlineAbort(abortForDeadline, Math.max(1, processingDeadlineAt - monotonicNow()));
+    const deadlineReached = () => {
+      if (monotonicNow() >= processingDeadlineAt) abortForDeadline();
+      return deadlineController.signal.aborted;
+    };
     const recordDeadlineExhaustion = () => {
       if (processingDeadlineExhausted) return;
       processingDeadlineExhausted = true;
@@ -918,6 +952,7 @@ export async function runTokenlessScheduledMaintenance(input: {
     const processingDeadline: MaintenanceProcessingDeadline = {
       reached: deadlineReached,
       recordExhaustion: recordDeadlineExhaustion,
+      signal: deadlineController.signal,
     };
     const runProcessor = <T>(
       processorInput: Omit<IsolatedMaintenanceProcessorInput<T>, "failures" | "observe"> & {
@@ -943,7 +978,12 @@ export async function runTokenlessScheduledMaintenance(input: {
     // stopped uploading never expired its own media. It belongs on the schedule with its siblings.
     const expiredPublicMedia = await runProcessor({
       processor: "sweepExpiredPublicMedia",
-      run: () => processors.sweepExpiredPublicMedia({ now, limit: workLimit }),
+      run: () =>
+        processors.sweepExpiredPublicMedia({
+          now,
+          limit: workLimit,
+          signal: processingDeadline.signal,
+        }),
       fallback: { deleted: 0, failed: [] } as Awaited<ReturnType<MaintenanceProcessors["sweepExpiredPublicMedia"]>>,
     });
     // Runs before both privacy queues so work revived this tick is picked up immediately.
@@ -987,7 +1027,12 @@ export async function runTokenlessScheduledMaintenance(input: {
     });
     const paidAssignmentSettlements = await runProcessor({
       processor: "reconcilePaidAssignmentSettlements",
-      run: () => processors.reconcilePaidAssignmentSettlements({ now, limit: workLimit }),
+      run: () =>
+        processors.reconcilePaidAssignmentSettlements({
+          now,
+          limit: workLimit,
+          signal: processingDeadline.signal,
+        }),
       fallback: {
         scanned: 0,
         transitionedSeats: 0,
@@ -998,7 +1043,12 @@ export async function runTokenlessScheduledMaintenance(input: {
     });
     const networkAssignmentSettlements = await runProcessor({
       processor: "reconcileNetworkAssignmentSettlements",
-      run: () => processors.reconcileNetworkAssignmentSettlements({ now, limit: workLimit }),
+      run: () =>
+        processors.reconcileNetworkAssignmentSettlements({
+          now,
+          limit: workLimit,
+          signal: processingDeadline.signal,
+        }),
       fallback: { scanned: 0, terminal: 0, retry: 0 } as Awaited<
         ReturnType<MaintenanceProcessors["reconcileNetworkAssignmentSettlements"]>
       >,
@@ -1061,7 +1111,7 @@ export async function runTokenlessScheduledMaintenance(input: {
     });
     const nonceDriftSweep = await runProcessor({
       processor: "sweepNonceDrift",
-      run: () => processors.sweepNonceDrift({ now, limit: workLimit }),
+      run: () => processors.sweepNonceDrift({ now, limit: workLimit, signal: processingDeadline.signal }),
       fallback: {
         checked: 0,
         pending: 0,
@@ -1163,7 +1213,7 @@ export async function runTokenlessScheduledMaintenance(input: {
     });
     const surpriseBounties = await runProcessor({
       processor: "processSurpriseBounties",
-      run: () => processors.processSurpriseBounties({ now, limit: workLimit }),
+      run: () => processors.processSurpriseBounties({ now, limit: workLimit, signal: processingDeadline.signal }),
       fallback: {
         paid: 0,
         pendingClaim: 0,
@@ -1173,21 +1223,21 @@ export async function runTokenlessScheduledMaintenance(input: {
     });
     const grcReconciliations = await runProcessor({
       processor: "processGrcReconciliations",
-      run: () => processors.processGrcReconciliations({ now, limit: 1 }),
+      run: () => processors.processGrcReconciliations({ now, limit: 1, signal: processingDeadline.signal }),
       fallback: { enqueued: 0, claimed: 0, succeeded: 0, retry: 0, failed: 0 } as Awaited<
         ReturnType<MaintenanceProcessors["processGrcReconciliations"]>
       >,
     });
     const wormExports = await runProcessor({
       processor: "processWormExports",
-      run: () => processors.processWormExports({ now, limit: workLimit }),
+      run: () => processors.processWormExports({ now, limit: workLimit, signal: processingDeadline.signal }),
       fallback: { due: 0, delivered: 0, retry: 0, dead: 0, skipped: 0 } as Awaited<
         ReturnType<MaintenanceProcessors["processWormExports"]>
       >,
     });
     const attestations = await runProcessor({
       processor: "processAttestations",
-      run: () => processors.processAttestations({ now, limit: workLimit }),
+      run: () => processors.processAttestations({ now, limit: workLimit, signal: processingDeadline.signal }),
       configuration: result => {
         if (result.configured) return { configurationState: "enabled" };
         if (result.unavailable > 0) {
@@ -1212,7 +1262,7 @@ export async function runTokenlessScheduledMaintenance(input: {
     });
     const prepaidTopups = await runProcessor({
       processor: "reconcilePrepaidTopups",
-      run: () => processors.reconcilePrepaidTopups({ now, limit: workLimit }),
+      run: () => processors.reconcilePrepaidTopups({ now, limit: workLimit, signal: processingDeadline.signal }),
       configuration: () =>
         prepaidTopupsEnabled()
           ? { configurationState: "enabled" }
@@ -1226,19 +1276,19 @@ export async function runTokenlessScheduledMaintenance(input: {
     });
     const prepaidTopupAudit = await runProcessor({
       processor: "drainPrepaidTopupAudit",
-      run: () => processors.drainPrepaidTopupAudit({ limit: webhookLimit }),
+      run: () => processors.drainPrepaidTopupAudit({ limit: webhookLimit, signal: processingDeadline.signal }),
       fallback: { attempted: 0, delivered: 0 } as Awaited<ReturnType<MaintenanceProcessors["drainPrepaidTopupAudit"]>>,
     });
     const enterpriseIdentityAuditReservations = await runProcessor({
       processor: "reconcileEnterpriseIdentityAudit",
-      run: () => processors.reconcileEnterpriseIdentityAudit(webhookLimit),
+      run: () => processors.reconcileEnterpriseIdentityAudit(webhookLimit, processingDeadline.signal),
       fallback: { activated: 0, inspected: 0 } as Awaited<
         ReturnType<MaintenanceProcessors["reconcileEnterpriseIdentityAudit"]>
       >,
     });
     const enterpriseIdentityAudit = await runProcessor({
       processor: "drainEnterpriseIdentityAudit",
-      run: () => processors.drainEnterpriseIdentityAudit(now, webhookLimit),
+      run: () => processors.drainEnterpriseIdentityAudit(now, webhookLimit, processingDeadline.signal),
       fallback: { delivered: 0, retry: 0 } as Awaited<
         ReturnType<MaintenanceProcessors["drainEnterpriseIdentityAudit"]>
       >,
@@ -1262,7 +1312,12 @@ export async function runTokenlessScheduledMaintenance(input: {
     });
     const assuranceEventOutcomes = await runProcessor({
       processor: "deliverAssuranceEvents",
-      run: () => processors.deliverAssuranceEvents({ now, limit: webhookLimit }),
+      run: () =>
+        processors.deliverAssuranceEvents({
+          now,
+          limit: webhookLimit,
+          signal: processingDeadline.signal,
+        }),
       fallback: [] as Awaited<ReturnType<MaintenanceProcessors["deliverAssuranceEvents"]>>,
     });
     const assuranceEvents = {
@@ -1275,7 +1330,7 @@ export async function runTokenlessScheduledMaintenance(input: {
     };
     const webhookOutcomes = await runProcessor({
       processor: "deliverWebhooks",
-      run: () => processors.deliverWebhooks({ now, limit: webhookLimit }),
+      run: () => processors.deliverWebhooks({ now, limit: webhookLimit, signal: processingDeadline.signal }),
       fallback: [] as Awaited<ReturnType<MaintenanceProcessors["deliverWebhooks"]>>,
     });
     const webhooks = {
@@ -1290,6 +1345,7 @@ export async function runTokenlessScheduledMaintenance(input: {
           appOrigin: input.appOrigin,
           now,
           limit: notificationLimit,
+          signal: processingDeadline.signal,
         }),
       fallback: {
         dead: 0,
@@ -1388,8 +1444,10 @@ export async function runTokenlessScheduledMaintenance(input: {
             SET status = ?, summary_json = ?, completed_at = ? WHERE run_id = ?`,
       args: [status, JSON.stringify(summary), now, runId],
     });
+    cancelDeadlineAbort();
     return { runId, status, summary };
   } catch (error) {
+    cancelDeadlineAbort();
     const message = error instanceof Error ? error.message.slice(0, 500) : "Scheduled maintenance failed";
     await dbClient.execute({
       sql: `UPDATE tokenless_scheduled_worker_runs
