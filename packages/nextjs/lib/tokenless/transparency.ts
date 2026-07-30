@@ -25,6 +25,7 @@ import {
 } from "~~/lib/tokenless/publicRaterResponses";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import { finalizeSurpriseBountyRound } from "~~/lib/tokenless/surpriseBountyService";
+import { assertTokenlessSettlementAccounting } from "~~/lib/tokenless/tokenlessSettlementAccounting";
 
 const WEBHOOK_EVENTS = new Set([
   "result.ready",
@@ -841,19 +842,7 @@ function validateFinalizedEvidence(value: IndexedFinalizedEvidence) {
   ) {
     throw new TokenlessServiceError("Chain finality evidence is malformed.", 400, "invalid_round_evidence");
   }
-  const fundedAmounts = [
-    value.economics.bounty.fundedAtomic,
-    value.economics.fee.fundedAtomic,
-    value.economics.attemptReserve.fundedAtomic,
-    value.economics.totalFundedAtomic,
-  ];
-  if (fundedAmounts.some(amount => !UNSIGNED_INTEGER.test(amount))) {
-    throw new TokenlessServiceError("Round evidence funding is malformed.", 400, "invalid_round_evidence");
-  }
-  const funded = BigInt(fundedAmounts[0]) + BigInt(fundedAmounts[1]) + BigInt(fundedAmounts[2]);
-  if (funded !== BigInt(value.economics.totalFundedAtomic)) {
-    throw new TokenlessServiceError("Round evidence funding does not conserve.", 400, "invalid_round_evidence");
-  }
+  assertTokenlessSettlementAccounting(value.economics, "scored");
   if (
     !BYTES32.test(value.roundTerms.admissionPolicyHash) ||
     !UNSIGNED_INTEGER.test(value.roundTerms.commitDeadline) ||

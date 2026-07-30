@@ -145,6 +145,7 @@ test("package root exposes only the tokenless client, schema, types, and generic
       "normalizeTokenlessQuoteRequest",
       "parseTokenlessYouTubeUrl",
       "serializeTokenlessX402Authorization",
+      "tokenlessEconomicsAccountingViolation",
       "tokenlessFirstQuicknetRoundAfter",
       "tokenlessQuicknetTimestamp",
       "validateTokenlessImmutableRoundTerms",
@@ -564,6 +565,83 @@ function economics(
   };
 }
 
+function resultEconomics(
+  verdictStatus: (typeof TOKENLESS_VERDICT_STATUSES)[number],
+): TokenlessEconomics {
+  const quoted = economics();
+  if (verdictStatus === "zero_commit_refunded") {
+    return {
+      ...quoted,
+      bounty: {
+        ...quoted.bounty,
+        refundedAtomic: quoted.bounty.fundedAtomic,
+      },
+      fee: { ...quoted.fee, refundedAtomic: quoted.fee.fundedAtomic },
+      attemptReserve: {
+        ...quoted.attemptReserve,
+        refundedAtomic: quoted.attemptReserve.fundedAtomic,
+      },
+      refund: {
+        attemptReserveAtomic: quoted.attemptReserve.fundedAtomic,
+        bountyAtomic: quoted.bounty.fundedAtomic,
+        feeAtomic: quoted.fee.fundedAtomic,
+        totalAtomic: quoted.totalFundedAtomic,
+      },
+    };
+  }
+  if (
+    verdictStatus === "under_quorum_compensated" ||
+    verdictStatus === "beacon_failure_compensated"
+  ) {
+    return {
+      ...quoted,
+      bounty: {
+        ...quoted.bounty,
+        refundedAtomic: quoted.bounty.fundedAtomic,
+      },
+      fee: { ...quoted.fee, refundedAtomic: quoted.fee.fundedAtomic },
+      attemptReserve: {
+        compensatedAtomic: "1000000",
+        fundedAtomic: quoted.attemptReserve.fundedAtomic,
+        refundedAtomic: "4000000",
+      },
+      refund: {
+        attemptReserveAtomic: "4000000",
+        bountyAtomic: quoted.bounty.fundedAtomic,
+        feeAtomic: quoted.fee.fundedAtomic,
+        totalAtomic: "30875000",
+      },
+      compensation: {
+        perAcceptedRevealCapAtomic: "500000",
+        recipientCount: 2,
+        totalAtomic: "1000000",
+      },
+    };
+  }
+  return {
+    ...quoted,
+    bounty: {
+      fundedAtomic: quoted.bounty.fundedAtomic,
+      paidAtomic: "20000000",
+      refundedAtomic: "5000000",
+    },
+    fee: {
+      ...quoted.fee,
+      paidAtomic: quoted.fee.fundedAtomic,
+    },
+    attemptReserve: {
+      ...quoted.attemptReserve,
+      refundedAtomic: quoted.attemptReserve.fundedAtomic,
+    },
+    refund: {
+      attemptReserveAtomic: quoted.attemptReserve.fundedAtomic,
+      bountyAtomic: "5000000",
+      feeAtomic: "0",
+      totalAtomic: "10000000",
+    },
+  };
+}
+
 function resultFixture(
   verdictStatus: (typeof TOKENLESS_VERDICT_STATUSES)[number] = "publishable",
 ) {
@@ -577,7 +655,7 @@ function resultFixture(
     commitDeadline: "2026-07-12T12:30:00.000Z",
     requestProfile: REQUEST_PROFILE,
     reviewEconomics: REVIEW_ECONOMICS,
-    economics: economics(),
+    economics: resultEconomics(verdictStatus),
     audience: {
       admissionPolicyHash: `0x${"ab".repeat(32)}`,
       label: "Customer-invited reviewers",
@@ -641,8 +719,17 @@ test("parseTokenlessResult validates terminal state and every accounting field",
     assert.equal(parsed.verdictStatus, status);
     assert.equal(parsed.terminal, status !== "pending");
     assert.equal(parsed.economics.attemptReserve.fundedAtomic, "5000000");
-    assert.equal(parsed.economics.refund.totalAtomic, "0");
-    assert.equal(parsed.economics.compensation.recipientCount, 0);
+    assert.equal(
+      BigInt(parsed.economics.refund.totalAtomic),
+      BigInt(parsed.economics.refund.bountyAtomic) +
+        BigInt(parsed.economics.refund.feeAtomic) +
+        BigInt(parsed.economics.refund.attemptReserveAtomic),
+    );
+    assert.equal(
+      BigInt(parsed.economics.compensation.totalAtomic),
+      BigInt(parsed.economics.compensation.perAcceptedRevealCapAtomic) *
+        BigInt(parsed.economics.compensation.recipientCount),
+    );
     assert.equal(parsed.responseWindowSeconds, 3_600);
     assert.equal(parsed.commitDeadline, "2026-07-12T12:30:00.000Z");
     assert.deepEqual(parsed.requestProfile, REQUEST_PROFILE);

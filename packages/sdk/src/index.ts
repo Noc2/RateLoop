@@ -7,6 +7,7 @@ export * from "./humanReviewResultEnvelopeSchema";
 export * from "./humanReviewResultEnvelopeTypes";
 export * from "./mimeContentType";
 export * from "./tokenless";
+export * from "./tokenlessEconomics";
 export * from "./tokenlessMedia";
 export * from "./tokenlessSchema";
 export * from "./tokenlessTypes";

@@ -1,6 +1,10 @@
 import { RateLoopSdkError } from "./errors";
 import { HUMAN_ASSURANCE_AUDIENCE_POLICY_JSON_SCHEMA } from "./humanAssuranceSchema";
 import {
+  type TokenlessEconomicsAccountingStage,
+  tokenlessEconomicsAccountingViolation,
+} from "./tokenlessEconomics";
+import {
   TOKENLESS_DATA_CLASSIFICATIONS,
   TOKENLESS_SCHEMA_VERSION,
   TOKENLESS_REVIEWER_SOURCES,
@@ -260,12 +264,16 @@ function compensationAccounting(
   };
 }
 
-function economics(value: unknown, path: string): TokenlessEconomics {
+function economics(
+  value: unknown,
+  path: string,
+  stage: TokenlessEconomicsAccountingStage,
+): TokenlessEconomics {
   const input = record(value, path);
   if (input.asset !== "USDC") invalid(`${path}.asset`, "USDC");
   if (input.decimals !== 6) invalid(`${path}.decimals`, "6");
 
-  return {
+  const parsed: TokenlessEconomics = {
     asset: "USDC",
     decimals: 6,
     bounty: fundAccounting(input.bounty, `${path}.bounty`),
@@ -284,6 +292,30 @@ function economics(value: unknown, path: string): TokenlessEconomics {
       `${path}.totalFundedAtomic`,
     ),
   };
+  const accountingViolation = tokenlessEconomicsAccountingViolation(
+    parsed,
+    stage,
+  );
+  if (accountingViolation) {
+    invalid(
+      `${path}.${accountingViolation.path}`,
+      accountingViolation.expectation,
+    );
+  }
+  return parsed;
+}
+
+function economicsAccountingStage(
+  verdictStatus: TokenlessVerdictStatus,
+): TokenlessEconomicsAccountingStage {
+  if (verdictStatus === "zero_commit_refunded") return "zero_commit_refunded";
+  if (
+    verdictStatus === "under_quorum_compensated" ||
+    verdictStatus === "beacon_failure_compensated"
+  ) {
+    return "compensated";
+  }
+  return "scored";
 }
 
 function continuation(value: unknown, path: string): TokenlessPollContinuation {
@@ -322,7 +354,7 @@ export function parseTokenlessQuoteResponse(
     schemaVersion: schemaVersion(input.schemaVersion),
     quoteId: string(input.quoteId, "quoteId"),
     expiresAt: isoDate(input.expiresAt, "expiresAt"),
-    economics: economics(input.economics, "economics"),
+    economics: economics(input.economics, "economics", "quote"),
     audience: {
       admissionPolicyHash: bytes32(
         audience.admissionPolicyHash,
@@ -749,7 +781,11 @@ export function parseTokenlessResult(value: unknown): TokenlessResult {
       input.reviewEconomics,
       "reviewEconomics",
     ),
-    economics: economics(input.economics, "economics"),
+    economics: economics(
+      input.economics,
+      "economics",
+      economicsAccountingStage(parsedVerdictStatus),
+    ),
     audience: {
       admissionPolicyHash: bytes32(
         audience.admissionPolicyHash,
