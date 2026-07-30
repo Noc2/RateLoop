@@ -1,7 +1,7 @@
 import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient } from "~~/lib/db";
-import { ADAPTIVE_REVIEW_STAGE_RATE_BPS } from "~~/lib/tokenless/adaptiveReview";
+import { adaptiveReviewRateBps } from "~~/lib/tokenless/adaptiveReview";
 import type {
   AgentOverviewPeriod,
   AgentOverviewStage,
@@ -732,7 +732,7 @@ function scopeReviewRate(row: QueryRow, stage: AgentAssuranceScopeSummary["stage
   const mode = rowText(row, "mode");
   const productionFloorBps = rowInteger(row, "production_floor_bps");
   if (mode === "always") return 10_000;
-  if (mode === "adaptive") return Math.max(ADAPTIVE_REVIEW_STAGE_RATE_BPS[stage], productionFloorBps);
+  if (mode === "adaptive") return adaptiveReviewRateBps(stage, productionFloorBps);
   if (mode === "fixed") return rowInteger(row, "fixed_rate_bps");
   if (["manual", "rules"].includes(mode ?? "")) return 0;
   throw new Error("Database returned an invalid overview review mode.");

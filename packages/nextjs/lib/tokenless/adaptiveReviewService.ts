@@ -7,6 +7,7 @@ import {
   type AdaptiveReviewPolicy,
   type AdaptiveReviewStage,
   type AdaptiveScopeState,
+  adaptiveReviewRateBps,
   decideAdaptiveReview,
   nextAdaptiveStage,
 } from "~~/lib/tokenless/adaptiveReview";
@@ -1108,16 +1109,7 @@ async function assuranceState(
   input: { workspaceId: string; policy: ReviewPolicyRow; scope: ScopeRow },
 ): Promise<AdaptiveAssuranceState> {
   const metrics = await stateMetrics(client, input.workspaceId, input.scope.scopeId);
-  const rate = Math.max(
-    input.scope.stage === "calibrating"
-      ? 10_000
-      : input.scope.stage === "high_coverage"
-        ? 5_000
-        : input.scope.stage === "medium_coverage"
-          ? 2_500
-          : 2_500,
-    input.policy.productionFloorBps,
-  );
+  const rate = adaptiveReviewRateBps(input.scope.stage, input.policy.productionFloorBps);
   return {
     schemaVersion: "rateloop.assurance-state.v1",
     workspaceId: input.workspaceId,

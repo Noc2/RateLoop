@@ -71,6 +71,7 @@ import { Card } from "~~/components/tokenless/ui/Card";
 import { SegmentedChoice } from "~~/components/tokenless/ui/SegmentedChoice";
 import { useConfirmDialog } from "~~/components/tokenless/ui/useConfirmDialog";
 import { DurationInput } from "~~/components/ui/DurationInput";
+import { ADAPTIVE_MONITORING_FLOOR_BPS } from "~~/lib/tokenless/adaptiveReviewPolicy";
 import { type AgentSetupScreenStep, agentSetupUrl } from "~~/lib/tokenless/agentSetupNavigation";
 import { configuredHumanReviewLaneForSelection, configuredHumanReviewLanes } from "~~/lib/tokenless/reviewCapabilities";
 import type {
@@ -1545,7 +1546,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     }
                     className="border-white/10 bg-[var(--rateloop-field)]"
                     type="number"
-                    min={reviewFrequency.mode === "adaptive" ? 25 : 0.01}
+                    min={reviewFrequency.mode === "adaptive" ? ADAPTIVE_MONITORING_FLOOR_BPS / 100 : 0.01}
                     max={100}
                     step={0.01}
                     inputMode="decimal"
@@ -1584,7 +1585,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 </div>
                 <p className="mt-3 text-xs leading-5 text-base-content/55">
                   {reviewFrequency.mode === "adaptive"
-                    ? "Starts at 100% while calibrating and never drops below 25%. "
+                    ? "Starts at 100% while calibrating and never drops below 10%. "
                     : ""}
                   Critical, incomplete, or low-confidence outputs can still require review.
                 </p>

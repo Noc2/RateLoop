@@ -1,9 +1,15 @@
 import { createHmac } from "node:crypto";
 import "server-only";
+import { type AdaptiveReviewStage, adaptiveReviewRateBps } from "~~/lib/tokenless/adaptiveReviewPolicy";
 import { wilsonIntervalBps } from "~~/lib/tokenless/transparency";
 
-export const ADAPTIVE_REVIEW_STAGES = ["calibrating", "high_coverage", "medium_coverage", "monitoring"] as const;
-export type AdaptiveReviewStage = (typeof ADAPTIVE_REVIEW_STAGES)[number];
+export {
+  ADAPTIVE_MONITORING_FLOOR_BPS,
+  ADAPTIVE_REVIEW_STAGES,
+  ADAPTIVE_REVIEW_STAGE_RATE_BPS,
+  adaptiveReviewRateBps,
+  type AdaptiveReviewStage,
+} from "~~/lib/tokenless/adaptiveReviewPolicy";
 export const ADAPTIVE_MONITORING_RECALIBRATION_CASES = 100;
 
 export type AdaptiveReviewPolicy = {
@@ -29,13 +35,6 @@ export type AdaptiveScopeState = {
   completedComparableCases: number;
   stableCasesSinceStage: number;
   unreviewedSinceLastSample: number;
-};
-
-export const ADAPTIVE_REVIEW_STAGE_RATE_BPS: Record<AdaptiveReviewStage, number> = {
-  calibrating: 10_000,
-  high_coverage: 5_000,
-  medium_coverage: 2_500,
-  monitoring: 2_500,
 };
 
 function validBps(value: number) {
@@ -129,13 +128,13 @@ export function nextAdaptiveStage(input: {
   } else if (state.stage === "medium_coverage" && state.stableCasesSinceStage >= 100 && latestPasses) {
     return {
       stage: "monitoring" as const,
-      reviewRateBps: Math.max(2_500, policy.productionFloorBps),
+      reviewRateBps: adaptiveReviewRateBps("monitoring", policy.productionFloorBps),
       reason: "one_hundred_stable_cases",
     };
   }
   return {
     stage: state.stage,
-    reviewRateBps: Math.max(ADAPTIVE_REVIEW_STAGE_RATE_BPS[state.stage], policy.productionFloorBps),
+    reviewRateBps: adaptiveReviewRateBps(state.stage, policy.productionFloorBps),
     reason: evidenceResetReason ?? (latestPasses ? "evidence_window_incomplete" : "quality_gate_not_met"),
   };
 }
@@ -156,7 +155,7 @@ export function decideAdaptiveReview(input: {
   if (!input.opportunityId || !input.scopeId || !input.samplerKeyVersion) {
     throw new Error("Adaptive review identity is incomplete.");
   }
-  const baseRate = Math.max(ADAPTIVE_REVIEW_STAGE_RATE_BPS[input.state.stage], input.policy.productionFloorBps);
+  const baseRate = adaptiveReviewRateBps(input.state.stage, input.policy.productionFloorBps);
   const forcedReasons: string[] = [];
   if (input.criticalRisk) forcedReasons.push("critical_risk");
   if (!input.metadataComplete) forcedReasons.push("missing_metadata");

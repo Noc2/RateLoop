@@ -36,8 +36,8 @@ silently drift from the implementation.
 
 Of the twenty-nine documents that existed before this rewrite, the four asserted by
 tests were accurate and the rest were not — a scope documented at five dimensions
-where the schema has twelve, a sampling floor documented at 10% where the code uses
-25%, a CLI command that does not exist.
+where the schema has twelve, one adaptive sampling rule re-derived inconsistently
+across runtime and reporting modules, and a CLI command that does not exist.
 
 Keep this directory small, and prefer asserting a claim in a test over restating it
 in prose.

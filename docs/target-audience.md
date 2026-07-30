@@ -46,8 +46,8 @@ The period differs by plan: Free uses a strict UTC calendar month, Early Access 
 Stripe subscription anniversary window.
 | Active agents | 1 | 3 |
 
-Read against the adaptive sampler's 25% floor, **250 decisions a month is roughly a
-thousand reviewable outputs, about 33 a day.** At the "always" setting it is 250
+Read against the adaptive sampler's 10% monitoring floor, **250 decisions a month is
+roughly 2,500 reviewable outputs, about 83 a day.** At the "always" setting it is 250
 outputs total. That is a pilot, a single agent in a single workflow, or a
 low-volume high-consequence decision path. It is not a production workload.
 

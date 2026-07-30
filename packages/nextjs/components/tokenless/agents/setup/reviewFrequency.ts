@@ -1,3 +1,4 @@
+import { ADAPTIVE_MONITORING_FLOOR_BPS } from "~~/lib/tokenless/adaptiveReviewPolicy";
 import type { AgentSetupReviewDraft, AgentSetupReviewMode } from "~~/lib/tokenless/workspaceAgentSetup";
 
 type ReviewSelection = AgentSetupReviewDraft["selection"];
@@ -19,8 +20,8 @@ export function reviewFrequencyFormValues(selection: ReviewSelection | null | un
   return {
     mode: selection?.mode ?? "always",
     adaptiveFloorPercent: percent(
-      selection && selection.productionFloorBps >= 2_500 ? selection.productionFloorBps : null,
-      2_500,
+      selection && selection.productionFloorBps >= ADAPTIVE_MONITORING_FLOOR_BPS ? selection.productionFloorBps : null,
+      ADAPTIVE_MONITORING_FLOOR_BPS,
     ),
     fixedPercent: percent(selection?.fixedRateBps ?? null, 1_000),
     maximumUnreviewedGap: String(selection?.maximumUnreviewedGap ?? 20),
@@ -35,7 +36,7 @@ export function reviewFrequencySummary(selection: ReviewSelection | null | undef
   if (selection.mode === "manual") return "Manual handoff only";
   if (selection.mode === "fixed") return `${percent(selection.fixedRateBps, 0)}% of eligible outputs`;
   if (selection.mode === "rules") return "When risk or confidence conditions match";
-  return `Adaptive review, at least ${percent(selection.productionFloorBps, 2_500)}%`;
+  return `Adaptive review, at least ${percent(selection.productionFloorBps, ADAPTIVE_MONITORING_FLOOR_BPS)}%`;
 }
 
 function percentageBps(value: string, field: string, minimumBps: number) {
@@ -92,7 +93,7 @@ export function buildReviewFrequencySelection(
   if (form.mode === "adaptive") {
     return {
       ...next,
-      productionFloorBps: 2_500,
+      productionFloorBps: ADAPTIVE_MONITORING_FLOOR_BPS,
       maximumUnreviewedGap: maximumGap(form.maximumUnreviewedGap),
     };
   }

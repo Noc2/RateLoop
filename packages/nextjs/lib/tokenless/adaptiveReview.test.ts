@@ -5,7 +5,7 @@ import { decideAdaptiveReview, nextAdaptiveStage } from "~~/lib/tokenless/adapti
 const policy = {
   policyVersion: 4,
   agreementThresholdBps: 7_000,
-  productionFloorBps: 2_500,
+  productionFloorBps: 1_000,
   maximumUnreviewedGap: 20,
 };
 
@@ -57,7 +57,7 @@ test("adaptive stages require two independent calibration windows and stable evi
     },
     latestWindow: passingWindow,
   });
-  assert.deepEqual(monitoring, { stage: "monitoring", reviewRateBps: 2_500, reason: "one_hundred_stable_cases" });
+  assert.deepEqual(monitoring, { stage: "monitoring", reviewRateBps: 1_000, reason: "one_hundred_stable_cases" });
 });
 
 test("the 7,000 bps Wilson threshold accepts 14/15 and resets reduced coverage at 13/15", () => {
@@ -174,7 +174,7 @@ test("sampling is deterministic and forced by risk, missing metadata, or maximum
   const first = decideAdaptiveReview(base);
   const replay = decideAdaptiveReview(base);
   assert.deepEqual(first, replay);
-  assert.equal(first.reviewRateBps, 2_500);
+  assert.equal(first.reviewRateBps, 1_000);
 
   for (const forced of [
     { ...base, criticalRisk: true },

@@ -17,9 +17,9 @@ export const reviewPolicyCopy = {
     adaptiveRate: "Minimum review rate (%)",
     adaptiveSummary: "Safe adaptive preset applied.",
     adaptiveConnectionHelp:
-      "Coverage starts at 100% and never drops below 25%. Review setup shows the policy after approval.",
+      "Coverage starts at 100% and never drops below 10%. Review setup shows the policy after approval.",
     adaptiveDetail:
-      "Coverage starts at 100%, then may move to 50% and 25% after two stable 15-case windows with at least 14 agent-human agreements each and 70% minimum declared confidence. High and critical risk always require review, and at most 20 outputs can pass without a sample. After 100 comparable cases, monitoring returns to a full-review calibration block.",
+      "Coverage starts at 100%, then may move to 50%, 25%, and 10% after stable evidence accumulates. Two 15-case windows must each include at least 14 agent-human agreements, with at least 70% declared confidence. High and critical risk always require review, at most 20 outputs can pass without a sample, and every 100 monitoring cases returns coverage to a full-review calibration block.",
     fixedRate: "Outputs reviewed (%)",
     maximumGap: "Maximum outputs between reviews",
     riskTiers: "Review these risk levels",

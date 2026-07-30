@@ -4,7 +4,11 @@ import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { assertCanCreateWorkspaceAgent } from "~~/lib/billing/entitlements";
 import { dbClient, dbPool } from "~~/lib/db";
 import type { TokenlessWorkspaceRole } from "~~/lib/db/productSchema";
-import { ADAPTIVE_REVIEW_STAGE_RATE_BPS, type AdaptiveReviewStage } from "~~/lib/tokenless/adaptiveReview";
+import {
+  ADAPTIVE_REVIEW_STAGE_RATE_BPS,
+  type AdaptiveReviewStage,
+  adaptiveReviewRateBps,
+} from "~~/lib/tokenless/adaptiveReview";
 import {
   type AgentConnectionLane,
   connectionLaneFromClientCapabilitiesJson,
@@ -1097,7 +1101,7 @@ async function loadWorkspaceAssuranceScopes(workspaceId: string) {
         mode === "always"
           ? 10_000
           : mode === "adaptive"
-            ? Math.max(ADAPTIVE_REVIEW_STAGE_RATE_BPS[stage], productionFloorBps)
+            ? adaptiveReviewRateBps(stage, productionFloorBps)
             : mode === "fixed"
               ? (fixedRateBps ?? 0)
               : 0,

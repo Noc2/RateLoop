@@ -3,7 +3,12 @@ import type { PoolClient } from "pg";
 import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient, dbPool } from "~~/lib/db";
-import { ADAPTIVE_REVIEW_STAGE_RATE_BPS, type AdaptiveReviewStage } from "~~/lib/tokenless/adaptiveReview";
+import {
+  ADAPTIVE_MONITORING_FLOOR_BPS,
+  ADAPTIVE_REVIEW_STAGE_RATE_BPS,
+  type AdaptiveReviewStage,
+  adaptiveReviewRateBps,
+} from "~~/lib/tokenless/adaptiveReview";
 import { listWorkspaceAgents } from "~~/lib/tokenless/agentRegistry";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -193,7 +198,7 @@ export function normalizeManagedReviewPolicyInput(value: unknown): ManagedReview
   const agreementThresholdBps = bps(input.agreementThresholdBps, "agreementThresholdBps");
   const requestedProductionFloorBps = bps(input.productionFloorBps, "productionFloorBps");
   const productionFloorBps = mode === "adaptive" ? requestedProductionFloorBps : 0;
-  if (mode === "adaptive" && productionFloorBps < 1_000) {
+  if (mode === "adaptive" && productionFloorBps < ADAPTIVE_MONITORING_FLOOR_BPS) {
     throw new TokenlessServiceError(
       "Adaptive review cannot fall below the 10% production floor.",
       400,
@@ -331,7 +336,7 @@ function scopeFromRow(
           : mode === "fixed"
             ? (fixedRateBps ?? 0)
             : mode === "adaptive"
-              ? Math.max(ADAPTIVE_REVIEW_STAGE_RATE_BPS[stage], floorBps)
+              ? adaptiveReviewRateBps(stage, floorBps)
               : 0,
     updatedAt: iso(row.updated_at, "scope update timestamp"),
   };
@@ -397,7 +402,7 @@ function policyFromRow(row: QueryRow, scopeRows: QueryRow[]): ManagedReviewPolic
         mode === "always"
           ? 10_000
           : mode === "adaptive"
-            ? Math.max(1_000, productionFloorBps)
+            ? adaptiveReviewRateBps("monitoring", productionFloorBps)
             : mode === "fixed"
               ? (fixedRateBps ?? 0)
               : 0,

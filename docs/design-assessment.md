@@ -294,12 +294,11 @@ has twelve and the identity hash uses fourteen; the README advertised paid mecha
 with no availability caveat and cited a deployment a full generation out of date; a
 CLI command was documented that does not exist.
 
-One item originally listed here has been removed, because a third pass showed it was
-not drift at all. Older documents described a 10% monitoring floor; the replacement
-set called that stale and asserted the code samples at 25%. **Both are true, in
-different modules** — five stage-rate tables exist, four of them wrong, and one of the
-wrong ones drives a coverage alert. The documentation was reporting a real defect, and
-correcting it away made this document worse than the ones it replaced.
+One item originally listed here proved to be a code defect rather than documentation
+drift. Older documents described a 10% monitoring floor while runtime sampling and
+reporting modules re-derived different values. The implementation now has one shared
+stage-rate definition: monitoring is 10%, and runtime decisions, owner UI, projections,
+and coverage alerts all consume that rule.
 
 The four documents asserted by tests did not drift. **Everything not mechanically
 checked did.** That is the lesson, and it is why this replacement set is deliberately

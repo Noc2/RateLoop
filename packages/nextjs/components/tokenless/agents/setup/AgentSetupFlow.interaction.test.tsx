@@ -40,7 +40,7 @@ function reviewDraft(profile: Record<string, unknown> = {}) {
       mode: "fixed",
       enforcementMode: "advisory",
       agreementThresholdBps: 6_600,
-      productionFloorBps: 2_500,
+      productionFloorBps: 1_000,
       fixedRateBps: 10_000,
       maximumUnreviewedGap: 10,
       requiredRiskTiers: [],

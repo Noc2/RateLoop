@@ -106,27 +106,15 @@ minutes.
 
 ### Adaptive review coverage
 
-Four stages: `calibrating` at 100%, `high_coverage` at 50%, `medium_coverage` and
-`monitoring` both at 25%. The effective rate is always the greater of the stage
+Four stages: `calibrating` at 100%, `high_coverage` at 50%, `medium_coverage` at
+25%, and `monitoring` at 10%. The effective rate is always the greater of the stage
 rate and the workspace's production floor.
 
-**`monitoring` and `medium_coverage` sample at the same rate.** Reaching
-`monitoring` changes coverage by nothing; its only effect is a periodic
-recalibration every 100 cases.
-
-**The 10% monitoring floor that older documents described is real, and it is a
-live defect.** An earlier draft of this section called it documentation drift; it is
-not. The stage-rate table is declared in **five** places. One — `adaptiveReview.ts`,
-the canonical set that actually drives sampling — says 2,500 basis points. The other
-four say 1,000: the policy-management module, the overview projection, the registry
-projection, and the oversight-alert module.
-
-The last of those is the one that bites. The coverage-floor alert compares a scope's
-production floor against its stage rate and warns when the floor is lower — using
-1,000 where sampling uses 2,500. **A workspace whose floor sits between 10% and 25%
-is under-sampled relative to what the alert believes, and no warning fires.** Fixing
-this means deleting four copies and importing the canonical one; the remediation plan
-carries it.
+The 10% monitoring floor is defined once and shared by runtime sampling, policy
+management, owner UI, overview and registry projections, evaluation reporting, and
+coverage-floor alerts. Reaching `monitoring` can therefore reduce baseline coverage
+from 25% to 10%; every 100 comparable monitoring cases starts a full-review
+recalibration block.
 
 Promotion is one step at a time, but only the first promotion requires two
 consecutive passing windows. `high_coverage → medium_coverage` and
@@ -387,7 +375,7 @@ Recorded so the same drift is not reintroduced.
 | Claim                                          | Reality                                                                      |
 | ---------------------------------------------- | ---------------------------------------------------------------------------- |
 | A scope has five dimensions                    | Twelve in the database constraint, fourteen in the identity hash             |
-| Monitoring floor is 10%                        | **Not drift — a live defect.** Sampling uses 25%; four modules still say 10% |
+| Monitoring floor is 10%                        | Shared runtime, UI, projection, and alert invariant                          |
 | Adaptive reports safety gates unavailable      | That branch is unreachable; gates are available                              |
 | Opportunity keyed on integration id            | Keyed on agent id                                                            |
 | Deployment is `tokenless-v3` at an older block | `tokenless-v4`, a full generation newer                                      |

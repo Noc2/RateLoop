@@ -2,7 +2,11 @@ import { createHash } from "node:crypto";
 import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient } from "~~/lib/db";
-import { ADAPTIVE_REVIEW_STAGE_RATE_BPS, type AdaptiveReviewStage } from "~~/lib/tokenless/adaptiveReview";
+import {
+  ADAPTIVE_REVIEW_STAGE_RATE_BPS,
+  type AdaptiveReviewStage,
+  adaptiveReviewRateBps,
+} from "~~/lib/tokenless/adaptiveReview";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Row = Record<string, unknown>;
@@ -365,7 +369,15 @@ async function loadCoverageFloorCandidates(now: Date, limit: number): Promise<Al
     const stage = (text(row, "stage") ?? "") as AdaptiveReviewStage;
     const floorBps = Number(row.production_floor_bps ?? 0);
     const stageRate = ADAPTIVE_REVIEW_STAGE_RATE_BPS[stage];
-    if (!principalAddress || !workspaceId || !scopeId || stageRate === undefined || stageRate > floorBps) return [];
+    if (
+      !principalAddress ||
+      !workspaceId ||
+      !scopeId ||
+      stageRate === undefined ||
+      adaptiveReviewRateBps(stage, floorBps) !== floorBps
+    ) {
+      return [];
+    }
     const workspaceName = text(row, "workspace_name") ?? "your workspace";
     return [
       {

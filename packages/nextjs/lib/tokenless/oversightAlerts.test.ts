@@ -310,7 +310,7 @@ test("workspace stop, disagreement spikes, and coverage floors alert with thresh
   const types = alerts.map(row => row.source_type);
   assert.ok(types.includes("oversight.workspace_stopped"));
   assert.ok(types.includes("oversight.disagreement_spike"));
-  // Stage rate (monitoring, 25%) is at the configured production floor (25%).
+  // The 10% monitoring stage is raised to the configured production floor (25%).
   assert.ok(types.includes("oversight.coverage_floor_hit"));
 
   // Threshold alerts fire at most once per UTC day.

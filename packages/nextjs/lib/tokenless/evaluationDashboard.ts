@@ -2,7 +2,11 @@ import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient } from "~~/lib/db";
 import type { TokenlessWorkspaceRole } from "~~/lib/db/productSchema";
-import { ADAPTIVE_REVIEW_STAGE_RATE_BPS, type AdaptiveReviewStage } from "~~/lib/tokenless/adaptiveReview";
+import {
+  ADAPTIVE_REVIEW_STAGE_RATE_BPS,
+  type AdaptiveReviewStage,
+  adaptiveReviewRateBps,
+} from "~~/lib/tokenless/adaptiveReview";
 import { listWorkspaceAgents } from "~~/lib/tokenless/agentRegistry";
 import { decisionExplanationRequired } from "~~/lib/tokenless/decisionPromptSampling";
 import { listAgentPublishingPolicies } from "~~/lib/tokenless/productCore";
@@ -282,11 +286,6 @@ function adaptiveStage(value: unknown) {
     throw new Error("Database returned an invalid adaptive coverage stage.");
   }
   return stage;
-}
-
-function adaptiveReviewRateBps(stage: AdaptiveReviewStage, productionFloorBps: number) {
-  if (productionFloorBps > 10_000) throw new Error("Database returned an invalid adaptive production floor.");
-  return Math.max(ADAPTIVE_REVIEW_STAGE_RATE_BPS[stage], productionFloorBps);
 }
 
 function adaptiveCoverageReason(value: unknown): AdaptiveCoverageReasonCode {

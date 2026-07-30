@@ -12,7 +12,7 @@ const selection: AgentSetupReviewDraft["selection"] = {
   mode: "adaptive",
   enforcementMode: "advisory",
   agreementThresholdBps: 8_000,
-  productionFloorBps: 2_500,
+  productionFloorBps: 1_000,
   fixedRateBps: null,
   maximumUnreviewedGap: 20,
   requiredRiskTiers: ["high"],
@@ -30,7 +30,7 @@ test("adaptive uses the conservative fixed floor while fixed percentages map exa
     selection,
     form({ mode: "adaptive", adaptiveFloorPercent: "12.25", maximumUnreviewedGap: "40" }),
   );
-  assert.equal(adaptive.productionFloorBps, 2_500);
+  assert.equal(adaptive.productionFloorBps, 1_000);
   assert.equal(adaptive.fixedRateBps, null);
   assert.equal(adaptive.maximumUnreviewedGap, 40);
 
@@ -106,5 +106,5 @@ test("saved frequency summaries preserve the exact visible mode", () => {
     reviewFrequencySummary({ ...selection, mode: "rules", productionFloorBps: 0 }),
     "When risk or confidence conditions match",
   );
-  assert.equal(reviewFrequencySummary(selection), "Adaptive review, at least 25%");
+  assert.equal(reviewFrequencySummary(selection), "Adaptive review, at least 10%");
 });

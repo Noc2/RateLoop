@@ -17,6 +17,7 @@ import { Card } from "~~/components/tokenless/ui/Card";
 import { SegmentedChoice } from "~~/components/tokenless/ui/SegmentedChoice";
 import { useConfirmDialog } from "~~/components/tokenless/ui/useConfirmDialog";
 import { DurationInput } from "~~/components/ui/DurationInput";
+import { ADAPTIVE_MONITORING_FLOOR_BPS } from "~~/lib/tokenless/adaptiveReviewPolicy";
 import { readJson } from "~~/lib/tokenless/http";
 import { configuredHumanReviewLaneForSelection, configuredHumanReviewLanes } from "~~/lib/tokenless/reviewCapabilities";
 import { formatUsdcAtomic, parseUsdcDecimal } from "~~/lib/tokenless/usdc";
@@ -135,7 +136,9 @@ function draftFromView(view: OwnerView): Draft {
   };
   const mode = String(selection.mode) as Mode;
   const rateBps =
-    mode === "fixed" ? number(selection.fixedRateBps, 1_000) : number(selection.productionFloorBps, 2_500);
+    mode === "fixed"
+      ? number(selection.fixedRateBps, 1_000)
+      : number(selection.productionFloorBps, ADAPTIVE_MONITORING_FLOOR_BPS);
   return {
     questionAuthority: request.questionAuthority === "agent_per_request" ? "agent_per_request" : "owner_fixed",
     mode,
@@ -233,7 +236,7 @@ function buildMutation(view: OwnerView, draft: Draft) {
     mode: draft.mode,
     enforcementMode: draft.mode === "manual" ? "advisory" : currentSelection.enforcementMode,
     agreementThresholdBps: currentSelection.agreementThresholdBps,
-    productionFloorBps: draft.mode === "adaptive" ? 2_500 : 0,
+    productionFloorBps: draft.mode === "adaptive" ? ADAPTIVE_MONITORING_FLOOR_BPS : 0,
     fixedRateBps: draft.mode === "fixed" ? bps(draft.ratePercent, "ratePercent", "Fixed review rate", 1) : null,
     maximumUnreviewedGap: positiveInteger(
       draft.maximumUnreviewedGap,

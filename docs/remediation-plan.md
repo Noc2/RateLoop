@@ -254,27 +254,14 @@ silent evidence gap for a user-visible failure on a decision that did succeed.
 
 This is the most consequential defect in the plan.
 
-### 2.1b Collapse the five stage-rate tables into one
+### 2.1b Collapse the stage-rate tables into one — implemented
 
-Found by the verification pass, and it is a code defect rather than a documentation
-one. Earlier drafts of these documents asserted the opposite — that a 10% monitoring
-floor was drift in old docs — so this item exists partly to retract that.
-
-The adaptive stage-rate table is declared in five places. `adaptiveReview.ts` is
-canonical and says `monitoring: 2_500`. The policy-management module, the overview
-projection, the registry projection and the oversight-alert module all say
-`monitoring: 1_000`, and only the evaluation dashboard imports the canonical
-constant.
-
-**The oversight-alert copy is the one that causes harm.** The coverage-floor alert
-compares a scope's production floor against its stage rate and warns when the floor
-falls below it — at 1,000 where sampling actually runs at 2,500. A workspace with a
-floor between those values is under-covered relative to the alert's model of the
-world and is never told.
-
-Delete the four copies, import the canonical one, and add a test asserting a single
-definition — the same "bind the sites that re-derive a rule" shape as 4.3, which is
-what would have caught it.
+The verification pass found inconsistent 10% and 25% monitoring values across runtime
+sampling, projections, policy management, and alerts. The implementation now defines
+the four stage rates once, uses the design-record 10% monitoring floor everywhere,
+and tests runtime and UI consumers together across floor boundary cases. Coverage
+alerts use the same effective-rate helper as sampling, so a configured floor cannot
+be interpreted differently by operational reporting.
 
 ### 2.2 Name every degraded signal in the health panel
 
