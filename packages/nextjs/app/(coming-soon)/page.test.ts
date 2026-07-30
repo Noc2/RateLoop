@@ -15,6 +15,7 @@ test("the root page presents only the relaunch message and follow action", () =>
   assert.match(pageSource, /https:\/\/x\.com\/RateLoop/);
   assert.match(pageSource, /Follow on X/);
   assert.match(pageSource, /<OrbAnimation \/>/);
+  assert.match(pageSource, /rateloop-text-gradient block w-fit/);
 
   assert.doesNotMatch(pageSource, /PublicShell|LandingNav|Wallet|promo-video|BetaNoticeBanner/);
 });
