@@ -12,6 +12,7 @@ test("the shared crowd forecast starts unset and reveals its slider only after a
     const view = render(
       <CrowdForecastField
         positiveLabel="Accept"
+        privacyContext="private_unpaid"
         value={value}
         onChange={next => {
           value = next;
@@ -24,7 +25,14 @@ test("the shared crowd forecast starts unset and reveals its slider only after a
     assert.match(screen.getByText(/No forecast is preselected/u).textContent ?? "", /No forecast is preselected/u);
 
     fireEvent.change(input, { target: { value: "73" } });
-    view.rerender(<CrowdForecastField positiveLabel="Accept" value={value} onChange={next => (value = next)} />);
+    view.rerender(
+      <CrowdForecastField
+        positiveLabel="Accept"
+        privacyContext="private_unpaid"
+        value={value}
+        onChange={next => (value = next)}
+      />,
+    );
     assert.equal(screen.getByRole<HTMLInputElement>("slider", { name: "Crowd forecast slider" }).value, "73");
   } finally {
     cleanup();

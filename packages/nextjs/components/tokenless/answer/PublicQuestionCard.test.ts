@@ -5,8 +5,8 @@ import { test } from "node:test";
 const source = readFileSync(new URL("./PublicQuestionCard.tsx", import.meta.url), "utf8");
 const crowdForecastSource = readFileSync(new URL("../review/CrowdForecastField.tsx", import.meta.url), "utf8");
 
-test("public rating progressively collects feedback without LREP and hides the aggregate until settlement", () => {
-  assert.match(source, /Rating hidden until settlement\./);
+test("public rating progressively collects feedback without LREP and explains the exact privacy timing", () => {
+  assert.match(source, /reviewRatingPrivacyMessage\(PUBLIC_PAID_REVIEW_PRIVACY_CONTEXT\)/);
   assert.match(source, /Add feedback/);
   assert.match(source, /Optional feedback/);
   assert.match(source, /Feedback required/);
@@ -85,7 +85,7 @@ test("the blind crowd forecast accepts the full one-percent RBTS grid without a 
   assert.match(crowdForecastSource, /step=\{1\}/);
   assert.match(crowdForecastSource, /value=\{value \?\? ""\}/);
   assert.match(crowdForecastSource, /No forecast is preselected/);
-  assert.match(crowdForecastSource, /Your forecast stays hidden until settlement/);
+  assert.match(source, /privacyContext=\{PUBLIC_PAID_REVIEW_PRIVACY_CONTEXT\}/);
   assert.match(source, /predictedUpBps: prediction \* 100/);
   assert.doesNotMatch(crowdForecastSource, /\[10, 30, 50, 70, 90\]/);
 });

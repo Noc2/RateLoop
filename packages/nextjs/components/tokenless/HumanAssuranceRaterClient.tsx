@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ChoiceInput, Field, TextareaField } from "~~/components/tokenless/forms/Field";
-import { CrowdForecastField } from "~~/components/tokenless/review/CrowdForecastField";
+import { CrowdForecastField, reviewRatingPrivacyMessage } from "~~/components/tokenless/review/CrowdForecastField";
 import { DeadlineChip } from "~~/components/tokenless/review/DeadlineChip";
 import { PrivateArtifactPreview } from "~~/components/tokenless/review/PrivateArtifactPreview";
 import { ReviewerShell } from "~~/components/tokenless/review/ReviewerShell";
@@ -190,6 +190,7 @@ function persistReviewerAssignment(assignmentId: string, termsHash: string) {
 }
 
 const PRIVATE_REVIEW_JSON_OPTIONS = { fallbackMessage: "The private review request failed." };
+export const PRIVATE_UNPAID_REVIEW_PRIVACY_CONTEXT = "private_unpaid" as const;
 
 function formatDate(value: string) {
   const date = new Date(value);
@@ -1150,6 +1151,9 @@ export function HumanAssuranceRaterClient({
                           </div>
                           <fieldset className="lg:sticky lg:top-4 lg:self-start">
                             <legend className="text-sm font-semibold">{task.rubric.prompt}</legend>
+                            <p className="mt-1 text-xs leading-5 text-base-content/55">
+                              {reviewRatingPrivacyMessage(PRIVATE_UNPAID_REVIEW_PRIVACY_CONTEXT)}
+                            </p>
                             <div className="mt-3 grid gap-3">
                               {(
                                 [
@@ -1186,6 +1190,7 @@ export function HumanAssuranceRaterClient({
                             {draft.selectedOption ? (
                               <CrowdForecastField
                                 positiveLabel={reviewCase.binaryReview.positiveLabel}
+                                privacyContext={PRIVATE_UNPAID_REVIEW_PRIVACY_CONTEXT}
                                 value={draft.predictionPercent}
                                 disabled={serverAcceptance !== null}
                                 onChange={predictionPercent => updateDraft(reviewCase.caseId, { predictionPercent })}

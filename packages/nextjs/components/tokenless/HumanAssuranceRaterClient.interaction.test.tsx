@@ -389,7 +389,12 @@ test("an owner-fixed private task shows source and output separately and submits
     await waitFor(() => assert.ok(view.getByText("User asked whether the deployment is ready.")));
     assert.ok(view.getByText("The agent answered that every required check passed."));
     assert.equal(view.queryByRole("link", { name: "Open private artifact" }), null);
+    assert.ok(view.getByText("This private, unpaid rating stays off-chain and is recorded when you submit."));
     await user.click(view.getByRole("radio", { name: "Approve" }));
+    assert.match(
+      view.getByText(/your forecast stays off-chain/iu).textContent ?? "",
+      /recorded with this private, unpaid review when you submit/iu,
+    );
     await user.type(view.getByRole("spinbutton", { name: "Crowd forecast" }), "65");
     await user.click(view.getByRole("button", { name: "Submit review" }));
     await waitFor(() => assert.ok(submission.current));

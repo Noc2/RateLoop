@@ -206,7 +206,10 @@ test("a public reviewer can choose a rating, exact crowd forecast, and optional 
     assert.equal(forecast.min, "1");
     assert.equal(forecast.max, "99");
     assert.equal(forecast.step, "1");
-    assert.match(screen.getByText(/your forecast stays hidden until settlement/iu).textContent ?? "", /hidden/u);
+    assert.match(
+      screen.getByText(/your forecast is sealed on submission/iu).textContent ?? "",
+      /publicly decryptable after the commit deadline/iu,
+    );
     assert.equal(screen.queryByRole("button", { name: "70%" }), null);
     fireEvent.change(forecast, { target: { value: "73" } });
     await waitFor(() =>

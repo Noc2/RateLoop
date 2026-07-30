@@ -6,7 +6,11 @@ import { shouldInspectReservedVoucher } from "./publicSubmissionReceipt";
 import type { Hex } from "viem";
 import { type PublicQuestionMedia, QuestionMedia } from "~~/components/tokenless/answer/QuestionMedia";
 import { ChoiceInput, Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
-import { CrowdForecastField, isCrowdForecastPercent } from "~~/components/tokenless/review/CrowdForecastField";
+import {
+  CrowdForecastField,
+  isCrowdForecastPercent,
+  reviewRatingPrivacyMessage,
+} from "~~/components/tokenless/review/CrowdForecastField";
 import { DeadlineChip } from "~~/components/tokenless/review/DeadlineChip";
 import { ReviewerShell } from "~~/components/tokenless/review/ReviewerShell";
 import { Card } from "~~/components/tokenless/ui/Card";
@@ -42,6 +46,8 @@ import type { TokenlessQueuedCommit } from "~~/lib/tokenless/rater/queue";
 import { clearReviewDraft, loadReviewDraft, saveReviewDraft } from "~~/lib/tokenless/reviewDrafts";
 import { loadReviewReceipt, saveReviewReceipt } from "~~/lib/tokenless/reviewReceipts";
 import { formatUsdcAtomic } from "~~/lib/tokenless/usdc";
+
+export const PUBLIC_PAID_REVIEW_PRIVACY_CONTEXT = "public_paid" as const;
 
 type PublicAnswerTaskBase = {
   operationKey: string;
@@ -906,7 +912,9 @@ export function PublicQuestionCard({
           {paidAccess.state === "ready" ? (
             <>
               <p className="text-sm font-semibold">Your rating</p>
-              <p className="mt-1 text-xs text-base-content/55">Rating hidden until settlement.</p>
+              <p className="mt-1 text-xs text-base-content/55">
+                {reviewRatingPrivacyMessage(PUBLIC_PAID_REVIEW_PRIVACY_CONTEXT)}
+              </p>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 {(["yes", "no"] as const).map((value, index) => (
                   <button
@@ -931,6 +939,7 @@ export function PublicQuestionCard({
                 <CrowdForecastField
                   accessibleLabel={`What percentage of reviewers do you expect to choose “${options[0]}”?`}
                   positiveLabel={options[0]}
+                  privacyContext={PUBLIC_PAID_REVIEW_PRIVACY_CONTEXT}
                   value={prediction}
                   onChange={setPrediction}
                 />

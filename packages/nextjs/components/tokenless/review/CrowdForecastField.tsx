@@ -2,6 +2,20 @@
 
 import { useId } from "react";
 
+export type ReviewPrivacyContext = "public_paid" | "private_unpaid";
+
+export function reviewRatingPrivacyMessage(context: ReviewPrivacyContext) {
+  return context === "public_paid"
+    ? "Submitting publishes a sealed rating. It becomes publicly decryptable after the commit deadline."
+    : "This private, unpaid rating stays off-chain and is recorded when you submit.";
+}
+
+export function reviewForecastPrivacyMessage(context: ReviewPrivacyContext) {
+  return context === "public_paid"
+    ? "Your forecast is sealed on submission and becomes publicly decryptable after the commit deadline."
+    : "Your forecast stays off-chain and is recorded with this private, unpaid review when you submit.";
+}
+
 export function isCrowdForecastPercent(value: number | null | undefined): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 1 && value <= 99;
 }
@@ -10,12 +24,14 @@ export function CrowdForecastField({
   accessibleLabel = "Crowd forecast",
   disabled = false,
   positiveLabel,
+  privacyContext,
   value,
   onChange,
 }: {
   accessibleLabel?: string;
   disabled?: boolean;
   positiveLabel: string;
+  privacyContext: ReviewPrivacyContext;
   value: number | null;
   onChange: (value: number | null) => void;
 }) {
@@ -73,8 +89,8 @@ export function CrowdForecastField({
         {value !== null && !valid
           ? "Enter a whole number from 1 to 99."
           : valid
-            ? "Fine-tune with the slider. Your forecast stays hidden until settlement."
-            : "Enter a whole number from 1 to 99. No forecast is preselected; your forecast stays hidden until settlement."}
+            ? `Fine-tune with the slider. ${reviewForecastPrivacyMessage(privacyContext)}`
+            : `Enter a whole number from 1 to 99. No forecast is preselected. ${reviewForecastPrivacyMessage(privacyContext)}`}
       </p>
     </fieldset>
   );
