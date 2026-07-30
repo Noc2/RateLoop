@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { multipartFormBodyLimit, readApiFormDataRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import { authenticateProductPrincipal, requireProductPrincipalScope } from "~~/lib/tokenless/productCore";
 import {
+  PUBLIC_QUESTION_IMAGE_MAX_BYTES,
   authorizePublicQuestionMediaOwner,
   stagePublicQuestionImage,
   sweepExpiredPublicQuestionMedia,
@@ -9,6 +11,9 @@ import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+export const AGENT_IMAGE_UPLOAD_FORM_BODY_MAX_BYTES = multipartFormBodyLimit(PUBLIC_QUESTION_IMAGE_MAX_BYTES);
+export const readAgentImageUploadForm = (request: Pick<Request, "body" | "headers">) =>
+  readApiFormDataRequestBody(request, AGENT_IMAGE_UPLOAD_FORM_BODY_MAX_BYTES);
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,7 +28,7 @@ export async function POST(request: NextRequest) {
     requireProductPrincipalScope(principal, "panel:publish");
     await authorizePublicQuestionMediaOwner({ apiKeyId: principal.apiKeyId, workspaceId: principal.workspaceId });
     await sweepExpiredPublicQuestionMedia({ limit: 20 });
-    const form = await request.formData();
+    const form = await readAgentImageUploadForm(request);
     const file = form.get("file");
     const clientRequestId = form.get("clientRequestId");
     if (!(file instanceof File) || typeof clientRequestId !== "string") {

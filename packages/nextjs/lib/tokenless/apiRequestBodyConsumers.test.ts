@@ -90,7 +90,7 @@ test("high-cost API consumers share exact-limit and limit-plus-one body boundari
 test("API routes do not bypass the streaming body readers", () => {
   const routes = routeFiles(new URL("../../app/api/", import.meta.url));
   const bypasses = routes.filter(route =>
-    /\brequest\.(?:arrayBuffer|json|text)\s*\(/u.test(readFileSync(route, "utf8")),
+    /\brequest\.(?:arrayBuffer|formData|json|text)\s*\(/u.test(readFileSync(route, "utf8")),
   );
   assert.deepEqual(
     bypasses.map(route => route.pathname),

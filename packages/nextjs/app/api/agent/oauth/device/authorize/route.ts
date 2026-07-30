@@ -3,9 +3,12 @@ import { requireBrowserSession } from "~~/lib/auth/request";
 import { assertAuthRequestOrigin } from "~~/lib/auth/session";
 import { AgentOAuthError } from "~~/lib/tokenless/agentOAuth";
 import { decideAgentOAuthDeviceAuthorization } from "~~/lib/tokenless/agentOAuthDevice";
+import { API_OAUTH_FORM_BODY_MAX_BYTES, readApiFormDataRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 export const runtime = "nodejs";
+export const readAgentOAuthDeviceAuthorizationForm = (request: Pick<Request, "body" | "headers">) =>
+  readApiFormDataRequestBody(request, API_OAUTH_FORM_BODY_MAX_BYTES);
 
 function formField(form: FormData, key: string, max = 128) {
   const values = form.getAll(key);
@@ -23,7 +26,7 @@ export async function POST(request: NextRequest) {
       throw new AgentOAuthError("invalid_request", "Cross-origin device approval denied.", 403);
     }
     const session = await requireBrowserSession(request);
-    const form = await request.formData();
+    const form = await readAgentOAuthDeviceAuthorizationForm(request);
     const userCode = formField(form, "user_code", 32);
     const decision = formField(form, "decision", 16);
     if (decision !== "approve" && decision !== "deny") {

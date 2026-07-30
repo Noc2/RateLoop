@@ -6,9 +6,12 @@ import {
   issueAgentOAuthAuthorizationCode,
   validateAgentOAuthAuthorizationRequest,
 } from "~~/lib/tokenless/agentOAuth";
+import { API_OAUTH_FORM_BODY_MAX_BYTES, readApiFormDataRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 export const runtime = "nodejs";
+export const readAgentOAuthAuthorizationForm = (request: Pick<Request, "body" | "headers">) =>
+  readApiFormDataRequestBody(request, API_OAUTH_FORM_BODY_MAX_BYTES);
 
 const BROWSER_RELAY_HEADER = "x-rateloop-oauth-callback-relay";
 
@@ -65,7 +68,7 @@ export async function POST(request: NextRequest) {
     } catch {
       throw new AgentOAuthError("invalid_request", "Cross-origin authorization request denied.", 403);
     }
-    const form = await request.formData();
+    const form = await readAgentOAuthAuthorizationForm(request);
     const validated = await validateAgentOAuthAuthorizationRequest(authorizationValues(form));
     const relayAllowed = isLoopbackRedirect(validated.redirectUri);
     let session;

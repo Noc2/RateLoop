@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
-import { storeEncryptedArtifact } from "~~/lib/tokenless/artifactPrivacy";
+import { multipartFormBodyLimit, readApiFormDataRequestBody } from "~~/lib/tokenless/apiRequestBody";
+import { ARTIFACT_MAX_BYTES, storeEncryptedArtifact } from "~~/lib/tokenless/artifactPrivacy";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+export const ASSURANCE_ARTIFACT_UPLOAD_FORM_BODY_MAX_BYTES = multipartFormBodyLimit(ARTIFACT_MAX_BYTES);
+export const readAssuranceArtifactUploadForm = (request: Pick<Request, "body" | "headers">) =>
+  readApiFormDataRequestBody(request, ASSURANCE_ARTIFACT_UPLOAD_FORM_BODY_MAX_BYTES);
 
 type Context = { params: Promise<{ projectId: string; workspaceId: string }> };
 
@@ -16,7 +20,7 @@ export async function POST(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
     const { projectId, workspaceId } = await context.params;
-    const form = await request.formData();
+    const form = await readAssuranceArtifactUploadForm(request);
     const file = form.get("file");
     const role = String(form.get("role") ?? "");
     const label = String(form.get("label") ?? "");

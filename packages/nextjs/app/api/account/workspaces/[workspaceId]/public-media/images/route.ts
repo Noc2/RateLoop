@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { multipartFormBodyLimit, readApiFormDataRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import {
+  PUBLIC_QUESTION_IMAGE_MAX_BYTES,
   authorizePublicQuestionMediaOwner,
   stagePublicQuestionImage,
   sweepExpiredPublicQuestionMedia,
@@ -9,6 +11,9 @@ import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+export const BROWSER_IMAGE_UPLOAD_FORM_BODY_MAX_BYTES = multipartFormBodyLimit(PUBLIC_QUESTION_IMAGE_MAX_BYTES);
+export const readBrowserImageUploadForm = (request: Pick<Request, "body" | "headers">) =>
+  readApiFormDataRequestBody(request, BROWSER_IMAGE_UPLOAD_FORM_BODY_MAX_BYTES);
 
 type Context = { params: Promise<{ workspaceId: string }> };
 
@@ -18,7 +23,7 @@ export async function POST(request: NextRequest, context: Context) {
     const { workspaceId } = await context.params;
     await authorizePublicQuestionMediaOwner({ accountAddress: session.principalId, workspaceId });
     await sweepExpiredPublicQuestionMedia({ limit: 20 });
-    const form = await request.formData();
+    const form = await readBrowserImageUploadForm(request);
     const file = form.get("file");
     const clientRequestId = form.get("clientRequestId");
     if (!(file instanceof File) || typeof clientRequestId !== "string") {

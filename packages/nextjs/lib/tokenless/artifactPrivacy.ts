@@ -21,7 +21,7 @@ import { TokenlessServiceError } from "~~/lib/tokenless/server";
 const ARTIFACT_KEY_DOMAIN = "customer_artifact";
 const ARTIFACT_DELETION_LEASE_MS = 5 * 60_000;
 const ARTIFACT_DELETION_RETRY_MS = 30_000;
-const MAX_ARTIFACT_BYTES = 10 * 1024 * 1024;
+export const ARTIFACT_MAX_BYTES = 10 * 1024 * 1024;
 const MAX_LEASE_MS = 30 * 60_000;
 export const PRIVATE_REVIEW_ARTIFACT_KINDS = ["source", "suggestion"] as const;
 export type PrivateReviewArtifactKind = (typeof PRIVATE_REVIEW_ARTIFACT_KINDS)[number];
@@ -272,7 +272,7 @@ export async function storeEncryptedArtifact(input: {
   role: "baseline" | "candidate" | "context" | "reference";
   workspaceId: string;
 }) {
-  if (input.bytes.byteLength === 0 || input.bytes.byteLength > MAX_ARTIFACT_BYTES) {
+  if (input.bytes.byteLength === 0 || input.bytes.byteLength > ARTIFACT_MAX_BYTES) {
     throw new TokenlessServiceError("Artifacts must be between 1 byte and 10 MB.", 400, "invalid_artifact_size");
   }
   const label = input.label.trim();
@@ -367,7 +367,7 @@ export function commitPrivateReviewArtifact(input: {
   requestReference: string;
   workspaceId: string;
 }) {
-  if (input.bytes.byteLength === 0 || input.bytes.byteLength > MAX_ARTIFACT_BYTES) {
+  if (input.bytes.byteLength === 0 || input.bytes.byteLength > ARTIFACT_MAX_BYTES) {
     throw new TokenlessServiceError(
       "Private review artifacts must be between 1 byte and 10 MB.",
       400,
@@ -416,7 +416,7 @@ export async function storeEncryptedPrivateReviewArtifacts(input: {
   const requestReference = input.requestReference.trim();
   const definitions = PRIVATE_REVIEW_ARTIFACT_KINDS.map(kind => {
     const value = kind === "source" ? input.source : input.suggestion;
-    if (value.bytes.byteLength === 0 || value.bytes.byteLength > MAX_ARTIFACT_BYTES) {
+    if (value.bytes.byteLength === 0 || value.bytes.byteLength > ARTIFACT_MAX_BYTES) {
       throw new TokenlessServiceError(
         "Private review artifacts must be between 1 byte and 10 MB.",
         400,
