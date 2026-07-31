@@ -142,7 +142,9 @@ report the comparable share, since weighting corrects selection but not dropout.
 review drops from 100% to 50%, which is a customer-visible safety property and a
 design-of-record reopening.
 
-**2.4** — exit codes 0 pass, 1 fail, 2 timeout, 3 transport. Add a `Retry-After` header
+**2.4** — a blocking command already exists (`wait --until-ready`, 300s default); what is
+missing is distinct exit states, since every error path currently returns 1. Exit codes
+0 pass, 1 fail, 2 timeout, 3 transport. Add a `Retry-After` header
 to the receipt route so backoff is server-driven; poll client-side rather than building
 a second long-poll implementation.
 
@@ -198,6 +200,12 @@ constraint that keeps RateLoop outside Annex III(4)(b) holds throughout.
 | 4.8  | **Senior-reviewer escalation**              | 5    | Route high-dissent cases to a named adjudicator recorded as a separate tier, so panel agreement stays intact. **The trigger must stay a deterministic count** — "escalate when the model thinks it's risky" is inference in routing and crosses the line.                                                                                                 |
 | 4.9  | **Public quality page**                     | 5    | A stable, indexable, aggregate-only page verifiable in-browser. A customer linking to it markets RateLoop for free. **Needs a real minimum-cell rule written fresh** — `minimumAggregationSize` equals `panelSize` on the live lane, so what looks like k-anonymity is a panel-completeness filter.                                                       |
 | 4.10 | **Licence freshness, not credential proof** | 5–8  | "In good standing _at the moment of this review_", bound into the evidence. Free authoritative sources exist: Nursys e-Notify pushes real-time status and discipline changes, the FCA register has a free REST API, GMC offers daily deltas. Almost every competitor verifies once at onboarding and never rechecks.                                      |
+
+**Before any of Phase 4 ships, two things must be fixed or stopped being claimed.** The
+live lane hardcodes its blinding flag to false and stores reviewers as customer-invited
+and customer-named, so neither blinding nor independence is real there. And the coverage
+export is unsigned and gate-blocked from public copy. Both are cheap to fix and neither
+is fixed by building more.
 
 **On 4.10 — drop "cryptographically verified credentials" from the pitch.** No regulator
 asks for it; DSA, AI Act, MDR and FDA all accept a CV and a training record. Centaur.ai,

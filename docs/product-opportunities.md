@@ -92,8 +92,9 @@ with one rather than competing; the moat is the review semantics, not the hash c
 
 ### B3. Stop hiding capabilities that work
 
-Roughly five shipped, deployed, working features are pinned false in the public-claim
-capability map and therefore cannot be mentioned publicly: managed evidence signing, the
+**Fourteen of seventeen** capabilities are hardcoded false in the public-claim map (the
+other three derive from lane readiness and are also false). An earlier draft said
+"roughly five". Several of the fourteen are shipped and working and therefore cannot be mentioned publicly: managed evidence signing, the
 offline packet verifier, OTLP ingest, and the attestation paths.
 
 The claim gate is a genuine asset and should not be weakened — but it now makes the
@@ -170,8 +171,11 @@ notices this in one meeting; better they hear it from the product.
 
 ### C1. Expose suites, cases and gold items to the live lane — weeks
 
-**Correction:** `createOwnerGoldItem` does have a production route; what it lacks is any
-UI client. And the sequencing is not a deadlock — build draft, mark ready, freeze, then
+**Correction, twice over.** Gold has a live authenticated route covering create,
+configure, retire and read, and gold failure rate is rendered in the dashboard. What is
+actually broken is **injection**: gold enters a run only through the frozen-run path, so
+items created via the route are never injected on the lane that runs. Different claim,
+different fix. And the sequencing is not a deadlock — build draft, mark ready, freeze, then
 designate gold terminates. The three real conflicts are that gold can only be designated
 after the suite is sealed, that designating every case as gold makes the suite unusable,
 and that a frozen suite can never be extended.
@@ -181,24 +185,27 @@ implemented, tested, and reachable only through a function with no production ca
 There is no UI for gold at all. A customer on the live lane cannot build a test set or
 record a known-correct answer.
 
-### C2. Expose version comparison
+### C2. Bind version comparison to explicit versions — weeks
 
-Every assurance case is already a blinded baseline-versus-candidate comparison, with
-counts, preference share, a Wilson interval and previous-run drift computed. It is
-reachable only through the same frozen-run path.
+**Correction:** this surface has a live route and a rendered panel, and previous-run
+drift is genuinely computed across all completed runs, including the ones the live lane
+synthesises. The gap is narrower than an earlier draft claimed: nothing binds the
+artifacts to explicit baseline and candidate agent-version identifiers, and there is no
+signed comparison report.
 
-Bind both artifacts to explicit baseline and candidate agent-version identifiers and
-emit one signed comparison report. **"We changed the agent, here is the human-judged
-difference, signed"** is a saleable artefact that nothing else in the market produces.
+Note also that the comparison is **not blinded on the live lane**, where the swap flag is
+hardcoded false — so "blinded baseline-versus-candidate" describes the switched-off lane
+only.
 
 ### C3. A CI command that waits for a human decision
 
-The Promptfoo adapter exists and fails uncertainty closed, but there is no CLI command
-that blocks on one immutable review run and returns distinct pass, fail, timeout and
-transport-error exit states.
+**Correction:** a blocking command already exists — `wait --until-ready`, 300-second
+default. What is missing is only **distinct exit states**: every error path sets exit
+code 1, so CI cannot distinguish a failed review from a timeout from a network error.
 
-This is what makes the product sticky to the engineer who installs it — the persona the
-product already serves best.
+**Move this first if the moat matters.** It is the only item in either document that
+creates a real switching cost — a pipeline gate is removed by a deliberate act with a
+named owner, where everything else is observational and removable silently.
 
 ### C4. Capture end-user feedback on live output
 
@@ -229,11 +236,11 @@ The published SDK and agents packages are pre-tokenless snapshots at `0.1.0`. **
 installing today gets a different product.** For a developer-led distribution strategy
 this is an own goal, and it is an afternoon of work.
 
-### C8. Alert delivery beyond the inbox
+### C8. Alert delivery beyond the inbox — days
 
-Six event types reach an in-app inbox with opt-in email. No Slack, no Teams, no webhook
-for humans. Cheap, and it is the difference between a dashboard someone remembers to
-open and a system that tells them.
+Six oversight event types reach an in-app inbox with opt-in email and browser push. No
+Slack, no Teams. **A signed webhook delivery system already exists** with endpoints and
+live routes — what is missing is a human-facing destination, not the transport.
 
 ---
 

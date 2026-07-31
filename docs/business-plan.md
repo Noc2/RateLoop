@@ -17,7 +17,7 @@ and the date by which it must be met.** Three shapes, and they are mutually excl
 
 | Objective                            | What it implies                                                                                                                                                                                                                                                                                                                                                |
 | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Replace a salary** (~€8–12k/month) | Roughly **five Business customers or twenty Team customers**. The enterprise tier, the marketplace and every market-sizing paragraph become noise. This is the shape the rest of the plan assumes.                                                                                                                                                             |
+| **Replace a salary** (~€8–12k/month) | Roughly **18–25 Business or 74–101 Team customers** — the salary sits _on top of_ a €3,000/month cost base, so this is not the break-even figure. An earlier draft conflated the two. The enterprise tier, the marketplace and every market-sizing paragraph become noise.                                                                                     |
 | **Venture scale**                    | Foreclosed by this plan's own findings — no compelled buyer, no EU funding line for compliance tooling, a category Gartner sizes at $492M worldwide. Say so and stop.                                                                                                                                                                                          |
 | **Acquisition**                      | The acquirer set determines the roadmap: a qualified trust service provider, a compliance platform, or an evaluation vendor. Robust Intelligence raised $44M and sold to Cisco for ~$400M by being a narrow technically-credible wedge absorbed into a bigger platform's story. That is achievable-shaped and implies different work from a self-serve ladder. |
 
@@ -29,8 +29,8 @@ The compliance framing is the wrong door and the right lock.
 
 **The door.** Gartner published a _Market Guide for AI Evaluation and Observability
 Platforms_ on 2 February 2026, predicting adoption by software engineering teams rising
-**18% in 2025 to 60% by 2028**. The AI governance platform market it sizes at **$492M
-worldwide for 2026** — the only tier-one figure in play, and the smallest by 5×, split
+**18% in 2025 to 60% by 2028**. A separate Gartner release two weeks later sized the AI
+governance platform market at **$492M worldwide for 2026** — the only tier-one figure in play, and the smallest by 5×, split
 across OneTrust, IBM, Credo AI and everyone else. Engineering budget is larger, faster,
 and reachable without procurement, legal review or a DPA negotiation.
 
@@ -58,15 +58,16 @@ to an engineer, or with evaluation to a risk buyer.
 
 ## 2. The wedge, and why it is unoccupied
 
-Human review is already the most common evaluation method — **59.8% of 1,340
-practitioners** rely on it for nuanced or high-stakes work, ahead of LLM-as-judge at
-53.3%. So the thesis is not novel; the instrumentation is.
+Human review is already the most common evaluation method — among organisations that
+already run evals, **59.8% rely on it** for nuanced or high-stakes work, ahead of
+LLM-as-judge at 53.3% (n=1,340 respondents, of whom about half run evals at all). So the thesis is not novel; the instrumentation is.
 
 Automated judges are measurably unreliable exactly where they matter. Chance correction
 deflates reported agreement by **33–41 percentage points**. Preference flips average
-**13.6%**. Against domain experts, agreement falls to **68% for dietitians and 64% for
-clinical psychologists** versus ~80% for general instruction-following — and prompting
-does not fix it. Most damning: one finance study found a judge at **κ = 0.86 on
+**13.6%**. Against domain experts, agreement falls to
+**68% for dietitians and 64% for clinical psychologists**, versus 80% for _lay users in
+the same two domains_ — the gap is expert-versus-layperson, not domain-versus-benchmark,
+which an earlier draft got wrong. Prompting does not fix it. Most damning: one finance study found a judge at **κ = 0.86 on
 questions it could answer itself and κ = 0.16 on questions it could not.** The judge is
 reliable precisely where you do not need it.
 
@@ -120,9 +121,23 @@ qualitative-research tools have computed these coefficients for decades — ATLA
 its implementation with Krippendorff himself. **The commercial object is the
 independence, the panel and the verifiability, never the coefficient.**
 
-Verified in code: nominal Krippendorff's alpha at `agentReviewQuality.ts:155`, Wilson
-bounds in four modules, HMAC-keyed sampling at `adaptiveReview.ts:175`, blinded panels
-throughout.
+**Verified in code, and one claim withdrawn.** Nominal Krippendorff's alpha at
+`agentReviewQuality.ts:155` — textbook, correct, and the strongest verified claim in this
+document. Wilson bounds across six files (two implementations, algebraically identical —
+a drift risk worth fixing). HMAC-keyed sampling at `adaptiveReview.ts:175`.
+
+**Blinding is withdrawn.** It exists only in the switched-off paid lane. On the live
+lane `directPrivateReviewEvidence.ts:296` sets `blinding = { swap: false }` — a literal
+written into the commitment as bookkeeping, blinding nothing — and reviewers are stored
+as `customer_invited` and `customer_named`. **They are invited and named by the party
+being reviewed, which is the opposite of structural independence.** Three other documents
+in this set already say the independence question is unresolved; selling it as shipped
+was wrong.
+
+Two limits on alpha the earlier draft omitted: the privacy floor is three reviewers while
+the live lane's default panel size is **one**, so alpha is unavailable unless a customer
+deliberately runs three-reviewer panels; and on that lane choices are recoded, so the UI
+caption describes categories that do not exist there.
 
 ### What this does NOT yet do, stated before anyone sells it
 
@@ -164,7 +179,10 @@ Three claims survive the audit, and they are enough:
    your reviewers disagree is where an automated judge is also unreliable, and where a
    confident score is a lie.
 3. **A tamper-evident record of exactly which outputs were reviewed and why**, with
-   recorded inclusion probability and a signed coverage export.
+   recorded inclusion probability and a coverage export carrying hashes and commitments.
+   **The export is not signed** — an earlier draft said it was — and the capability is
+   pinned false in the claim gate, so it cannot appear in public copy until both are
+   fixed.
 
 **The positioning sentence:**
 
@@ -175,7 +193,9 @@ Three claims survive the audit, and they are enough:
 > know which parts of the job are genuinely ambiguous.
 
 For the risk buyer, the same sentence plus: _and the same dated, sampled, reproducible
-record that Article 72 post-market monitoring asks you to keep._
+record a provider's post-market monitoring plan needs._ Note Article 72 binds the
+**provider**, not the deployer — this set's own legal document flags deployer-facing
+Article 72 citations as a defect, and an earlier draft reproduced it.
 
 Judge calibration is the natural next claim and it is **three build items away**:
 collect human labels on a sample of `pass` and `fail` receipts too, compute the
@@ -202,12 +222,25 @@ Fix the meter _after_ deciding what it should be.
 
 ## 4. Pricing and the numbers that actually bind
 
-The current meter is decisions, and it is wrong three ways. It prices at $0.116 per
-decision against Amazon A2I at $0.02–0.08 with no charge for your own reviewers. It
-suppresses the behaviour being sold — metered review budgets mean fewer reviews, which
-means thinner evidence. And **adaptive coverage steps 100% → 50% → 25% → 10%, so
-per-decision revenue falls up to 90% as a customer succeeds.** Of four meters already
-implemented, the only one charged for is the only one that shrinks.
+The current meter is decisions, and it is wrong three ways — with two corrections an
+earlier draft needed.
+
+**It compares badly per unit.** $29 for 250 decisions is $0.116, but that is the
+promotional price; **at the $99 list it is $0.396**, and quoting the lower figure
+flattered the comparison. Amazon A2I orchestrated the same work at $0.02–0.03 per object
+with no charge for your own reviewers, so the honest gap is 5–20×. (A2I closed to new
+customers on 30 July 2026 — a historical anchor now, but the one a buyer's memory uses.)
+
+**It suppresses the behaviour being sold.** Metered review budgets mean fewer reviews,
+which means thinner evidence.
+
+**The metered thing is the shrinking thing.** Adaptive coverage steps
+100% → 50% → 25% → 10% by design. Note the sign, because an earlier draft had it
+backwards: **nothing is charged per decision today** — both plans are flat fees with an
+allowance, no overage, no usage record — so falling consumption raises revenue _per
+decision_. The problem is not that revenue falls. It is that of four limits already
+implemented, the only one presented as the headline is the only one designed to shrink,
+which forecloses usage-based expansion before it starts.
 
 **Meter on governed agents and retention years.** Both grow. Retention costs almost
 nothing to serve and is where willingness to pay sits — evidence with short retention
@@ -226,10 +259,12 @@ signature, Checkr $30–95 per report.
 | **Business** | **€599/mo**               | 25 agents        | 3-year retention, SSO, DPA, audit export   |
 | **Scale**    | **€2,499/mo, self-serve** | unlimited agents | 6-year retention, invoice or bank transfer |
 
-The €599 → €25k jump in an earlier draft was a gap with no rung. Langfuse already
-solved this in the adjacent category: a **self-serve €2,499/month top tier payable by
-card**, with SSO sold as an add-on to the middle tier rather than behind a hard wall.
-Copy that. A 4× step is _narrow_ by category norms — Langfuse runs 6.9× then 12.6×.
+The €599 → €25k jump in an earlier draft was a gap with no rung, and the fix proposed
+for it was wrong: **Langfuse's $2,499 tier is Enterprise, contact-sales, not self-serve.**
+Its top card-payable tier is Pro at **$199**. What is genuinely copyable is the
+add-on pattern — SSO sold as a $300/month addition to the middle tier rather than behind
+a hard wall — and the step sizes, 6.9× then 12.6×, which make a 4× ladder narrow by
+category norms rather than wide.
 
 **One constraint the tiers must respect:** a 30-day Free tier is not implementable.
 There is a six-month retention floor in `evidenceRetention.ts` _and_ a database CHECK
@@ -283,8 +318,9 @@ fact — price floor, no self-serve — holds.)
 thread and a domain expert's memory. What this sells against that is a number that
 survives being questioned.
 
-**Two warnings.** HumanLayer was the human-in-the-loop approval SDK at ~$660k revenue
-growing 100% month over month — **and pivoted away anyway** to a coding IDE, while
+**Two warnings.** HumanLayer was the human-in-the-loop approval SDK and **pivoted away anyway**, with its
+repository now carrying an explicit deprecation notice (revenue figures circulating for
+it trace to an estimate aggregator and a single job posting — do not rely on them) to a coding IDE, while
 OpenAI's Agents SDK shipped native approve-and-resume. HITL as a standalone product gets
 absorbed into frameworks. And Datadog shipped production-to-human annotation queues in
 March 2026 explicitly for judge calibration: **the workflow is being commoditised in
@@ -295,8 +331,9 @@ real time.** Only the statistics and the labour supply remain unclaimed.
 ## 6. Go to market
 
 **One ICP, named.** Teams running a customer-facing agent where a quality claim has to
-survive challenge by someone outside the team. The DSA transparency database publishes
-**all 359 obligated providers for free** — naming ten of them is an hour's work and is
+survive challenge by someone outside the team. The DSA transparency database publishes **359 active platforms** for free — that is a
+live counter of platforms currently filing, not the obligated population, and Article 20
+is disapplied for micro and small enterprises, which excludes much of this ICP — naming ten of them is an hour's work and is
 the difference between a plan and an intention.
 
 **The regulatory hook that leads is DSA Article 42(2)(b)**, not Article 20(6) and not
@@ -380,9 +417,11 @@ pages on.**
 
 **Nobody replies.** For bootstrapped companies this is the modal failure, not running
 out of money — in one dataset of 83 postmortems citing "no market need", only **2 cited
-insufficient funding** while 69% named a marketing failure as the killing blow.
+insufficient funding** while **55% named a marketing problem** (an earlier draft said
+69%, which appears only on unrelated blogs).
 
-**The closest documented analogue shut down in February 2026.** Cydoc: solo founder,
+**The closest documented analogue shut down in August 2025** — February 2026 is when the
+founder published the postmortem. Cydoc: solo founder,
 bootstrapped, regulated-adjacent AI, seven years. Cause was broken unit economics (~$70
 cost against a sub-$100 price), sales neglected because solo, and a moat undercut when a
 client built a simpler version in-house. **Explicitly not regulation.** Three of those
