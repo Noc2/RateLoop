@@ -13,13 +13,13 @@ function rawSource(relativePath: string) {
   return readFileSync(new URL(relativePath, import.meta.url), "utf8");
 }
 
-test("Human Discover keeps the compact legacy feed and action-rail composition", () => {
+test("assigned review work keeps the compact feed and action-rail composition", () => {
   const page = source("./answer/AnswerPageClient.tsx");
   const card = source("./answer/PublicQuestionCard.tsx");
   const tabs = source("./human/HumanTabs.tsx");
 
   assert.match(page, /AppPageShell/);
-  assert.match(page, /tab-control/);
+  assert.match(tabs, /tab-control/);
   assert.doesNotMatch(page, /display-section|answer-query|Answer safely/);
   assert.match(card, /17\.25rem/);
   assert.match(card, /import \{ Card \}/);
@@ -60,10 +60,10 @@ test("Human profile keeps established surface cards without a dashboard hero", (
   assert.doesNotMatch(rawProfile, /lg:grid-cols-\[minmax\(0,1fr\)_340px\]/);
 });
 
-test("Human Discover keeps sign-in requirements concise", () => {
+test("assigned review work keeps sign-in requirements concise", () => {
   const page = source("./answer/AnswerPageClient.tsx");
-  assert.match(page, /Sign in to discover review work/);
-  assert.match(page, /eligible, signed-in RateLoop humans/);
+  assert.match(page, /Sign in to view assigned work/);
+  assert.match(page, /only review work assigned to your account/);
   assert.match(page, /<SignedOutGate/);
   assert.match(page, /headingLevel=\{2\}/);
   assert.match(page, /layout="embedded"/);
@@ -71,22 +71,17 @@ test("Human Discover keeps sign-in requirements concise", () => {
   assert.doesNotMatch(page, /ThirdwebSessionButton/);
 });
 
-test("Human Discover offers exactly the legacy source filters and empty state", () => {
+test("assigned review work omits discovery filters and keeps actionable empty states", () => {
   const page = source("./answer/AnswerPageClient.tsx");
   const card = source("./answer/PublicQuestionCard.tsx");
 
-  // When both queues have work the surface is unfiltered and the pills are redundant. The
-  // conditions governing a scope that has run out of work are asserted behaviourally in
-  // AnswerPageClient.interaction.test.tsx, which this source match cannot express.
-  assert.match(page, /hasPublicTasks && hasPrivateAssignments/);
-  assert.match(page, /\["all", "public", "private"\]/);
-  assert.doesNotMatch(page, /\["all", "public", "private", "submitted"\]/);
+  assert.doesNotMatch(page, /sourceOptions|setScope|setQuery|searchParams\.get\("q"\)|searchParams\.get\("scope"\)/);
   assert.ok(page.indexOf("assignments.map") < page.indexOf("tasks.map"));
-  assert.match(page, /No review work is available right now/);
+  assert.match(page, /No review work is assigned to you right now/);
   assert.match(page, /No review history yet/);
   assert.match(page, /Use an invitation/);
   assert.doesNotMatch(rawSource("./answer/AnswerPageClient.tsx"), /Check again/);
-  assert.match(card, /Public reviews can be browsed now/);
+  assert.match(card, /assigned paid work/);
   assert.match(card, /\/settings\/wallets/);
 });
 

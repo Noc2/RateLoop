@@ -18,11 +18,10 @@ import {
 import { HumanTabs } from "~~/components/tokenless/human/HumanTabs";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import { Card } from "~~/components/tokenless/ui/Card";
-import { usePathname, useRouter } from "~~/i18n/navigation";
+import { usePathname } from "~~/i18n/navigation";
 import { readBrowserSession, subscribeToBrowserAuthSessionChanges } from "~~/lib/auth/client";
 import { AnswerRequestError, loadAnswerQueues, readAccountBoundAssignments } from "~~/lib/tokenless/answerQueue";
 
-type VisibleScope = "all" | "public" | "private";
 type ReviewView = "active" | "history";
 
 function paidTaskAccess(value: unknown): PaidTaskAccess {
@@ -41,21 +40,14 @@ function paidTaskAccess(value: unknown): PaidTaskAccess {
 
 export function AnswerPageClient({
   initialInvitationOpen = false,
-  initialQuery = "",
-  initialScope = "all",
   initialView = "active",
 }: {
   initialInvitationOpen?: boolean;
-  initialQuery?: string;
-  initialScope?: VisibleScope;
   initialView?: ReviewView;
 }) {
   const t = useTranslations("review.queue");
-  const router = useRouter();
   const pathname = usePathname();
-  const query = initialQuery;
   const [invitationOpen, setInvitationOpen] = useState(initialInvitationOpen);
-  const [scope, setScope] = useState<VisibleScope>(initialScope);
   const [view, setView] = useState<ReviewView>(initialView);
   const [tasks, setTasks] = useState<PublicAnswerTask[]>([]);
   const [assignments, setAssignments] = useState<PrivateAnswerAssignment[]>([]);
@@ -80,99 +72,79 @@ export function AnswerPageClient({
   const loadGenerationRef = useRef(0);
   const loadControllerRef = useRef<AbortController | null>(null);
 
-  const load = useCallback(
-    async (nextQuery = query) => {
-      loadControllerRef.current?.abort();
-      const controller = new AbortController();
-      loadControllerRef.current = controller;
-      const generation = ++loadGenerationRef.current;
-      setLoading(true);
-      setError(null);
-      setSignedOut(false);
-      try {
-        const browserSession = await readBrowserSession(controller.signal);
-        if (controller.signal.aborted || generation !== loadGenerationRef.current) return;
-        const nextPrincipalId = browserSession?.principalId ?? null;
-        if (principalRef.current !== nextPrincipalId) {
-          principalRef.current = nextPrincipalId;
-          setTasks([]);
-          setAssignments([]);
-          setFocusedAssignmentId(null);
-          setPaidAccess({ state: "eligibility_required", eligibilityStatus: "not_started" });
-        }
-        if (!browserSession) {
-          setPrincipalId(null);
-          setSignedOut(true);
-          return;
-        }
-        setPrincipalId(browserSession.principalId);
-        const fetchWithSignal: typeof fetch = (input, init) => fetch(input, { ...init, signal: controller.signal });
-        const [publicQueue, privateQueue] = await loadAnswerQueues(
-          nextQuery,
-          view === "history" ? "private" : "all",
-          fetchWithSignal,
-          view,
-        );
-        if (controller.signal.aborted || generation !== loadGenerationRef.current) return;
-        setTasks((publicQueue.body.tasks ?? []) as PublicAnswerTask[]);
-        const nextAssignments = (
-          privateQueue.error ? [] : readAccountBoundAssignments(privateQueue.body, browserSession.principalId)
-        ) as PrivateAnswerAssignment[];
-        setAssignments(nextAssignments);
-        setFocusedAssignmentId(current =>
-          current && nextAssignments.some(assignment => assignment.assignmentId === current)
-            ? current
-            : (nextAssignments[0]?.assignmentId ?? null),
-        );
-        setPaidAccess(paidTaskAccess(publicQueue.body.paidAccess));
-        const requestErrors = [publicQueue.error, privateQueue.error].filter(
-          (value): value is AnswerRequestError => value !== null,
-        );
-        if (requestErrors.some(requestError => requestError.status === 401)) {
-          setSignedOut(true);
-        } else if (requestErrors.length) {
-          setError([...new Set(requestErrors.map(requestError => requestError.message))].join(" "));
-        }
-      } catch (cause) {
-        if (controller.signal.aborted || generation !== loadGenerationRef.current) return;
-        if (cause instanceof AnswerRequestError && cause.status === 401) setSignedOut(true);
-        else setError(t("loadFailed"));
-      } finally {
-        if (!controller.signal.aborted && generation === loadGenerationRef.current) setLoading(false);
+  const load = useCallback(async () => {
+    loadControllerRef.current?.abort();
+    const controller = new AbortController();
+    loadControllerRef.current = controller;
+    const generation = ++loadGenerationRef.current;
+    setLoading(true);
+    setError(null);
+    setSignedOut(false);
+    try {
+      const browserSession = await readBrowserSession(controller.signal);
+      if (controller.signal.aborted || generation !== loadGenerationRef.current) return;
+      const nextPrincipalId = browserSession?.principalId ?? null;
+      if (principalRef.current !== nextPrincipalId) {
+        principalRef.current = nextPrincipalId;
+        setTasks([]);
+        setAssignments([]);
+        setFocusedAssignmentId(null);
+        setPaidAccess({ state: "eligibility_required", eligibilityStatus: "not_started" });
       }
-    },
-    [query, t, view],
-  );
+      if (!browserSession) {
+        setPrincipalId(null);
+        setSignedOut(true);
+        return;
+      }
+      setPrincipalId(browserSession.principalId);
+      const fetchWithSignal: typeof fetch = (input, init) => fetch(input, { ...init, signal: controller.signal });
+      const [publicQueue, privateQueue] = await loadAnswerQueues(
+        "",
+        view === "history" ? "private" : "all",
+        fetchWithSignal,
+        view,
+      );
+      if (controller.signal.aborted || generation !== loadGenerationRef.current) return;
+      setTasks((publicQueue.body.tasks ?? []) as PublicAnswerTask[]);
+      const nextAssignments = (
+        privateQueue.error ? [] : readAccountBoundAssignments(privateQueue.body, browserSession.principalId)
+      ) as PrivateAnswerAssignment[];
+      setAssignments(nextAssignments);
+      setFocusedAssignmentId(current =>
+        current && nextAssignments.some(assignment => assignment.assignmentId === current)
+          ? current
+          : (nextAssignments[0]?.assignmentId ?? null),
+      );
+      setPaidAccess(paidTaskAccess(publicQueue.body.paidAccess));
+      const requestErrors = [publicQueue.error, privateQueue.error].filter(
+        (value): value is AnswerRequestError => value !== null,
+      );
+      if (requestErrors.some(requestError => requestError.status === 401)) {
+        setSignedOut(true);
+      } else if (requestErrors.length) {
+        setError([...new Set(requestErrors.map(requestError => requestError.message))].join(" "));
+      }
+    } catch (cause) {
+      if (controller.signal.aborted || generation !== loadGenerationRef.current) return;
+      if (cause instanceof AnswerRequestError && cause.status === 401) setSignedOut(true);
+      else setError(t("loadFailed"));
+    } finally {
+      if (!controller.signal.aborted && generation === loadGenerationRef.current) setLoading(false);
+    }
+  }, [t, view]);
 
   useEffect(() => {
-    setScope(initialScope);
     setView(initialView);
-  }, [initialScope, initialView]);
+  }, [initialView]);
 
   useEffect(() => {
-    void load(initialQuery);
-  }, [initialQuery, load]);
+    void load();
+  }, [load]);
 
   useEffect(() => subscribeToBrowserAuthSessionChanges(() => void load()), [load]);
 
-  function changeScope(nextScope: VisibleScope) {
-    setScope(nextScope);
-    router.push(discoverHref(pathname, query, nextScope, invitationOpen, view));
-  }
-
   const hasPublicTasks = tasks.length > 0;
   const hasPrivateAssignments = assignments.length > 0;
-  // A scope keeps filtering only while it still has review work. Submitting the last item of the
-  // selected scope must never leave the queue rendering nothing, so the filter falls back to "all".
-  const visibleScope: VisibleScope =
-    (scope === "public" && !hasPublicTasks) || (scope === "private" && !hasPrivateAssignments) ? "all" : scope;
-  // Whenever the surface is filtered, the pills stay reachable so the selection can be changed
-  // without editing the URL — including after the selected scope has run out of work.
-  const showScopeControls =
-    !loading &&
-    !signedOut &&
-    (hasPublicTasks || hasPrivateAssignments) &&
-    (scope !== "all" || (hasPublicTasks && hasPrivateAssignments));
 
   return (
     <AppPageShell outerClassName="pb-8" contentClassName="space-y-4">
@@ -200,40 +172,11 @@ export function AnswerPageClient({
         </div>
       ) : null}
 
-      {showScopeControls || query ? (
-        <div className="flex flex-wrap items-center gap-2">
-          {showScopeControls ? (
-            <div className="flex flex-wrap items-center gap-2" role="group" aria-label={t("sources")}>
-              {(["all", "public", "private"] as const).map(value => (
-                <button
-                  key={value}
-                  type="button"
-                  aria-pressed={visibleScope === value}
-                  onClick={() => changeScope(value)}
-                  className={`tab-control px-4 py-1.5 text-base font-medium capitalize transition-colors ${
-                    visibleScope === value ? "pill-active" : "pill-inactive"
-                  }`}
-                >
-                  {t(`scope.${value}`)}
-                </button>
-              ))}
-            </div>
-          ) : null}
-          {query ? (
-            <Card as="span" variant="nested" className="ml-auto rounded-lg px-3 py-2 text-sm text-base-content/65">
-              {t.rich("resultsFor", {
-                query,
-              })}
-            </Card>
-          ) : null}
-        </div>
-      ) : null}
-
       <div className="space-y-4">
         <AsyncSection loading={loading} loadingLabel={t("loading")}>
           {null}
         </AsyncSection>
-        {!loading && !signedOut && visibleScope !== "public" && view === "active" && assignments.length > 1 ? (
+        {!loading && !signedOut && view === "active" && assignments.length > 1 ? (
           <Card
             as="div"
             role="group"
@@ -259,7 +202,7 @@ export function AnswerPageClient({
             ))}
           </Card>
         ) : null}
-        {!loading && !signedOut && visibleScope !== "public" ? (
+        {!loading && !signedOut ? (
           view === "active" ? (
             assignments
               .filter(assignment => assignment.assignmentId === focusedAssignmentId)
@@ -283,7 +226,7 @@ export function AnswerPageClient({
             </ul>
           ) : null
         ) : null}
-        {!loading && !signedOut && principalId && view === "active" && visibleScope !== "private"
+        {!loading && !signedOut && principalId && view === "active"
           ? tasks.map((task, index) => (
               <PublicQuestionCard
                 key={task.roundId}
@@ -300,7 +243,7 @@ export function AnswerPageClient({
             description={t("signInDescription")}
             headingLevel={2}
             layout="embedded"
-            returnTo={discoverHref(pathname, query, scope, initialInvitationOpen, view)}
+            returnTo={assignedInboxHref(pathname, initialInvitationOpen, view)}
             title={t("signInTitle")}
             titleId="human-discover-sign-in-title"
           />
@@ -310,10 +253,8 @@ export function AnswerPageClient({
             as="div"
             className="flex min-h-36 flex-col items-center justify-center gap-3 rounded-lg p-6 text-center"
           >
-            <p className="text-base text-base-content/60">
-              {query ? t("noSearchResults") : view === "history" ? t("noHistory") : t("noneAvailable")}
-            </p>
-            {!query && view === "active" && !invitationOpen ? (
+            <p className="text-base text-base-content/60">{view === "history" ? t("noHistory") : t("noneAvailable")}</p>
+            {view === "active" && !invitationOpen ? (
               <button
                 type="button"
                 className="btn btn-sm rateloop-secondary-action"
@@ -335,9 +276,11 @@ export function AnswerPageClient({
   );
 }
 
-function discoverHref(pathname: string, query: string, scope: VisibleScope, invitationOpen: boolean, view: ReviewView) {
-  const params = new URLSearchParams({ q: query, scope });
-  if (view === "history") params.set("view", view);
+function assignedInboxHref(pathname: string, invitationOpen: boolean, view: ReviewView) {
+  const params = new URLSearchParams();
   if (invitationOpen) params.set("invite", "1");
-  return `${pathname}?${params.toString()}`;
+  const search = params.toString();
+  const expectedPathname = `/human/${view === "history" ? "history" : "review"}`;
+  const safePathname = pathname === expectedPathname ? pathname : expectedPathname;
+  return `${safePathname}${search ? `?${search}` : ""}`;
 }

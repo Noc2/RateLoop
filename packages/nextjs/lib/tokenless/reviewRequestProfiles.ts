@@ -11,6 +11,7 @@ import {
   type HumanReviewCompensationMode,
   type HumanReviewContentBoundary,
 } from "~~/lib/tokenless/reviewCapabilities";
+import { assertHumanReviewMutationAvailable } from "~~/lib/tokenless/reviewConfigurationMutation";
 import { validateReviewerExpertiseRequirementsWithClient } from "~~/lib/tokenless/reviewerExpertiseDefinitions";
 import {
   type ReviewerExpertiseRequirement,
@@ -907,6 +908,7 @@ export async function createReviewRequestProfile(input: {
 }) {
   const actor = await requireManagement(input.accountAddress, input.workspaceId);
   const profile = normalizeReviewRequestProfileInput(input.profile);
+  assertHumanReviewMutationAvailable(profile);
   const profileId = `rrp_${randomUUID().replaceAll("-", "")}`;
   const profileHash = hashReviewRequestProfile(profile);
   const now = new Date();
@@ -960,6 +962,7 @@ export async function updateReviewRequestProfile(input: {
 }) {
   const actor = await requireManagement(input.accountAddress, input.workspaceId);
   const profile = normalizeReviewRequestProfileInput(input.profile);
+  assertHumanReviewMutationAvailable(profile);
   const profileHash = hashReviewRequestProfile(profile);
   const now = new Date();
   const client = await dbPool.connect();

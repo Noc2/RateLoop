@@ -33,6 +33,69 @@ export type HumanReviewLaneReadiness = Pick<
   "privateInvitedUnpaid" | "privateInvitedPaid" | "publicPaidNetwork" | "hybridPublicSafe"
 >;
 
+export type GovernedReviewerExperiment =
+  | "public_network"
+  | "hybrid"
+  | "feedback_bonus"
+  | "surprisingly_popular"
+  | "crowd_forecast";
+
+export type HumanReviewMutationCapability = {
+  available: boolean;
+  experiment: GovernedReviewerExperiment | null;
+  message: string;
+};
+
+/**
+ * These capabilities are intentionally separate from the paid-lane deployment
+ * gate. A paid-lane activation proves deployment, funding, and compliance
+ * readiness; it does not authorize an ordinary customer or agent configuration
+ * to become a public-safe benchmark experiment.
+ *
+ * No persisted, benchmark-scoped activation record exists yet. Keep every
+ * experiment false until one binds the workspace, project, benchmark, method,
+ * export window, pilot evidence, recovery exercise, and deployment key. Crowd
+ * Forecast and Surprisingly Popular are implicit network-round mechanics, so
+ * keeping the network false also keeps them unreachable.
+ */
+export const GOVERNED_REVIEWER_EXPERIMENTS = {
+  publicNetwork: false,
+  hybrid: false,
+  feedbackBonus: false,
+  surprisinglyPopular: false,
+  crowdForecast: false,
+} as const;
+
+export function configuredHumanReviewMutationCapability(input: {
+  audience: HumanReviewAudience;
+  feedbackBonusEnabled: boolean;
+}): HumanReviewMutationCapability {
+  if (input.audience === "public_network") {
+    return {
+      available: GOVERNED_REVIEWER_EXPERIMENTS.publicNetwork,
+      experiment: "public_network",
+      message:
+        "RateLoop-network review is reserved for a separately governed public-safe benchmark and is unavailable for ordinary customer or agent configuration.",
+    };
+  }
+  if (input.audience === "hybrid") {
+    return {
+      available: GOVERNED_REVIEWER_EXPERIMENTS.hybrid,
+      experiment: "hybrid",
+      message: "Hybrid review is reserved and unavailable in this release.",
+    };
+  }
+  if (input.feedbackBonusEnabled) {
+    return {
+      available: GOVERNED_REVIEWER_EXPERIMENTS.feedbackBonus,
+      experiment: "feedback_bonus",
+      message:
+        "Feedback Bonus is a separately governed experiment and is unavailable for ordinary customer or agent configuration.",
+    };
+  }
+  return { available: true, experiment: null, message: "This configuration can be saved." };
+}
+
 type HumanReviewActivationEnv = Readonly<Record<string, string | undefined>>;
 const RUNTIME_HUMAN_REVIEW_ACTIVATION_ENV: HumanReviewActivationEnv = {
   NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE:

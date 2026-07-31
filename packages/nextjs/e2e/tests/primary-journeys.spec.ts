@@ -237,7 +237,7 @@ test("invited reviewer sees exact agent content and rates it directly in Discove
   await expect(page.getByText(source)).toHaveCount(0);
   await expect(page.getByText(agentOutput)).toHaveCount(0);
   await page.getByRole("button", { name: "Review next assignment" }).click();
-  await expect(page.getByText("No review work is available right now.")).toBeVisible();
+  await expect(page.getByText("No review work is assigned to you right now.")).toBeVisible();
 });
 
 test("owner approves a request and prepares its human feedback award", async ({ page }) => {

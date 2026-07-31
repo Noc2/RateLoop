@@ -22,6 +22,7 @@ import {
   deployedHumanReviewReadiness,
   resolveHumanReviewCapability,
 } from "~~/lib/tokenless/reviewCapabilities";
+import { assertHumanReviewMutationAvailable } from "~~/lib/tokenless/reviewConfigurationMutation";
 import { normalizeManagedReviewPolicyInput } from "~~/lib/tokenless/reviewPolicyManagement";
 import {
   REVIEW_REQUEST_PRIVATE_SENSITIVITIES,
@@ -437,6 +438,9 @@ async function validateExactObjects(
     );
   }
   const profileAudience = rowString(profileRow, "audience");
+  if (profileAudience !== "private_invited" && profileAudience !== "public_network" && profileAudience !== "hybrid") {
+    throw new Error("Database returned an invalid review audience.");
+  }
   const compensationMode = rowString(profileRow, "compensation_mode");
   if (compensationMode !== "unpaid" && compensationMode !== "usdc") {
     throw new Error("Database returned invalid review compensation.");
@@ -445,6 +449,10 @@ async function validateExactObjects(
     compensationMode,
     feedbackBonusEnabled: profileRow?.feedback_bonus_enabled === true || profileRow?.feedback_bonus_enabled === "t",
   };
+  assertHumanReviewMutationAvailable({
+    audience: profileAudience,
+    feedbackBonusEnabled: paymentProfile.feedbackBonusEnabled,
+  });
   const policyAudience = selectionAudience(selectionRow.audience_policy_json);
   if (profileAudience !== policyAudience) {
     throw new TokenlessServiceError(
@@ -1721,6 +1729,7 @@ export async function putHumanReviewConfigurationForOwner(input: PutHumanReviewC
       privateGroupPolicyVersion: group.version,
       privateGroupPolicyHash: group.hash,
     });
+    assertHumanReviewMutationAvailable(profile);
     await validateReviewerExpertiseRequirementsWithClient(client, {
       workspaceId: input.workspaceId,
       audience: profile.audience,

@@ -81,7 +81,7 @@ test("five primary tokenless surfaces pass rendered DOM axe checks", async () =>
       description="Review work is available to eligible, signed-in RateLoop humans."
       headingLevel={2}
       layout="embedded"
-      title="Sign in to discover review work"
+      title="Sign in to view assigned work"
       titleId="human-discover-sign-in-title"
     >
       <button type="button">Sign in</button>

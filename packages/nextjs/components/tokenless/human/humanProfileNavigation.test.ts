@@ -36,10 +36,10 @@ test("account sign-in preserves an allowed profile destination", () => {
   );
 });
 
-test("human route compatibility preserves history, profile, and invitation state", () => {
+test("human route compatibility preserves history, profile, and invitation state without browsing filters", () => {
   assert.equal(
     legacyHumanRouteHref({ q: "safety", scope: "private", tab: "discover", view: "history" }),
-    "/human/history?q=safety&scope=private",
+    "/human/history",
   );
   assert.equal(
     legacyHumanRouteHref({ eligibility: "provider-return", section: "paid-work", tab: "profile" }),

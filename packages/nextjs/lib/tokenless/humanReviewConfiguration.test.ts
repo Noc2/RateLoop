@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { generateKeyPairSync } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient, dbPool } from "~~/lib/db";
@@ -12,8 +11,6 @@ import {
   saveHumanReviewConfiguration,
   saveHumanReviewConfigurationInTransaction,
 } from "~~/lib/tokenless/humanReviewConfiguration";
-import { persistIntegrityEpochSnapshot } from "~~/lib/tokenless/integrityEpochPersistence";
-import { buildIntegrityEpoch, hashIntegrityValue } from "~~/lib/tokenless/integrityEpochs";
 import { createPrivateGroup } from "~~/lib/tokenless/privateGroups";
 import { createAgentPublishingPolicy, createWorkspace } from "~~/lib/tokenless/productCore";
 import { createManagedReviewPolicy, updateManagedReviewPolicy } from "~~/lib/tokenless/reviewPolicyManagement";
@@ -36,43 +33,8 @@ test("automatic grant locking is valid PostgreSQL for optional OAuth relations",
 beforeEach(() => __setDatabaseResourcesForTests(createMemoryDatabaseResources()));
 afterEach(() => __setDatabaseResourcesForTests(null));
 
-async function persistCurrentTestIntegrityEpoch() {
-  const now = new Date();
-  const signingPrivateKey = generateKeyPairSync("ed25519").privateKey;
-  const snapshot = buildIntegrityEpoch({
-    epochId: "integrity:configuration-test",
-    cutoffAt: new Date(now.getTime() - 60_000).toISOString(),
-    sourceWindowStartedAt: new Date(now.getTime() - 24 * 60 * 60 * 1_000).toISOString(),
-    privateFeaturesExpireAt: new Date(now.getTime() + 24 * 60 * 60 * 1_000).toISOString(),
-    createdAt: new Date(now.getTime() - 60_000).toISOString(),
-    scorerBuildHash: hashIntegrityValue({
-      build: "human-review-configuration-test",
-    }),
-    observations: [
-      {
-        reviewerId: "rater_configuration_test",
-        observedAt: new Date(now.getTime() - 60_000).toISOString(),
-        sourceRecordCommitments: [hashIntegrityValue({ source: "configuration-test" })],
-        eligible: true,
-      },
-    ],
-    keys: {
-      lookupKey: Buffer.alloc(32, 1),
-      lookupKeyVersion: "lookup-test",
-      pseudonymKey: Buffer.alloc(32, 2),
-      pseudonymKeyVersion: "pseudonym-test",
-      vaultKey: Buffer.alloc(32, 3),
-      vaultKeyVersion: "vault-test",
-      signingPrivateKey,
-    },
-  });
-  await persistIntegrityEpochSnapshot(snapshot);
-  return snapshot;
-}
-
 async function fixture(
   options: {
-    policyAudience?: "private_invited" | "public_network";
     policyMode?: "adaptive" | "manual";
   } = {},
 ) {
@@ -105,7 +67,7 @@ async function fixture(
     maximumUnreviewedGap: 20,
     requiredRiskTiers: [],
     criticalRiskTiers: ["critical"],
-    audience: options.policyAudience ?? ("private_invited" as const),
+    audience: "private_invited" as const,
   };
   const policy = await createManagedReviewPolicy({ accountAddress: OWNER, workspaceId, policy: policyInput });
   const profileInput = {
@@ -199,7 +161,7 @@ test("manual handoff normalizes owner mutations and rejects contradictory direct
   );
 });
 
-test("hybrid owner selection emits distinct invited and network subpanel cohorts", async () => {
+test("hybrid owner selection is rejected before any cohort policy is persisted", async () => {
   const setup = await fixture();
   const body = {
     expectedBindingVersion: null,
@@ -242,49 +204,13 @@ test("hybrid owner selection emits distinct invited and network subpanel cohorts
         agentId: setup.agent.agentId,
         body,
       }),
-    (error: unknown) => error instanceof TokenlessServiceError && error.code === "integrity_epoch_unavailable",
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "human_review_experiment_unavailable",
   );
-  const epoch = await persistCurrentTestIntegrityEpoch();
-  const saved = await putHumanReviewConfigurationForOwner({
-    accountAddress: OWNER,
-    workspaceId: setup.workspaceId,
-    agentId: setup.agent.agentId,
-    body,
-  });
   const stored = await dbClient.execute({
-    sql: `SELECT audience_policy_json FROM tokenless_agent_review_policies
-          WHERE workspace_id=? AND policy_id=? AND version=?`,
-    args: [setup.workspaceId, saved.configuration.selectionPolicy.id, saved.configuration.selectionPolicy.version],
+    sql: `SELECT audience_policy_json FROM tokenless_agent_review_policies WHERE workspace_id=? AND audience_policy_json LIKE '%hybrid%'`,
+    args: [setup.workspaceId],
   });
-  const policy = JSON.parse(String(stored.rows[0]?.audience_policy_json)) as {
-    reviewerSource: string;
-    selection: string;
-    cohorts: Array<{
-      cohortId: string;
-      minimumReviewers: number;
-      maximumReviewers: number;
-    }>;
-    integrity: {
-      epochId: string;
-      epochManifestHash: string;
-    };
-  };
-  assert.equal(policy.reviewerSource, "hybrid");
-  assert.equal(policy.selection, "randomized");
-  assert.equal(policy.integrity.epochId, epoch.manifest.epochId);
-  assert.equal(policy.integrity.epochManifestHash, epoch.manifestHash);
-  assert.equal(policy.cohorts.length, 2);
-  assert.equal(new Set(policy.cohorts.map(cohort => cohort.cohortId)).size, 2);
-  assert.ok(policy.cohorts.some(cohort => cohort.cohortId.startsWith("hacoh_setup_")));
-  assert.ok(policy.cohorts.some(cohort => cohort.cohortId.startsWith("hacoh_network_")));
-  assert.equal(
-    policy.cohorts.reduce((sum, cohort) => sum + cohort.minimumReviewers, 0),
-    4,
-  );
-  assert.equal(
-    policy.cohorts.reduce((sum, cohort) => sum + cohort.maximumReviewers, 0),
-    4,
-  );
+  assert.equal(stored.rowCount, 0);
 });
 
 test("optimistic saves append one binding version while carrying forward unchanged object versions", async () => {
@@ -404,21 +330,16 @@ test("the in-transaction seam leaves commit and rollback ownership with the unif
   }
 });
 
-test("request profile audience is authoritative across the bound objects", async () => {
-  const setup = await fixture({ policyAudience: "public_network" });
+test("standalone policy mutation cannot persist the unavailable network audience", async () => {
+  const setup = await fixture();
   await assert.rejects(
     () =>
-      saveHumanReviewConfiguration({
+      createManagedReviewPolicy({
         accountAddress: OWNER,
         workspaceId: setup.workspaceId,
-        agentId: setup.agent.agentId,
-        agentVersionId: setup.agent.currentVersion.versionId,
-        expectedBindingVersion: null,
-        selectionPolicy: { id: setup.policy.policyId, version: setup.policy.version },
-        requestProfile: { id: setup.profile.profileId, version: setup.profile.version },
-        authority: "check_only",
+        policy: { ...setup.policyInput, audience: "public_network" },
       }),
-    (error: unknown) => error instanceof TokenlessServiceError && error.code === "human_review_audience_mismatch",
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "human_review_experiment_unavailable",
   );
 });
 

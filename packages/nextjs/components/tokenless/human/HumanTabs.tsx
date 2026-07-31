@@ -22,14 +22,7 @@ export function HumanTabs({ active, endAction }: { active: HumanNavigation; endA
         {tabs.map(tab => (
           <Link
             key={tab}
-            href={humanSectionHref(
-              tab,
-              active === tab
-                ? preservedSearch
-                : tab === "history"
-                  ? new URLSearchParams({ scope: "private" })
-                  : undefined,
-            )}
+            href={humanSectionHref(tab, active === tab ? preservedSearch : undefined)}
             aria-current={active === tab ? "page" : undefined}
             className={`tab-control px-4 py-1.5 text-base font-medium transition-colors ${
               active === tab ? "pill-active" : "pill-inactive"

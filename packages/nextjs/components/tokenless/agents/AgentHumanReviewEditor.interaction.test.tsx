@@ -55,6 +55,7 @@ test("the editor uses workspace reviewer readiness without exposing legacy group
     assert.equal(screen.queryByRole("option", { name: "RateLoop network" }), null);
     assert.equal(screen.queryByRole("option", { name: "Add USDC bounty" }), null);
     assert.equal(screen.queryByRole("combobox", { name: "Guaranteed bounty" }), null);
+    assert.equal(screen.queryByText("Feedback Bonus"), null);
     assert.ok(screen.getByText("Invited reviewers"));
     assert.equal((screen.getByRole("textbox", { name: "Response window" }) as HTMLInputElement).value, "1");
     await userEvent.setup().click(screen.getByRole("button", { name: "Finish setup" }));

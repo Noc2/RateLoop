@@ -188,7 +188,7 @@ test("review setup defines specialist requirements and leaves pool coverage to P
   assert.doesNotMatch(flowSource, /expertiseEligibilityStatus/);
 });
 
-test("review setup controls independent base compensation, optional Feedback Bonus, and agent authority", () => {
+test("review setup keeps governed compensation experiments behind the shared capability", () => {
   for (const label of ["Check only", "Prepare for approval", "Send automatically"]) {
     assert.match(`${flowSource}\n${localizedRoutingSource}`, new RegExp(label));
   }
@@ -210,6 +210,8 @@ test("review setup controls independent base compensation, optional Feedback Bon
   assert.match(localizedFlowSource, /Optional and separate from the guaranteed bounty/);
   assert.match(localizedFlowSource, /A human later chooses useful written feedback to pay/);
   assert.match(flowSource, /reviewCompensation\.feedbackBonusEnabled/);
+  assert.match(flowSource, /const feedbackBonusAvailable = configuredHumanReviewMutationCapability\(/);
+  assert.match(flowSource, /\{feedbackBonusAvailable \? \(/);
   assert.match(flowSource, /feedbackBonusAwarderKind/);
   assert.match(flowSource, /value=\{reviewCompensation\.usdcPerReviewer\}/);
   assert.match(flowSource, /authority=\{displayedReviewAuthority\}/);

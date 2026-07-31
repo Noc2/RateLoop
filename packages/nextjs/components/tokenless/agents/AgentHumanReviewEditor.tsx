@@ -21,7 +21,11 @@ import { useConfirmDialog } from "~~/components/tokenless/ui/useConfirmDialog";
 import { DurationInput } from "~~/components/ui/DurationInput";
 import { ADAPTIVE_MONITORING_FLOOR_BPS } from "~~/lib/tokenless/adaptiveReviewPolicy";
 import { readJson } from "~~/lib/tokenless/http";
-import { configuredHumanReviewLaneForSelection, configuredHumanReviewLanes } from "~~/lib/tokenless/reviewCapabilities";
+import {
+  configuredHumanReviewLaneForSelection,
+  configuredHumanReviewLanes,
+  configuredHumanReviewMutationCapability,
+} from "~~/lib/tokenless/reviewCapabilities";
 import { formatUsdcAtomic, parseUsdcDecimal } from "~~/lib/tokenless/usdc";
 
 type Audience = "private_invited" | "public_network" | "hybrid";
@@ -542,16 +546,19 @@ export function AgentHumanReviewEditor({
   const creating = view.configuration === null;
   const advisoryConnectionLabel =
     view.connection?.reportedLane === "plugin-with-hooks" ? editor("pluginConnection") : editor("connection");
-  const canChooseQuestionAuthority =
-    CONFIGURED_HUMAN_REVIEW_LANES.publicPaidNetwork.available || draft.questionAuthority === "agent_per_request";
+  const canChooseQuestionAuthority = configuredHumanReviewMutationCapability({
+    audience: "public_network",
+    feedbackBonusEnabled: false,
+  }).available;
   const canChooseAudience =
-    CONFIGURED_HUMAN_REVIEW_LANES.publicPaidNetwork.available ||
-    CONFIGURED_HUMAN_REVIEW_LANES.hybridPublicSafe.available ||
-    draft.audience !== "private_invited";
+    configuredHumanReviewMutationCapability({ audience: "public_network", feedbackBonusEnabled: false }).available ||
+    configuredHumanReviewMutationCapability({ audience: "hybrid", feedbackBonusEnabled: false }).available;
+  const feedbackBonusAvailable = configuredHumanReviewMutationCapability({
+    audience: "private_invited",
+    feedbackBonusEnabled: true,
+  }).available;
   const paidConfigurationRelevant =
-    CONFIGURED_HUMAN_REVIEW_LANES.privateInvitedPaid.available ||
-    draft.compensationMode === "usdc" ||
-    draft.feedbackBonusEnabled;
+    CONFIGURED_HUMAN_REVIEW_LANES.privateInvitedPaid.available || draft.compensationMode === "usdc";
 
   return (
     <Card as="section" id="agent-human-review-editor" className="rounded-2xl p-6">
@@ -596,8 +603,7 @@ export function AgentHumanReviewEditor({
                 onChange={event => changeQuestionAuthority(event.target.value as QuestionAuthority)}
               >
                 <option value="owner_fixed">{policyCopy.question.ownerFixed}</option>
-                {CONFIGURED_HUMAN_REVIEW_LANES.publicPaidNetwork.available ||
-                draft.questionAuthority === "agent_per_request" ? (
+                {canChooseQuestionAuthority ? (
                   <option value="agent_per_request">{policyCopy.question.agentPerRequest}</option>
                 ) : null}
               </SelectField>
@@ -754,11 +760,15 @@ export function AgentHumanReviewEditor({
                 {draft.questionAuthority !== "agent_per_request" ? (
                   <option value="private_invited">{policyCopy.audience.invited}</option>
                 ) : null}
-                {CONFIGURED_HUMAN_REVIEW_LANES.publicPaidNetwork.available || draft.audience === "public_network" ? (
+                {configuredHumanReviewMutationCapability({
+                  audience: "public_network",
+                  feedbackBonusEnabled: false,
+                }).available ? (
                   <option value="public_network">{policyCopy.audience.rateLoopNetwork}</option>
                 ) : null}
                 {draft.questionAuthority !== "agent_per_request" &&
-                (CONFIGURED_HUMAN_REVIEW_LANES.hybridPublicSafe.available || draft.audience === "hybrid") ? (
+                configuredHumanReviewMutationCapability({ audience: "hybrid", feedbackBonusEnabled: false })
+                  .available ? (
                   <option value="hybrid">
                     <AgentText id="hybridAudience" />
                   </option>
@@ -824,7 +834,7 @@ export function AgentHumanReviewEditor({
                 required
               />
             ) : null}
-            {paidConfigurationRelevant ? (
+            {paidConfigurationRelevant && feedbackBonusAvailable ? (
               <fieldset className="rounded-xl border border-base-content/10 p-4 sm:col-span-2">
                 <legend className="px-1 text-sm font-medium">{policyCopy.payment.feedbackBonus}</legend>
                 <SegmentedChoice

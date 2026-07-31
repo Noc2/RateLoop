@@ -49,16 +49,9 @@ export async function HumanSectionPage({
 
   if (navigation === "discover" || navigation === "history") {
     const invitation = firstQueryValue(searchParams.invite);
-    const query = firstQueryValue(searchParams.q);
-    const requestedScope = firstQueryValue(searchParams.scope);
-    const scope = ["all", "public", "private"].includes(requestedScope ?? "")
-      ? (requestedScope as "all" | "public" | "private")
-      : "all";
     return (
       <AnswerPageClient
         initialInvitationOpen={invitation === "1"}
-        initialQuery={query}
-        initialScope={scope}
         initialView={navigation === "history" ? "history" : "active"}
       />
     );

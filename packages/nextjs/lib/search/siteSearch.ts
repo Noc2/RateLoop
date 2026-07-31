@@ -51,7 +51,7 @@ export const SITE_SEARCH_INDEX: readonly SiteSearchEntry[] = [
     href: "/human/review",
     area: "Task",
     description: "Open assigned review work and reviewer history.",
-    keywords: ["questions", "to review", "discover", "rate", "human"],
+    keywords: ["assigned work", "to review", "review inbox", "rate", "human"],
   },
   {
     title: "Reviewer access",

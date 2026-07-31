@@ -10,6 +10,7 @@ import {
   adaptiveReviewRateBps,
 } from "~~/lib/tokenless/adaptiveReview";
 import { listWorkspaceAgents } from "~~/lib/tokenless/agentRegistry";
+import { assertHumanReviewMutationAvailable } from "~~/lib/tokenless/reviewConfigurationMutation";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 export const REVIEW_POLICY_MODES = ["manual", "always", "rules", "adaptive", "fixed"] as const;
@@ -468,6 +469,7 @@ export async function createManagedReviewPolicy(input: {
 }) {
   const actor = await requireManagement(input.accountAddress, input.workspaceId);
   const policy = normalizeManagedReviewPolicyInput(input.policy);
+  assertHumanReviewMutationAvailable({ audience: policy.audience, feedbackBonusEnabled: false });
   const policyId = `rpol_${randomUUID().replaceAll("-", "")}`;
   const now = new Date();
   const client = await dbPool.connect();
@@ -531,6 +533,7 @@ export async function updateManagedReviewPolicy(input: {
 }) {
   const actor = await requireManagement(input.accountAddress, input.workspaceId);
   const policy = normalizeManagedReviewPolicyInput(input.policy);
+  assertHumanReviewMutationAvailable({ audience: policy.audience, feedbackBonusEnabled: false });
   const now = new Date();
   const client = await dbPool.connect();
   let nextVersion = 0;

@@ -74,7 +74,10 @@ import { DurationInput } from "~~/components/ui/DurationInput";
 import { useRouter } from "~~/i18n/navigation";
 import { ADAPTIVE_MONITORING_FLOOR_BPS } from "~~/lib/tokenless/adaptiveReviewPolicy";
 import { type AgentSetupScreenStep, agentSetupUrl } from "~~/lib/tokenless/agentSetupNavigation";
-import { configuredHumanReviewLaneForSelection, configuredHumanReviewLanes } from "~~/lib/tokenless/reviewCapabilities";
+import {
+  configuredHumanReviewLaneForSelection,
+  configuredHumanReviewMutationCapability,
+} from "~~/lib/tokenless/reviewCapabilities";
 import type {
   ReviewerExpertiseDefinition,
   ReviewerExpertiseRequirement,
@@ -104,9 +107,9 @@ const ACTIVE_CONNECTION_STATES = new Set([
   "action_required",
 ]);
 
-const CONFIGURED_HUMAN_REVIEW_LANES = configuredHumanReviewLanes();
-
 function configuredAudienceOption(audience: ReviewAudienceFormValues["audience"]) {
+  const governed = configuredHumanReviewMutationCapability({ audience, feedbackBonusEnabled: false });
+  if (!governed.available) return governed;
   return configuredHumanReviewLaneForSelection(audience, audience === "private_invited" ? "unpaid" : "usdc");
 }
 
@@ -205,10 +208,16 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   const confirmationCopy = useAgentTranslations("reviewConfirmation");
   const policyCopy = useLocalizedReviewPolicyCopy();
   const router = useRouter();
-  const reviewAudienceOptions = [
-    ["public_network", policyCopy.audience.rateLoopNetwork, t("audienceNetworkDescription")],
-    ["private_invited", policyCopy.audience.invited, t("audienceInvitedDescription")],
-  ] as const;
+  const reviewAudienceOptions = (
+    [
+      ["public_network", policyCopy.audience.rateLoopNetwork, t("audienceNetworkDescription")],
+      ["private_invited", policyCopy.audience.invited, t("audienceInvitedDescription")],
+    ] as const
+  ).filter(([audience]) => configuredAudienceOption(audience).available);
+  const feedbackBonusAvailable = configuredHumanReviewMutationCapability({
+    audience: "private_invited",
+    feedbackBonusEnabled: true,
+  }).available;
   const reviewAuthoritySummary = (
     authority: AgentSetupReviewDraft["authority"],
     requiresFundingPermission: boolean,
@@ -1492,18 +1501,20 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   label={policyCopy.question.ownerFixed}
                   description={t("fixedQuestionDescription")}
                 />
-                <SetupRadioChoice
-                  id="agent-setup-question-agent-per-request"
-                  name="questionAuthority"
-                  value="agent_per_request"
-                  checked={reviewCriterion.questionAuthority === "agent_per_request"}
-                  onChange={() => changeQuestionAuthority("agent_per_request")}
-                  label={policyCopy.question.agentPerRequest}
-                  description={`${completion("agentQuestionDescription")} ${
-                    CONFIGURED_HUMAN_REVIEW_LANES.publicPaidNetwork.available ? "" : completion("reviewPathUnavailable")
-                  }`}
-                  disabled={!CONFIGURED_HUMAN_REVIEW_LANES.publicPaidNetwork.available}
-                />
+                {configuredHumanReviewMutationCapability({
+                  audience: "public_network",
+                  feedbackBonusEnabled: false,
+                }).available ? (
+                  <SetupRadioChoice
+                    id="agent-setup-question-agent-per-request"
+                    name="questionAuthority"
+                    value="agent_per_request"
+                    checked={reviewCriterion.questionAuthority === "agent_per_request"}
+                    onChange={() => changeQuestionAuthority("agent_per_request")}
+                    label={policyCopy.question.agentPerRequest}
+                    description={completion("agentQuestionDescription")}
+                  />
+                ) : null}
               </SetupChoiceGroup>
             </fieldset>
             {reviewCriterion.questionAuthority === "owner_fixed" ? (
@@ -2038,76 +2049,78 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     </div>
                   ) : null}
                 </fieldset>
-                <fieldset className="mt-6 border-t border-base-content/10 pt-5">
-                  <legend className="text-lg font-semibold">
-                    <span className="inline-flex items-center gap-2">
-                      {policyCopy.payment.feedbackBonus}
-                      <InfoPopover label={t("aboutBonus")}>
-                        {reviewCompensation.compensationMode === "usdc" ? t("bonusOptional") : t("bonusHumanChoice")}
-                      </InfoPopover>
-                    </span>
-                  </legend>
-                  <SegmentedChoice
-                    className="mt-3 sm:max-w-md"
-                    value={reviewCompensation.feedbackBonusEnabled ? "enabled" : "disabled"}
-                    options={[
-                      { value: "disabled", label: policyCopy.payment.noBonus },
-                      { value: "enabled", label: policyCopy.payment.addBonus },
-                    ]}
-                    onChange={value => changeFeedbackBonus(value === "enabled")}
-                  />
-                  {reviewCompensation.feedbackBonusEnabled ? (
-                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                      <Field
-                        label={policyCopy.payment.bonusPool}
-                        className="border-base-content/10 bg-[var(--rateloop-field)]"
-                        type="text"
-                        inputMode="decimal"
-                        format="usdcAmount"
-                        maxLength={REVIEW_USDC_DECIMAL_MAX_LENGTH}
-                        value={reviewCompensation.feedbackBonusUsdc}
-                        onChange={event =>
-                          setReviewCompensation(current => ({ ...current, feedbackBonusUsdc: event.target.value }))
-                        }
-                        required
-                      />
-                      <SelectField
-                        className="border-base-content/10 bg-[var(--rateloop-field)]"
-                        label={policyCopy.payment.awarder}
-                        labelClassName="text-sm"
-                        value={reviewCompensation.feedbackBonusAwarderKind}
-                        onChange={event =>
-                          setReviewCompensation(current => ({
-                            ...current,
-                            feedbackBonusAwarderKind: event.target.value as "requester" | "designated",
-                          }))
-                        }
-                      >
-                        <option value="requester">{policyCopy.payment.requester}</option>
-                        <option value="designated">{policyCopy.payment.designated}</option>
-                      </SelectField>
-                      {reviewCompensation.feedbackBonusAwarderKind === "designated" ? (
-                        <div className="sm:col-span-2">
-                          <Field
-                            label={policyCopy.payment.awarderAccount}
-                            className="border-base-content/10 bg-[var(--rateloop-field)]"
-                            value={reviewCompensation.feedbackBonusAwarderAccount}
-                            onChange={event =>
-                              setReviewCompensation(current => ({
-                                ...current,
-                                feedbackBonusAwarderAccount: event.target.value,
-                              }))
-                            }
-                            placeholder={t("authenticatedAccount")}
-                            maxLength={320}
-                            required
-                          />
-                        </div>
-                      ) : null}
-                      <p className="text-xs text-base-content/55 sm:col-span-2">{t("bonusAgentBoundary")}</p>
-                    </div>
-                  ) : null}
-                </fieldset>
+                {feedbackBonusAvailable ? (
+                  <fieldset className="mt-6 border-t border-base-content/10 pt-5">
+                    <legend className="text-lg font-semibold">
+                      <span className="inline-flex items-center gap-2">
+                        {policyCopy.payment.feedbackBonus}
+                        <InfoPopover label={t("aboutBonus")}>
+                          {reviewCompensation.compensationMode === "usdc" ? t("bonusOptional") : t("bonusHumanChoice")}
+                        </InfoPopover>
+                      </span>
+                    </legend>
+                    <SegmentedChoice
+                      className="mt-3 sm:max-w-md"
+                      value={reviewCompensation.feedbackBonusEnabled ? "enabled" : "disabled"}
+                      options={[
+                        { value: "disabled", label: policyCopy.payment.noBonus },
+                        { value: "enabled", label: policyCopy.payment.addBonus },
+                      ]}
+                      onChange={value => changeFeedbackBonus(value === "enabled")}
+                    />
+                    {reviewCompensation.feedbackBonusEnabled ? (
+                      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                        <Field
+                          label={policyCopy.payment.bonusPool}
+                          className="border-base-content/10 bg-[var(--rateloop-field)]"
+                          type="text"
+                          inputMode="decimal"
+                          format="usdcAmount"
+                          maxLength={REVIEW_USDC_DECIMAL_MAX_LENGTH}
+                          value={reviewCompensation.feedbackBonusUsdc}
+                          onChange={event =>
+                            setReviewCompensation(current => ({ ...current, feedbackBonusUsdc: event.target.value }))
+                          }
+                          required
+                        />
+                        <SelectField
+                          className="border-base-content/10 bg-[var(--rateloop-field)]"
+                          label={policyCopy.payment.awarder}
+                          labelClassName="text-sm"
+                          value={reviewCompensation.feedbackBonusAwarderKind}
+                          onChange={event =>
+                            setReviewCompensation(current => ({
+                              ...current,
+                              feedbackBonusAwarderKind: event.target.value as "requester" | "designated",
+                            }))
+                          }
+                        >
+                          <option value="requester">{policyCopy.payment.requester}</option>
+                          <option value="designated">{policyCopy.payment.designated}</option>
+                        </SelectField>
+                        {reviewCompensation.feedbackBonusAwarderKind === "designated" ? (
+                          <div className="sm:col-span-2">
+                            <Field
+                              label={policyCopy.payment.awarderAccount}
+                              className="border-base-content/10 bg-[var(--rateloop-field)]"
+                              value={reviewCompensation.feedbackBonusAwarderAccount}
+                              onChange={event =>
+                                setReviewCompensation(current => ({
+                                  ...current,
+                                  feedbackBonusAwarderAccount: event.target.value,
+                                }))
+                              }
+                              placeholder={t("authenticatedAccount")}
+                              maxLength={320}
+                              required
+                            />
+                          </div>
+                        ) : null}
+                        <p className="text-xs text-base-content/55 sm:col-span-2">{t("bonusAgentBoundary")}</p>
+                      </div>
+                    ) : null}
+                  </fieldset>
+                ) : null}
               </div>
             </section>
             {authorityAdjustmentNotice ? (

@@ -89,7 +89,7 @@ function settle() {
   return new Promise(resolve => setTimeout(resolve, 50));
 }
 
-test("a selected private scope with no assignments left still renders the public review work", async () => {
+test("the assigned inbox renders principal-bound paid work", async () => {
   const restoreDom = installTestDom();
   const { cleanup, render: baseRender, waitFor, within } = await import("@testing-library/react");
   const render = withEnglishAppTestProviders(baseRender);
@@ -101,24 +101,14 @@ test("a selected private scope with no assignments left still renders the public
   try {
     render(
       <AppRouterContext.Provider value={router as never}>
-        <AnswerPageClient initialScope="private" />
+        <AnswerPageClient />
       </AppRouterContext.Provider>,
     );
     const screen = within(document.body);
     await waitFor(() => assert.ok(screen.getByText(publicTask.question.prompt)));
 
-    const pills = within(screen.getByRole("group", { name: "Review sources" })).getAllByRole<HTMLButtonElement>(
-      "button",
-    );
-    assert.deepEqual(
-      pills.map(pill => pill.textContent),
-      ["All", "Public", "Private"],
-    );
-    assert.deepEqual(
-      pills.map(pill => pill.getAttribute("aria-pressed")),
-      ["true", "false", "false"],
-    );
-    assert.equal(screen.queryByText(/No review work is available right now/iu), null);
+    assert.equal(screen.queryByRole("group", { name: "Review sources" }), null);
+    assert.equal(screen.queryByText(/No review work is assigned to you right now/iu), null);
   } finally {
     cleanup();
     await settle();
@@ -127,7 +117,7 @@ test("a selected private scope with no assignments left still renders the public
   }
 });
 
-test("a selected public scope with no tasks left still renders the private review work", async () => {
+test("history renders assigned private work", async () => {
   const restoreDom = installTestDom();
   const { cleanup, render: baseRender, waitFor, within } = await import("@testing-library/react");
   const render = withEnglishAppTestProviders(baseRender);
@@ -138,7 +128,7 @@ test("a selected public scope with no tasks left still renders the private revie
   try {
     render(
       <AppRouterContext.Provider value={router as never}>
-        <AnswerPageClient initialScope="public" initialView="history" />
+        <AnswerPageClient initialView="history" />
       </AppRouterContext.Provider>,
     );
     const screen = within(document.body);
@@ -148,13 +138,8 @@ test("a selected public scope with no tasks left still renders the private revie
     assert.ok(screen.getByText(/3 cases/iu));
     assert.equal(screen.queryByText("Private assignment"), null);
     assert.equal(screen.queryByText("Data handling"), null);
-    assert.deepEqual(
-      within(screen.getByRole("group", { name: "Review sources" }))
-        .getAllByRole("button")
-        .map(pill => pill.getAttribute("aria-pressed")),
-      ["true", "false", "false"],
-    );
-    assert.equal(screen.queryByText(/No review work is available right now/iu), null);
+    assert.equal(screen.queryByRole("group", { name: "Review sources" }), null);
+    assert.equal(screen.queryByText(/No review work is assigned to you right now/iu), null);
   } finally {
     cleanup();
     await settle();
@@ -163,7 +148,7 @@ test("a selected public scope with no tasks left still renders the private revie
   }
 });
 
-test("a selected scope still filters out the other kind of review work while both exist", async () => {
+test("assigned work renders every principal-bound source without browsing controls", async () => {
   const restoreDom = installTestDom();
   const { cleanup, render: baseRender, waitFor, within } = await import("@testing-library/react");
   const render = withEnglishAppTestProviders(baseRender);
@@ -174,19 +159,14 @@ test("a selected scope still filters out the other kind of review work while bot
   try {
     render(
       <AppRouterContext.Provider value={router as never}>
-        <AnswerPageClient initialScope="public" />
+        <AnswerPageClient />
       </AppRouterContext.Provider>,
     );
     const screen = within(document.body);
     await waitFor(() => assert.ok(screen.getByText(publicTask.question.prompt)));
 
-    assert.equal(screen.queryByText(privateAssignment.projectName), null);
-    assert.deepEqual(
-      within(screen.getByRole("group", { name: "Review sources" }))
-        .getAllByRole("button")
-        .map(pill => pill.getAttribute("aria-pressed")),
-      ["false", "true", "false"],
-    );
+    assert.ok(screen.getByText(privateAssignment.projectName));
+    assert.equal(screen.queryByRole("group", { name: "Review sources" }), null);
   } finally {
     cleanup();
     await settle();
@@ -195,7 +175,7 @@ test("a selected scope still filters out the other kind of review work while bot
   }
 });
 
-test("an empty review queue keeps its empty state and hides the scope pills", async () => {
+test("an empty assigned-work inbox offers invitation entry without browsing controls", async () => {
   const restoreDom = installTestDom();
   const { cleanup, render: baseRender, waitFor, within } = await import("@testing-library/react");
   const render = withEnglishAppTestProviders(baseRender);
@@ -206,11 +186,11 @@ test("an empty review queue keeps its empty state and hides the scope pills", as
   try {
     render(
       <AppRouterContext.Provider value={router as never}>
-        <AnswerPageClient initialScope="private" />
+        <AnswerPageClient />
       </AppRouterContext.Provider>,
     );
     const screen = within(document.body);
-    await waitFor(() => assert.ok(screen.getByText(/No review work is available right now/iu)));
+    await waitFor(() => assert.ok(screen.getByText(/No review work is assigned to you right now/iu)));
     assert.equal(screen.queryByRole("group", { name: "Review sources" }), null);
     assert.ok(screen.getByRole("button", { name: "Use an invitation" }));
     assert.equal(screen.queryByRole("button", { name: "Check again" }), null);
@@ -233,7 +213,7 @@ test("an empty history uses history-specific copy without an invitation action",
   try {
     render(
       <AppRouterContext.Provider value={router as never}>
-        <AnswerPageClient initialView="history" initialScope="private" />
+        <AnswerPageClient initialView="history" />
       </AppRouterContext.Provider>,
     );
     const screen = within(document.body);

@@ -19,7 +19,7 @@ const DESIGNATED_AWARDER = "0x2222222222222222222222222222222222222222";
 beforeEach(() => __setDatabaseResourcesForTests(createMemoryDatabaseResources()));
 afterEach(() => __setDatabaseResourcesForTests(null));
 
-test("all audiences persist optional Feedback Bonus while private review also supports an optional base bounty", async () => {
+test("ordinary configuration persists private review while governed experiments stay closed", async () => {
   const { workspaceId } = await createWorkspace({ name: "Audience economics E2E", ownerAddress: OWNER });
   const group = await createPrivateGroup({
     accountAddress: OWNER,
@@ -39,72 +39,83 @@ test("all audiences persist optional Feedback Bonus while private review also su
       environment: "production",
     },
   });
-  let index = 0;
-  let profileId: string | null = null;
+  const privateProfile = {
+    agentId: agent.agentId,
+    agentVersionId: agent.currentVersion.versionId,
+    questionAuthority: "owner_fixed" as const,
+    criterion: "Which answer is safest and most useful?",
+    positiveLabel: "Use",
+    negativeLabel: "Revise",
+    rationaleMode: "optional" as const,
+    audience: "private_invited" as const,
+    contentBoundary: "private_workspace" as const,
+    privateSensitivity: "confidential" as const,
+    privateGroupId: group.groupId,
+    privateGroupPolicyVersion: 1,
+    privateGroupPolicyHash: group.policyHash,
+    responseWindowSeconds: 1_200,
+    panelSize: 2,
+    compensationMode: "unpaid" as const,
+    bountyPerSeatAtomic: null,
+    feedbackBonusEnabled: false,
+    feedbackBonusPoolAtomic: null,
+    feedbackBonusAwarderKind: "requester" as const,
+    feedbackBonusAwarderAccount: null,
+    feedbackBonusAwardWindowSeconds: null,
+  };
+  const created = await createReviewRequestProfile({ accountAddress: OWNER, workspaceId, profile: privateProfile });
+  assert.equal(created.audience, "private_invited");
 
-  for (const audience of ["private_invited", "public_network", "hybrid"] as const) {
-    for (const baseBounty of audience === "private_invited" ? [false, true] : [true]) {
-      for (const feedbackBonus of [false, true]) {
-        const designated = feedbackBonus && index % 2 === 1;
-        const profileInput = {
-          agentId: agent.agentId,
-          agentVersionId: agent.currentVersion.versionId,
-          questionAuthority: "owner_fixed" as const,
-          criterion: "Which answer is safest and most useful?",
-          positiveLabel: "Use",
-          negativeLabel: "Revise",
-          rationaleMode: feedbackBonus ? ("required" as const) : ("optional" as const),
-          audience,
-          contentBoundary:
-            audience === "private_invited" ? ("private_workspace" as const) : ("public_or_test" as const),
-          privateSensitivity: audience === "private_invited" ? ("confidential" as const) : null,
-          privateGroupId: audience === "public_network" ? null : group.groupId,
-          privateGroupPolicyVersion: audience === "public_network" ? null : 1,
-          privateGroupPolicyHash: audience === "public_network" ? null : group.policyHash,
-          responseWindowSeconds: index % 2 === 0 ? 1_200 : 86_400,
-          panelSize: audience === "private_invited" ? 2 : audience === "public_network" ? 3 : 4,
-          compensationMode: baseBounty ? ("usdc" as const) : ("unpaid" as const),
-          bountyPerSeatAtomic: baseBounty ? "1250000" : null,
-          feedbackBonusEnabled: feedbackBonus,
-          feedbackBonusPoolAtomic: feedbackBonus ? "5000000" : null,
-          feedbackBonusAwarderKind: designated ? ("designated" as const) : ("requester" as const),
-          feedbackBonusAwarderAccount: designated ? DESIGNATED_AWARDER : null,
-          feedbackBonusAwardWindowSeconds: feedbackBonus ? 604_800 : null,
-        };
-        let profile: Awaited<ReturnType<typeof createReviewRequestProfile>>;
-        if (profileId === null) {
-          profile = await createReviewRequestProfile({ accountAddress: OWNER, workspaceId, profile: profileInput });
-        } else {
-          profile = await updateReviewRequestProfile({
-            accountAddress: OWNER,
-            workspaceId,
-            profileId,
-            profile: profileInput,
-          });
-        }
-        profileId = profile.profileId;
-        assert.equal(profile.audience, audience);
-        assert.equal(profile.compensationMode, baseBounty ? "usdc" : "unpaid");
-        assert.equal(profile.bountyPerSeatAtomic, baseBounty ? "1250000" : null);
-        assert.equal(profile.feedbackBonusEnabled, feedbackBonus);
-        assert.equal(profile.feedbackBonusPoolAtomic, feedbackBonus ? "5000000" : null);
-        assert.equal(profile.feedbackBonusAwarderKind, designated ? "designated" : "requester");
-        assert.equal(profile.feedbackBonusAwarderAccount, designated ? DESIGNATED_AWARDER : null);
-        assert.equal(profile.feedbackBonusAwardWindowSeconds, feedbackBonus ? 604_800 : null);
-        assert.equal(profile.responseWindowSeconds, index % 2 === 0 ? 1_200 : 86_400);
-        index += 1;
-      }
-    }
+  const candidates = [
+    {
+      ...privateProfile,
+      rationaleMode: "required" as const,
+      feedbackBonusEnabled: true,
+      feedbackBonusPoolAtomic: "5000000",
+      feedbackBonusAwarderKind: "designated" as const,
+      feedbackBonusAwarderAccount: DESIGNATED_AWARDER,
+      feedbackBonusAwardWindowSeconds: 604_800,
+    },
+    {
+      ...privateProfile,
+      audience: "public_network" as const,
+      contentBoundary: "public_or_test" as const,
+      privateSensitivity: null,
+      privateGroupId: null,
+      privateGroupPolicyVersion: null,
+      privateGroupPolicyHash: null,
+      panelSize: 3,
+      compensationMode: "usdc" as const,
+      bountyPerSeatAtomic: "1250000",
+    },
+    {
+      ...privateProfile,
+      audience: "hybrid" as const,
+      contentBoundary: "public_or_test" as const,
+      privateSensitivity: null,
+      panelSize: 4,
+      compensationMode: "usdc" as const,
+      bountyPerSeatAtomic: "1250000",
+    },
+  ];
+  for (const profile of candidates) {
+    await assert.rejects(
+      () =>
+        updateReviewRequestProfile({
+          accountAddress: OWNER,
+          workspaceId,
+          profileId: created.profileId,
+          profile,
+        }),
+      (error: unknown) =>
+        error instanceof Error && "code" in error && error.code === "human_review_experiment_unavailable",
+    );
   }
 
   const listed = await listReviewRequestProfiles({ accountAddress: OWNER, workspaceId, includeHistory: true });
-  assert.equal(listed.length, 8);
-  assert.equal(new Set(listed.map(profile => profile.profileId)).size, 1);
-  assert.deepEqual(new Set(listed.map(profile => profile.version)), new Set([1, 2, 3, 4, 5, 6, 7, 8]));
-  assert.deepEqual(
-    new Set(listed.map(profile => `${profile.compensationMode}:${profile.feedbackBonusEnabled}`)),
-    new Set(["unpaid:false", "unpaid:true", "usdc:false", "usdc:true"]),
-  );
+  assert.equal(listed.length, 1);
+  assert.equal(listed[0]?.version, 1);
+  assert.equal(listed[0]?.feedbackBonusEnabled, false);
 });
 
 test("private review freezes base bounty and Feedback Bonus as two independent switches", () => {

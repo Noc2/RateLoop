@@ -52,6 +52,8 @@ export function humanSectionHref(
 ) {
   const params = navigationSearchParams(currentSearch);
   params.delete("tab");
+  params.delete("q");
+  params.delete("scope");
   if (navigation === "history") params.delete("view");
   const search = params.toString();
   return `/human/${humanSectionForNavigation(navigation)}${search ? `?${search}` : ""}`;

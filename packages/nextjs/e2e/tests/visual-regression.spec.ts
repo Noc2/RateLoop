@@ -43,7 +43,7 @@ test("landing and signed-out hubs retain their visual hierarchy", async ({ page 
     json(route, { message: "Authentication required." }, 401),
   );
   await page.goto("/human");
-  await expect(page.getByRole("heading", { name: "Sign in to discover review work" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sign in to view assigned work" })).toBeVisible();
   await settleVisuals(page);
   const humanGate = await signedOutGateTreatment(page, "human-discover-sign-in-title");
   expect(humanGate).toEqual(agentGate);
