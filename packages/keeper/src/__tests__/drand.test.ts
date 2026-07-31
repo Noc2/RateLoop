@@ -57,7 +57,7 @@ describe("quicknet-t beacon evidence", () => {
           { round: 1, randomness: ROUND_1_RANDOMNESS, signature },
           1,
         ),
-      ).toThrow(/malformed beacon evidence/);
+      ).toThrow(/signature is not 48 bytes/);
     }
   });
 
@@ -71,7 +71,7 @@ describe("quicknet-t beacon evidence", () => {
         },
         1,
       ),
-    ).toThrow(/malformed beacon evidence/);
+    ).toThrow(/does not match the frozen round/);
 
     expect(() =>
       validateDrandBeaconEvidence(
@@ -82,7 +82,22 @@ describe("quicknet-t beacon evidence", () => {
         },
         1,
       ),
-    ).toThrow(/inconsistent beacon randomness/);
+    ).toThrow(/randomness is not the SHA-256 digest/);
+  });
+
+  it("rejects a forged signature even when its randomness digest is self-consistent", () => {
+    const changedSignature = `${ROUND_1_SIGNATURE.slice(0, -2)}20`;
+    expect(() =>
+      validateDrandBeaconEvidence(
+        {
+          round: 1,
+          randomness:
+            "00b1c1cd81cb978576a9090f49671ca7777af72da2d301e3acf121094c14be60",
+          signature: changedSignature,
+        },
+        1,
+      ),
+    ).toThrow(/BLS signature does not verify/);
   });
 });
 

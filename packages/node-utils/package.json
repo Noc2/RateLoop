@@ -41,6 +41,11 @@
       "import": "./dist/esm/jcs.js",
       "require": "./dist/cjs/jcs.js"
     },
+    "./drand": {
+      "types": "./dist/esm/drand.d.ts",
+      "import": "./dist/esm/drand.js",
+      "require": "./dist/cjs/drand.js"
+    },
     "./evm-signing-audit": {
       "types": "./dist/esm/evm-signing-audit.d.ts",
       "import": "./dist/esm/evm-signing-audit.js",
@@ -59,6 +64,9 @@
       ],
       "jcs": [
         "dist/esm/jcs.d.ts"
+      ],
+      "drand": [
+        "dist/esm/drand.d.ts"
       ],
       "evm-signing-audit": [
         "dist/esm/evm-signing-audit.d.ts"
@@ -83,6 +91,7 @@
     "provenance": true
   },
   "dependencies": {
+    "@noble/curves": "1.9.1",
     "@noble/hashes": "1.8.0",
     "viem": "2.39.0"
   },

@@ -1,13 +1,19 @@
+import {
+  PINNED_DRAND_CHAINS,
+  verifyDrandBeaconEvidence as verifyPinnedDrandBeaconEvidence,
+  type DrandChainInfo,
+  type PinnedDrandChain,
+} from "@rateloop/node-utils/drand";
 import { HttpCachingChain, HttpChainClient, type ChainClient } from "tlock-js";
-import { sha256, type Hex } from "viem";
+import { type Hex } from "viem";
 import { incrementCounter } from "./metrics.js";
 
 type DrandChain = ReturnType<ChainClient["chain"]>;
 
 export const MAINNET_QUICKNET_CHAIN_HASH =
-  "52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971";
+  PINNED_DRAND_CHAINS.quicknet.chainHash;
 export const QUICKNET_T_CHAIN_HASH =
-  "cc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5";
+  PINNED_DRAND_CHAINS["quicknet-t"].chainHash;
 export const QUICKNET_T_GENESIS_SECONDS = 1_689_232_296n;
 export const QUICKNET_T_PERIOD_SECONDS = 3n;
 export const QUICKNET_T_SCORING_MARGIN_SECONDS = 24n * 60n * 60n;
@@ -100,16 +106,13 @@ export function validateQuicknetTScoringSchedule(params: {
 }
 
 interface DrandChainSpec {
-  chainHash: string;
-  publicKey: string;
+  chain: PinnedDrandChain;
   relayHosts: readonly string[];
 }
 
 const CHAINS: readonly DrandChainSpec[] = [
   {
-    chainHash: MAINNET_QUICKNET_CHAIN_HASH,
-    publicKey:
-      "83cf0f2896adee7eb8b5f01fcad3912212c437e0073e911fb90022d3e760183c8c4b450b6a0a6c3ac6a5776a2d1064510d1fec758c921cc22b0e17e63aaf4bcb5ed66304de9cf809bd274ca73bab4af5a6e9c76a4bc09e76eae8991ef5ece45a",
+    chain: PINNED_DRAND_CHAINS.quicknet,
     relayHosts: [
       "https://api.drand.sh",
       "https://api2.drand.sh",
@@ -118,9 +121,7 @@ const CHAINS: readonly DrandChainSpec[] = [
     ],
   },
   {
-    chainHash: QUICKNET_T_CHAIN_HASH,
-    publicKey:
-      "b15b65b46fb29104f6a4b5d1e11a8da6344463973d423661bb0804846a0ecd1ef93c25057f1c0baab2ac53e56c662b66072f6d84ee791a3382bfb055afab1e6a375538d8ffc451104ac971d2dc9b168e2d3246b0be2015969cbaac298f6502da",
+    chain: PINNED_DRAND_CHAINS["quicknet-t"],
     relayHosts: [
       "https://testnet-api.drand.cloudflare.com",
       "https://pl-us.testnet.drand.sh",
@@ -230,11 +231,14 @@ function relayClient(spec: DrandChainSpec, host: string): ChainClient {
     disableBeaconVerification: false,
     noCache: false,
     chainVerificationParams: {
-      chainHash: spec.chainHash,
-      publicKey: spec.publicKey,
+      chainHash: spec.chain.chainHash,
+      publicKey: spec.chain.publicKey,
     },
   };
-  const chain = new HttpCachingChain(`${host}/${spec.chainHash}`, options);
+  const chain = new HttpCachingChain(
+    `${host}/${spec.chain.chainHash}`,
+    options,
+  );
   return new HttpChainClient(chain, options, {
     userAgent: "rateloop-tokenless-keeper",
   });
@@ -256,7 +260,9 @@ export function resolveTlockClientForDrandChain(
       `Base Sepolia tokenless keeper requires quicknet-t chain 0x${QUICKNET_T_CHAIN_HASH}.`,
     );
   }
-  const spec = CHAINS.find((candidate) => candidate.chainHash === normalized);
+  const spec = CHAINS.find(
+    (candidate) => candidate.chain.chainHash === normalized,
+  );
   if (!spec) {
     throw new Error(`Unsupported drand chain 0x${normalized}.`);
   }
@@ -275,25 +281,39 @@ export interface VerifiedDrandBeacon {
   proof: Hex;
 }
 
+function pinnedChainInfo(chain: PinnedDrandChain): DrandChainInfo {
+  return {
+    public_key: chain.publicKey,
+    period: chain.period,
+    genesis_time: chain.genesisTime,
+    hash: chain.chainHash,
+    groupHash: chain.groupHash,
+    schemeID: chain.schemeId,
+    metadata: { beaconID: chain.beaconId },
+  };
+}
+
 export function validateDrandBeaconEvidence(
-  beacon: { round: number; randomness: string; signature: string },
+  beacon: {
+    round: number;
+    randomness: string;
+    signature: string;
+    previous_signature?: string;
+  },
   expectedRound: number,
+  chain: PinnedDrandChain = PINNED_DRAND_CHAINS["quicknet-t"],
+  chainInfo: DrandChainInfo = pinnedChainInfo(chain),
 ): VerifiedDrandBeacon {
-  if (
-    beacon.round !== expectedRound ||
-    !/^[0-9a-fA-F]{64}$/u.test(beacon.randomness) ||
-    !/^[0-9a-fA-F]{96}$/u.test(beacon.signature)
-  ) {
-    throw new Error("Verified drand relay returned malformed beacon evidence.");
-  }
-  const proof = `0x${beacon.signature}` as Hex;
-  const randomness = `0x${beacon.randomness}` as Hex;
-  if (sha256(proof).toLowerCase() !== randomness.toLowerCase()) {
-    throw new Error(
-      "Verified drand relay returned inconsistent beacon randomness.",
-    );
-  }
-  return { randomness, proof };
+  const verified = verifyPinnedDrandBeaconEvidence({
+    chain,
+    chainInfo,
+    beacon,
+    expectedRound,
+  });
+  return {
+    randomness: verified.randomness as Hex,
+    proof: verified.signature as Hex,
+  };
 }
 
 /// Fetch and locally verify the exact frozen beacon round. The raw drand
@@ -306,7 +326,20 @@ export async function fetchVerifiedDrandBeacon(
   if (!Number.isSafeInteger(roundNumber) || roundNumber <= 0) {
     throw new Error("Drand round is outside the supported safe-integer range.");
   }
-  const beacon =
-    await resolveTlockClientForDrandChain(chainHash).get(roundNumber);
-  return validateDrandBeaconEvidence(beacon, roundNumber);
+  const normalized = normalizeDrandChainHash(chainHash);
+  const spec = CHAINS.find(
+    (candidate) => candidate.chain.chainHash === normalized,
+  );
+  if (!spec) throw new Error(`Unsupported drand chain 0x${normalized}.`);
+  const client = resolveTlockClientForDrandChain(chainHash);
+  const [beacon, chainInfo] = await Promise.all([
+    client.get(roundNumber),
+    client.chain().info(),
+  ]);
+  return validateDrandBeaconEvidence(
+    beacon,
+    roundNumber,
+    spec.chain,
+    chainInfo,
+  );
 }
