@@ -91,7 +91,9 @@ produce comparable evidence. An agent-per-request binary question uses `feedback
 any consequential review action, cannot change on retry, and never creates adaptive observations, calibration labels,
 coverage reductions, disagreement alerts, or correctness claims. Agent-written mode is incompatible with adaptive
 selection. Its initial availability is restricted to public-safe RateLoop-network review; private and hybrid delivery
-remain fail-closed until the question itself uses the encrypted private artifact boundary.
+remain fail-closed until the question itself uses the encrypted private artifact boundary. Because the RateLoop
+network is closed by default, agent-per-request questions are unavailable to ordinary customer and agent
+configuration.
 
 ## Workspace and agent setup
 
@@ -204,7 +206,24 @@ Audience policies are versioned and distinguish customer-invited, RateLoop-netwo
 policy hash is bound into paid round terms and vouchers. World ID Proof of Human may supply provider-scoped uniqueness
 for RateLoop-network admission; it does not prove expertise, residence, independence, or paid eligibility. Paid-task
 eligibility—including adulthood, residence/tax information where applicable, sanctions screening, and payout setup—must
-finish before the first paid voucher. Browsing and advisory calibration require none of those paid-task fields.
+finish before the first paid voucher. Unpaid customer-invited work requires none of those paid-task fields.
+
+### Reviewer supply and experimental methods
+
+Private customer-invited and individually named panels remain the ordinary reviewer-supply path. A reviewer sees only
+work assigned to their authenticated principal through an invitation, named seat, or other policy-bound assignment.
+RateLoop does not expose an open reviewer marketplace, task browsing, self-selection, public rankings, or streaks.
+
+RateLoop-network implementation is retained but closed by default. It may be activated only for an exact public-safe
+benchmark through a persisted activation record that binds the workspace, project, benchmark, export window, method,
+accepted pilot evidence, recovery exercise, and complete deployment key. No such activation record exists in the
+current baseline. Hybrid supply is unavailable. Feedback Bonus, Surprisingly Popular, and Crowd Forecast are separate
+governed methods, remain default-off, and are unreachable from ordinary customer or agent configuration; activating
+one method never activates another.
+
+Any future activation also remains subject to the applicable external contract, privacy, eligibility, tax, sanctions,
+security, reviewer-appeal and recovery reviews, operational drills, and deployment-pinned end-to-end evidence. An
+activation record cannot waive those release gates.
 
 Private artifacts are encrypted before storage and released only through workspace membership, project assignment, and
 short reviewer leases. Public, private, and sensitive-material decisions are separate policy dimensions. Each customer
@@ -248,16 +267,18 @@ Round terms freeze the bounty, platform fee, accepted-work reserve, minimum reve
 scoring version, and content commitments. `revealDeadline` must be at least five minutes after `commitDeadline`, matching
 the immutable panel floor. The funder cannot cancel or edit a paid round after the first accepted commit.
 
-Every valid reveal earns fixed base compensation. The current binary
-RBTS v1 specification adds a bounded, non-negative reporting bonus without changing the
-majority verdict. The separately funded Surprisingly Popular bounty may reward
-useful minority signal after finalization; it cannot alter customer-funded settlement or contract state.
+Every valid reveal earns fixed base compensation. The current binary RBTS v1 specification adds a bounded,
+non-negative reporting bonus without changing the majority verdict. The fund and schema capabilities for separately
+funded Surprisingly Popular and Feedback Bonus awards are retained, but ordinary customer and agent configurations
+cannot enable them. Each requires its own governed benchmark activation and applicable external release evidence;
+neither changes customer-funded settlement or contract state.
 
-The optional Feedback Bonus is also separate from those mechanisms and from the
-guaranteed review bounty. It may be configured with or without guaranteed compensation, is prefunded before delivery,
-and can be awarded afterward only by the requester or another designated human to selected eligible written feedback.
-The agent, automatic scoring, moderation, and operator cannot select an award. When either guaranteed compensation or a
-Feedback Bonus is possible, paid eligibility completes before assignment.
+If activated, Surprisingly Popular may reward useful minority signal after finalization. Feedback Bonus remains
+separate from RBTS, Surprisingly Popular, and the guaranteed review bounty; it is prefunded before delivery and may be
+awarded only by the requester or another designated human to selected eligible written feedback. The agent, automatic
+scoring, moderation, and operator cannot select an award. Crowd Forecast is likewise a separately gated benchmark
+method, not a generally available question format. For any activated method that can pay a reviewer, paid eligibility
+must complete before assignment.
 
 Settlement freezes the reveal set, processes deterministic evidence in restart-safe pages, and enables claims only
 after conservation checks pass. Any caller may continue the state machine. Zero-commit rounds refund in full. Under-
