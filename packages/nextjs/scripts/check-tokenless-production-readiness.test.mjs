@@ -413,6 +413,26 @@ test("production chain execution enforces the immutable five-minute reveal windo
   assert.match(validateTokenlessProductionReadiness(belowMinimum).join("\n"), /must be at least 300 seconds/i);
 });
 
+test("hosted production may keep the reviewer network disabled", () => {
+  const fixture = validFixture();
+  fixture.env.TOKENLESS_NETWORK_PANELS_ENABLED = "false";
+  fixture.env.NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED = "false";
+  fixture.env.NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE = derivePaidLaneActivationReference(fixture.env);
+
+  assert.deepEqual(validateTokenlessProductionReadiness(fixture), []);
+});
+
+test("hosted production still validates the reviewer network when enabled", () => {
+  const fixture = validFixture();
+  fixture.env.WORLD_ID_APP_ID = "invalid";
+  fixture.env.NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE = derivePaidLaneActivationReference(fixture.env);
+
+  assert.match(
+    validateTokenlessProductionReadiness(fixture).join("\n"),
+    /WORLD_ID_APP_ID must identify the registered production World ID application/,
+  );
+});
+
 test("platform-secret signer keys, addresses, and versions are pinned and distinct", () => {
   const mismatched = validFixture();
   mismatched.env.TOKENLESS_X402_RELAYER_EXPECTED_ADDRESS = mismatched.env.TOKENLESS_PREPAID_FUNDER_EXPECTED_ADDRESS;
