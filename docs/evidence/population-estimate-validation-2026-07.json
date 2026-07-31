@@ -1,0 +1,67 @@
+{
+  "schemaVersion": "rateloop.population-estimate-validation.v1",
+  "generatedBy": "packages/nextjs/scripts/population-estimate-validation.ts",
+  "deterministicRunsPerScenario": 10000,
+  "intervalDecision": "withheld_pending_external_method_review",
+  "limitations": [
+    "These deterministic simulations validate implementation behaviour; they are not an external statistical review.",
+    "The operational estimator uses recorded history-conditioned propensities and a self-normalized sequential-IPW domain ratio.",
+    "No public confidence interval is enabled by this report."
+  ],
+  "scenarios": [
+    {
+      "id": "balanced_adaptive",
+      "frameCount": 80,
+      "truthBps": 5000,
+      "meanEstimateBps": 5015,
+      "signedBiasBps": 15,
+      "rmseBps": 818,
+      "gapRuns": 0,
+      "meanCertaintyShareBps": 1292,
+      "design": {
+        "baseProbabilityBps": 2500,
+        "calibrationUnits": 10,
+        "maximumUnreviewedGap": 12,
+        "disagreementElevatedProbabilityBps": 5000
+      }
+    },
+    {
+      "id": "rare_disagreement",
+      "frameCount": 120,
+      "truthBps": 9500,
+      "meanEstimateBps": 9499,
+      "signedBiasBps": -1,
+      "rmseBps": 555,
+      "gapRuns": 0,
+      "meanCertaintyShareBps": 1205,
+      "design": {
+        "baseProbabilityBps": 1000,
+        "calibrationUnits": 12,
+        "maximumUnreviewedGap": 15,
+        "disagreementElevatedProbabilityBps": 5000
+      }
+    },
+    {
+      "id": "multiple_transitions",
+      "frameCount": 100,
+      "truthBps": 8700,
+      "meanEstimateBps": 8697,
+      "signedBiasBps": -3,
+      "rmseBps": 727,
+      "gapRuns": 0,
+      "meanCertaintyShareBps": 1079,
+      "design": {
+        "baseProbabilityBps": 1500,
+        "calibrationUnits": 8,
+        "maximumUnreviewedGap": 10,
+        "disagreementElevatedProbabilityBps": 5000
+      }
+    }
+  ],
+  "supportChecks": {
+    "zeroProbabilityReturnsGap": true,
+    "missingSelectedOutcomeReturnsGap": true,
+    "censusIsExact": true,
+    "orderingIsDeterministic": true
+  }
+}
