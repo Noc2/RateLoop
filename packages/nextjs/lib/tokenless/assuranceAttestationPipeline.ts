@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { PoolClient } from "pg";
 import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient, dbPool } from "~~/lib/db";
@@ -92,21 +93,25 @@ function parseStatement(value: unknown): AssuranceAttestationStatement {
   }
 }
 
-function jsonObject(value: unknown, field: string) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new TokenlessServiceError(`${field} is invalid.`, 502, "invalid_external_attestation_receipt");
-  }
-  return value as Record<string, unknown>;
-}
-
-export async function enqueueAssuranceAttestation(input: {
+type AssuranceAttestationEnqueueInput = {
   workspaceId: string;
   kind: AssuranceAttestationKind;
   artifactDigest: string;
   artifactSchemaVersion: string;
   boundaryAt: Date;
   now?: Date;
-}) {
+};
+
+type NormalizedAssuranceAttestationEnqueue = AssuranceAttestationEnqueueInput & {
+  boundaryAt: Date;
+  now: Date;
+  jobId: string;
+  statementJson: string;
+};
+
+function normalizeAssuranceAttestationEnqueue(
+  input: AssuranceAttestationEnqueueInput,
+): NormalizedAssuranceAttestationEnqueue {
   const boundaryAt = validDate(input.boundaryAt, "Attestation boundary");
   const now = validDate(input.now ?? new Date(), "Attestation queue time");
   const statement = createAssuranceAttestationStatement({
@@ -115,8 +120,36 @@ export async function enqueueAssuranceAttestation(input: {
     artifactSchemaVersion: input.artifactSchemaVersion,
     boundaryAt,
   });
-  const statementJson = canonicalAttestationJson(statement);
-  const jobId = deterministicJobId({ workspaceId: input.workspaceId, kind: input.kind, digest: input.artifactDigest });
+  return {
+    ...input,
+    boundaryAt,
+    now,
+    jobId: deterministicJobId({ workspaceId: input.workspaceId, kind: input.kind, digest: input.artifactDigest }),
+    statementJson: canonicalAttestationJson(statement),
+  };
+}
+
+function validateExistingAssuranceAttestation(row: Row | undefined, expected: NormalizedAssuranceAttestationEnqueue) {
+  if (!row) throw new TokenlessServiceError("Workspace not found.", 404, "workspace_not_found");
+  if (text(row, "job_id") !== expected.jobId || text(row, "statement_json") !== expected.statementJson) {
+    throw new TokenlessServiceError(
+      "The artifact digest is already bound to different attestation metadata.",
+      409,
+      "assurance_attestation_conflict",
+    );
+  }
+  return { jobId: expected.jobId, replay: true as const };
+}
+
+function jsonObject(value: unknown, field: string) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new TokenlessServiceError(`${field} is invalid.`, 502, "invalid_external_attestation_receipt");
+  }
+  return value as Record<string, unknown>;
+}
+
+export async function enqueueAssuranceAttestation(input: AssuranceAttestationEnqueueInput) {
+  const normalized = normalizeAssuranceAttestationEnqueue(input);
   const replayCandidate = await dbClient.execute({
     sql: `SELECT job_id,statement_json FROM tokenless_assurance_attestation_jobs
           WHERE workspace_id=? AND artifact_kind=? AND artifact_digest=? LIMIT 1`,
@@ -124,14 +157,7 @@ export async function enqueueAssuranceAttestation(input: {
   });
   const replayRow = replayCandidate.rows[0] as Row | undefined;
   if (replayRow) {
-    if (text(replayRow, "job_id") !== jobId || text(replayRow, "statement_json") !== statementJson) {
-      throw new TokenlessServiceError(
-        "The artifact digest is already bound to different attestation metadata.",
-        409,
-        "assurance_attestation_conflict",
-      );
-    }
-    return { jobId, replay: true };
+    return validateExistingAssuranceAttestation(replayRow, normalized);
   }
   const inserted = await dbClient.execute({
     sql: `INSERT INTO tokenless_assurance_attestation_jobs
@@ -143,35 +169,67 @@ export async function enqueueAssuranceAttestation(input: {
           ON CONFLICT (workspace_id,artifact_kind,artifact_digest) DO NOTHING
           RETURNING job_id`,
     args: [
-      jobId,
-      input.workspaceId,
-      input.kind,
-      input.artifactSchemaVersion,
-      input.artifactDigest,
-      boundaryAt,
-      statementJson,
-      now,
-      now,
-      now,
-      input.workspaceId,
+      normalized.jobId,
+      normalized.workspaceId,
+      normalized.kind,
+      normalized.artifactSchemaVersion,
+      normalized.artifactDigest,
+      normalized.boundaryAt,
+      normalized.statementJson,
+      normalized.now,
+      normalized.now,
+      normalized.now,
+      normalized.workspaceId,
     ],
   });
-  if (inserted.rows.length === 1) return { jobId, replay: false };
+  if (inserted.rows.length === 1) return { jobId: normalized.jobId, replay: false as const };
   const existing = await dbClient.execute({
     sql: `SELECT job_id,statement_json FROM tokenless_assurance_attestation_jobs
           WHERE workspace_id=? AND artifact_kind=? AND artifact_digest=? LIMIT 1`,
-    args: [input.workspaceId, input.kind, input.artifactDigest],
+    args: [normalized.workspaceId, normalized.kind, normalized.artifactDigest],
   });
-  const row = existing.rows[0] as Row | undefined;
-  if (!row) throw new TokenlessServiceError("Workspace not found.", 404, "workspace_not_found");
-  if (text(row, "job_id") !== jobId || text(row, "statement_json") !== statementJson) {
-    throw new TokenlessServiceError(
-      "The artifact digest is already bound to different attestation metadata.",
-      409,
-      "assurance_attestation_conflict",
-    );
-  }
-  return { jobId, replay: true };
+  return validateExistingAssuranceAttestation(existing.rows[0] as Row | undefined, normalized);
+}
+
+export async function enqueueAssuranceAttestationInTransaction(
+  input: AssuranceAttestationEnqueueInput & { now: Date },
+  client: PoolClient,
+) {
+  const normalized = normalizeAssuranceAttestationEnqueue(input);
+  const replayCandidate = await client.query(
+    `SELECT job_id,statement_json FROM tokenless_assurance_attestation_jobs
+     WHERE workspace_id=$1 AND artifact_kind=$2 AND artifact_digest=$3 LIMIT 1`,
+    [normalized.workspaceId, normalized.kind, normalized.artifactDigest],
+  );
+  const replayRow = replayCandidate.rows[0] as Row | undefined;
+  if (replayRow) return validateExistingAssuranceAttestation(replayRow, normalized);
+  const inserted = await client.query(
+    `INSERT INTO tokenless_assurance_attestation_jobs
+     (job_id,workspace_id,artifact_kind,artifact_schema_version,artifact_digest,boundary_at,
+      statement_json,state,attempt_count,next_attempt_at,created_at,updated_at)
+     SELECT $1,$2,$3,$4,$5,CAST($6 AS timestamptz),$7,'pending',0,
+            CAST($8 AS timestamptz),CAST($8 AS timestamptz),CAST($8 AS timestamptz)
+     WHERE EXISTS (SELECT 1 FROM tokenless_workspaces WHERE workspace_id=$2 AND status='active')
+     ON CONFLICT (workspace_id,artifact_kind,artifact_digest) DO NOTHING
+     RETURNING job_id`,
+    [
+      normalized.jobId,
+      normalized.workspaceId,
+      normalized.kind,
+      normalized.artifactSchemaVersion,
+      normalized.artifactDigest,
+      normalized.boundaryAt,
+      normalized.statementJson,
+      normalized.now,
+    ],
+  );
+  if (inserted.rowCount === 1) return { jobId: normalized.jobId, replay: false as const };
+  const existing = await client.query(
+    `SELECT job_id,statement_json FROM tokenless_assurance_attestation_jobs
+     WHERE workspace_id=$1 AND artifact_kind=$2 AND artifact_digest=$3 LIMIT 1`,
+    [normalized.workspaceId, normalized.kind, normalized.artifactDigest],
+  );
+  return validateExistingAssuranceAttestation(existing.rows[0] as Row | undefined, normalized);
 }
 
 export async function requireAssuranceAttestationManagement(accountAddress: string, workspaceId: string) {

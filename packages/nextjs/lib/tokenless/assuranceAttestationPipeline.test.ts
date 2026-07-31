@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { generateKeyPairSync, sign } from "node:crypto";
 import { afterEach, beforeEach, test } from "node:test";
-import { type DatabaseResources, __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
+import { type DatabaseResources, __setDatabaseResourcesForTests, dbClient, dbPool } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import {
   countDueAssuranceAttestationJobs,
   enqueueAssuranceAttestation,
+  enqueueAssuranceAttestationInTransaction,
   getPublicAssuranceAttestationBundle,
   listAssuranceAttestations,
   processAssuranceAttestationJobs,
@@ -142,6 +143,62 @@ test("digest-only export jobs are idempotent and require Rekor plus RFC 3161 rec
     () => listAssuranceAttestations({ accountAddress: OUTSIDER, workspaceId }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "workspace_not_found",
   );
+});
+
+test("standalone and transaction enqueue adapters share replay, conflict, and date invariants", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Attestation enqueue adapters", ownerAddress: OWNER });
+  const client = await dbPool.connect();
+  const firstInput = {
+    workspaceId,
+    kind: "audit_export_head" as const,
+    artifactDigest: `sha256:${"34".repeat(32)}`,
+    artifactSchemaVersion: "rateloop-audit-v1",
+    boundaryAt: NOW,
+    now: NOW,
+  };
+  const secondInput = { ...firstInput, artifactDigest: `sha256:${"56".repeat(32)}` };
+  try {
+    const standaloneFirst = await enqueueAssuranceAttestation(firstInput);
+    const transactionReplay = await enqueueAssuranceAttestationInTransaction(firstInput, client);
+    assert.equal(standaloneFirst.replay, false);
+    assert.deepEqual(transactionReplay, { jobId: standaloneFirst.jobId, replay: true });
+
+    const transactionFirst = await enqueueAssuranceAttestationInTransaction(secondInput, client);
+    const standaloneReplay = await enqueueAssuranceAttestation(secondInput);
+    assert.equal(transactionFirst.replay, false);
+    assert.deepEqual(standaloneReplay, { jobId: transactionFirst.jobId, replay: true });
+
+    await assert.rejects(
+      () =>
+        enqueueAssuranceAttestationInTransaction({ ...firstInput, artifactSchemaVersion: "rateloop-audit-v2" }, client),
+      (error: unknown) => error instanceof TokenlessServiceError && error.code === "assurance_attestation_conflict",
+    );
+    await assert.rejects(
+      () => enqueueAssuranceAttestation({ ...secondInput, boundaryAt: new Date(NOW.getTime() + 1) }),
+      (error: unknown) => error instanceof TokenlessServiceError && error.code === "assurance_attestation_conflict",
+    );
+
+    const invalidBoundary = new Date(Number.NaN);
+    await assert.rejects(
+      () =>
+        enqueueAssuranceAttestation({
+          ...firstInput,
+          artifactDigest: `sha256:${"78".repeat(32)}`,
+          boundaryAt: invalidBoundary,
+        }),
+      (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_assurance_attestation",
+    );
+    await assert.rejects(
+      () =>
+        enqueueAssuranceAttestationInTransaction(
+          { ...secondInput, artifactDigest: `sha256:${"9a".repeat(32)}`, boundaryAt: invalidBoundary },
+          client,
+        ),
+      (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_assurance_attestation",
+    );
+  } finally {
+    client.release();
+  }
 });
 
 test("decision packets use Rekor without requesting an export-boundary timestamp", async () => {
