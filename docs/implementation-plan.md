@@ -39,25 +39,93 @@ Phase 2 is therefore the product phase, not a follow-on.
 
 ---
 
-## What "acquisition" changes about the order
+## What "acquisition" changes about the order — and what it does not
 
-The acquirer set is narrow and technical: a qualified trust service provider, a
-compliance platform, an evaluation vendor, or an observability company consolidating the
-category. None of them buys a €149 self-serve ladder. What they diligence is whether the
-thing works, whether it is legible, and whether it is defensible.
+An earlier version of this section moved revenue mechanics down to position nine on the
+reasoning that no acquirer buys a self-serve ladder. **Research contradicted that, and
+the correction is the most important thing on this page.**
 
-So the reordering is:
+**Revenue at this stage is not a revenue question. It is a deal-category question.**
 
-- **Up:** the standards position (Phase 3), because authoring the vocabulary others
-  implement is the cheapest durable asset and the window is measured in months; the
-  evaluation statistics (Phase 2), because they are the technical claim; and the demo
-  workspace, because a thing that cannot be shown cannot be sold.
-- **Down, but not out:** the pricing ladder, the four-tier repricing, the marketplace,
-  the EU procurement artefacts. Keep Phase 0 — being unable to take money at all is a
-  diligence flag — but stop treating the ladder as the goal.
-- **Unchanged:** every honesty fix. A claim that does not survive diligence is worse in
-  an acquisition than in a sale, because the acquirer's technical reviewer will read the
-  code.
+Of thirteen acquisitions surveyed in this space since 2024, every one that cleared $180M
+had revenue and a team — Robust Intelligence at ~$10M ARR and seventy people, Langfuse
+at two thousand paying customers, Weights & Biases at ~$100M ARR. And the two that most
+resemble this company's shape, Humanloop and WhyLabs, were **people transactions where
+the product was explicitly excluded and then shut down.** Anthropic confirmed on the
+record that it took neither assets nor IP; Humanloop's platform sunset three weeks later.
+
+There is no middle pile. Pre-revenue code prices at replacement cost — a marketplace
+that lists such deals puts it at $1,000–$5,000 — and the main brokerage in this bracket
+will not list an unprofitable business at all.
+
+**The research found no verified case of a solo founder with zero revenue and no team
+selling to a strategic at a disclosed price, and no acquisition of a
+compliance-or-attestation tooling company at any revenue stage.** Those are absences,
+not rarities.
+
+So: **one paying customer or one signed design partner moves the conversation from
+"should we hire him" to "what is this worth."** That is the single highest-value item in
+either document, and Phase 0 is its precondition. It goes back to first.
+
+### What acquisition genuinely does change
+
+- **The standards work is a relationship channel, not a moat.** Once a spec is
+  published anyone can implement it. What it buys is that the in-toto predicate's
+  approvers work at Google, Verizon, Intel and two small supply-chain vendors — five
+  named people who will read the work closely. Every documented small-vendor acquisition
+  in this space started with a relationship, not with corp dev outreach.
+- **Diligence-survivability stops being hygiene and becomes value-preserving.** A claim
+  the reviewer can contradict from the code costs more here than in a sale. So every
+  honesty fix stays exactly where it is.
+- **Three structural items have long lead times and are worth more than several build
+  phases.** See below.
+
+### Structure, before any conversation
+
+- **Interpose a German holding company first.** Selling shares held personally taxes
+  sixty percent of the gain at the personal rate. Held through a corporate holding, the
+  disposal gain is roughly ninety-five percent exempt — no minimum holding period, no
+  minimum stake. This must be done _before_ a deal, not during, and it is worth more
+  than any single build item here.
+- **Do not flip to Delaware on a horizon under seven years.** The tax-neutral share
+  exchange carries a seven-year blocking period, and selling inside it retroactively
+  claws back the treatment. US strategics buy German entities routinely — Cohere bought
+  Aleph Alpha, SAP bought Prior Labs — so the notarial deed is friction, not refusal.
+- **Expect a foreign-investment filing.** The threshold drops to twenty percent for AI
+  and to ten percent, with a _mandatory_ filing, for IT-security products. A
+  signed-evidence product plausibly reads as the latter. Weeks and a counsel line item,
+  not a blocker.
+- **Know that an asset purchase is the likely buyer proposal and the worst seller
+  outcome** — taxed inside the company and again on distribution, with none of the
+  exemptions above. For a company that is essentially IP, expect it to be offered.
+
+### Process, from the sourced pattern
+
+Conversations begin through partnership, not through corp dev — corp dev rarely has the
+authority to buy without an operational sponsor. Build the relationship with the
+engineering or product leader who owns the gap. Do not run a banked process at this
+size, do not name a price first, and do not bring counsel into the first conversations —
+but do bring them in before the notarial deed, the investment filing and the holding
+structure, all of which have long lead times.
+
+### The honest assessment, recorded rather than softened
+
+**Acquisition is not a realistic objective for this product at this stage. It is a
+realistic outcome of pursuing something else.**
+
+Two paths are open and they call for different work. The founder gets hired, in which
+case public technical credibility matters and forty days of statistics work is the wrong
+forty days. Or a small product acquisition, which requires customers — not many, but
+some, and there is no documented path that skips them.
+
+The failure mode to name: **building for forty days toward "everything actually works",
+then finding that "works" was never the binding constraint.** This document's companion
+already says the modal failure for a bootstrapped company is that nobody replies.
+
+**Keep acquisition as the exit shape and run the customer plan as the strategy.** They
+are not in conflict: one paying customer, a working demo, a filed predicate and a clean
+codebase is simultaneously the minimum credible acquisition proof and the first rung of
+the ladder.
 
 ---
 
@@ -478,21 +546,31 @@ architecturally foreclosed.
 Re-ordered for the acquisition objective. Revenue mechanics move down; the artefact,
 the statistics and the standards position move up.
 
-| Order | Work                                            | Days  | Note                                       |
-| ----- | ----------------------------------------------- | ----- | ------------------------------------------ |
-| **0** | **Redeploy HEAD** — before the first test pass  | —     | Phases 1 and 3 not demonstrable until then |
-| 1     | Phase 1 — sampling disclosure + claim-gate rule | 1     | Cheapest honesty win; do it first          |
-| 2     | Phase 3 — standards comments (3.1, 3.2)         | 2     | **Time-critical.** Window is months        |
-| 3     | 4.1 — demo workspace with synthetic data        | 2–3   | Nothing can be shown without it            |
-| 4     | 2.1 — version comparison                        | 4–5   | Unblocks 4.3                               |
-| 5     | 4.3, 4.5 — model comparison, override analytics | 4–5   | Both are SQL joins over existing data      |
-| 6     | 4.2 — failure taxonomy                          | 3–5   | Turns a number into an action              |
-| 7     | 2.2, 2.3 — judge calibration and weighting      | 11–12 | The lead technical claim                   |
-| 8     | 3.3 — in-toto human-review predicate            | 3–5   | The durable asset                          |
-| 9     | Phase 0 — revenue mechanics, test mode          | 3     | Diligence hygiene, not the goal            |
-| 10    | 5.1, 5.3 — verifier package, flag flips         | 6     | Needs the redeploy at step 0               |
-| 11    | 2.4, 4.6 — CI gate, trace scoring               | 8–9   | Switching cost, adoption                   |
-| 12    | Everything else                                 | —     | Appetite                                   |
+| Order | Work                                              | Days  | Note                                                              |
+| ----- | ------------------------------------------------- | ----- | ----------------------------------------------------------------- |
+| **0** | **Redeploy HEAD** — before the first test pass    | —     | Phases 1 and 3 not demonstrable until then                        |
+| 1     | Phase 0 — revenue mechanics, test mode            | 3     | **Precondition for the only fact that changes the deal category** |
+| 2     | Phase 1 — sampling disclosure + claim-gate rule   | 1     | Cheapest honesty win                                              |
+| 3     | 4.1 — demo workspace with synthetic data          | 2–3   | Nothing can be shown without it                                   |
+| 4     | **Name ten accounts and go get one signature**    | —     | Not engineering. Highest-value item here                          |
+| 5     | 3.3 — in-toto human-review predicate              | 3–5   | Relationship channel; approvers are the acquirer set              |
+| 6     | 3.1, 3.2 — OpenTelemetry, reconciled not proposed | 2     | See the correction below                                          |
+| 7     | 2.1 — version comparison                          | 5–7   | Bigger than first estimated                                       |
+| 8     | 4.3, 4.5 — model comparison, override analytics   | 4–5   | SQL joins over existing data                                      |
+| 9     | 4.2 — failure taxonomy                            | 3–5   | Turns a number into an action                                     |
+| 10    | 2.2 → 2.3 — judge calibration, then weighting     | 11–12 | Strictly in this order                                            |
+| 11    | 5.1, 5.3 — verifier package, flag flips           | 6     | Fix the digest defect before publishing                           |
+| 12    | 2.4, 4.6 — CI gate, trace scoring                 | 8–9   | Switching cost, adoption                                          |
+
+**One correction to Phase 3 that changes how it is filed.** The OpenTelemetry window is
+**not** the open field this plan assumed. The GenAI special interest group is already
+drafting human-feedback conventions — including a feedback-source attribute with a
+`human` value — in two open issues. The bar for acceptance is that a convention be
+**prototyped in real instrumentation first** and shown to generalise. RateLoop can meet
+that and almost nobody else can, so the panel, agreement and confidence-bound concepts
+are still genuinely missing. But they must be filed as **reconciliation with the
+existing work, not as a fresh proposal.** File the in-toto predicate first — that one
+really is unfilled since December 2021.
 
 Three tracks parallelise: the read path (2.1, 2.3, 4.3) must be serialised because it
 touches the same SQL; the evaluator lane (2.2, 2.4) is independent; the authoring
@@ -514,9 +592,10 @@ surface (5.4) touches nothing the others do.
 - **2.1's extraction breaks two source-text assertions.** Do not land it concurrently
   with 2.3, or you cannot tell which change broke which.
 
-**Roughly 40 days gets to a demonstrable, honest, standards-positioned product with a
-working payment path.** For an acquisition conversation that is the deliverable — not
-the pricing ladder.
+**The first four rows are the plan.** A working payment path, honest numbers, something
+demonstrable, and one signature — call it a week of engineering and an unbounded amount
+of outreach. Everything after row four improves a product that already has a customer,
+which is the correct order for both objectives at once.
 
 ---
 
