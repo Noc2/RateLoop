@@ -12,6 +12,11 @@ import { TokenlessServiceError } from "~~/lib/tokenless/server";
 export const REFERENCE_FRAME_SCHEMA_VERSION = "rateloop.reference-sampling-frame.v1" as const;
 export const REFERENCE_SAMPLE_SCHEMA_VERSION = "rateloop.reference-sample.v1" as const;
 export const REFERENCE_SAMPLING_METHOD_VERSION = "stratified-sha256-rank-without-replacement-v1" as const;
+export const REFERENCE_SAMPLE_INTENDED_ESTIMANDS = ["accuracy", "precision", "recall"] as const;
+export const REFERENCE_SAMPLE_PLAN_LIMITATIONS = [
+  "no_public_confidence_interval",
+  "pilot_sample_size_not_validated",
+] as const;
 
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,159}$/u;
 const LOWER_IDENTIFIER = /^[a-z0-9][a-z0-9._:-]{0,127}$/u;
@@ -67,8 +72,8 @@ export type ReferenceFrameCommitment = Readonly<{
     version: number;
     methodReviewStatus: "pending_external_method_review";
     adequacy: "pilot_unvalidated";
-    intendedEstimands: readonly ["accuracy", "precision", "recall"];
-    limitations: readonly ["no_public_confidence_interval", "pilot_sample_size_not_validated"];
+    intendedEstimands: typeof REFERENCE_SAMPLE_INTENDED_ESTIMANDS;
+    limitations: typeof REFERENCE_SAMPLE_PLAN_LIMITATIONS;
   }>;
   strata: readonly Readonly<{
     stratum: "automated_fail" | "automated_pass";
@@ -379,8 +384,8 @@ function validateCommitment(commitment: ReferenceFrameCommitment, units: readonl
         version: commitment.sampleSizePlan.version,
         methodReviewStatus: "pending_external_method_review",
         adequacy: "pilot_unvalidated",
-        intendedEstimands: ["accuracy", "precision", "recall"],
-        limitations: ["no_public_confidence_interval", "pilot_sample_size_not_validated"],
+        intendedEstimands: REFERENCE_SAMPLE_INTENDED_ESTIMANDS,
+        limitations: REFERENCE_SAMPLE_PLAN_LIMITATIONS,
       }) ||
     !Array.isArray(commitment.strata)
   ) {
@@ -474,8 +479,8 @@ export function createReferenceFrameCommitment(input: {
       version: input.sampleSizePlanVersion,
       methodReviewStatus: "pending_external_method_review" as const,
       adequacy: "pilot_unvalidated" as const,
-      intendedEstimands: ["accuracy", "precision", "recall"] as const,
-      limitations: ["no_public_confidence_interval", "pilot_sample_size_not_validated"] as const,
+      intendedEstimands: REFERENCE_SAMPLE_INTENDED_ESTIMANDS,
+      limitations: REFERENCE_SAMPLE_PLAN_LIMITATIONS,
     },
     strata,
     frameRoot,
