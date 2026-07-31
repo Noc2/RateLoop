@@ -173,7 +173,7 @@ per-decision revenue falls up to 90% as a customer succeeds.** Of four meters al
 implemented, the only one charged for is the only one that shrinks.
 
 **Meter on governed agents and retention years.** Both grow. Retention costs almost
-nothing to serve and is where willingness to pay sits — evidence with 30-day retention
+nothing to serve and is where willingness to pay sits — evidence with short retention
 is worthless to an auditor.
 
 **Price against expert-hours, not eval-tool seats.** Next to LangSmith at $39/seat you
@@ -184,7 +184,7 @@ signature, Checkr $30–95 per report.
 
 | Tier         | Price                     | Meter            | Gates                                      |
 | ------------ | ------------------------- | ---------------- | ------------------------------------------ |
-| Free         | €0                        | 1 agent          | 30-day retention, no export                |
+| Free         | €0                        | 1 agent          | 12-month retention, no export              |
 | **Team**     | **€149/mo**               | 5 agents         | 1-year retention, export, verifier bundle  |
 | **Business** | **€599/mo**               | 25 agents        | 3-year retention, SSO, DPA, audit export   |
 | **Scale**    | **€2,499/mo, self-serve** | unlimited agents | 6-year retention, invoice or bank transfer |
@@ -193,6 +193,10 @@ The €599 → €25k jump in an earlier draft was a gap with no rung. Langfuse 
 solved this in the adjacent category: a **self-serve €2,499/month top tier payable by
 card**, with SSO sold as an add-on to the middle tier rather than behind a hard wall.
 Copy that. A 4× step is _narrow_ by category norms — Langfuse runs 6.9× then 12.6×.
+
+**One constraint the tiers must respect:** a 30-day Free tier is not implementable.
+There is a six-month retention floor in `evidenceRetention.ts` _and_ a database CHECK
+constraint, with its recorded basis being Article 26(6). Free is 12 months.
 
 Two corrections an earlier draft got wrong. **Retention depth has no AI Act basis** —
 Article 26(6) is _six months_, not six years. The real anchors are §195 BGB's three-year
@@ -252,10 +256,17 @@ survive challenge by someone outside the team. The DSA transparency database pub
 **all 359 obligated providers for free** — naming ten of them is an hour's work and is
 the difference between a plan and an intention.
 
-**The regulatory hook that leads is DSA Article 20(6)**, not the AI Act. Verbatim:
-decisions are _"taken under the supervision of appropriately qualified staff, and not
-solely on the basis of automated means."_ In force now, and the word **qualified** is
-exactly the differentiator nothing else claims. Article 50(4)'s editorial-review
+**The regulatory hook that leads is DSA Article 42(2)(b)**, not Article 20(6) and not
+the AI Act. Very large platforms must report **"the qualifications and linguistic
+expertise of the persons carrying out"** content moderation, "as well as the training
+and support given to such staff" — a **recurring, public, mandatory disclosure about
+reviewer qualifications** that someone has to produce every period, and that this
+product's evidence could populate directly.
+
+Article 20(6) is the second hook, not the first. It says decisions are _"taken under the
+supervision of appropriately qualified staff, and not solely on the basis of automated
+means"_ — but "appropriately qualified" is nowhere defined, and it requires
+_supervision_, not that each decision be made by a qualified person. Article 50(4)'s editorial-review
 exemption (applies 2 August 2026; "natural **or legal** person") and Article 72
 post-market monitoring are the next two. Article 26 rides a deadline sixteen months out.
 

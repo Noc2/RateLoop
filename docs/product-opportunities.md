@@ -52,6 +52,14 @@ This is the differentiator. Nothing else in the product is unmatched.
 
 ### B1. Ship the verifier as a standalone open-source package
 
+**Correction:** an earlier draft called for an async-hash refactor and unifying a
+duplicated implementation. Neither is needed. The core has **zero `node:` imports**,
+already uses `globalThis.crypto.subtle`, and a test enforces that; the browser page
+already delegates to the same module. The real work is a canonicalization defect —
+key ordering uses `localeCompare`, which is locale- and ICU-sensitive, so an `en-US`
+browser and a `LANG=C` server can produce different digests for the same packet. An
+open-source verifier cannot ship that, and fixing it changes digests.
+
 A browser verifier exists and the SDK is already MIT with npm provenance — but there is
 no separately installable verifier with its own README, and no marketing that says _you
 do not have to trust us, here is the code that checks it_.
@@ -161,6 +169,12 @@ in the UI that the figure describes reviewed outputs. A statistically literate b
 notices this in one meeting; better they hear it from the product.
 
 ### C1. Expose suites, cases and gold items to the live lane — weeks
+
+**Correction:** `createOwnerGoldItem` does have a production route; what it lacks is any
+UI client. And the sequencing is not a deadlock — build draft, mark ready, freeze, then
+designate gold terminates. The three real conflicts are that gold can only be designated
+after the suite is sealed, that designating every case as gold makes the suite unusable,
+and that a frozen suite can never be extended.
 
 Suite creation, case import, expected answers and owner adjudication are fully
 implemented, tested, and reachable only through a function with no production caller.

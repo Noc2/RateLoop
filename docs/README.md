@@ -12,6 +12,7 @@
 | [evaluation-platform-gaps.md](evaluation-platform-gaps.md) | What the product lacks as an evaluation platform, read against Humanloop — and the one feature that would regulate RateLoop itself.           |
 | [business-plan.md](business-plan.md)                       | How the product could make money: what is shippable, why the meter runs backwards, and the ninety-day test.                                   |
 | [product-opportunities.md](product-opportunities.md)       | What to build next to make it worth paying for, ordered so revenue mechanics come first.                                                      |
+| [implementation-plan.md](implementation-plan.md)           | How to execute the plan and the build list: phases, effort in days, dependencies, and what not to build.                                      |
 
 The first four were written on 29 July 2026 to replace twenty-five documents that
 had drifted from the code. Read them as a set: the first is descriptive, the next
