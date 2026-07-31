@@ -3,6 +3,10 @@
 Rewritten 31 July 2026 from six research passes into the question that matters: **what
 should this be, so that an enterprise wants it and can be made to need it?**
 
+**Written for a German vendor.** The reachable obligations are European, so §4's vertical
+analysis is being redone on that basis — an earlier draft picked a US vertical that a
+German company cannot sell into. Everything else here is jurisdiction-independent.
+
 Effort is days for one experienced engineer.
 
 ---
@@ -97,47 +101,51 @@ inability to demonstrate review is independently punished.
 
 ---
 
-## 4. Where this is needed, not merely wanted
+## 4. Where this is needed — being re-done with an EU lens
 
-**Health-plan utilization review, sold as review _assurance_, not review substitution.**
+**This section is under revision and its previous content was wrong for this vendor.**
 
-California SB 1120 requires a licensed physician competent in the specific clinical issue
-to make every adverse medical-necessity determination, and bars an AI tool from denying or
-delaying care. Arizona, Texas, Nebraska and Maryland passed comparable laws in 2025; CMS
-requires the same for Medicare Advantage.
+An earlier draft picked US health-plan utilization review: California SB 1120, CMS
+Medicare Advantage rules, the Cigna and UnitedHealth litigation. The analysis was sound
+and the vertical is genuinely underserved — but **it is unreachable from Germany.** The
+buyers are US health plans, the obligation is US state law, the audit authority sits with
+US regulators, and a German vendor has no route in. Same objection applies to FINRA
+communications supervision, which was ranked second.
 
-The obligation is per-case, so sampling cannot satisfy it. **What sampling can do is prove
-the mandated per-case review was genuine rather than a batch click** — which is precisely
-what the vertical is being sued over.
+The company is German. The reachable obligations are European, and the analysis is being
+redone against them. What is already established:
 
-- **Regulators already have audit authority in the statute and nothing to audit with.**
-  InterQual and MCG supply clinical criteria, not review-quality evidence. The category is
-  empty.
-- **The quality gap is public and quantified:** 52.8M prior-authorisation determinations
-  in Medicare Advantage in 2024, 4.1M denied, an **11.5% appeal rate against an 80.7%
-  overturn rate**.
-- **The pain is already priced in litigation** — a class action proceeding since March
-  2025, and a court ordering disclosure of a denial algorithm in March 2026.
-- The qualified human is legally defined and expensive, with reviewer quotas reported at
-  one case per four minutes.
+- **The evidence standard in §3 is European and holds.** Uber/Ola is Amsterdam, the
+  SCHUFA line is the CJEU, the €492,000 explain-the-decision fine is Hamburg, and
+  Foodinho is the Italian Garante at €2.6M then €5M. **The case law that defines what
+  "real human review" means is EU case law**, which is an advantage rather than a
+  constraint.
+- **German data-protection authorities are the most active AI enforcers in Europe**, and
+  a German vendor is closer to that enforcement than any US competitor.
+- **Article 50 applies 2 August 2026** and was not deferred, unlike the Annex III duties.
+- **The insurance argument is jurisdiction-neutral** — the generative-AI exclusion wave
+  in commercial general liability affects EU insureds the same way.
 
-**Second: FINRA communications supervision** — the cleanest _legal_ fit anywhere, because
-sampling is permitted by rule, written evidence of review is mandatory by rule, and the
-qualified reviewer is defined by rule. It ranks second because the archive and workflow
-are owned by entrenched suites. **One tension to resolve first:** FINRA requires evidence
-of review to identify the reviewer, and the evidence packet deliberately carries reviewer
-identities as counts only. The privacy architecture and this vertical are in direct
-opposition.
+The candidate EU verticals being assessed, pending research:
 
-**Third: pharmacovigilance**, where EMA guidance literally names "routine sampling of data
-for manual classification" as the monitoring mechanism — but it is non-binding, and EMA
-designates the area as deliberately flexible.
+- **Annex III(4), employment and worker management** — allocation, monitoring and
+  termination decisions. Note this is also the category that constrains RateLoop's own
+  design, so the product knowledge is already there.
+- **Annex III(5), essential services** — creditworthiness, and life and health insurance
+  pricing, which are explicitly high-risk in the EU in a way they are not in the US.
+- **DSA Article 20(6) and 42(2)(b)** — qualified-staff supervision and the recurring
+  public obligation to report reviewer qualifications and training.
+- **The Platform Work Directive**, transposing 2 December 2026, whose Article 8 requires
+  human review of significant automated decisions and reaches the genuinely
+  self-employed.
+- **German-specific**: the works-council pathway under §87(1)(6) BetrVG, BaFin's position
+  on AI in financial services, and whichever authority Germany designates for AI Act
+  supervision.
 
-**The commercial argument that needs no mandate:** ISO introduced a generative-AI exclusion
-for commercial general liability in January 2026, with 60+ carriers filing to adopt it,
-while no AI-specific policy has publicly paid a claim. Enterprises are being told their
-existing cover no longer responds — which converts review evidence from a compliance
-line-item into a retained-risk control.
+Nothing in sections 1, 2, 3 or 5–10 depends on the vertical choice. **The measurement
+instrument, the sampling frame, the evidence standard and the verifiable draw are all
+jurisdiction-independent** — only the go-to-market target changes. Build rows one and two
+of §9 regardless.
 
 ---
 
