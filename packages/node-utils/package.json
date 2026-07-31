@@ -36,6 +36,11 @@
       "import": "./dist/esm/keystore.js",
       "require": "./dist/cjs/keystore.js"
     },
+    "./jcs": {
+      "types": "./dist/esm/jcs.d.ts",
+      "import": "./dist/esm/jcs.js",
+      "require": "./dist/cjs/jcs.js"
+    },
     "./evm-signing-audit": {
       "types": "./dist/esm/evm-signing-audit.d.ts",
       "import": "./dist/esm/evm-signing-audit.js",
@@ -51,6 +56,9 @@
     "*": {
       "keystore": [
         "dist/esm/keystore.d.ts"
+      ],
+      "jcs": [
+        "dist/esm/jcs.d.ts"
       ],
       "evm-signing-audit": [
         "dist/esm/evm-signing-audit.d.ts"
@@ -75,6 +83,7 @@
     "provenance": true
   },
   "dependencies": {
+    "@noble/hashes": "1.8.0",
     "viem": "2.39.0"
   },
   "devDependencies": {

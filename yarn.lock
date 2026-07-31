@@ -4304,6 +4304,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@rateloop/node-utils@workspace:packages/node-utils"
   dependencies:
+    "@noble/hashes": 1.8.0
     "@types/node": ^24.0.0
     tsx: ^4.21.0
     typescript: ~5.8.2
