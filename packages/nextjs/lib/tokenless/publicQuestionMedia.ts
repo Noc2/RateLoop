@@ -2,7 +2,7 @@ import type { TokenlessQuestionImagePreviewGrant } from "@rateloop/sdk";
 import { createHash, randomBytes } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
-import sharp from "sharp";
+import sharp, { type Metadata } from "sharp";
 import { dbClient, dbPool } from "~~/lib/db";
 import { maintenanceCancellationRequested } from "~~/lib/tokenless/maintenanceCancellation";
 import { privateBlobStorage } from "~~/lib/tokenless/privateBlobStorage";
@@ -169,7 +169,7 @@ async function findIdempotentUpload(input: {
 }
 
 async function normalizeImage(bytes: Uint8Array) {
-  let metadata: sharp.Metadata;
+  let metadata: Metadata;
   try {
     metadata = await sharp(bytes, { failOn: "error", limitInputPixels: PUBLIC_QUESTION_IMAGE_MAX_PIXELS }).metadata();
   } catch {
