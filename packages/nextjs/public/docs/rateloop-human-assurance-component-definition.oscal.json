@@ -22,7 +22,7 @@
         {
           "name": "mapping-hash",
           "ns": "https://rateloop.ai/ns/oscal",
-          "value": "sha256:995f3e95597a1cab40a5b4b30332623e9d48a1dc94bd6ee827fcfbe1ae84e2b2"
+          "value": "sha256:a18571f988162b370e37f7ad0b32447e1004f1ce6f02defefe6a1bab3bd8a270"
         },
         {
           "name": "claim-boundary",
@@ -56,7 +56,7 @@
           {
             "name": "mapping-hash",
             "ns": "https://rateloop.ai/ns/oscal",
-            "value": "sha256:995f3e95597a1cab40a5b4b30332623e9d48a1dc94bd6ee827fcfbe1ae84e2b2"
+            "value": "sha256:a18571f988162b370e37f7ad0b32447e1004f1ce6f02defefe6a1bab3bd8a270"
           },
           {
             "name": "claim-boundary",
@@ -694,7 +694,7 @@
         {
           "uuid": "d5d0b0ec-1ff3-5cf7-8725-1b6229e20e3c",
           "title": "Adaptive assurance coverage export",
-          "description": "A hash-bound workspace export of policy snapshots, sampling decisions, forced-review rules, human-result observations, coverage rollups, and stage transitions for a bounded period.",
+          "description": "A hash-bound workspace export of policy snapshots, sampling decisions, forced-review rules, human-result observations, design-weighted population estimates or typed coverage gaps, coverage rollups, and stage transitions for a bounded period.",
           "props": [
             {
               "name": "artifact-id",
@@ -704,7 +704,7 @@
             {
               "name": "schema-version",
               "ns": "https://rateloop.ai/ns/oscal",
-              "value": "rateloop.assurance-coverage-export.v1"
+              "value": "rateloop.assurance-coverage-export.v2"
             }
           ]
         },

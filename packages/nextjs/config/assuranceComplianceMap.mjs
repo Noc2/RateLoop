@@ -23,9 +23,9 @@ export const assuranceComplianceMap = Object.freeze({
     {
       id: "adaptive-coverage-export",
       title: "Adaptive assurance coverage export",
-      schemaVersion: "rateloop.assurance-coverage-export.v1",
+      schemaVersion: "rateloop.assurance-coverage-export.v2",
       description:
-        "A hash-bound workspace export of policy snapshots, sampling decisions, forced-review rules, human-result observations, coverage rollups, and stage transitions for a bounded period.",
+        "A hash-bound workspace export of policy snapshots, sampling decisions, forced-review rules, human-result observations, design-weighted population estimates or typed coverage gaps, coverage rollups, and stage transitions for a bounded period.",
       sourceLocations: ["packages/nextjs/lib/tokenless/adaptiveCoverageExport.ts"],
     },
     {

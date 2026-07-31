@@ -11,23 +11,24 @@ function estimate(overrides: Partial<PopulationEstimateInput> = {}) {
     expectedFrameCount: 3,
     frameReconciled: true,
     selectionMadeBeforeOutcome: true,
+    probabilityKind: "history_conditioned_propensity",
     units: [
       {
         unitId: "certain-agree",
         selected: true,
-        inclusionProbabilityBps: 10_000,
+        selectionProbabilityBps: 10_000,
         observation: { unitId: "certain-agree", comparable: true, agreement: "agree" },
       },
       {
         unitId: "rare-disagree",
         selected: true,
-        inclusionProbabilityBps: 1_000,
+        selectionProbabilityBps: 1_000,
         observation: { unitId: "rare-disagree", comparable: true, agreement: "disagree" },
       },
       {
         unitId: "not-selected",
         selected: false,
-        inclusionProbabilityBps: 5_000,
+        selectionProbabilityBps: 5_000,
         observation: null,
       },
     ],
@@ -55,10 +56,11 @@ test("a full census is exact and has zero sampling uncertainty", () => {
     expectedFrameCount: 3,
     frameReconciled: true,
     selectionMadeBeforeOutcome: true,
+    probabilityKind: "first_order_inclusion",
     units: ["agree", "agree", "disagree"].map((agreement, index) => ({
       unitId: `unit-${index}`,
       selected: true,
-      inclusionProbabilityBps: 10_000,
+      selectionProbabilityBps: 10_000,
       observation: {
         unitId: `unit-${index}`,
         comparable: true,
@@ -88,12 +90,12 @@ test("returns named coverage gaps for every unsupported frame condition", () => 
       },
     ],
     [
-      "invalid_inclusion_probability",
-      { ...estimateInput(), units: [{ ...estimateInput().units[0]!, inclusionProbabilityBps: null }] },
+      "invalid_selection_probability",
+      { ...estimateInput(), units: [{ ...estimateInput().units[0]!, selectionProbabilityBps: null }] },
     ],
     [
-      "zero_inclusion_probability",
-      { ...estimateInput(), units: [{ ...estimateInput().units[0]!, inclusionProbabilityBps: 0 }] },
+      "zero_selection_probability",
+      { ...estimateInput(), units: [{ ...estimateInput().units[0]!, selectionProbabilityBps: 0 }] },
     ],
     ["selected_outcome_missing", { ...estimateInput(), units: [{ ...estimateInput().units[0]!, observation: null }] }],
     [
@@ -147,11 +149,12 @@ function estimateInput(): PopulationEstimateInput {
     expectedFrameCount: 1,
     frameReconciled: true,
     selectionMadeBeforeOutcome: true,
+    probabilityKind: "first_order_inclusion",
     units: [
       {
         unitId: "unit",
         selected: true,
-        inclusionProbabilityBps: 10_000,
+        selectionProbabilityBps: 10_000,
         observation: { unitId: "unit", comparable: true, agreement: "agree" },
       },
     ],

@@ -673,7 +673,12 @@ function artifactSchema(type: WormArtifactType, artifact: Record<string, unknown
     }
     return "rateloop-audit-v1";
   }
-  if (type === "coverage_export" && artifact.schemaVersion === "rateloop.assurance-coverage-export.v1") {
+  if (
+    type === "coverage_export" &&
+    ["rateloop.assurance-coverage-export.v1", "rateloop.assurance-coverage-export.v2"].includes(
+      String(artifact.schemaVersion),
+    )
+  ) {
     const { exportDigest, ...payload } = artifact;
     if (
       typeof exportDigest !== "string" ||
@@ -682,7 +687,7 @@ function artifactSchema(type: WormArtifactType, artifact: Record<string, unknown
     ) {
       throw new TokenlessServiceError("Coverage export digest is invalid.", 409, "invalid_worm_export");
     }
-    return "rateloop.assurance-coverage-export.v1";
+    return String(artifact.schemaVersion);
   }
   if (type === "supervision_report" && artifact.schemaVersion === "rateloop.assurance-supervision-report.v1") {
     const { reportDigest, ...payload } = artifact;

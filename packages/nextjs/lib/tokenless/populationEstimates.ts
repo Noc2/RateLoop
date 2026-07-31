@@ -6,8 +6,8 @@ export const POPULATION_ESTIMATE_GAP_CODES = [
   "frame_not_reconciled",
   "selection_not_pre_outcome",
   "duplicate_unit",
-  "invalid_inclusion_probability",
-  "zero_inclusion_probability",
+  "invalid_selection_probability",
+  "zero_selection_probability",
   "selected_outcome_missing",
   "outcome_binding_mismatch",
   "unselected_outcome_present",
@@ -19,7 +19,7 @@ export type PopulationEstimateGapCode = (typeof POPULATION_ESTIMATE_GAP_CODES)[n
 export type PopulationFrameUnit = {
   unitId: string;
   selected: boolean;
-  inclusionProbabilityBps: number | null;
+  selectionProbabilityBps: number | null;
   observation: null | {
     unitId: string;
     comparable: boolean;
@@ -31,6 +31,7 @@ export type PopulationEstimateInput = {
   expectedFrameCount: number;
   frameReconciled: boolean;
   selectionMadeBeforeOutcome: boolean;
+  probabilityKind: "first_order_inclusion" | "history_conditioned_propensity";
   units: readonly PopulationFrameUnit[];
 };
 
@@ -58,6 +59,7 @@ export type PopulationEstimate =
       status: "estimable";
       gap: null;
       counts: PopulationEstimateCounts;
+      probabilityKind: PopulationEstimateInput["probabilityKind"];
       sampledAgreementBps: number;
       populationAgreementBps: number;
       weightedComparableTotal: number;
@@ -82,7 +84,7 @@ function baseCounts(units: readonly PopulationFrameUnit[]): PopulationEstimateCo
   const agreements = units.filter(
     unit => unit.selected && unit.observation?.comparable === true && unit.observation.agreement === "agree",
   ).length;
-  const certaintyUnits = units.filter(unit => unit.inclusionProbabilityBps === 10_000).length;
+  const certaintyUnits = units.filter(unit => unit.selectionProbabilityBps === 10_000).length;
   return {
     frame: units.length,
     selected,
@@ -110,9 +112,11 @@ function gap(units: readonly PopulationFrameUnit[], code: PopulationEstimateGapC
  * numerator and the comparable-domain denominator are estimated totals.
  *
  * The function exposes a point estimate only when every in-scope unit has a
- * known positive first-order inclusion probability and every selected unit has
- * its bound outcome. It withholds a confidence interval until the selection
- * design's joint inclusion/dependence assumptions have been reviewed.
+ * known positive first-order inclusion probability or recorded conditional
+ * selection propensity and every selected unit has its bound outcome. The
+ * self-normalized sequential-IPW interpretation is explicit for adaptive
+ * propensities. It withholds a confidence interval until the selection design's
+ * joint inclusion/dependence assumptions have been reviewed.
  */
 export function estimateComparableAgreement(input: PopulationEstimateInput): PopulationEstimate {
   const units = [...input.units];
@@ -128,14 +132,14 @@ export function estimateComparableAgreement(input: PopulationEstimateInput): Pop
     if (!unit.unitId || unitIds.has(unit.unitId)) return gap(units, "duplicate_unit");
     unitIds.add(unit.unitId);
     if (
-      unit.inclusionProbabilityBps === null ||
-      !Number.isSafeInteger(unit.inclusionProbabilityBps) ||
-      unit.inclusionProbabilityBps < 0 ||
-      unit.inclusionProbabilityBps > 10_000
+      unit.selectionProbabilityBps === null ||
+      !Number.isSafeInteger(unit.selectionProbabilityBps) ||
+      unit.selectionProbabilityBps < 0 ||
+      unit.selectionProbabilityBps > 10_000
     ) {
-      return gap(units, "invalid_inclusion_probability");
+      return gap(units, "invalid_selection_probability");
     }
-    if (unit.inclusionProbabilityBps === 0) return gap(units, "zero_inclusion_probability");
+    if (unit.selectionProbabilityBps === 0) return gap(units, "zero_selection_probability");
     if (unit.selected && unit.observation === null) return gap(units, "selected_outcome_missing");
     if (unit.observation && unit.observation.unitId !== unit.unitId) return gap(units, "outcome_binding_mismatch");
     if (!unit.selected && unit.observation !== null) return gap(units, "unselected_outcome_present");
@@ -145,7 +149,7 @@ export function estimateComparableAgreement(input: PopulationEstimateInput): Pop
   let weightedAgreementTotal = 0;
   for (const unit of units) {
     if (!unit.selected || !unit.observation?.comparable) continue;
-    const weight = 10_000 / unit.inclusionProbabilityBps!;
+    const weight = 10_000 / unit.selectionProbabilityBps!;
     weightedComparableTotal += weight;
     if (unit.observation.agreement === "agree") weightedAgreementTotal += weight;
   }
@@ -154,7 +158,7 @@ export function estimateComparableAgreement(input: PopulationEstimateInput): Pop
   const counts = baseCounts(units);
   const populationAgreementBps = roundBps(weightedAgreementTotal, weightedComparableTotal);
   const census = units.every(
-    unit => unit.selected && unit.inclusionProbabilityBps === 10_000 && unit.observation !== null,
+    unit => unit.selected && unit.selectionProbabilityBps === 10_000 && unit.observation !== null,
   );
   return {
     schemaVersion: POPULATION_ESTIMATE_SCHEMA_VERSION,
@@ -162,6 +166,7 @@ export function estimateComparableAgreement(input: PopulationEstimateInput): Pop
     status: "estimable",
     gap: null,
     counts,
+    probabilityKind: input.probabilityKind,
     sampledAgreementBps: roundBps(counts.agreements, counts.comparable),
     populationAgreementBps,
     weightedComparableTotal: finiteWeight(weightedComparableTotal),

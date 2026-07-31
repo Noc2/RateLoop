@@ -223,7 +223,7 @@ test("owner export is bounded, canonical, complete, and records its digest in th
     now: SNAPSHOT,
   };
   const exported = await exportAdaptiveCoverage(input);
-  assert.equal(exported.schemaVersion, "rateloop.assurance-coverage-export.v1");
+  assert.equal(exported.schemaVersion, "rateloop.assurance-coverage-export.v2");
   assert.deepEqual(exported.boundaries, {
     startInclusive: FROM.toISOString(),
     endExclusive: TO.toISOString(),
@@ -256,6 +256,32 @@ test("owner export is bounded, canonical, complete, and records its digest in th
   assert.ok(scope);
   assert.equal(scope.scopeId, setup.scopeId);
   assert.equal(scope.currentState.stage, "high_coverage");
+  assert.deepEqual(scope.populationFrame, {
+    kind: "rateloop_recorded_eligible_outputs",
+    reconciliation: "workspace_opportunity_ledger",
+    externalPopulationCompletenessClaimed: false,
+  });
+  assert.deepEqual(scope.populationEstimate, {
+    schemaVersion: "rateloop.population-estimate.v1",
+    estimand: "comparable_agreement_domain_ratio",
+    status: "estimable",
+    gap: null,
+    probabilityKind: "history_conditioned_propensity",
+    counts: {
+      frame: 1,
+      selected: 1,
+      completed: 1,
+      comparable: 1,
+      agreements: 1,
+      certaintyUnits: 1,
+      certaintyShareBps: 10_000,
+    },
+    sampledAgreementBps: 10_000,
+    populationAgreementBps: 10_000,
+    weightedComparableTotal: 1,
+    weightedAgreementTotal: 1,
+    uncertainty: { method: "census_exact", lowerBps: 10_000, upperBps: 10_000 },
+  });
   assert.deepEqual(scope.forcedReviewRules, {
     everyEligibleOutput: false,
     manualOwnerHandoff: false,
@@ -400,6 +426,42 @@ test("only active workspace owners and admins can export and windows fail closed
       }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_coverage_export_window",
   );
+});
+
+test("manual or rules scopes with zero selection support export a typed coverage gap", async () => {
+  const setup = await fixture("zero-support");
+  await dbClient.execute({
+    sql: `DELETE FROM tokenless_agent_evaluation_observations WHERE workspace_id=? AND opportunity_id=?`,
+    args: [setup.workspaceId, setup.opportunityId],
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_review_opportunities
+          SET decision='skip',status='skipped',selection_probability_bps=0
+          WHERE workspace_id=? AND opportunity_id=?`,
+    args: [setup.workspaceId, setup.opportunityId],
+  });
+  const exported = await exportAdaptiveCoverage({
+    accountAddress: setup.identity.principalId,
+    workspaceId: setup.workspaceId,
+    from: FROM,
+    to: TO,
+    now: SNAPSHOT,
+  });
+  assert.deepEqual(exported.scopes[0]?.populationEstimate, {
+    schemaVersion: "rateloop.population-estimate.v1",
+    estimand: "comparable_agreement_domain_ratio",
+    status: "coverage_gap",
+    gap: "zero_selection_probability",
+    counts: {
+      frame: 1,
+      selected: 0,
+      completed: 0,
+      comparable: 0,
+      agreements: 0,
+      certaintyUnits: 0,
+      certaintyShareBps: 0,
+    },
+  });
 });
 
 test("GET returns the authenticated attachment and rejects ambiguous export boundaries", async () => {

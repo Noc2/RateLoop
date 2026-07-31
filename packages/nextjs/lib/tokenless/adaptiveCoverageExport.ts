@@ -6,12 +6,13 @@ import { releasePoolClient, rollbackAndReleasePoolClient } from "~~/lib/db/trans
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { enqueueAssuranceAttestation } from "~~/lib/tokenless/assuranceAttestationPipeline";
 import { summarizeOversightDesignationsForExport } from "~~/lib/tokenless/oversightAttestations";
+import { estimateComparableAgreement } from "~~/lib/tokenless/populationEstimates";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import { TRAINING_RECORDS_SCHEMA_VERSION, buildTrainingRecordsPayload } from "~~/lib/tokenless/trainingRecordsExport";
 
 type Row = Record<string, unknown>;
 
-const EXPORT_SCHEMA_VERSION = "rateloop.assurance-coverage-export.v1" as const;
+const EXPORT_SCHEMA_VERSION = "rateloop.assurance-coverage-export.v2" as const;
 const DEFAULT_WINDOW_MS = 30 * 86_400_000;
 const MAX_WINDOW_MS = 366 * 86_400_000;
 const MAX_SCOPES = 500;
@@ -273,6 +274,33 @@ function stageTransition(row: Row) {
   };
 }
 
+function populationEstimate(decisionRows: Row[], observationRows: Row[]) {
+  const observationsByOpportunity = new Map(observationRows.map(row => [requiredText(row, "opportunity_id"), row]));
+  return estimateComparableAgreement({
+    expectedFrameCount: decisionRows.length,
+    frameReconciled: true,
+    selectionMadeBeforeOutcome: true,
+    probabilityKind: "history_conditioned_propensity",
+    units: decisionRows.map(row => {
+      const unitId = requiredText(row, "opportunity_id");
+      const storedObservation = observationsByOpportunity.get(unitId);
+      const agreement = text(storedObservation, "agreement");
+      return {
+        unitId,
+        selected: requiredText(row, "decision") === "required",
+        selectionProbabilityBps: integer(row, "selection_probability_bps"),
+        observation: storedObservation
+          ? {
+              unitId: requiredText(storedObservation, "opportunity_id"),
+              comparable: bool(storedObservation, "comparable"),
+              agreement: agreement === "agree" || agreement === "disagree" ? agreement : ("uncertain" as const),
+            }
+          : null,
+      };
+    }),
+  });
+}
+
 export async function exportAdaptiveCoverage(input: {
   accountAddress: string;
   workspaceId: string;
@@ -406,6 +434,8 @@ export async function exportAdaptiveCoverage(input: {
         audiencePolicy: jsonObject(row, "audience_policy_json"),
         publishingPolicyId: text(row, "publishing_policy_id"),
       };
+      const decisionRows = decisionsByScope.get(scopeId) ?? [];
+      const observationRows = observationsByScope.get(scopeId) ?? [];
       return {
         scopeId,
         agentId: requiredText(row, "agent_id"),
@@ -434,8 +464,14 @@ export async function exportAdaptiveCoverage(input: {
         },
         policySnapshot: { ...policySnapshot, hash: sha256(policySnapshot) },
         forcedReviewRules: forcedReviewRules(row, rules),
-        decisions: (decisionsByScope.get(scopeId) ?? []).map(decision),
-        observations: (observationsByScope.get(scopeId) ?? []).map(observation),
+        populationFrame: {
+          kind: "rateloop_recorded_eligible_outputs" as const,
+          reconciliation: "workspace_opportunity_ledger" as const,
+          externalPopulationCompletenessClaimed: false as const,
+        },
+        populationEstimate: populationEstimate(decisionRows, observationRows),
+        decisions: decisionRows.map(decision),
+        observations: observationRows.map(observation),
         rollups: (rollupsByScope.get(scopeId) ?? []).map(rollup),
         stageTransitions: (eventsByScope.get(scopeId) ?? []).map(stageTransition),
       };
