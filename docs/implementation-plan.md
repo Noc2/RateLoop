@@ -3,9 +3,10 @@
 Rewritten 31 July 2026 from six research passes into the question that matters: **what
 should this be, so that an enterprise wants it and can be made to need it?**
 
-**Written for a German vendor.** The reachable obligations are European, so §4's vertical
-analysis is being redone on that basis — an earlier draft picked a US vertical that a
-German company cannot sell into. Everything else here is jurisdiction-independent.
+**Written for a German vendor.** The first reachable obligation is European: DSA
+content-moderation accuracy reporting and independent audit. An earlier draft picked a
+US vertical that a German company could not credibly sell into. Everything else here is
+jurisdiction-independent.
 
 Effort is days for one experienced engineer.
 
@@ -42,7 +43,7 @@ high-risk operations, and external auditing valued for its own sake.
 
 ---
 
-## 2. The moat is the sampling frame, and it is currently broken
+## 2. The moat is the sampling frame
 
 `adaptiveCoverageExport.ts` emits a per-decision record for **every eligible output,
 including the ones nobody reviewed**, carrying the selection probability, the sample
@@ -65,12 +66,14 @@ opinion is a PDF nobody verifies.
 So: the measurement is the product, the signature is a feature of it, and the
 differentiator is that the computation can be re-run by someone who does not trust you.
 
-It is also, today:
+The first invariant was repaired on 31 July 2026. Adaptive and fixed review now share one
+sampler implementation and persist canonical `sha256:` commitments; migration `0165`
+backfills exact legacy bare digests and rejects future non-canonical writes. Golden
+vectors pin both domain-separated manifests, and a real decision → persistence → export
+test covers manual, always, rules, fixed and adaptive policies.
 
-- **Broken in production.** `adaptiveReview.ts:182` stores the HMAC as bare hex;
-  `adaptiveCoverageExport.ts:19` requires a `sha256:` prefix. **Every real row throws on
-  export.** The test passes because it hand-builds fixtures rather than driving the
-  decision path. One-line fix, and nothing else here matters until it lands.
+It remains:
+
 - **Capability-flagged false**, so it cannot be mentioned publicly.
 - **Never used to weight anything.** Every published rate is an unweighted count.
 - **Not third-party verifiable**, because the sampler key is a permanent environment
@@ -103,7 +106,7 @@ which imports its framework.
 
 ## 3. The evidence standard, which is the product specification
 
-Four converging sources define what "real" human review means, far more specifically than
+Five converging sources define what "real" human review means, far more specifically than
 any statute:
 
 1. **Named, competent, authorised reviewers.** The Amsterdam Court of Appeal found
@@ -133,74 +136,112 @@ inability to demonstrate review is independently punished.
 
 ---
 
-## 4. Where this is needed — being re-done with an EU lens
+## 4. First reachable market — DSA content-moderation assurance
 
-**This section is under revision and its previous content was wrong for this vendor.**
+**Start with audit-ready, independently sampled accuracy evidence for automated content
+moderation and complaint review.** The platform retains the complete moderation and
+appeal population. Its own qualified staff or controlled contractors remain responsible
+for statutory complaint decisions. A separate, blinded and language-qualified panel
+re-reviews a precommitted sample and produces reproducible accuracy, precision, recall,
+error, agreement and override evidence.
 
-An earlier draft picked US health-plan utilization review: California SB 1120, CMS
-Medicare Advantage rules, the Cigna and UnitedHealth litigation. The analysis was sound
-and the vertical is genuinely underserved — but **it is unreachable from Germany.** The
-buyers are US health plans, the obligation is US state law, the audit authority sits with
-US regulators, and a German vendor has no route in. Same objection applies to FINRA
-communications supervision, which was ranked second.
+This is the strongest European fit because the obligation, artifact and adverse reader
+already exist:
 
-The company is German. The reachable obligations are European, and the analysis is being
-redone against them. What is already established:
+- The [Digital Services Act](https://eur-lex.europa.eu/eli/reg/2022/2065/oj/eng) is in
+  force. Article 20 requires complaint decisions to be supervised by appropriately
+  qualified staff and not made solely by automation. Articles 15 and 42 require public
+  reporting of automated-moderation accuracy and possible error rates; VLOPs and VLOSEs
+  report the measures by official EU language.
+- The harmonised reporting rules have applied since 1 July 2025. The
+  [mandatory template](https://eur-lex.europa.eu/eli/reg_impl/2024/2835/oj/eng) asks for
+  accuracy, precision and recall per moderation system, plus the input criteria,
+  methodology, control-group variation and, optionally, human-reviewer accuracy. The
+  first harmonised reports were due in February 2026, so this is a current recurring
+  workflow rather than a future mandate.
+- VLOPs and VLOSEs undergo annual independent audits. The
+  [DSA audit rules](https://eur-lex.europa.eu/eli/reg_del/2024/436/oj/eng) require
+  sufficient reliable evidence, tests of algorithmic systems, assessment that public
+  disclosures are free from material error, and representative sampling selected
+  without interference by the audited provider. They specifically contemplate
+  independently reproducing accuracy indicators.
+- German enforcement is concrete. The
+  [Bundesnetzagentur's 2025 report](https://www.bundesnetzagentur.de/SharedDocs/Pressemitteilungen/EN/2026/20260430_TB_DSC.html)
+  records more than 2,000 complaints and names Articles 16, 17 and 20 among its
+  enforcement priorities.
+- The evidence failure is observable rather than hypothetical. Booking.com's
+  [published DSA audit](https://q-xx.bstatic.com/data/mobile/2025%20-%20Audit%20report.pdf)
+  used samples of appeals and training records, but unreconciled datasets prevented
+  reasonable assurance for several obligations and the auditor found material
+  discrepancies in Article 42 accuracy disclosures.
 
-- **The evidence standard in §3 is European and holds.** Uber/Ola is Amsterdam, the
-  SCHUFA line is the CJEU, the €492,000 explain-the-decision fine is Hamburg, and
-  Foodinho is the Italian Garante at €2.6M then €5M. **The case law that defines what
-  "real human review" means is EU case law**, which is an advantage rather than a
-  constraint.
-- **German data-protection authorities are the most active AI enforcers in Europe**, and
-  a German vendor is closer to that enforcement than any US competitor.
-- **Article 50 applies 2 August 2026** and was not deferred, unlike the Annex III duties.
-- **The insurance argument is jurisdiction-neutral** — the generative-AI exclusion wave
-  in commercial general liability affects EU insureds the same way.
+### The product boundary
 
-The candidate EU verticals being assessed, pending research:
+The independent panel is an **additional calibration and reference-label layer**. It is
+not the Article 20 decision-maker, and its existence does not prove that the platform's
+human supervision occurred. The DSA prescribes supervision, reporting and audit; it does
+not prescribe RateLoop's sample rate, multi-rater consensus, commitments or metric.
 
-- **Annex III(4), employment and worker management** — allocation, monitoring and
-  termination decisions. Note this is also the category that constrains RateLoop's own
-  design, so the product knowledge is already there.
-- **Annex III(5), essential services** — creditworthiness, and life and health insurance
-  pricing, which are explicitly high-risk in the EU in a way they are not in the US.
-- **DSA Article 20(6) and 42(2)(b)** — qualified-staff supervision and the recurring
-  public obligation to report reviewer qualifications and training.
-- **The Platform Work Directive**, transposing 2 December 2026, whose Article 8 requires
-  human review of significant automated decisions and reaches the genuinely
-  self-employed.
-- **German-specific**: the works-council pathway under §87(1)(6) BetrVG, BaFin's position
-  on AI in financial services, and whichever authority Germany designates for AI Act
-  supervision.
+The current permanent operator-held sampler key also does not yet support a claim that
+selection occurred without provider interference. The epoch precommitment and
+beacon-seeded draw in §6 are therefore prerequisites for an **independent sampling**
+claim, not optional hardening.
 
-Nothing in sections 1, 2, 3 or 5–10 depends on the vertical choice. **The measurement
-instrument, the sampling frame, the evidence standard and the verifiable draw are all
-jurisdiction-independent** — only the go-to-market target changes. Build rows one and two
-of §9 regardless.
+### Buyer and first pilot
+
+The operational champion is a moderation-quality lead, Head of Trust & Safety or DSA
+compliance officer. The adverse reader is the statutory auditor, Commission or Digital
+Services Coordinator. Begin with EU-established platforms using automated moderation;
+VLOPs and VLOSEs are the enterprise segment because the external audit recurs annually,
+while the wider Article 15 market supplies the reporting adjacency.
+
+Run concierge pilots with a small named, contracted, language-qualified panel and only
+public, synthetic, owner-confirmed redacted or contractually permitted material. Validate
+the packet and sampling method with one audit-organisation design partner and two
+provider-side pilots before deciding whether to expand the reviewer network.
+
+### Adjacent obligations, not the launch wedge
+
+- The [Platform Work Directive](https://eur-lex.europa.eu/eli/dir/2024/2831/oj/eng)
+  requires qualified human oversight, human account-termination decisions and reasoned
+  review after national transposition by 2 December 2026. It is a strong second vertical,
+  but implementation is still settling and an outside panel cannot substitute for the
+  platform's authorised decision-maker.
+- GDPR automated-decision contests are broad and already live, but lack the DSA's
+  recurring public metric and statutory audit artifact.
+- AI Act Annex III is a horizon, not a launch wedge. Its high-risk duties now start on
+  2 December 2027 under
+  [Regulation (EU) 2026/1744](https://eur-lex.europa.eu/eli/reg/2026/1744/oj/eng), and
+  most Annex III providers use internal-control conformity assessment rather than a
+  mandatory outside audit.
+- Reviewer scorecards and engagement analytics may trigger German works-council
+  co-determination under [§87(1)(6) BetrVG](https://www.gesetze-im-internet.de/betrvg/__87.html).
+  That is a deployment constraint and product control, not a buyer mandate.
 
 ---
 
 ## 5. The two-week version
 
-| #   | Task                                                        | Days |
-| --- | ----------------------------------------------------------- | ---- |
-| 1.1 | Fix the coverage-export hash format                         | 0.5  |
-| 1.2 | Replace the fixture test with one that drives the real path | 0.5  |
-| 1.3 | Golden test vector for the sampler manifest                 | 0.5  |
-| 1.4 | Horvitz–Thompson weighted estimator                         | 3–4  |
-| 1.5 | The one screen                                              | 2    |
-| 1.6 | Sampling disclosure + claim-gate rule                       | 1    |
+| #   | Task                                                              | Days | Status |
+| --- | ----------------------------------------------------------------- | ---- | ------ |
+| 1.1 | Canonical commitment writes, legacy backfill and DB constraint    | 0.5  | Done   |
+| 1.2 | Real decision → persistence → export test across all policy modes | 0.5  | Done   |
+| 1.3 | Golden vectors for both domain-separated sampler manifests        | 0.5  | Done   |
+| 1.4 | Horvitz–Thompson weighted estimator                               | 3–4  | Open   |
+| 1.5 | The one screen                                                    | 2    | Open   |
+| 1.6 | Sampling disclosure + claim-gate rule                             | 1    | Open   |
 
-**1.3 matters more than its size.** The current test asserts only self-consistency, so
-reordering the manifest string would silently re-roll every bucket in production with a
-green suite. For a construction whose entire claim is that the draw is fixed, that is the
-wrong test.
+**1.3 matters more than its size.** Before it landed, the test asserted only
+self-consistency, so reordering the manifest string could silently re-roll every bucket
+with a green suite. The fixed and adaptive vectors now freeze both commitment and bucket.
 
 **1.5 — the single screen that sells this.** Two numbers side by side:
 
 > Sampled agreement: 96.2% (n=740)
-> **Population estimate: 88.1% (95% CI 84.3–91.4%)** > _The sampled figure is biased upward because coverage was reduced on scopes that were
+>
+> **Population estimate: 88.1% (95% CI 84.3–91.4%)**
+>
+> _The sampled figure is biased upward because coverage was reduced on scopes that were
 > already agreeing._
 
 A vendor telling a risk officer their own headline number is wrong, and then showing the
@@ -266,27 +307,56 @@ implementations.
 
 ---
 
-## 7. What to delete
+## 7. What to retain and gate
 
-Roughly **40% of the codebase — around 55,000 lines — serves a reviewer marketplace that
-will not run.** It is the strongest engineering in the repository and it serves a lane that
-is switched off, gated behind an evidence lock nobody will satisfy, and legally hazardous
-to open.
+**Do not delete the reviewer network under the current design of record.** The newer
+deletion proposal was an unrecorded product pivot: the governing tokenless design retains
+the immutable fund core, paid eligibility, reviewer access, audience policies, vouchers,
+keeper, indexer and paid assignment-to-settlement release work. The stack also supports
+paid customer-invited review, so it is not a detachable public-marketplace page.
 
-- The paid lane, settlement, vouchers, identity assurance, wallet screening, tax
-  declaration and the on-chain stack — contracts, keeper, indexer, chain and rater modules,
-  and the 56 associated tables. **Keep only the drand beacon client**, which becomes the
-  seed for §6.
-- Crowd forecast, surprise bounty and feedback bonus — sophisticated reviewer-scoring
-  machinery for a lane that does not exist.
-- **The Merkle trees, or fix them.** Today the leaves ship inside the packet and there are
-  no inclusion proofs, so they imply more than they deliver. Either ship a proof API or
-  replace them with a signed leaf-list digest.
-- The host support tier, unless the smoke harness is actually run. A tier that gates only a
-  badge colour is an unevidenced claim, in a codebase whose best property is refusing to
-  make those.
+Keep the RateLoop-network lane **default-off and outside the initial release**. Test it
+first as the narrow DSA reference-panel workflow in §4, using named contracted reviewers,
+language and qualification evidence, blind assignment and public-safe material. Do not
+finish or market a general crowd marketplace until those pilots show demand and an
+external legal/privacy review approves the operating model.
 
-Follow the deletion order recorded in the contributor guide.
+### DSA reference-panel pilot
+
+| #   | Task                                                                   | Days       |
+| --- | ---------------------------------------------------------------------- | ---------- |
+| 3.1 | Import and reconcile the complete moderation/appeal population         | 5–7        |
+| 3.2 | Freeze a separate audit sample from the §6 provider-independent draw   | 3–4        |
+| 3.3 | Bind named reviewer identity, language, qualification and conflict     | 4–5        |
+| 3.4 | Blind source outcome and provider identity in assignment and review    | 4–5        |
+| 3.5 | Export DSA classifier/category/language metrics and calculation inputs | 5–7        |
+| 3.6 | One audit-partner review and two provider pilots                       | External   |
+| 3.7 | Deployment-pinned paid assignment-to-settlement and recovery suite     | 5–7 + soak |
+
+The audit sample is separate from the operational adaptive-review sample. It must never
+feed the adaptive promotion window, and the provider must not choose its seed, exclusions
+or replacements. Population reconciliation fails closed: a packet with missing,
+duplicated or unmatched moderation decisions produces a gap, not an estimate.
+
+Activation requires all of the following on one fresh complete deployment:
+
+- exact activation evidence and a deployment-pinned eligibility → assignment →
+  acceptance → commit/reveal → settlement/claim exercise;
+- quorum, beacon, takedown, restart, compensation, refund, keeper and indexer recovery
+  exercises;
+- paid eligibility, DAC7, sanctions, payout, appeal and privacy operations; and
+- a recorded choice of provider-side evidence supplier or audit-organisation
+  subcontractor for each engagement. The DSA audit-independence and non-audit-services
+  restrictions make casually occupying both roles unsafe.
+
+Hybrid remains a reserved unavailable schema value until both child lanes have durable
+terminal, expiry, refund, restart and compensation processing. Crowd Forecast,
+Surprisingly Popular and Feedback Bonus remain separately gated experiments, not reasons
+to activate the network.
+
+If pilots reject the network, reopen the governing design explicitly and then follow the
+ordered cross-package deletion rule. Until then, irreversible deletion destroys the only
+existing supply path for the DSA wedge before it has been tested.
 
 ---
 
@@ -321,25 +391,26 @@ shipped native approve-and-resume.
 
 ## 9. Sequence
 
-| Order | Work                                         | Days  |
-| ----- | -------------------------------------------- | ----- |
-| 1     | 1.1–1.3 — make the frame load and stay fixed | 1.5   |
-| 2     | 1.4, 1.5 — the estimator and the screen      | 5–6   |
-| 3     | 1.6 — disclosure and claim gate              | 1     |
-| 4     | 2.3, 2.4 — override and engagement analytics | 4–5   |
-| 5     | 2.1, 2.2 — the verifiable draw               | 11–14 |
-| 6     | 2.7 — compliance-reader entry point          | 5     |
-| 7     | 2.5 — stratified automated-eval sampling     | 7–8   |
-| 8     | 2.6, 2.8 — anchoring and schema              | 7     |
-| 9     | Deletion pass                                | —     |
+| Order | Work                                                        | Days/Status  |
+| ----- | ----------------------------------------------------------- | ------------ |
+| 1     | 1.1–1.3 — make the frame load and stay fixed                | Done         |
+| 2     | 1.4, 1.5 — the estimator and the screen                     | 5–6          |
+| 3     | 1.6 — disclosure and claim gate                             | 1            |
+| 4     | 2.3, 2.4 — override and engagement analytics                | 4–5          |
+| 5     | 2.1, 2.2 — the provider-independent verifiable draw         | 11–14        |
+| 6     | 2.7 — compliance-reader entry point                         | 5            |
+| 7     | 2.5 — stratified automated-eval sampling                    | 7–8          |
+| 8     | 2.6, 2.8 — anchoring and schema                             | 7            |
+| 9     | 3.1–3.7 — DSA panel pilot, deployed validation and decision | Release gate |
 
-**Rows one and two are the product.** Everything after row three makes it defensible
-rather than merely correct.
+The frame in row one is repaired. Row two produces the number; row five makes an
+independent-sampling claim supportable. The intervening work makes the output honest and
+operationally useful without claiming independence early.
 
 ### Ordering hazards
 
 - **2.5 before any weighting that reads its output**, never in parallel.
-- **One migration in flight at a time.** `0164` is taken; the next is `0165`.
+- **One migration in flight at a time.** `0165` is taken; the next is `0166`.
 - **Copy fixes now span four files**, because public strings moved into message catalogs
   and the German translations are already written. Editing a page component alone breaks no
   test and leaves the other language asserting the old claim.
@@ -403,3 +474,6 @@ this document should hold to the same standard.
   is a convenience.
 - **Not that a mandate produces a market.** Local Law 144 has been in force for three
   years at roughly 12% compliance with no fines.
+- **Not that an outside panel satisfies statutory human oversight.** It supplies a
+  separate calibration/reference label. Article 20 decisions remain with appropriately
+  qualified people under the platform's supervision.
