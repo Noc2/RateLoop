@@ -89,6 +89,7 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
       "0145_public_network_review_reachability.sql",
       "0146_hybrid_review_parent_settlement.sql",
       "0147_hybrid_request_profile_semantics.sql",
+      "0166_employment_data_governance.sql",
     ].includes(file) &&
     (/\bDO \$\$/u.test(statement) ||
       /\bCREATE OR REPLACE FUNCTION\b/u.test(statement) ||
@@ -385,6 +386,12 @@ export function createMemoryDatabaseResources(): DatabaseResources {
     args: [DataType.text],
     returns: DataType.integer,
     implementation: value => value.length,
+  });
+  memoryDb.public.registerFunction({
+    name: "btrim",
+    args: [DataType.text],
+    returns: DataType.text,
+    implementation: value => value.trim(),
   });
   memoryDb.public.registerOperator({
     operator: "<@",

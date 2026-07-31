@@ -35,6 +35,72 @@ export const tokenlessWorkspaceEvidenceRetentionPolicies = pgTable(
   }),
 );
 
+export const tokenlessWorkspaceEmploymentDataGovernanceVersions = pgTable(
+  "tokenless_workspace_employment_data_governance_versions",
+  {
+    workspaceId: text("workspace_id").notNull(),
+    version: integer("version").notNull(),
+    processingMode: text("processing_mode").notNull().default("aggregate_only"),
+    controllerRole: text("controller_role"),
+    processorRole: text("processor_role"),
+    lawfulBasisRecordReference: text("lawful_basis_record_reference"),
+    necessityRecordReference: text("necessity_record_reference"),
+    workerNoticeReference: text("worker_notice_reference"),
+    retentionPolicyReference: text("retention_policy_reference"),
+    accessPolicyReference: text("access_policy_reference"),
+    dpiaStatus: text("dpia_status").notNull().default("not_started"),
+    dpiaReference: text("dpia_reference"),
+    dataSubjectProcessReference: text("data_subject_process_reference"),
+    worksCouncilStatus: text("works_council_status").notNull().default("blocked"),
+    worksCouncilReference: text("works_council_reference"),
+    reviewerAnalyticsActivatedAt: time("reviewer_analytics_activated_at"),
+    reviewerAnalyticsActivatedBy: text("reviewer_analytics_activated_by"),
+    effectiveAt: time("effective_at").notNull(),
+    createdBy: text("created_by").notNull(),
+    createdAt: time("created_at").notNull(),
+  },
+  table => ({
+    pk: primaryKey({ columns: [table.workspaceId, table.version] }),
+    versionCheck: check("tokenless_workspace_employment_data_governance_version_check", sql`${table.version} > 0`),
+    modeCheck: check(
+      "tokenless_workspace_employment_data_governance_mode_check",
+      sql`${table.processingMode} IN ('aggregate_only', 'reviewer_analytics')`,
+    ),
+    dpiaCheck: check(
+      "tokenless_workspace_employment_data_governance_dpia_check",
+      sql`${table.dpiaStatus} IN ('not_started', 'not_required', 'completed', 'blocked')`,
+    ),
+    worksCouncilCheck: check(
+      "tokenless_workspace_employment_data_governance_works_council_check",
+      sql`${table.worksCouncilStatus} IN ('not_applicable', 'agreement_recorded', 'blocked')`,
+    ),
+    activationCheck: check(
+      "tokenless_workspace_employment_data_governance_activation_check",
+      sql`(
+        (${table.processingMode} = 'aggregate_only'
+          AND ${table.reviewerAnalyticsActivatedAt} IS NULL
+          AND ${table.reviewerAnalyticsActivatedBy} IS NULL)
+        OR
+        (${table.processingMode} = 'reviewer_analytics'
+          AND ${table.controllerRole} IS NOT NULL
+          AND ${table.processorRole} IS NOT NULL
+          AND ${table.lawfulBasisRecordReference} IS NOT NULL
+          AND ${table.necessityRecordReference} IS NOT NULL
+          AND ${table.workerNoticeReference} IS NOT NULL
+          AND ${table.retentionPolicyReference} IS NOT NULL
+          AND ${table.accessPolicyReference} IS NOT NULL
+          AND ${table.dpiaStatus} IN ('not_required', 'completed')
+          AND ${table.dpiaReference} IS NOT NULL
+          AND ${table.dataSubjectProcessReference} IS NOT NULL
+          AND ${table.worksCouncilStatus} IN ('not_applicable', 'agreement_recorded')
+          AND ${table.worksCouncilReference} IS NOT NULL
+          AND ${table.reviewerAnalyticsActivatedAt} IS NOT NULL
+          AND ${table.reviewerAnalyticsActivatedBy} IS NOT NULL)
+      )`,
+    ),
+  }),
+);
+
 export const tokenlessEvidenceRetentionEnforcementRuns = pgTable(
   "tokenless_evidence_retention_enforcement_runs",
   {

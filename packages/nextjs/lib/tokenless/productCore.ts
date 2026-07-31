@@ -325,6 +325,13 @@ export async function createWorkspace(input: { name: string; ownerAddress: strin
         ownerAddress,
       ],
     );
+    await client.query(
+      `INSERT INTO tokenless_workspace_employment_data_governance_versions
+       (workspace_id, version, processing_mode, dpia_status, works_council_status,
+        effective_at, created_by, created_at)
+       VALUES ($1, 1, 'aggregate_only', 'not_started', 'blocked', $2, $3, $2)`,
+      [workspaceId, now, ownerAddress],
+    );
     await client.query("COMMIT");
     return { workspaceId };
   } catch (error) {
