@@ -517,6 +517,7 @@ test("the invocation deadline stops cumulative processor work and records one bo
 
 test("the invocation deadline cooperatively aborts an in-flight processor", async () => {
   let observedSignal: AbortSignal | undefined;
+  let fireDeadline: (() => void) | undefined;
   let laterProcessorRan = false;
   const originalConsoleError = console.error;
   console.error = () => undefined;
@@ -533,9 +534,11 @@ test("the invocation deadline cooperatively aborts an in-flight processor", asyn
         async sweepExpiredPublicMedia(input) {
           observedSignal = input?.signal;
           assert.ok(observedSignal);
-          await new Promise<void>(resolve =>
-            observedSignal!.addEventListener("abort", () => resolve(), { once: true }),
-          );
+          assert.ok(fireDeadline);
+          await new Promise<void>(resolve => {
+            observedSignal!.addEventListener("abort", () => resolve(), { once: true });
+            fireDeadline!();
+          });
           return { deleted: 0, failed: [] };
         },
         async revivePrivacyWorkerFailures() {
@@ -543,7 +546,16 @@ test("the invocation deadline cooperatively aborts an in-flight processor", asyn
           return { revived: 0 };
         },
       },
-      runtime: { processingBudgetMs: 25 },
+      runtime: {
+        monotonicNow: () => 0,
+        processingBudgetMs: 25,
+        scheduleDeadlineAbort(onDeadline) {
+          fireDeadline = onDeadline;
+          return () => {
+            fireDeadline = undefined;
+          };
+        },
+      },
     });
   } finally {
     console.error = originalConsoleError;
