@@ -27,6 +27,27 @@ const agents: EvaluationDashboard["agents"] = [
         riskTier: "low",
         stage: "high_coverage",
         reviewRateBps: 5_000,
+        populationEstimate: {
+          schemaVersion: "rateloop.population-estimate.v1",
+          estimand: "comparable_agreement_domain_ratio",
+          status: "estimable",
+          gap: null,
+          counts: {
+            frame: 20,
+            selected: 8,
+            completed: 7,
+            comparable: 6,
+            agreements: 4,
+            certaintyUnits: 2,
+            certaintyShareBps: 1_000,
+          },
+          probabilityKind: "history_conditioned_propensity",
+          sampledAgreementBps: 6_667,
+          populationAgreementBps: 7_500,
+          weightedComparableTotal: 16,
+          weightedAgreementTotal: 12,
+          uncertainty: { method: "withheld_pending_design_review", lowerBps: null, upperBps: null },
+        },
         changes: [
           {
             fromRateBps: 10_000,
@@ -52,6 +73,17 @@ test("adaptive coverage renders an accessible trend and explains every recorded 
   assert.match(html, /Adaptive coverage/);
   assert.match(html, /Review rate/);
   assert.match(html, />50%</);
+  assert.match(html, /Observed agreement/);
+  assert.match(html, /Reviewed sample/);
+  assert.match(html, />66\.7%</);
+  assert.match(html, /Weighted population/);
+  assert.match(html, />75%</);
+  assert.match(html, /Self-normalized sequential-IPW point estimate/);
+  assert.match(html, /Confidence interval withheld pending method review/);
+  assert.match(html, /Frame<\/dt><dd[^>]*>20</);
+  assert.match(html, /Selected<\/dt><dd[^>]*>8</);
+  assert.match(html, /Complete<\/dt><dd[^>]*>7</);
+  assert.match(html, /Certainty<\/dt><dd[^>]*>2</);
   assert.match(html, /role="img"/);
   assert.match(
     html,
@@ -64,6 +96,42 @@ test("adaptive coverage renders an accessible trend and explains every recorded 
   assert.match(html, /Agreement fell below the policy threshold/);
   assert.equal((html.match(/<time /gu) ?? []).length, 2);
   assert.doesNotMatch(html, /two_stable_windows|agreement_below_threshold/);
+});
+
+test("adaptive coverage makes an inestimable population an explicit coverage gap", () => {
+  const html = renderToStaticMarkup(
+    <AdaptiveCoverageSummary
+      agents={[
+        {
+          ...agents[0]!,
+          adaptiveCoverage: [
+            {
+              ...agents[0]!.adaptiveCoverage[0]!,
+              populationEstimate: {
+                schemaVersion: "rateloop.population-estimate.v1",
+                estimand: "comparable_agreement_domain_ratio",
+                status: "coverage_gap",
+                gap: "zero_selection_probability",
+                counts: {
+                  frame: 20,
+                  selected: 8,
+                  completed: 7,
+                  comparable: 6,
+                  agreements: 4,
+                  certaintyUnits: 2,
+                  certaintyShareBps: 1_000,
+                },
+              },
+            },
+          ],
+        },
+      ]}
+    />,
+  );
+
+  assert.match(html, /Coverage gap/);
+  assert.match(html, /At least one opportunity had no chance of selection/);
+  assert.doesNotMatch(html, /Reviewed sample|Weighted population|Confidence interval/);
 });
 
 test("adaptive coverage stays absent when no adaptive scope exists", () => {

@@ -9,6 +9,7 @@ import {
 } from "~~/lib/tokenless/adaptiveReview";
 import { listWorkspaceAgents } from "~~/lib/tokenless/agentRegistry";
 import { decisionExplanationRequired } from "~~/lib/tokenless/decisionPromptSampling";
+import { type PopulationEstimate, estimateOperationalComparableAgreement } from "~~/lib/tokenless/populationEstimates";
 import { listAgentPublishingPolicies } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import { wilsonIntervalBps } from "~~/lib/tokenless/transparency";
@@ -98,6 +99,7 @@ export type AdaptiveCoverageTile = {
   riskTier: string;
   stage: AdaptiveReviewStage;
   reviewRateBps: number;
+  populationEstimate: PopulationEstimate;
   changes: AdaptiveCoverageChange[];
 };
 
@@ -480,6 +482,7 @@ export async function getWorkspaceEvaluationDashboard(input: {
     policies,
     adaptiveScopeResult,
     adaptiveEventResult,
+    adaptivePopulationResult,
     trendDecisions,
     trendOverrides,
     modelExecutionResult,
@@ -637,6 +640,22 @@ export async function getWorkspaceEvaluationDashboard(input: {
       args: [input.workspaceId],
     }),
     dbClient.execute({
+      sql: `SELECT o.scope_id,o.opportunity_id,o.decision,o.selection_probability_bps,
+                   observation.opportunity_id AS observation_opportunity_id,
+                   observation.comparable AS observation_comparable,
+                   observation.agreement AS observation_agreement
+            FROM tokenless_agent_review_opportunities o
+            JOIN tokenless_agent_evaluation_scopes s
+              ON s.workspace_id=o.workspace_id AND s.scope_id=o.scope_id
+            JOIN tokenless_agent_review_policies p
+              ON p.workspace_id=s.workspace_id AND p.policy_id=s.policy_id AND p.version=s.policy_version
+            LEFT JOIN tokenless_agent_evaluation_observations observation
+              ON observation.workspace_id=o.workspace_id AND observation.opportunity_id=o.opportunity_id
+            WHERE o.workspace_id=? AND p.mode='adaptive'
+            ORDER BY o.scope_id ASC,o.created_at ASC,o.opportunity_id ASC`,
+      args: [input.workspaceId],
+    }),
+    dbClient.execute({
       sql: `SELECT d.decision
             FROM tokenless_assurance_client_decisions d
             JOIN tokenless_assurance_runs r ON r.run_id = d.run_id
@@ -782,6 +801,13 @@ export async function getWorkspaceEvaluationDashboard(input: {
   }
 
   const coverageByAgentVersion = new Map<string, AdaptiveCoverageTile[]>();
+  const populationRowsByScope = new Map<string, QueryRow[]>();
+  for (const value of adaptivePopulationResult.rows) {
+    const row = value as QueryRow;
+    const scopeId = rowString(row, "scope_id");
+    if (!scopeId) throw new Error("Database returned an invalid adaptive population scope.");
+    populationRowsByScope.set(scopeId, [...(populationRowsByScope.get(scopeId) ?? []), row]);
+  }
   for (const value of adaptiveScopeResult.rows) {
     const row = value as QueryRow;
     const scopeId = rowString(row, "scope_id");
@@ -805,12 +831,30 @@ export async function getWorkspaceEvaluationDashboard(input: {
       } satisfies AdaptiveCoverageChange;
     });
     const key = `${agentId}\0${agentVersionId}`;
+    const populationRows = populationRowsByScope.get(scopeId) ?? [];
     const tile: AdaptiveCoverageTile = {
       scopeId,
       workflowKey,
       riskTier,
       stage,
       reviewRateBps: adaptiveReviewRateBps(stage, productionFloorBps),
+      populationEstimate: estimateOperationalComparableAgreement({
+        decisions: populationRows.map(populationRow => ({
+          opportunityId: rowString(populationRow, "opportunity_id") ?? "",
+          decision: rowString(populationRow, "decision") ?? "",
+          selectionProbabilityBps: rowNullableNumber(populationRow, "selection_probability_bps"),
+        })),
+        observations: populationRows.flatMap(populationRow => {
+          const opportunityId = rowString(populationRow, "observation_opportunity_id");
+          if (!opportunityId) return [];
+          const comparable = rowBoolean(populationRow, "observation_comparable");
+          const agreement = rowString(populationRow, "observation_agreement");
+          if (comparable === null || !agreement) {
+            throw new Error("Database returned an invalid adaptive population observation.");
+          }
+          return [{ opportunityId, comparable, agreement }];
+        }),
+      }),
       changes,
     };
     coverageByAgentVersion.set(key, [...(coverageByAgentVersion.get(key) ?? []), tile]);

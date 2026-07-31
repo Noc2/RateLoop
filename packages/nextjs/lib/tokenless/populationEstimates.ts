@@ -35,6 +35,18 @@ export type PopulationEstimateInput = {
   units: readonly PopulationFrameUnit[];
 };
 
+export type OperationalCoverageDecision = {
+  opportunityId: string;
+  decision: string;
+  selectionProbabilityBps: number | null;
+};
+
+export type OperationalCoverageObservation = {
+  opportunityId: string;
+  comparable: boolean;
+  agreement: string;
+};
+
 type PopulationEstimateCounts = {
   frame: number;
   selected: number;
@@ -175,4 +187,43 @@ export function estimateComparableAgreement(input: PopulationEstimateInput): Pop
       ? { method: "census_exact", lowerBps: populationAgreementBps, upperBps: populationAgreementBps }
       : { method: "withheld_pending_design_review", lowerBps: null, upperBps: null },
   };
+}
+
+/**
+ * Keeps the operational opportunity/observation projection identical across
+ * exports and authenticated dashboard views. Operational adaptive decisions
+ * record predictable, history-conditioned propensities rather than fixed
+ * first-order inclusion probabilities.
+ */
+export function estimateOperationalComparableAgreement(input: {
+  decisions: readonly OperationalCoverageDecision[];
+  observations: readonly OperationalCoverageObservation[];
+}): PopulationEstimate {
+  const observationsByOpportunity = new Map(
+    input.observations.map(observation => [observation.opportunityId, observation] as const),
+  );
+  return estimateComparableAgreement({
+    expectedFrameCount: input.decisions.length,
+    frameReconciled: true,
+    selectionMadeBeforeOutcome: true,
+    probabilityKind: "history_conditioned_propensity",
+    units: input.decisions.map(decision => {
+      const observation = observationsByOpportunity.get(decision.opportunityId);
+      return {
+        unitId: decision.opportunityId,
+        selected: decision.decision === "required",
+        selectionProbabilityBps: decision.selectionProbabilityBps,
+        observation: observation
+          ? {
+              unitId: observation.opportunityId,
+              comparable: observation.comparable,
+              agreement:
+                observation.agreement === "agree" || observation.agreement === "disagree"
+                  ? observation.agreement
+                  : ("uncertain" as const),
+            }
+          : null,
+      };
+    }),
+  });
 }

@@ -29,6 +29,27 @@ const agents: EvaluationDashboard["agents"] = [
         riskTier: "low",
         stage: "monitoring",
         reviewRateBps: 2_500,
+        populationEstimate: {
+          schemaVersion: "rateloop.population-estimate.v1",
+          estimand: "comparable_agreement_domain_ratio",
+          status: "estimable",
+          gap: null,
+          counts: {
+            frame: 20,
+            selected: 8,
+            completed: 7,
+            comparable: 6,
+            agreements: 4,
+            certaintyUnits: 2,
+            certaintyShareBps: 1_000,
+          },
+          probabilityKind: "history_conditioned_propensity",
+          sampledAgreementBps: 6_667,
+          populationAgreementBps: 7_500,
+          weightedComparableTotal: 16,
+          weightedAgreementTotal: 12,
+          uncertainty: { method: "withheld_pending_design_review", lowerBps: null, upperBps: null },
+        },
         changes: [
           {
             fromRateBps: 5_000,
@@ -54,8 +75,13 @@ test("the Agents locale provider renders representative German UI and locale-awa
   assert.match(html, /Adaptive Abdeckung/);
   assert.match(html, /Prüfrate/);
   assert.match(html, />25\s?%</u);
+  assert.match(html, /Beobachtete Übereinstimmung/);
+  assert.match(html, /Gewichtete Population/);
+  assert.match(html, />75\s?%</u);
+  assert.match(html, /sequenzielle IPW-Punktschätzung/);
+  assert.match(html, /Konfidenzintervall bis zur Methodenprüfung zurückgehalten/);
   assert.match(html, /50 stabile vergleichbare Fälle/);
-  assert.doesNotMatch(html, /Adaptive coverage|Review rate|Fifty stable cases/);
+  assert.doesNotMatch(html, /Adaptive coverage|Review rate|Weighted population|Fifty stable cases/);
 });
 
 test("the same components retain their English catalog copy", () => {
@@ -68,5 +94,6 @@ test("the same components retain their English catalog copy", () => {
 
   assert.match(html, /Reviewers/);
   assert.match(html, /Adaptive coverage/);
+  assert.match(html, /Weighted population/);
   assert.match(html, /50 stable comparable cases/);
 });

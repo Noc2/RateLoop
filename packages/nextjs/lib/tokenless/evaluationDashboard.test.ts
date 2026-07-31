@@ -455,6 +455,31 @@ test("evaluation dashboard keeps legacy runs unattributed and joins an exact age
       riskTier: "low",
       stage: "high_coverage",
       reviewRateBps: 6_000,
+      populationEstimate: {
+        schemaVersion: "rateloop.population-estimate.v1",
+        estimand: "comparable_agreement_domain_ratio",
+        status: "estimable",
+        gap: null,
+        counts: {
+          frame: 1,
+          selected: 1,
+          completed: 1,
+          comparable: 1,
+          agreements: 1,
+          certaintyUnits: 0,
+          certaintyShareBps: 0,
+        },
+        probabilityKind: "history_conditioned_propensity",
+        sampledAgreementBps: 10_000,
+        populationAgreementBps: 10_000,
+        weightedComparableTotal: 1.66666667,
+        weightedAgreementTotal: 1.66666667,
+        uncertainty: {
+          method: "withheld_pending_design_review",
+          lowerBps: null,
+          upperBps: null,
+        },
+      },
       changes: [
         {
           fromRateBps: 10_000,
@@ -477,6 +502,34 @@ test("evaluation dashboard keeps legacy runs unattributed and joins an exact age
       ],
     },
   ]);
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_review_opportunities
+          SET decision='skip',selection_probability_bps=0
+          WHERE opportunity_id='aeop_evaluation_model'`,
+    args: [],
+  });
+  const coverageGap = await getWorkspaceEvaluationDashboard({ accountAddress: OWNER, workspaceId });
+  assert.deepEqual(coverageGap.agents[0]?.adaptiveCoverage[0]?.populationEstimate, {
+    schemaVersion: "rateloop.population-estimate.v1",
+    estimand: "comparable_agreement_domain_ratio",
+    status: "coverage_gap",
+    gap: "zero_selection_probability",
+    counts: {
+      frame: 1,
+      selected: 0,
+      completed: 0,
+      comparable: 0,
+      agreements: 0,
+      certaintyUnits: 0,
+      certaintyShareBps: 0,
+    },
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_review_opportunities
+          SET decision='required',selection_probability_bps=6000
+          WHERE opportunity_id='aeop_evaluation_model'`,
+    args: [],
+  });
   assert.doesNotMatch(
     JSON.stringify(suppressed.agents[0]?.adaptiveCoverage),
     /private-adaptive-actor|must-not-enter-coverage-history|arpe_coverage/u,

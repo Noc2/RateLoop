@@ -8,6 +8,7 @@ import type {
   AdaptiveCoverageTile,
   EvaluationDashboard,
 } from "~~/lib/tokenless/evaluationDashboard";
+import type { PopulationEstimateGapCode } from "~~/lib/tokenless/populationEstimates";
 
 const reasonKeys = {
   two_stable_windows: "reasonTwoStableWindows",
@@ -23,6 +24,20 @@ const reasonKeys = {
   severe_disagreement_open: "reasonSevereDisagreement",
   policy_evidence_changed: "reasonPolicyChanged",
 } as const satisfies Record<AdaptiveCoverageReasonCode, string>;
+
+const gapKeys = {
+  empty_frame: "gapEmptyFrame",
+  frame_size_mismatch: "gapFrameSizeMismatch",
+  frame_not_reconciled: "gapFrameNotReconciled",
+  selection_not_pre_outcome: "gapSelectionTiming",
+  duplicate_unit: "gapDuplicateUnit",
+  invalid_selection_probability: "gapInvalidProbability",
+  zero_selection_probability: "gapZeroProbability",
+  selected_outcome_missing: "gapMissingOutcome",
+  outcome_binding_mismatch: "gapOutcomeBinding",
+  unselected_outcome_present: "gapUnselectedOutcome",
+  no_comparable_outcomes: "gapNoComparableOutcomes",
+} as const satisfies Record<PopulationEstimateGapCode, string>;
 
 function safeId(value: string) {
   return value.replace(/[^A-Za-z0-9_-]/gu, "-");
@@ -89,6 +104,60 @@ function CoverageSparkline({ coverage }: { coverage: AdaptiveCoverageTile }) {
   );
 }
 
+function PopulationEstimateSummary({ coverage }: { coverage: AdaptiveCoverageTile }) {
+  const format = useAgentFormatter();
+  const t = useAgentTranslations("adaptive");
+  const estimate = coverage.populationEstimate;
+  const formatRate = (bps: number) =>
+    format.number(bps / 10_000, {
+      style: "percent",
+      maximumFractionDigits: Number.isInteger(bps / 100) ? 0 : 1,
+    });
+  const counts = [
+    ["frame", estimate.counts.frame],
+    ["selected", estimate.counts.selected],
+    ["completed", estimate.counts.completed],
+    ["certainty", estimate.counts.certaintyUnits],
+  ] as const;
+
+  return (
+    <section className="mt-3 border-t border-base-content/10 pt-3" aria-label={t("estimateTitle")}>
+      <h4 className="text-xs font-semibold text-base-content">{t("estimateTitle")}</h4>
+      {estimate.status === "estimable" ? (
+        <>
+          <dl className="mt-2 grid grid-cols-2 gap-2">
+            <div>
+              <dt className="text-xs text-base-content/60">{t("sampleAgreement")}</dt>
+              <dd className="mt-0.5 font-mono text-lg font-semibold">{formatRate(estimate.sampledAgreementBps)}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-base-content/60">{t("populationAgreement")}</dt>
+              <dd className="mt-0.5 font-mono text-lg font-semibold">{formatRate(estimate.populationAgreementBps)}</dd>
+            </div>
+          </dl>
+          <p className="mt-1 text-xs text-base-content/60">{t("sequentialIpwMethod")}</p>
+          <p className="mt-2 text-xs text-base-content/70">
+            {estimate.uncertainty.method === "census_exact" ? t("censusExact") : t("intervalWithheld")}
+          </p>
+        </>
+      ) : (
+        <div className="mt-2 rounded-lg bg-warning/10 px-3 py-2 text-xs leading-5 text-base-content">
+          <p className="font-semibold">{t("coverageGap")}</p>
+          <p>{t(gapKeys[estimate.gap])}</p>
+        </div>
+      )}
+      <dl className="mt-3 grid grid-cols-4 gap-2 border-t border-base-content/10 pt-3">
+        {counts.map(([key, value]) => (
+          <div key={key}>
+            <dt className="text-[0.65rem] text-base-content/60">{t(key)}</dt>
+            <dd className="mt-0.5 font-mono text-sm font-semibold">{format.number(value)}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
 export function AdaptiveCoverageSummary({ agents }: { agents: EvaluationDashboard["agents"] }) {
   const format = useAgentFormatter();
   const t = useAgentTranslations("adaptive");
@@ -137,6 +206,7 @@ export function AdaptiveCoverageSummary({ agents }: { agents: EvaluationDashboar
               <div className="mt-3">
                 <CoverageSparkline coverage={coverage} />
               </div>
+              <PopulationEstimateSummary coverage={coverage} />
               {latest ? (
                 <p className="mt-2 text-xs leading-5 text-base-content/70">
                   <span className="font-semibold text-base-content">{t("why")}</span> {t(reasonKeys[latest.reason])}
