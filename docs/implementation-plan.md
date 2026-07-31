@@ -13,16 +13,32 @@ Effort is days for one experienced engineer.
 
 ## 1. What the product is
 
-**An audit-grade measurement instrument for AI output quality.**
+**A calibrated, reproducible quality number that an adverse third party will accept from
+someone who is not the AI vendor.**
 
-Not a review workflow that emits evidence. A measurement instrument whose output is one
-defensible number about a whole population of agent outputs — and whose review workflow
-is merely how the measurement gets taken.
+Every word of that is load-bearing.
 
-The distinction is the whole plan. Every evaluation product on the market records **what
-you looked at**. This one records **what you did not look at, and with what
-probability** — which is the definition of a sampling frame, and the only thing from
-which a defensible population estimate can be built.
+- **Adverse third party** — an underwriter with capital at risk, an accreditor, a
+  regulator on examination, a counterparty entitled to demand evidence. Not the
+  engineering team improving the product. The reader must have a reason to doubt the
+  producer, or none of the rigour is worth paying for.
+- **Reproducible** — the reader can recompute the number and get the same answer. This
+  matters more than the signature; see §2.
+- **Not the AI vendor** — the UK government's own economists found the binding constraint
+  in AI assurance is that **225 of 310 supplier firms are AI developers assuring their
+  own tools**, and their demand-side research recorded participants saying that assurance
+  delivered by a profit-motivated developer "would not be trustworthy."
+
+Not a review workflow that emits evidence. A measurement instrument whose output is that
+number — and whose review workflow is merely how the measurement gets taken.
+
+**The buy trigger is not scale. It is the need for an artifact someone external will
+accept.** The field's most influential practitioners tell teams to build their own
+annotation tooling, and they are right — about _criteria_, which are domain-specific.
+None of them argues that sampling design, agreement measurement or regression tracking
+are domain-specific. The stated exceptions are precise and they are all the same
+exception: distributed annotators with enterprise access controls, regulated or
+high-risk operations, and external auditing valued for its own sake.
 
 ---
 
@@ -33,7 +49,23 @@ including the ones nobody reviewed**, carrying the selection probability, the sa
 bucket, the sampler commitment, the key version and the reason codes — written inside
 the same transaction as the decision, **before the outcome was known**.
 
-Nothing else in the category has this. It is also, today:
+Nothing else in the category has this — and note what makes it valuable. **Determinism,
+not signing.** An adverse reader can recompute a deterministic draw and get the same
+answer, which is a stronger claim than "this file has not been altered."
+
+**Be ruthless about the signature, because it is the weakest leg.** No regulator requires
+a cryptographic signature on AI evidence. None has said it would accept one. The vendors
+already selling signed AI audit logs cannot cite a requirement — they cite regulations
+that demand records permitting reconstruction and then supply their own schema. And when
+the SEC chose a replacement for physically immutable storage, it picked **a named senior
+executive's personal undertaking to produce records**. In assurance markets trust is
+manufactured by attaching a name and a liability to a claim, which is why an audit
+opinion is a PDF nobody verifies.
+
+So: the measurement is the product, the signature is a feature of it, and the
+differentiator is that the computation can be re-run by someone who does not trust you.
+
+It is also, today:
 
 - **Broken in production.** `adaptiveReview.ts:182` stores the HMAC as bare hex;
   `adaptiveCoverageExport.ts:19` requires a `sha256:` prefix. **Every real row throws on
@@ -319,7 +351,40 @@ rather than merely correct.
 
 ---
 
-## 10. What this plan does not claim
+## 10. The objection to answer first
+
+**The most influential practitioner in this field argues against the core design**, and
+the product cannot pretend otherwise. Hamel Husain — whose evals course is the
+highest-grossing on its platform, having trained 2,000+ people at 500+ companies —
+recommends a single "benevolent dictator" annotator _instead of_ multi-rater agreement,
+warns that raw agreement is a trap under class imbalance, and says outsourcing error
+analysis is usually a mistake.
+
+**He is right, for a different job.** His use case is _improving a product_: a fast
+iteration loop where one expert's judgement is the ground truth and the criteria are
+still being discovered. Shreya Shankar's criteria-drift finding sharpens it — grading
+outputs is how you learn what to grade for, so a fixed eval suite is philosophically the
+wrong shape for that job.
+
+The job here is _evidencing a product to someone who does not trust you_. A benevolent
+dictator is unfalsifiable to an adverse reader: their agreement with themselves is 100%
+by construction. Chance-corrected agreement across independent raters is the only thing
+that answers "how do I know this reviewer isn't just consistent with their own bias?"
+
+**Say this explicitly in any technical conversation, because otherwise the metrics look
+like the thing 2,000 engineers were told not to bother with.**
+
+Two supporting facts worth carrying. Contact-centre QA — a purchasable category at
+roughly $24k average annual contract value, up to $131k — mandates quarterly calibration
+against a reference gauge, and **has never published a single chance-corrected
+reliability statistic.** No kappa, no alpha, no ICC, while a quarter of programmes are
+out of conformance with the standard they claim to follow. And expert human annotation
+revenue went from about $1B to over $6B across exactly the period when model judges were
+supposed to displace it. **Judges ate the volume tier; humans hold the boundary cases.**
+
+---
+
+## 11. What this plan does not claim
 
 Recorded because the codebase's best property is refusing to let the pitch outrun it, and
 this document should hold to the same standard.
@@ -333,3 +398,8 @@ this document should hold to the same standard.
   is hardcoded false and reviewers are customer-invited and customer-named.
 - **Not that "we cannot prove what happened" is a named buyer category.** It is not; no
   major survey isolates it. That is both the opportunity and the sales-cycle risk.
+- **Not that signing is what makes the evidence credible.** No regulator requires or has
+  accepted it. Reproducibility by an adverse reader is the differentiator; the signature
+  is a convenience.
+- **Not that a mandate produces a market.** Local Law 144 has been in force for three
+  years at roughly 12% compliance with no fines.
