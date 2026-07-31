@@ -71,7 +71,7 @@ test("evidence docs explain exact artifacts, checks, mappings, and boundaries", 
   assert.match(html, /evidence method is to publish the boundary beside every control/i);
   assert.match(html, /limits are part of the verification record, not an apology/i);
   assert.match(html, /no evidence export by itself makes anyone compliant/i);
-  assert.match(html, /rateloop\.human-assurance\.evidence\.v3/i);
+  assert.match(html, /rateloop\.human-assurance\.evidence\.v4/i);
   assert.match(html, /Frozen scope.*Review context.*Judgment evidence.*Available references and limits/i);
   assert.match(html, /reviewer identities and raw or decryptable rationales are excluded/i);
   assert.match(html, /Commissioned paid-panel methodology/i);
@@ -125,7 +125,7 @@ test("machine docs mirror evidence boundaries and are linked from agent setup", 
     "utf8",
   );
 
-  assert.match(evidence, /rateloop\.human-assurance\.evidence\.v3/);
+  assert.match(evidence, /rateloop\.human-assurance\.evidence\.v4/);
   assert.match(evidence, /Commissioned paid-panel methodology/i);
   assert.match(evidence, /not organic consumer feedback, a customer testimonial, an\s+endorsement/i);
   assert.match(evidence, /must not relabel paid reviewer feedback as unsolicited customer or consumer feedback/i);
