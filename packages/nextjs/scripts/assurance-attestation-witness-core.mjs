@@ -1,3 +1,4 @@
+import { canonicalizeRfc8785 } from "@rateloop/node-utils/jcs";
 import { createHash, createPublicKey, verify } from "node:crypto";
 
 export const EXTERNAL_WITNESS_SCHEMA_VERSION = "rateloop.assurance-external-witness.v1";
@@ -12,18 +13,44 @@ const PREDICATE_TYPE = "https://rateloop.ai/attestation/review-verdict/v1";
 const PREDICATE_SCHEMA = "rateloop.review-verdict-attestation.v1";
 const DSSE_PAYLOAD_TYPE = "application/vnd.in-toto+json";
 
-export function canonicalizeAttestationWitness(value) {
-  if (Array.isArray(value)) return `[${value.map(canonicalizeAttestationWitness).join(",")}]`;
+export function canonicalizeLegacyAttestationWitness(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalizeLegacyAttestationWitness).join(",")}]`;
   if (value && typeof value === "object") {
     return `{${Object.entries(value)
       .filter(([, entry]) => entry !== undefined)
       .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalizeAttestationWitness(entry)}`)
+      .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalizeLegacyAttestationWitness(entry)}`)
       .join(",")}}`;
   }
   const encoded = JSON.stringify(value);
   if (encoded === undefined) throw new Error("Attestation witness content must be JSON serializable.");
   return encoded;
+}
+
+/** RFC 8785 canonical bytes for newly created witness artifacts. */
+export function canonicalizeAttestationWitness(value) {
+  return canonicalizeRfc8785(value);
+}
+
+function canonicalVariants(value) {
+  const variants = [];
+  try {
+    variants.push(canonicalizeAttestationWitness(value));
+  } catch {
+    // Historical v1 artifacts can contain values that RFC 8785 rejects.
+  }
+  const legacy = canonicalizeLegacyAttestationWitness(value);
+  if (!variants.includes(legacy)) variants.push(legacy);
+  return variants;
+}
+
+function hasCanonicalBytes(value, bytes) {
+  return canonicalVariants(value).includes(bytes);
+}
+
+function canonicallyEquivalent(left, right) {
+  const rightVariants = new Set(canonicalVariants(right));
+  return canonicalVariants(left).some(value => rightVariants.has(value));
 }
 
 function sha256Bytes(value) {
@@ -103,8 +130,8 @@ export function rfc3161BoundaryDigestHex(input) {
   return sha256Hex(rfc3161BoundaryPayload(input));
 }
 
-export function expectedRekorCanonicalBody(input) {
-  const envelopeJson = canonicalizeAttestationWitness(input.envelope);
+function rekorCanonicalBody(input, canonicalize) {
+  const envelopeJson = canonicalize(input.envelope);
   const payload = strictBase64(input.envelope.payload);
   const signature = input.envelope.signatures?.[0]?.sig;
   if (typeof signature !== "string" || !signature) throw new Error("DSSE signature is missing.");
@@ -118,6 +145,14 @@ export function expectedRekorCanonicalBody(input) {
       signatures: [{ signature, verifier: Buffer.from(publicKeyPem).toString("base64") }],
     },
   };
+}
+
+export function expectedRekorCanonicalBody(input) {
+  return rekorCanonicalBody(input, canonicalizeAttestationWitness);
+}
+
+export function expectedLegacyRekorCanonicalBody(input) {
+  return rekorCanonicalBody(input, canonicalizeLegacyAttestationWitness);
 }
 
 function verifyInclusionProof(body, proof) {
@@ -153,16 +188,17 @@ function verifyInclusionProof(body, proof) {
 function verifySignedEntryTimestamp(entry, rekorPublicKey) {
   const signature = entry.verification?.signedEntryTimestamp;
   if (typeof signature !== "string") return false;
-  const payload = canonicalizeAttestationWitness({
+  const statement = {
     body: entry.body,
     integratedTime: entry.integratedTime,
     logID: entry.logID,
     logIndex: entry.logIndex,
-  });
+  };
   try {
     const key = publicKey(rekorPublicKey);
     const algorithm = key.asymmetricKeyType === "ed25519" || key.asymmetricKeyType === "ed448" ? null : "sha256";
-    return verify(algorithm, Buffer.from(payload), key, strictBase64(signature));
+    const signatureBytes = strictBase64(signature);
+    return canonicalVariants(statement).some(payload => verify(algorithm, Buffer.from(payload), key, signatureBytes));
   } catch {
     return false;
   }
@@ -183,18 +219,24 @@ export function verifyRekorReceipt(input) {
   try {
     body = strictBase64(entry.body);
     canonicalBody = JSON.parse(body.toString("utf8"));
-    if (canonicalizeAttestationWitness(canonicalBody) !== body.toString("utf8")) {
+    if (!hasCanonicalBytes(canonicalBody, body.toString("utf8"))) {
       errors.push("rekor_body_not_canonical");
     }
   } catch {
     errors.push("invalid_rekor_body");
   }
   try {
-    const expected = expectedRekorCanonicalBody({
-      envelope: input.envelope,
-      signerPublicKey: input.signerPublicKey,
-    });
-    if (!canonicalBody || canonicalizeAttestationWitness(expected) !== canonicalizeAttestationWitness(canonicalBody)) {
+    const expectedBodies = [
+      rekorCanonicalBody(
+        { envelope: input.envelope, signerPublicKey: input.signerPublicKey },
+        canonicalizeAttestationWitness,
+      ),
+      rekorCanonicalBody(
+        { envelope: input.envelope, signerPublicKey: input.signerPublicKey },
+        canonicalizeLegacyAttestationWitness,
+      ),
+    ];
+    if (!canonicalBody || !expectedBodies.some(expected => canonicallyEquivalent(expected, canonicalBody))) {
       errors.push("rekor_body_binding_mismatch");
     }
     const verifier = canonicalBody?.spec?.signatures?.[0]?.verifier;
@@ -251,8 +293,8 @@ export function verifyAssuranceAttestationWitnessBundle(bundle, trust = {}) {
     }
     const payload = strictBase64(envelope?.payload);
     const statement = JSON.parse(payload.toString("utf8"));
-    if (canonicalizeAttestationWitness(statement) !== payload.toString("utf8")) errors.push("non_canonical_statement");
-    if (canonicalizeAttestationWitness(statement) !== canonicalizeAttestationWitness(bundle.statement)) {
+    if (!hasCanonicalBytes(statement, payload.toString("utf8"))) errors.push("non_canonical_statement");
+    if (!canonicallyEquivalent(statement, bundle.statement)) {
       errors.push("statement_envelope_mismatch");
     }
     const digestHex = bundle.artifact?.digest?.match(SHA256)?.[1];
@@ -308,11 +350,21 @@ export function verifyAssuranceAttestationWitnessBundle(bundle, trust = {}) {
       errors.push("missing_rfc3161_timestamp");
     } else {
       strictBase64(timestamp.tokenBase64);
-      const expectedDigest = rfc3161BoundaryDigestHex({
+      const boundary = {
         artifactDigest: bundle.artifact.digest,
         boundaryAt: bundle.artifact.boundaryAt,
-      });
-      if (timestamp.messageImprint?.algorithm !== "sha256" || timestamp.messageImprint?.digest !== expectedDigest) {
+      };
+      const expectedDigests = new Set([
+        rfc3161BoundaryDigestHex(boundary),
+        sha256Hex(
+          canonicalizeLegacyAttestationWitness({
+            schemaVersion: "rateloop.assurance-rfc3161-boundary.v1",
+            artifactDigest: boundary.artifactDigest,
+            boundaryAt: new Date(boundary.boundaryAt).toISOString(),
+          }),
+        ),
+      ]);
+      if (timestamp.messageImprint?.algorithm !== "sha256" || !expectedDigests.has(timestamp.messageImprint?.digest)) {
         errors.push("rfc3161_imprint_mismatch");
       }
     }

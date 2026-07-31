@@ -1,8 +1,8 @@
 import {
-  canonicalizeEvidenceValue,
+  canonicalizeEvidenceValueForSchema,
   computeEvidenceAggregation,
-  evidenceMerkleRoot,
-  sha256EvidenceValue,
+  evidenceMerkleRootForSchema,
+  sha256EvidenceValueForSchema,
   verifyEvidenceExport,
 } from "../../scripts/assurance-evidence-core.mjs";
 
@@ -152,7 +152,10 @@ async function fetchTrustedDecisionKey(
 async function digestCheck(packet: EvidencePacket): Promise<PublicEvidenceCheck> {
   const expected = typeof packet.packetDigest === "string" ? packet.packetDigest : null;
   try {
-    const actual = await sha256EvidenceValue({ payload: packet.payload, signing: packet.signing });
+    const actual = await sha256EvidenceValueForSchema(
+      { payload: packet.payload, signing: packet.signing },
+      packet.payload.schemaVersion,
+    );
     return {
       id: "digest",
       label: "Packet digest",
@@ -188,7 +191,10 @@ async function merkleCheck(
   const expected = typeof root === "string" ? root : null;
   try {
     if (!Array.isArray(recomputation?.[input.leaves])) throw new Error("Missing leaves.");
-    const actual = await evidenceMerkleRoot(recomputation[input.leaves] as unknown[]);
+    const actual = await evidenceMerkleRootForSchema(
+      recomputation[input.leaves] as unknown[],
+      packet.payload.schemaVersion,
+    );
     return {
       id: input.id,
       label: input.label,
@@ -222,7 +228,9 @@ function aggregationCheck(packet: EvidencePacket): PublicEvidenceCheck {
       throw new Error("Missing recomputation inputs.");
     }
     const actual = computeEvidenceAggregation(recomputation, aggregation.minimumAggregationSize, aggregation.passRule);
-    const matches = canonicalizeEvidenceValue(actual) === canonicalizeEvidenceValue(aggregation);
+    const matches =
+      canonicalizeEvidenceValueForSchema(actual, packet.payload.schemaVersion) ===
+      canonicalizeEvidenceValueForSchema(aggregation, packet.payload.schemaVersion);
     return {
       id: "aggregation",
       label: "Aggregation",

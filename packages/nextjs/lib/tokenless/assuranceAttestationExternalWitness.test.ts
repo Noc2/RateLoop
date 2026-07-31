@@ -8,11 +8,15 @@ import {
 } from "~~/lib/tokenless/assuranceAttestationExternalWitness";
 import {
   canonicalAttestationJson,
+  canonicalizeLegacyAttestationJson,
   createAssuranceAttestationStatement,
   createAssuranceDsseEnvelope,
+  dssePreAuthenticationEncoding,
 } from "~~/lib/tokenless/assuranceAttestations";
 import {
   REKOR_RECEIPT_SCHEMA_VERSION,
+  canonicalizeLegacyAttestationWitness,
+  expectedLegacyRekorCanonicalBody,
   expectedRekorCanonicalBody,
   rfc3161BoundaryDigestHex,
   verifyAssuranceAttestationWitnessBundle,
@@ -186,5 +190,101 @@ test("offline witness verifier binds DSSE, Rekor, and explicit signer/log trust 
       rekorPublicKey: rekorKeys.publicKey.export({ format: "pem", type: "spki" }),
     }).valid,
     false,
+  );
+});
+
+test("offline witness verifier preserves historical v1 statement and Rekor SET bytes", () => {
+  const signerKeys = generateKeyPairSync("ed25519");
+  const rekorKeys = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+  const statement = {
+    ...createAssuranceAttestationStatement({
+      kind: "decision_packet",
+      artifactDigest: DIGEST,
+      artifactSchemaVersion: "rateloop.human-assurance.evidence.v3",
+      boundaryAt: NOW,
+    }),
+    legacyExtension: { A: 1, a: 2, "€": 3, "💩": 4 },
+  };
+  const payload = Buffer.from(canonicalizeLegacyAttestationJson(statement));
+  const envelope = {
+    payloadType: "application/vnd.in-toto+json" as const,
+    payload: payload.toString("base64"),
+    signatures: [
+      {
+        keyid: SIGNER_KEY_ID,
+        sig: sign(
+          null,
+          dssePreAuthenticationEncoding("application/vnd.in-toto+json", payload),
+          signerKeys.privateKey,
+        ).toString("base64"),
+      },
+    ] as [{ keyid: string; sig: string }],
+  };
+  const body = Buffer.from(
+    canonicalizeLegacyAttestationWitness(
+      expectedLegacyRekorCanonicalBody({ envelope, signerPublicKey: signerKeys.publicKey }),
+    ),
+  );
+  const rekorPublicKeyDer = rekorKeys.publicKey.export({ format: "der", type: "spki" });
+  const logEntry = {
+    body: body.toString("base64"),
+    integratedTime: Math.floor(NOW.getTime() / 1000),
+    logID: createHash("sha256").update(rekorPublicKeyDer).digest("hex"),
+    logIndex: 0,
+    legacyExtension: { A: 1, a: 2, "€": 3, "💩": 4 },
+  };
+  const signedEntryTimestamp = sign(
+    "sha256",
+    Buffer.from(
+      canonicalizeLegacyAttestationWitness({
+        body: logEntry.body,
+        integratedTime: logEntry.integratedTime,
+        logID: logEntry.logID,
+        logIndex: logEntry.logIndex,
+      }),
+    ),
+    rekorKeys.privateKey,
+  ).toString("base64");
+  const rootHash = createHash("sha256")
+    .update(Buffer.concat([Buffer.from([0]), body]))
+    .digest("hex");
+  const entryUuid = "b".repeat(64);
+  const bundle = {
+    schemaVersion: "rateloop.assurance-external-witness.v1",
+    jobId: `aat_${"2".repeat(40)}`,
+    artifact: {
+      kind: "decision_packet",
+      schemaVersion: "rateloop.human-assurance.evidence.v3",
+      digest: DIGEST,
+      boundaryAt: NOW.toISOString(),
+    },
+    statement,
+    dsse: { signerKeyId: SIGNER_KEY_ID, envelope },
+    rekor: {
+      entryUuid,
+      logIndex: "0",
+      bundle: {
+        schemaVersion: REKOR_RECEIPT_SCHEMA_VERSION,
+        logOrigin: "https://rekor.example.test",
+        entryUuid,
+        logEntry: {
+          ...logEntry,
+          verification: {
+            signedEntryTimestamp,
+            inclusionProof: { logIndex: 0, treeSize: 1, rootHash, hashes: [] },
+          },
+        },
+      },
+    },
+    rfc3161: null,
+    completedAt: NOW.toISOString(),
+  };
+  assert.deepEqual(
+    verifyAssuranceAttestationWitnessBundle(bundle, {
+      signerPublicKey: signerKeys.publicKey.export({ format: "pem", type: "spki" }),
+      rekorPublicKey: rekorKeys.publicKey.export({ format: "pem", type: "spki" }),
+      expectedSignerKeyId: SIGNER_KEY_ID,
+    }),
+    { valid: true, errors: [] },
   );
 });

@@ -4,7 +4,7 @@
     "metadata": {
       "title": "RateLoop Human Assurance Evidence Compliance Map",
       "published": "2026-07-16T00:00:00Z",
-      "last-modified": "2026-07-29T00:00:00Z",
+      "last-modified": "2026-07-31T00:00:00Z",
       "version": "rateloop.assurance-compliance-map.v1",
       "oscal-version": "1.2.2",
       "document-ids": [
@@ -22,7 +22,7 @@
         {
           "name": "mapping-hash",
           "ns": "https://rateloop.ai/ns/oscal",
-          "value": "sha256:a18571f988162b370e37f7ad0b32447e1004f1ce6f02defefe6a1bab3bd8a270"
+          "value": "sha256:049b78c2105535366b4ebfe60f5f79b40405e006b20d40746ea1267dce7f1dca"
         },
         {
           "name": "claim-boundary",
@@ -56,7 +56,7 @@
           {
             "name": "mapping-hash",
             "ns": "https://rateloop.ai/ns/oscal",
-            "value": "sha256:a18571f988162b370e37f7ad0b32447e1004f1ce6f02defefe6a1bab3bd8a270"
+            "value": "sha256:049b78c2105535366b4ebfe60f5f79b40405e006b20d40746ea1267dce7f1dca"
           },
           {
             "name": "claim-boundary",
@@ -687,7 +687,7 @@
             {
               "name": "schema-version",
               "ns": "https://rateloop.ai/ns/oscal",
-              "value": "rateloop.human-assurance.evidence.v3"
+              "value": "rateloop.human-assurance.evidence.v4"
             }
           ]
         },

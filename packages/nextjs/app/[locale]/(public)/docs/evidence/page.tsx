@@ -116,7 +116,7 @@ export const COMPLIANCE_ROWS = assuranceComplianceMap.mappings.map(mapping => {
 
 const REDACTED_PACKET = `{
   "payload": {
-    "schemaVersion": "rateloop.human-assurance.evidence.v3",
+    "schemaVersion": "rateloop.human-assurance.evidence.v4",
     "tenantCommitment": "hmac-sha256:[redacted]",
     "frozen": {
       "runManifestHash": "sha256:…",

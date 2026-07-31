@@ -1,8 +1,10 @@
 import {
   canonicalizeEvidenceValue,
+  canonicalizeLegacyEvidenceValue,
   computeEvidenceAggregation,
   evidenceSigningKeyId,
   sha256EvidenceValue,
+  sha256LegacyEvidenceValue,
 } from "../../scripts/assurance-evidence-core.mjs";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -709,7 +711,7 @@ test("evidence derives private aggregates, verifies only against trusted pins, a
     signer: { privateKey: signer.privateKey },
     tenantCommitmentKey: TENANT_KEY,
   });
-  assert.equal(packet.payload.schemaVersion, "rateloop.human-assurance.evidence.v3");
+  assert.equal(packet.payload.schemaVersion, "rateloop.human-assurance.evidence.v4");
   assert.deepEqual(packet.payload.reviewContext.selectionTrigger, {
     kind: "owner_required",
     source: "explicit_workspace_assurance_run",
@@ -826,6 +828,28 @@ test("evidence derives private aggregates, verifies only against trusted pins, a
   assert.equal(
     (
       await verifyEvidenceExport(legacyPacket, {
+        expectedPublicKey: packet.signing.publicKey,
+        expectedKeyId: packet.signing.keyId,
+      })
+    ).valid,
+    true,
+  );
+  const legacyV3Payload = {
+    ...packet.payload,
+    schemaVersion: "rateloop.human-assurance.evidence.v3",
+    legacyExtension: { A: 1, a: 2, "€": 3, "💩": 4 },
+  };
+  const legacyV3Document = { payload: legacyV3Payload, signing: packet.signing };
+  const legacyV3Packet = {
+    ...legacyV3Document,
+    packetDigest: await sha256LegacyEvidenceValue(legacyV3Document),
+    signature: sign(null, Buffer.from(canonicalizeLegacyEvidenceValue(legacyV3Document)), signer.privateKey).toString(
+      "base64url",
+    ),
+  };
+  assert.equal(
+    (
+      await verifyEvidenceExport(legacyV3Packet, {
         expectedPublicKey: packet.signing.publicKey,
         expectedKeyId: packet.signing.keyId,
       })

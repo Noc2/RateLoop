@@ -9,6 +9,7 @@ import {
   canonicalAttestationJson,
   createAssuranceAttestationStatement,
   createAssuranceDsseEnvelope,
+  isCanonicalAttestationJson,
   verifyAssuranceDsseEnvelope,
 } from "~~/lib/tokenless/assuranceAttestations";
 import { maintenanceCancellationRequested } from "~~/lib/tokenless/maintenanceCancellation";
@@ -80,7 +81,7 @@ function validDate(value: Date, field: string) {
 function parseStatement(value: unknown): AssuranceAttestationStatement {
   try {
     const statement = JSON.parse(String(value)) as AssuranceAttestationStatement;
-    if (canonicalAttestationJson(statement) !== String(value)) throw new Error();
+    if (!isCanonicalAttestationJson(statement, String(value))) throw new Error();
     return statement;
   } catch {
     throw new TokenlessServiceError(
@@ -264,8 +265,8 @@ export async function getPublicAssuranceAttestationBundle(jobId: string) {
     envelope = JSON.parse(text(row, "dsse_envelope_json") ?? "") as DsseEnvelope;
     rekorBundle = JSON.parse(text(row, "rekor_bundle_json") ?? "") as Record<string, unknown>;
     if (
-      canonicalAttestationJson(envelope) !== text(row, "dsse_envelope_json") ||
-      canonicalAttestationJson(rekorBundle) !== text(row, "rekor_bundle_json")
+      !isCanonicalAttestationJson(envelope, text(row, "dsse_envelope_json") ?? "") ||
+      !isCanonicalAttestationJson(rekorBundle, text(row, "rekor_bundle_json") ?? "")
     ) {
       throw new Error();
     }

@@ -1,9 +1,10 @@
 import {
-  canonicalizeEvidenceValue,
+  canonicalizeLegacyEvidenceValue,
   computeEvidenceAggregation,
   evidenceMerkleRoot,
   evidenceSigningKeyId,
   sha256EvidenceValue,
+  sha256LegacyEvidenceValue,
 } from "../../scripts/assurance-evidence-core.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -63,6 +64,7 @@ async function signedPacket() {
   const passRule = { minimumValidResponses: 1, thresholdBps: 5_000 };
   const payload = {
     schemaVersion: "rateloop.human-assurance.evidence.v2",
+    legacyExtension: { A: 1, a: 2, "€": 3, "💩": 4 },
     roots: {
       caseRoot: await evidenceMerkleRoot(recomputation.caseLeaves),
       responseRoot: await evidenceMerkleRoot(recomputation.responseLeaves),
@@ -74,12 +76,12 @@ async function signedPacket() {
   const signedDocument = { payload, signing };
   return {
     ...signedDocument,
-    packetDigest: await sha256EvidenceValue(signedDocument),
+    packetDigest: await sha256LegacyEvidenceValue(signedDocument),
     signature: Buffer.from(
       await crypto.subtle.sign(
         { name: "Ed25519" },
         keyPair.privateKey,
-        new TextEncoder().encode(canonicalizeEvidenceValue(signedDocument)),
+        new TextEncoder().encode(canonicalizeLegacyEvidenceValue(signedDocument)),
       ),
     ).toString("base64url"),
   };
@@ -110,7 +112,7 @@ test("the public verifier binds every browser check to the shared isomorphic cor
     },
   });
 
-  assert.equal(result.valid, true);
+  assert.equal(result.valid, true, JSON.stringify(result));
   assert.deepEqual(
     result.checks.map(check => [check.id, check.status]),
     [

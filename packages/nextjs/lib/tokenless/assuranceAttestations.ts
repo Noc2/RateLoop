@@ -1,3 +1,4 @@
+import { canonicalizeRfc8785 } from "@rateloop/node-utils/jcs";
 import { createPublicKey, verify } from "node:crypto";
 
 export const IN_TOTO_STATEMENT_TYPE = "https://in-toto.io/Statement/v1" as const;
@@ -73,18 +74,32 @@ export function createAssuranceAttestationStatement(input: {
   };
 }
 
-export function canonicalAttestationJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonicalAttestationJson).join(",")}]`;
+export function canonicalizeLegacyAttestationJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalizeLegacyAttestationJson).join(",")}]`;
   if (value && typeof value === "object") {
     return `{${Object.entries(value as Record<string, unknown>)
       .filter(([, entry]) => entry !== undefined)
       .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalAttestationJson(entry)}`)
+      .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalizeLegacyAttestationJson(entry)}`)
       .join(",")}}`;
   }
   const encoded = JSON.stringify(value);
   if (encoded === undefined) throw new Error("Attestation content must be JSON serializable.");
   return encoded;
+}
+
+/** RFC 8785 canonical bytes for newly created attestations and witness requests. */
+export function canonicalAttestationJson(value: unknown): string {
+  return canonicalizeRfc8785(value);
+}
+
+export function isCanonicalAttestationJson(value: unknown, bytes: string) {
+  try {
+    if (canonicalAttestationJson(value) === bytes) return true;
+  } catch {
+    // Historical v1 payloads used the legacy serializer before RFC 8785.
+  }
+  return canonicalizeLegacyAttestationJson(value) === bytes;
 }
 
 function dsseLength(value: Buffer) {
@@ -142,7 +157,7 @@ export function verifyAssuranceDsseEnvelope(input: {
     const payload = Buffer.from(input.envelope.payload, "base64");
     const statement = JSON.parse(payload.toString("utf8")) as AssuranceAttestationStatement;
     if (
-      canonicalAttestationJson(statement) !== payload.toString("utf8") ||
+      !isCanonicalAttestationJson(statement, payload.toString("utf8")) ||
       statement._type !== IN_TOTO_STATEMENT_TYPE ||
       statement.predicateType !== RATELOOP_REVIEW_VERDICT_PREDICATE_TYPE ||
       statement.subject.length !== 1 ||

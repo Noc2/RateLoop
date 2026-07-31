@@ -34,7 +34,7 @@ behind each row lives in
 
 ## Packet fields
 
-Schema: `rateloop.human-assurance.evidence.v3`
+Schema: `rateloop.human-assurance.evidence.v4`
 
 - **Frozen scope:** exact run, suite, audience-policy, admission-policy, and manifest versions and hashes.
 - **Review context:** selection trigger, delivery authority, gate type, reviewer-qualification counts, review period,
@@ -43,7 +43,7 @@ Schema: `rateloop.human-assurance.evidence.v3`
   response Merkle roots, and recomputation inputs.
 - **Settlement:** available deployment, round, transaction, indexed-event, refund, compensation, and claim references.
 - **Boundaries:** privacy classification, minimum aggregation size, suppressed cells, exclusions, and limitations.
-- **Integrity:** Ed25519 key ID and public key, canonical packet digest, and signature.
+- **Integrity:** Ed25519 key ID and public key, RFC 8785 (JCS) packet digest, and signature.
 
 Reviewer identities and raw or decryptable rationales are excluded. Host-reported execution metadata remains marked
 `independentlyVerified:false`; it does not establish that the reported model produced the output.
@@ -53,7 +53,7 @@ Redacted shape:
 ```json
 {
   "payload": {
-    "schemaVersion": "rateloop.human-assurance.evidence.v3",
+    "schemaVersion": "rateloop.human-assurance.evidence.v4",
     "tenantCommitment": "hmac-sha256:[redacted]",
     "frozen": {
       "runManifestHash": "sha256:...",

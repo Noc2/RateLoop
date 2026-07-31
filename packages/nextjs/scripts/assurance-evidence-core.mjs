@@ -1,5 +1,10 @@
-export const EVIDENCE_SCHEMA_VERSION = "rateloop.human-assurance.evidence.v3";
-export const LEGACY_EVIDENCE_SCHEMA_VERSIONS = ["rateloop.human-assurance.evidence.v2"];
+import { canonicalizeRfc8785 } from "@rateloop/node-utils/jcs";
+
+export const EVIDENCE_SCHEMA_VERSION = "rateloop.human-assurance.evidence.v4";
+export const LEGACY_EVIDENCE_SCHEMA_VERSIONS = [
+  "rateloop.human-assurance.evidence.v2",
+  "rateloop.human-assurance.evidence.v3",
+];
 export const EVIDENCE_AGGREGATION_VERSION = "rateloop.descriptive-case-quorum.v2";
 
 const UTF8 = new TextEncoder();
@@ -85,22 +90,49 @@ export function normalizeP256Signature(signature) {
   return raw;
 }
 
-export function canonicalizeEvidenceValue(value) {
-  if (Array.isArray(value)) return `[${value.map(canonicalizeEvidenceValue).join(",")}]`;
+export function canonicalizeLegacyEvidenceValue(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalizeLegacyEvidenceValue).join(",")}]`;
   if (value && typeof value === "object") {
     const entries = Object.entries(value)
       .filter(([, entry]) => entry !== undefined)
       .sort(([left], [right]) => left.localeCompare(right));
-    return `{${entries.map(([key, entry]) => `${JSON.stringify(key)}:${canonicalizeEvidenceValue(entry)}`).join(",")}}`;
+    return `{${entries.map(([key, entry]) => `${JSON.stringify(key)}:${canonicalizeLegacyEvidenceValue(entry)}`).join(",")}}`;
   }
   const encoded = JSON.stringify(value);
   if (encoded === undefined) throw new Error("Evidence must be JSON serializable.");
   return encoded;
 }
 
-export async function sha256EvidenceValue(value) {
-  const digest = await sha256Bytes(UTF8.encode(canonicalizeEvidenceValue(value)));
+/** RFC 8785 canonical bytes for all newly created evidence artifacts. */
+export function canonicalizeEvidenceValue(value) {
+  return canonicalizeRfc8785(value);
+}
+
+function canonicalizerForEvidenceSchema(schemaVersion) {
+  return LEGACY_EVIDENCE_SCHEMA_VERSIONS.includes(schemaVersion)
+    ? canonicalizeLegacyEvidenceValue
+    : canonicalizeEvidenceValue;
+}
+
+export function canonicalizeEvidenceValueForSchema(value, schemaVersion) {
+  return canonicalizerForEvidenceSchema(schemaVersion)(value);
+}
+
+async function sha256CanonicalEvidenceValue(value, canonicalize) {
+  const digest = await sha256Bytes(UTF8.encode(canonicalize(value)));
   return `sha256:${bytesToHex(digest)}`;
+}
+
+export async function sha256EvidenceValue(value) {
+  return await sha256CanonicalEvidenceValue(value, canonicalizeEvidenceValue);
+}
+
+export async function sha256LegacyEvidenceValue(value) {
+  return await sha256CanonicalEvidenceValue(value, canonicalizeLegacyEvidenceValue);
+}
+
+export async function sha256EvidenceValueForSchema(value, schemaVersion) {
+  return await sha256CanonicalEvidenceValue(value, canonicalizerForEvidenceSchema(schemaVersion));
 }
 
 export async function evidenceSigningKeyId(publicKey, algorithm = "Ed25519") {
@@ -110,17 +142,25 @@ export async function evidenceSigningKeyId(publicKey, algorithm = "Ed25519") {
   return `${prefix}:${bytesToHex(digest).slice(0, 24)}`;
 }
 
-export async function evidenceMerkleRoot(leaves) {
+async function canonicalEvidenceMerkleRoot(leaves, canonicalize) {
   let level = [...leaves].sort();
-  if (level.length === 0) return await sha256EvidenceValue([]);
+  if (level.length === 0) return await sha256CanonicalEvidenceValue([], canonicalize);
   while (level.length > 1) {
     const next = [];
     for (let index = 0; index < level.length; index += 2) {
-      next.push(sha256EvidenceValue([level[index], level[index + 1] ?? level[index]]));
+      next.push(sha256CanonicalEvidenceValue([level[index], level[index + 1] ?? level[index]], canonicalize));
     }
     level = await Promise.all(next);
   }
   return level[0];
+}
+
+export async function evidenceMerkleRoot(leaves) {
+  return await canonicalEvidenceMerkleRoot(leaves, canonicalizeEvidenceValue);
+}
+
+export async function evidenceMerkleRootForSchema(leaves, schemaVersion) {
+  return await canonicalEvidenceMerkleRoot(leaves, canonicalizerForEvidenceSchema(schemaVersion));
 }
 
 function count(value, name) {
@@ -313,7 +353,7 @@ export function computeEvidenceAggregation(recomputation, minimumAggregationSize
   };
 }
 
-function validEvidenceReviewContext(payload) {
+function validEvidenceReviewContext(payload, canonicalize) {
   const context = payload.reviewContext;
   const frozen = payload.frozen;
   if (!context || typeof context !== "object" || !frozen || typeof frozen !== "object") return false;
@@ -394,7 +434,7 @@ function validEvidenceReviewContext(payload) {
   if (
     !Array.isArray(admissionPolicies) ||
     admissionPolicies.length !== 1 ||
-    canonicalizeEvidenceValue(admissionPolicies) !== canonicalizeEvidenceValue(frozen.admissionPolicies) ||
+    canonicalize(admissionPolicies) !== canonicalize(frozen.admissionPolicies) ||
     !Array.isArray(frozen.admissionPolicyHashes) ||
     frozen.admissionPolicyHashes.length !== 1
   ) {
@@ -445,7 +485,11 @@ export async function verifyEvidenceExport(packet, trust = {}) {
     ) {
       errors.push("unsupported_schema_version");
     }
-    if (packet.payload.schemaVersion === EVIDENCE_SCHEMA_VERSION && !validEvidenceReviewContext(packet.payload)) {
+    const canonicalize = canonicalizerForEvidenceSchema(packet.payload.schemaVersion);
+    if (
+      packet.payload.schemaVersion !== LEGACY_EVIDENCE_SCHEMA_VERSIONS[0] &&
+      !validEvidenceReviewContext(packet.payload, canonicalize)
+    ) {
       errors.push("review_context_invalid");
     }
     if (packet.signing.algorithm !== "Ed25519" && packet.signing.algorithm !== "ECDSA-SHA256") {
@@ -470,13 +514,19 @@ export async function verifyEvidenceExport(packet, trust = {}) {
       }
     }
     const signedDocument = { payload: packet.payload, signing: packet.signing };
-    const canonicalDocument = canonicalizeEvidenceValue(signedDocument);
-    const packetDigest = await sha256EvidenceValue(signedDocument);
+    const canonicalDocument = canonicalize(signedDocument);
+    const packetDigest = await sha256CanonicalEvidenceValue(signedDocument, canonicalize);
     if (packet.packetDigest !== packetDigest) errors.push("packet_digest_mismatch");
-    if ((await evidenceMerkleRoot(packet.payload.recomputation.caseLeaves)) !== packet.payload.roots.caseRoot) {
+    if (
+      (await canonicalEvidenceMerkleRoot(packet.payload.recomputation.caseLeaves, canonicalize)) !==
+      packet.payload.roots.caseRoot
+    ) {
       errors.push("case_root_mismatch");
     }
-    if ((await evidenceMerkleRoot(packet.payload.recomputation.responseLeaves)) !== packet.payload.roots.responseRoot) {
+    if (
+      (await canonicalEvidenceMerkleRoot(packet.payload.recomputation.responseLeaves, canonicalize)) !==
+      packet.payload.roots.responseRoot
+    ) {
       errors.push("response_root_mismatch");
     }
     const aggregation = computeEvidenceAggregation(
@@ -484,7 +534,7 @@ export async function verifyEvidenceExport(packet, trust = {}) {
       packet.payload.aggregation.minimumAggregationSize,
       packet.payload.aggregation.passRule,
     );
-    if (canonicalizeEvidenceValue(aggregation) !== canonicalizeEvidenceValue(packet.payload.aggregation)) {
+    if (canonicalize(aggregation) !== canonicalize(packet.payload.aggregation)) {
       errors.push("aggregation_mismatch");
     }
     if (!(await verifyEvidenceSignature(packet, canonicalDocument))) {

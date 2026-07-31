@@ -6,6 +6,7 @@ import {
   evidenceMerkleRoot,
   evidenceSigningKeyId,
   sha256EvidenceValue,
+  sha256LegacyEvidenceValue,
   verifyEvidenceExport as verifyEvidenceExportCore,
 } from "../../scripts/assurance-evidence-core.mjs";
 import { type KeyObject, createHmac, createPrivateKey, createPublicKey, randomUUID, sign } from "node:crypto";
@@ -323,9 +324,9 @@ async function requireFrozenSource(row: QueryRow) {
   const suiteManifest = parseJson<Record<string, any>>(row.suite_manifest_json, "Suite manifest");
   const policy = parseJson<Record<string, any>>(row.policy_json, "Audience policy");
   if (
-    (await sha256EvidenceValue(runManifest)) !== runManifestHash ||
-    (await sha256EvidenceValue(suiteManifest)) !== suiteManifestHash ||
-    (await sha256EvidenceValue(policy)) !== policyHash
+    (await sha256LegacyEvidenceValue(runManifest)) !== runManifestHash ||
+    (await sha256LegacyEvidenceValue(suiteManifest)) !== suiteManifestHash ||
+    (await sha256LegacyEvidenceValue(policy)) !== policyHash
   ) {
     evidenceError("A frozen evidence source no longer matches its hash.", "assurance_evidence_hash_mismatch");
   }

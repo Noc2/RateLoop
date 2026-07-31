@@ -3,7 +3,7 @@ export const RATELOOP_OSCAL_NAMESPACE = "https://rateloop.ai/ns/oscal";
 export const assuranceComplianceMap = Object.freeze({
   mappingVersion: "rateloop.assurance-compliance-map.v1",
   published: "2026-07-16T00:00:00Z",
-  lastModified: "2026-07-29T00:00:00Z",
+  lastModified: "2026-07-31T00:00:00Z",
   oscalVersion: "1.2.2",
   claimBoundary:
     "These mappings identify evidence RateLoop artifacts can support. They do not establish certification, legal compliance, control effectiveness, or discharge a customer's duties.",
@@ -11,7 +11,7 @@ export const assuranceComplianceMap = Object.freeze({
     {
       id: "signed-assurance-evidence-packet",
       title: "Signed assurance evidence packet",
-      schemaVersion: "rateloop.human-assurance.evidence.v3",
+      schemaVersion: "rateloop.human-assurance.evidence.v4",
       description:
         "A signed, hash-bound packet containing frozen assurance-input commitments, privacy-safe aggregation, limitations, and available settlement or chain references.",
       sourceLocations: [
