@@ -3,6 +3,7 @@ import type { PoolClient } from "pg";
 import "server-only";
 import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient, dbPool, serializePoolClientQueries } from "~~/lib/db";
+import { enqueueAssuranceAttestation } from "~~/lib/tokenless/assuranceAttestationPipeline";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 export type AuditEventInput = Readonly<{
@@ -633,8 +634,15 @@ export async function exportWorkspaceAudit(input: { accountAddress: string; work
     return exportedEvent;
   });
   const retentionBasis = JSON.parse(rowString(snapshotRow, "retention_basis_json") ?? "null") as unknown;
+  const exportedAt = new Date();
+  const boundaryAt = new Date(
+    String(events.length > 0 ? events[events.length - 1]!.occurred_at : snapshotRow.retention_effective_at),
+  );
+  if (!Number.isFinite(boundaryAt.getTime())) {
+    throw new TokenlessServiceError("The audit export boundary is invalid.", 500, "audit_boundary_invalid");
+  }
   const exported = {
-    exportedAt: new Date().toISOString(),
+    exportedAt: exportedAt.toISOString(),
     format: "rateloop-audit-v1",
     integrity,
     events: exportedEvents,
@@ -647,5 +655,13 @@ export async function exportWorkspaceAudit(input: { accountAddress: string; work
     },
     workspaceId: input.workspaceId,
   };
+  await enqueueAssuranceAttestation({
+    workspaceId: input.workspaceId,
+    kind: "audit_export_head",
+    artifactDigest: integrity.headDigest,
+    artifactSchemaVersion: "rateloop-audit-v1",
+    boundaryAt,
+    now: exportedAt,
+  });
   return exported;
 }

@@ -211,7 +211,8 @@ test("workspace audit export is private, integrity-bearing JSON restricted to ow
             (SELECT COUNT(*) FROM tokenless_assurance_attestation_jobs WHERE workspace_id = ?) AS attestations`,
     args: [workspaceId, workspaceId],
   });
-  assert.deepEqual(after.rows, before.rows);
+  assert.equal(Number(after.rows[0]?.events), Number(before.rows[0]?.events));
+  assert.equal(Number(after.rows[0]?.attestations), Number(before.rows[0]?.attestations) + 1);
 
   const denied = await exportAudit(browserRequest(path, { token: member.token }), context);
   assert.equal(denied.status, 404);

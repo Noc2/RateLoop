@@ -87,6 +87,18 @@ test("canonical audit events form a verifiable tenant chain and export only to a
   assert.equal(exported.retention.policyVersion, 1);
   assert.equal(exported.retention.auditRetentionMonths, 12);
   assert.equal(exported.retention.minimumRetentionMonths, 6);
+  const attestationJob = await dbClient.execute({
+    sql: `SELECT artifact_kind,artifact_digest,artifact_schema_version,state
+          FROM tokenless_assurance_attestation_jobs
+          WHERE workspace_id=? AND artifact_kind='audit_export_head'`,
+    args: [workspaceId],
+  });
+  assert.deepEqual(attestationJob.rows[0], {
+    artifact_kind: "audit_export_head",
+    artifact_digest: second.eventDigest,
+    artifact_schema_version: "rateloop-audit-v1",
+    state: "pending",
+  });
   const exportEvent = await dbClient.execute({
     sql: "SELECT action FROM tokenless_audit_events WHERE workspace_id = ? AND action = 'audit.export'",
     args: [workspaceId],
