@@ -50,3 +50,14 @@ const messages = {
 export function getMessagesForLocale(locale: Locale) {
   return messages[locale];
 }
+
+/**
+ * Phrase-keyed dictionaries are consumed by the exact-string localization
+ * adapters. next-intl treats dots in object keys as namespace separators and
+ * rejects those dictionaries, so they must not enter its request payload.
+ */
+export function getIntlMessagesForLocale(locale: Locale) {
+  return Object.fromEntries(
+    Object.entries(messages[locale]).filter(([namespace]) => namespace !== "public" && namespace !== "shared"),
+  );
+}

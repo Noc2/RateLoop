@@ -1,5 +1,5 @@
 import { DEFAULT_LOCALE, isLocale } from "./config";
-import { getMessagesForLocale } from "./messages";
+import { getIntlMessagesForLocale } from "./messages";
 import { getRequestConfig } from "next-intl/server";
 
 export default getRequestConfig(async ({ requestLocale }) => {
@@ -8,7 +8,7 @@ export default getRequestConfig(async ({ requestLocale }) => {
 
   return {
     locale,
-    messages: getMessagesForLocale(locale),
+    messages: getIntlMessagesForLocale(locale),
     timeZone: "UTC",
   };
 });

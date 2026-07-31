@@ -1,7 +1,9 @@
 "use client";
 
 import { Children, type ReactElement, type ReactNode, cloneElement, isValidElement } from "react";
-import { useLocale, useMessages } from "next-intl";
+import { useLocale } from "next-intl";
+import deShared from "~~/messages/de/shared.json";
+import enShared from "~~/messages/en/shared.json";
 
 const TRANSLATABLE_ATTRIBUTES = [
   "alt",
@@ -70,7 +72,6 @@ function translateNode(node: ReactNode, phrases: Record<string, string>): ReactN
 
 export function LocalizedSharedContent({ children }: { children: ReactNode }) {
   const locale = useLocale();
-  const messages = useMessages() as { shared?: { phrases?: Record<string, string> } };
   if (locale === "en") return children;
-  return translateNode(children, messages.shared?.phrases ?? {});
+  return translateNode(children, locale === "de" ? deShared.phrases : enShared.phrases);
 }
