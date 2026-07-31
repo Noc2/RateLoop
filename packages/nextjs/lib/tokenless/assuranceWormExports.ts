@@ -1,3 +1,4 @@
+import { canonicalizeRfc8785, sha256Rfc8785 } from "@rateloop/node-utils/jcs";
 import { createHash, randomUUID } from "node:crypto";
 import "server-only";
 import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/accountSubject";
@@ -100,6 +101,14 @@ function canonicalJson(value: unknown): string {
 
 function sha256(value: string | Uint8Array) {
   return `sha256:${createHash("sha256").update(value).digest("hex")}`;
+}
+
+function coverageV2Digest(value: unknown) {
+  return sha256Rfc8785(value);
+}
+
+function canonicalizeWormArtifact(schema: string, artifact: Record<string, unknown>) {
+  return schema === "rateloop.assurance-coverage-export.v2" ? canonicalizeRfc8785(artifact) : canonicalJson(artifact);
 }
 
 function deterministicId(prefix: "awd" | "awj" | "awr", value: string) {
@@ -673,12 +682,7 @@ function artifactSchema(type: WormArtifactType, artifact: Record<string, unknown
     }
     return "rateloop-audit-v1";
   }
-  if (
-    type === "coverage_export" &&
-    ["rateloop.assurance-coverage-export.v1", "rateloop.assurance-coverage-export.v2"].includes(
-      String(artifact.schemaVersion),
-    )
-  ) {
+  if (type === "coverage_export" && artifact.schemaVersion === "rateloop.assurance-coverage-export.v1") {
     const { exportDigest, ...payload } = artifact;
     if (
       typeof exportDigest !== "string" ||
@@ -687,7 +691,20 @@ function artifactSchema(type: WormArtifactType, artifact: Record<string, unknown
     ) {
       throw new TokenlessServiceError("Coverage export digest is invalid.", 409, "invalid_worm_export");
     }
-    return String(artifact.schemaVersion);
+    return "rateloop.assurance-coverage-export.v1";
+  }
+  if (type === "coverage_export" && artifact.schemaVersion === "rateloop.assurance-coverage-export.v2") {
+    const { exportDigest, ...payload } = artifact;
+    let expectedDigest: string | null = null;
+    try {
+      expectedDigest = coverageV2Digest(payload);
+    } catch {
+      // An RFC 8785 failure is an invalid v2 export, not an internal verifier error.
+    }
+    if (typeof exportDigest !== "string" || !HASH.test(exportDigest) || expectedDigest !== exportDigest) {
+      throw new TokenlessServiceError("Coverage export digest is invalid.", 409, "invalid_worm_export");
+    }
+    return "rateloop.assurance-coverage-export.v2";
   }
   if (type === "supervision_report" && artifact.schemaVersion === "rateloop.assurance-supervision-report.v1") {
     const { reportDigest, ...payload } = artifact;
@@ -866,7 +883,7 @@ export async function enqueueAssuranceWormExport(input: {
   }
   const sourceId = safeSourceId(input.sourceId);
   const schema = artifactSchema(input.artifactType, artifact);
-  const payloadJson = canonicalJson(artifact);
+  const payloadJson = canonicalizeWormArtifact(schema, artifact);
   if (Buffer.byteLength(payloadJson) > MAX_EXPORT_BYTES) {
     throw new TokenlessServiceError("Export artifact exceeds 5 MiB.", 413, "worm_export_too_large");
   }
@@ -1273,4 +1290,13 @@ export function __setAssuranceWormAuditAppenderForTests(value: typeof appendAudi
   auditAppenderOverride = value;
 }
 
-export const __assuranceWormTestUtils = { canonicalJson, containsMoneyClaim, normalizeDestination, sha256 };
+export const __assuranceWormTestUtils = {
+  artifactSchema,
+  canonicalJson,
+  canonicalizeCoverageV2: canonicalizeRfc8785,
+  canonicalizeWormArtifact,
+  containsMoneyClaim,
+  coverageV2Digest,
+  normalizeDestination,
+  sha256,
+};

@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { canonicalizeRfc8785, sha256Rfc8785 } from "@rateloop/node-utils/jcs";
 import "server-only";
 import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbPool } from "~~/lib/db";
@@ -6,7 +6,7 @@ import { releasePoolClient, rollbackAndReleasePoolClient } from "~~/lib/db/trans
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { enqueueAssuranceAttestation } from "~~/lib/tokenless/assuranceAttestationPipeline";
 import { summarizeOversightDesignationsForExport } from "~~/lib/tokenless/oversightAttestations";
-import { estimateComparableAgreement } from "~~/lib/tokenless/populationEstimates";
+import { estimateOperationalComparableAgreement } from "~~/lib/tokenless/populationEstimates";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import { TRAINING_RECORDS_SCHEMA_VERSION, buildTrainingRecordsPayload } from "~~/lib/tokenless/trainingRecordsExport";
 
@@ -18,24 +18,6 @@ const MAX_WINDOW_MS = 366 * 86_400_000;
 const MAX_SCOPES = 500;
 const MAX_SERIES_ROWS = 5_000;
 const HASH_PATTERN = /^sha256:[0-9a-f]{64}$/u;
-
-function canonicalJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  if (value !== null && typeof value === "object") {
-    return `{${Object.entries(value as Record<string, unknown>)
-      .filter(([, entry]) => entry !== undefined)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`)
-      .join(",")}}`;
-  }
-  const encoded = JSON.stringify(value);
-  if (encoded === undefined) throw new Error("Coverage evidence must be JSON serializable.");
-  return encoded;
-}
-
-function sha256(value: unknown) {
-  return `sha256:${createHash("sha256").update(canonicalJson(value)).digest("hex")}` as const;
-}
 
 function text(row: Row | undefined, key: string) {
   const value = row?.[key];
@@ -275,29 +257,17 @@ function stageTransition(row: Row) {
 }
 
 function populationEstimate(decisionRows: Row[], observationRows: Row[]) {
-  const observationsByOpportunity = new Map(observationRows.map(row => [requiredText(row, "opportunity_id"), row]));
-  return estimateComparableAgreement({
-    expectedFrameCount: decisionRows.length,
-    frameReconciled: true,
-    selectionMadeBeforeOutcome: true,
-    probabilityKind: "history_conditioned_propensity",
-    units: decisionRows.map(row => {
-      const unitId = requiredText(row, "opportunity_id");
-      const storedObservation = observationsByOpportunity.get(unitId);
-      const agreement = text(storedObservation, "agreement");
-      return {
-        unitId,
-        selected: requiredText(row, "decision") === "required",
-        selectionProbabilityBps: integer(row, "selection_probability_bps"),
-        observation: storedObservation
-          ? {
-              unitId: requiredText(storedObservation, "opportunity_id"),
-              comparable: bool(storedObservation, "comparable"),
-              agreement: agreement === "agree" || agreement === "disagree" ? agreement : ("uncertain" as const),
-            }
-          : null,
-      };
-    }),
+  return estimateOperationalComparableAgreement({
+    decisions: decisionRows.map(row => ({
+      opportunityId: requiredText(row, "opportunity_id"),
+      decision: requiredText(row, "decision"),
+      selectionProbabilityBps: integer(row, "selection_probability_bps"),
+    })),
+    observations: observationRows.map(row => ({
+      opportunityId: requiredText(row, "opportunity_id"),
+      comparable: bool(row, "comparable"),
+      agreement: requiredText(row, "agreement"),
+    })),
   });
 }
 
@@ -462,7 +432,7 @@ export async function exportAdaptiveCoverage(input: {
           stageEnteredAt: iso(row, "stage_entered_at"),
           observedAt: window.snapshotAt.toISOString(),
         },
-        policySnapshot: { ...policySnapshot, hash: sha256(policySnapshot) },
+        policySnapshot: { ...policySnapshot, hash: sha256Rfc8785(policySnapshot) },
         forcedReviewRules: forcedReviewRules(row, rules),
         populationFrame: {
           kind: "rateloop_recorded_eligible_outputs" as const,
@@ -515,7 +485,7 @@ export async function exportAdaptiveCoverage(input: {
       },
       scopes,
     };
-    const exported = { ...payload, exportDigest: sha256(payload) };
+    const exported = { ...payload, exportDigest: sha256Rfc8785(payload) };
     await client.query("COMMIT");
     transactionOpen = false;
     await appendAuditEvent({
@@ -556,4 +526,8 @@ export async function exportAdaptiveCoverage(input: {
   }
 }
 
-export const __adaptiveCoverageExportTestUtils = { canonicalJson, exportWindow, sha256 };
+export const __adaptiveCoverageExportTestUtils = {
+  canonicalJson: canonicalizeRfc8785,
+  exportWindow,
+  sha256: sha256Rfc8785,
+};
