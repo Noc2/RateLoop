@@ -1,6 +1,6 @@
-import { createHmac } from "node:crypto";
 import "server-only";
 import { type AdaptiveReviewStage, adaptiveReviewRateBps } from "~~/lib/tokenless/adaptiveReviewPolicy";
+import { createDeterministicReviewSample } from "~~/lib/tokenless/reviewSampling";
 import { wilsonIntervalBps } from "~~/lib/tokenless/transparency";
 
 export {
@@ -11,6 +11,7 @@ export {
   type AdaptiveReviewStage,
 } from "~~/lib/tokenless/adaptiveReviewPolicy";
 export const ADAPTIVE_MONITORING_RECALIBRATION_CASES = 100;
+export const ADAPTIVE_REVIEW_SAMPLER_DOMAIN = "rateloop-adaptive-sample-v1";
 
 export type AdaptiveReviewPolicy = {
   policyVersion: number;
@@ -165,21 +166,19 @@ export function decideAdaptiveReview(input: {
   }
   if (input.state.stage === "calibrating") forcedReasons.push("calibrating");
 
-  const manifest = [
-    "rateloop-adaptive-sample-v1",
-    input.samplerKeyVersion,
-    String(input.policy.policyVersion),
-    input.scopeId,
-    input.opportunityId,
-  ].join(":");
-  const digest = createHmac("sha256", input.samplerKey).update(manifest).digest("hex");
-  const bucket = Number(BigInt(`0x${digest.slice(0, 16)}`) % 10_000n);
-  const sampled = bucket < baseRate;
+  const sample = createDeterministicReviewSample({
+    domain: ADAPTIVE_REVIEW_SAMPLER_DOMAIN,
+    samplerKey: input.samplerKey,
+    samplerKeyVersion: input.samplerKeyVersion,
+    policyVersion: input.policy.policyVersion,
+    scopeId: input.scopeId,
+    opportunityId: input.opportunityId,
+  });
+  const sampled = sample.sampleBucket < baseRate;
   return {
     required: forcedReasons.length > 0 || sampled,
     reviewRateBps: baseRate,
-    sampleBucket: bucket,
-    samplerCommitment: digest,
+    ...sample,
     reasonCodes: forcedReasons.length > 0 ? forcedReasons : [sampled ? "sampled" : "not_sampled"],
   };
 }

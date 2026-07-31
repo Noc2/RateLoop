@@ -1,5 +1,5 @@
-import { createHmac } from "node:crypto";
 import "server-only";
+import { createDeterministicReviewSample } from "~~/lib/tokenless/reviewSampling";
 
 export const FIXED_REVIEW_SAMPLER_DOMAIN = "rateloop-fixed-sample-v1";
 
@@ -44,16 +44,15 @@ export function decideFixedReview(input: {
     throw new Error("Fixed review identity is incomplete.");
   }
 
-  const manifest = [
-    FIXED_REVIEW_SAMPLER_DOMAIN,
-    input.samplerKeyVersion,
-    String(input.policy.policyVersion),
-    input.scopeId,
-    input.opportunityId,
-  ].join(":");
-  const digest = createHmac("sha256", input.samplerKey).update(manifest).digest("hex");
-  const bucket = Number(BigInt(`0x${digest.slice(0, 16)}`) % 10_000n);
-  const sampled = bucket < input.policy.fixedRateBps;
+  const sample = createDeterministicReviewSample({
+    domain: FIXED_REVIEW_SAMPLER_DOMAIN,
+    samplerKey: input.samplerKey,
+    samplerKeyVersion: input.samplerKeyVersion,
+    policyVersion: input.policy.policyVersion,
+    scopeId: input.scopeId,
+    opportunityId: input.opportunityId,
+  });
+  const sampled = sample.sampleBucket < input.policy.fixedRateBps;
   const forcedReasons: string[] = [];
   if (input.criticalRisk) forcedReasons.push("critical_risk");
   if (!input.metadataComplete) forcedReasons.push("missing_metadata");
@@ -67,8 +66,7 @@ export function decideFixedReview(input: {
     required: forced || sampled,
     reviewRateBps: input.policy.fixedRateBps,
     selectionProbabilityBps: forced ? 10_000 : input.policy.fixedRateBps,
-    sampleBucket: bucket,
-    samplerCommitment: digest,
+    ...sample,
     reasonCodes: forcedReasons.length > 0 ? forcedReasons : [sampled ? "sampled" : "not_sampled"],
   };
 }

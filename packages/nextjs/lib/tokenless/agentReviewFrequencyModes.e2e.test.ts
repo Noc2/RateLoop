@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import { exportAdaptiveCoverage } from "~~/lib/tokenless/adaptiveCoverageExport";
 import {
   __adaptiveReviewServiceTestUtils,
   authenticateAdaptiveReviewPrincipal,
@@ -161,6 +162,7 @@ function opportunity(input: {
 }
 
 test("real persisted policies evaluate manual, always, rules, fixed, and adaptive frequencies end to end", async () => {
+  const coverageWindowStart = new Date(Date.now() - 10_000);
   const configured = new Map<ReviewPolicyMode, Awaited<ReturnType<typeof configuredAgent>>>();
   for (const [index, mode] of (["manual", "always", "rules", "fixed", "adaptive"] as const).entries()) {
     configured.set(mode, await configuredAgent({ mode, index }));
@@ -217,5 +219,21 @@ test("real persisted policies evaluate manual, always, rules, fixed, and adaptiv
   for (const result of [manual, always, rulesSkipped, rulesRequired, fixed, adaptive]) {
     assert.equal(result.policyFrozen, true);
     assert.match(result.metadataCommitment, /^sha256:[0-9a-f]{64}$/u);
+  }
+
+  const coverageWindowEnd = new Date(Date.now() + 10_000);
+  for (const mode of ["manual", "always", "rules", "fixed", "adaptive"] as const) {
+    const modeConfiguration = configured.get(mode)!;
+    const exported = await exportAdaptiveCoverage({
+      accountAddress: OWNER,
+      workspaceId: modeConfiguration.workspaceId,
+      from: coverageWindowStart,
+      to: coverageWindowEnd,
+      now: coverageWindowEnd,
+    });
+    assert.equal(exported.counts.decisions, mode === "rules" ? 2 : 1);
+    const decisions = exported.scopes.flatMap(scope => scope.decisions);
+    assert.equal(decisions.length, exported.counts.decisions);
+    assert.ok(decisions.every(decision => /^sha256:[0-9a-f]{64}$/u.test(decision.samplerCommitment)));
   }
 });

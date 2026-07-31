@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { decideAdaptiveReview } from "~~/lib/tokenless/adaptiveReview";
+import { ADAPTIVE_REVIEW_SAMPLER_DOMAIN, decideAdaptiveReview } from "~~/lib/tokenless/adaptiveReview";
 import { FIXED_REVIEW_SAMPLER_DOMAIN, decideFixedReview } from "~~/lib/tokenless/fixedReview";
 
 const KEY = Buffer.from("42".repeat(32), "hex");
@@ -39,30 +39,42 @@ test("fixed sampling is deterministic, domain separated, and honors 1/5000/10000
   assert.equal(all.required, true);
   assert.equal(all.reviewRateBps, 10_000);
   assert.equal(all.selectionProbabilityBps, 10_000);
-  assert.notEqual(
-    half.samplerCommitment,
-    decideAdaptiveReview({
-      samplerKey: KEY,
-      samplerKeyVersion: "fixed-test-v1",
-      opportunityId: "fixed-boundary-half",
-      scopeId: "scope-fixed-test",
-      policy: {
-        policyVersion: 3,
-        agreementThresholdBps: 7_000,
-        productionFloorBps: 0,
-        maximumUnreviewedGap: 20,
-      },
-      state: {
-        stage: "high_coverage",
-        completedComparableCases: 30,
-        stableCasesSinceStage: 0,
-        unreviewedSinceLastSample: 0,
-      },
-      criticalRisk: false,
-      metadataComplete: true,
-    }).samplerCommitment,
+  assert.deepEqual(
+    { commitment: half.samplerCommitment, bucket: half.sampleBucket },
+    {
+      commitment: "sha256:03b3fa2bb6bb025f30284d76ed088195c9b75a3c4187300bf7ea8a7b54f26881",
+      bucket: 8_111,
+    },
+  );
+  const adaptive = decideAdaptiveReview({
+    samplerKey: KEY,
+    samplerKeyVersion: "fixed-test-v1",
+    opportunityId: "fixed-boundary-half",
+    scopeId: "scope-fixed-test",
+    policy: {
+      policyVersion: 3,
+      agreementThresholdBps: 7_000,
+      productionFloorBps: 0,
+      maximumUnreviewedGap: 20,
+    },
+    state: {
+      stage: "high_coverage",
+      completedComparableCases: 30,
+      stableCasesSinceStage: 0,
+      unreviewedSinceLastSample: 0,
+    },
+    criticalRisk: false,
+    metadataComplete: true,
+  });
+  assert.deepEqual(
+    { commitment: adaptive.samplerCommitment, bucket: adaptive.sampleBucket },
+    {
+      commitment: "sha256:d9c550a0c3168fbaeb32b3e974a3bd997e1f5de6eeaa7b6e30ec688ebfa3daa3",
+      bucket: 6_490,
+    },
   );
   assert.equal(FIXED_REVIEW_SAMPLER_DOMAIN, "rateloop-fixed-sample-v1");
+  assert.equal(ADAPTIVE_REVIEW_SAMPLER_DOMAIN, "rateloop-adaptive-sample-v1");
 });
 
 test("fixed sampling forces safety overrides without changing the configured base rate", () => {
