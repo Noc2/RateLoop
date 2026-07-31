@@ -19,6 +19,7 @@ const NEXTJS_DIRECTORY = path.resolve(PUBLIC_APP_DIRECTORY, "../../..");
 const MACHINE_DOCS_DIRECTORY = path.resolve(NEXTJS_DIRECTORY, "public/docs");
 const COMPONENTS_DIRECTORY = path.resolve(NEXTJS_DIRECTORY, "components");
 const TOKENLESS_COMPONENTS_DIRECTORY = path.join(COMPONENTS_DIRECTORY, "tokenless");
+const MESSAGE_DIRECTORIES = [path.join(NEXTJS_DIRECTORY, "messages/en"), path.join(NEXTJS_DIRECTORY, "messages/de")];
 const REPOSITORY_DIRECTORY = path.resolve(NEXTJS_DIRECTORY, "../..");
 const PLUGINS_DIRECTORY = path.join(REPOSITORY_DIRECTORY, "plugins");
 
@@ -35,7 +36,7 @@ const MACHINE_INTEGRATION_GUIDES = [
   path.join(REPOSITORY_DIRECTORY, "packages/nextjs/public/skill.md"),
 ] as const;
 
-function filesBelow(directory: string, extension: ".md" | ".tsx"): string[] {
+function filesBelow(directory: string, extension: ".json" | ".md" | ".tsx"): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
     const absolutePath = path.join(directory, entry.name);
     if (entry.isDirectory()) return filesBelow(absolutePath, extension);
@@ -78,6 +79,18 @@ function publicComponentDependencies(publicAppFiles: string[]) {
     }
   }
   return [...discovered];
+}
+
+function jsonMessageValues(value: unknown): string[] {
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.flatMap(jsonMessageValues);
+  if (!value || typeof value !== "object") return [];
+  return Object.values(value).flatMap(jsonMessageValues);
+}
+
+function claimSources(file: string) {
+  const source = readFileSync(file, "utf8");
+  return file.endsWith(".json") ? jsonMessageValues(JSON.parse(source) as unknown) : [source];
 }
 
 test("the unreleased deployment registry and every deployment claim fail closed together", () => {
@@ -138,6 +151,11 @@ test("the public evidence claims matrix is fail-closed and has explicit prerequi
         "offline_evidence_packet_verifier",
       ],
       packet_escalation_and_coverage: ["evidence_packet_compliance_fields", "adaptive_coverage_export"],
+      design_weighted_population_estimate: ["design_weighted_population_estimate"],
+      method_reviewed_population_interval: [
+        "design_weighted_population_estimate",
+        "method_reviewed_population_interval",
+      ],
       audit_export_offline_verification: ["offline_audit_export_verifier"],
       independent_witnessing: ["managed_evidence_signing", "rekor_attestation", "rfc3161_timestamping"],
       grc_and_siem_delivery: ["vanta_delivery_exercised", "drata_delivery_exercised", "siem_delivery_exercised"],
@@ -216,6 +234,40 @@ test("gated evidence phrases require every capability named by the matrix", () =
   );
 });
 
+test("population point estimates and reviewed intervals have independent public claim gates", () => {
+  const pointClaim = "RateLoop publishes a design-weighted population point estimate.";
+  const intervalClaim = "RateLoop publishes a method-reviewed population confidence interval.";
+
+  assert.deepEqual(findPublicEvidenceClaimViolations(pointClaim)[0]?.missingCapabilities, [
+    "design_weighted_population_estimate",
+  ]);
+  assert.equal(
+    findPublicEvidenceClaimViolations(pointClaim, capabilitiesEnabled("design_weighted_population_estimate")).length,
+    0,
+  );
+  assert.deepEqual(
+    findPublicEvidenceClaimViolations(intervalClaim, capabilitiesEnabled("design_weighted_population_estimate"))[0]
+      ?.missingCapabilities,
+    ["method_reviewed_population_interval"],
+  );
+  assert.equal(
+    findPublicEvidenceClaimViolations(
+      intervalClaim,
+      capabilitiesEnabled("design_weighted_population_estimate", "method_reviewed_population_interval"),
+    ).length,
+    0,
+  );
+  assert.equal(
+    findPublicEvidenceClaimViolations("RateLoop veröffentlicht eine designgewichtete Punktschätzung.")[0]?.claimId,
+    "design_weighted_population_estimate",
+  );
+  assert.equal(
+    findPublicEvidenceClaimViolations("RateLoop veröffentlicht ein methodengeprüftes Konfidenzintervall.")[0]?.claimId,
+    "method_reviewed_population_interval",
+  );
+  assert.deepEqual(findPublicEvidenceClaimViolations("Confidence interval withheld pending method review."), []);
+});
+
 test("forbidden compliance and provenance claims cannot be enabled by capability flags", () => {
   const allEnabled = capabilitiesEnabled(...PUBLIC_EVIDENCE_CAPABILITIES);
   for (const [source, claimId] of [
@@ -232,6 +284,12 @@ test("forbidden compliance and provenance claims cannot be enabled by capability
 
   assert.deepEqual(findPublicEvidenceClaimViolations("RateLoop does not make anyone compliant."), []);
   assert.deepEqual(findPublicEvidenceClaimViolations("RateLoop is not ISO/IEC 42001-certified."), []);
+  assert.deepEqual(
+    findPublicEvidenceClaimViolations(
+      "This mapping does not demonstrate that a customer implemented A.6 or that RateLoop is ISO/IEC 42001 certified.",
+    ),
+    [],
+  );
 });
 
 test("verified-host delivery claims follow the host registry and require an availability caveat", () => {
@@ -286,28 +344,30 @@ test("paid/public lanes and launch GDPR claims require their exact shipped capab
   assert.deepEqual(findPublicEvidenceClaimViolations("RateLoop does not claim launch-level GDPR compliance."), []);
 });
 
-test("all public TSX, tokenless components, machine docs, and plugin copy obey capability gates", () => {
+test("all public TSX, tokenless components, EN/DE messages, machine docs, and plugin copy obey capability gates", () => {
   const publicAppFiles = filesBelow(PUBLIC_APP_DIRECTORY, ".tsx");
   const publicFiles = [
     ...publicAppFiles,
     ...publicComponentDependencies(publicAppFiles),
     ...filesBelow(TOKENLESS_COMPONENTS_DIRECTORY, ".tsx"),
+    ...MESSAGE_DIRECTORIES.flatMap(directory => filesBelow(directory, ".json")),
     ...filesBelow(MACHINE_DOCS_DIRECTORY, ".md"),
     ...filesBelow(PLUGINS_DIRECTORY, ".md"),
   ];
   assert.ok(publicFiles.some(file => file.endsWith("/docs/sdk/page.tsx")));
   assert.ok(publicFiles.some(file => file.endsWith("/components/shared/AppPageShell.tsx")));
+  assert.ok(publicFiles.some(file => file.endsWith("/messages/en/agents.json")));
+  assert.ok(publicFiles.some(file => file.endsWith("/messages/de/agents.json")));
   assert.ok(publicFiles.some(file => file.endsWith("/public/docs/sdk.md")));
   assert.ok(publicFiles.some(file => file.endsWith("/rateloop-human-review-loop/SKILL.md")));
 
   const failures = publicFiles.flatMap(file =>
-    [
-      ...findPublicEvidenceClaimViolations(readFileSync(file, "utf8")),
-      ...findVerifiedHostTierClaimViolations(readFileSync(file, "utf8")),
-    ].map(violation => ({
-      file: path.relative(NEXTJS_DIRECTORY, file),
-      ...violation,
-    })),
+    claimSources(file).flatMap(source =>
+      [...findPublicEvidenceClaimViolations(source), ...findVerifiedHostTierClaimViolations(source)].map(violation => ({
+        file: path.relative(NEXTJS_DIRECTORY, file),
+        ...violation,
+      })),
+    ),
   );
   assert.deepEqual(failures, []);
 });

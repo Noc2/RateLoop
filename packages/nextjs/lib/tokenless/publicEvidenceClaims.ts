@@ -7,6 +7,8 @@ export const PUBLIC_EVIDENCE_CAPABILITIES = [
   "offline_evidence_packet_verifier",
   "evidence_packet_compliance_fields",
   "adaptive_coverage_export",
+  "design_weighted_population_estimate",
+  "method_reviewed_population_interval",
   "offline_audit_export_verifier",
   "rekor_attestation",
   "rfc3161_timestamping",
@@ -36,6 +38,8 @@ export function derivePublicEvidenceCapabilityState(
     offline_evidence_packet_verifier: false,
     evidence_packet_compliance_fields: false,
     adaptive_coverage_export: false,
+    design_weighted_population_estimate: false,
+    method_reviewed_population_interval: false,
     offline_audit_export_verifier: false,
     rekor_attestation: false,
     rfc3161_timestamping: false,
@@ -93,6 +97,26 @@ export const PUBLIC_EVIDENCE_CLAIMS_MATRIX = [
     phrase: "Escalation triggers and coverage statistics in every packet",
     patterns: [/escalation triggers? and coverage statistics? (?:are )?(?:included )?in every (?:decision )?packet/iu],
     requiredCapabilities: ["evidence_packet_compliance_fields", "adaptive_coverage_export"],
+    policy: "gated",
+  },
+  {
+    id: "design_weighted_population_estimate",
+    phrase: "RateLoop publishes a design-weighted population point estimate",
+    patterns: [
+      /\bRateLoop (?:publishes?|provides?|reports?|delivers?) (?:a |the )?(?:design[- ]weighted|self[- ]normalized sequential[- ]IPW) (?:population )?(?:point )?estimate\b/iu,
+      /\bRateLoop (?:veröffentlicht|liefert|berichtet)(?: eine)? (?:designgewichtete|selbstnormalisierte sequenzielle IPW[- ])\s+(?:Populations[- ])?Punktschätzung\b/iu,
+    ],
+    requiredCapabilities: ["design_weighted_population_estimate"],
+    policy: "gated",
+  },
+  {
+    id: "method_reviewed_population_interval",
+    phrase: "RateLoop publishes a method-reviewed population confidence interval",
+    patterns: [
+      /\bRateLoop (?:publishes?|provides?|reports?|delivers?) (?:a |the )?(?:method[- ]reviewed )?(?:population )?(?:confidence|uncertainty) interval\b/iu,
+      /\bRateLoop (?:veröffentlicht|liefert|berichtet)(?: ein)? (?:methodengeprüftes )?(?:Populations[- ])?Konfidenzintervall\b/iu,
+    ],
+    requiredCapabilities: ["design_weighted_population_estimate", "method_reviewed_population_interval"],
     policy: "gated",
   },
   {
@@ -238,6 +262,11 @@ export type PublicEvidenceClaimViolation = {
   policy: PublicEvidenceClaimRule["policy"];
 };
 
+const NEGATED_CERTIFICATION_DISCLAIMERS = [
+  /\bdoes not (?:claim|demonstrate|establish|mean|show)[\s\S]{0,400}\bRateLoop is (?:SOC\s*2|ISO(?:\/IEC)?\s*42001|HIPAA)?[- ]?(?:certified|compliant|attested)/giu,
+  /\bweist weder[\s\S]{0,400}\bnoch dass RateLoop[\s\S]{0,160}(?:zertifiziert|konform)/giu,
+] as const;
+
 const UNEARNED_VERIFIED_HOST_CLAIMS = [
   /\bverified host enforcement can\b/giu,
   /\bverified hosts? honors?\b/giu,
@@ -300,8 +329,12 @@ export function findPublicEvidenceClaimViolations(
 ): PublicEvidenceClaimViolation[] {
   const searchableSource = source.replace(/\s+/gu, " ");
   return PUBLIC_EVIDENCE_CLAIMS_MATRIX.flatMap(rule => {
+    const ruleSource =
+      rule.id === "unheld_certification"
+        ? NEGATED_CERTIFICATION_DISCLAIMERS.reduce((value, pattern) => value.replace(pattern, " "), searchableSource)
+        : searchableSource;
     const match = rule.patterns
-      .map(pattern => searchableSource.match(pattern))
+      .map(pattern => ruleSource.match(pattern))
       .find((value): value is RegExpMatchArray => Boolean(value));
     if (!match) return [];
 
