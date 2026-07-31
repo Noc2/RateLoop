@@ -95,8 +95,11 @@ remain fail-closed until the question itself uses the encrypted private artifact
 
 ## Workspace and agent setup
 
-The detailed owner-facing policy choices, audience and material matrix, timing, compensation, and delegation semantics are frozen in
-[`tokenless-agent-human-review-configuration.md`](./tokenless-agent-human-review-configuration.md). If a generic setup or management surface conflicts with that document, the narrower human-review configuration controls.
+The current owner-facing controls are summarized in
+[`tokenless-agent-human-review-owner-guide.md`](./tokenless-agent-human-review-owner-guide.md).
+This implementation plan remains normative; versioned schema, code, and tests enforce the
+lifecycle and failure semantics. If the owner guide conflicts with this plan, this plan
+controls.
 
 A first workspace uses one resumable setup flow:
 

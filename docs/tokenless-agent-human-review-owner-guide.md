@@ -1,8 +1,9 @@
 # Agent human-review owner guide
 
-This guide explains the controls a workspace owner uses after connecting an agent. The normative policy model is
-Tokenless agent human-review configuration; the lifecycle and failure
-states are defined in the agent review state machine.
+This guide explains the controls a workspace owner uses after connecting an agent. The
+normative product boundary is the
+[tokenless immutable implementation plan](./tokenless-immutable-implementation-plan-2026-07.md).
+Versioned schema, code, and tests enforce the current lifecycle and failure semantics.
 
 ## Find and change the configuration
 
