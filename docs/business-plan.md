@@ -9,20 +9,6 @@ The tokenless product is the next chapter and has never taken a payment.
 
 ---
 
-## 0. The decision that has to come first
-
-Everything below re-sorts depending on the answer, and an earlier draft of this plan
-was incoherent because it never asked. **Name the objective, the target monthly income,
-and the date by which it must be met.** Three shapes, and they are mutually exclusive:
-
-| Objective                            | What it implies                                                                                                                                                                                                                                                                                                                                                |
-| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Replace a salary** (~€8–12k/month) | Roughly **18–25 Business or 74–101 Team customers** — the salary sits _on top of_ a €3,000/month cost base, so this is not the break-even figure. An earlier draft conflated the two. The enterprise tier, the marketplace and every market-sizing paragraph become noise.                                                                                     |
-| **Venture scale**                    | Foreclosed by this plan's own findings — no compelled buyer, no EU funding line for compliance tooling, a category Gartner sizes at $492M worldwide. Say so and stop.                                                                                                                                                                                          |
-| **Acquisition**                      | The acquirer set determines the roadmap: a qualified trust service provider, a compliance platform, or an evaluation vendor. Robust Intelligence raised $44M and sold to Cisco for ~$400M by being a narrow technically-credible wedge absorbed into a bigger platform's story. That is achievable-shaped and implies different work from a self-serve ladder. |
-
----
-
 ## 1. Position: lead with evaluation, price on compliance
 
 The compliance framing is the wrong door and the right lock.
@@ -262,46 +248,22 @@ hours of expert judgement. Regulated-evidence artefacts price 10–40× commodit
 Stripe Identity €1.25/verification, Sumsub $1.35–1.85, Skribble €4–5 per qualified
 signature, Checkr $30–95 per report.
 
-| Tier         | Price                     | Meter            | Gates                                      |
-| ------------ | ------------------------- | ---------------- | ------------------------------------------ |
-| Free         | €0                        | 1 agent          | 12-month retention, no export              |
-| **Team**     | **€149/mo**               | 5 agents         | 1-year retention, export, verifier bundle  |
-| **Business** | **€599/mo**               | 25 agents        | 3-year retention, SSO, DPA, audit export   |
-| **Scale**    | **€2,499/mo, self-serve** | unlimited agents | 6-year retention, invoice or bank transfer |
-
-The €599 → €25k jump in an earlier draft was a gap with no rung, and the fix proposed
-for it was wrong: **Langfuse's $2,499 tier is Enterprise, contact-sales, not self-serve.**
-Its top card-payable tier is Pro at **$199**. What is genuinely copyable is the
-add-on pattern — SSO sold as a $300/month addition to the middle tier rather than behind
-a hard wall — and the step sizes, 6.9× then 12.6×, which make a 4× ladder narrow by
-category norms rather than wide.
-
-**One constraint the tiers must respect:** a 30-day Free tier is not implementable.
-There is a six-month retention floor in `evidenceRetention.ts` _and_ a database CHECK
-constraint, with its recorded basis being Article 26(6). Free is 12 months.
+**One constraint any retention promise must respect:** a 30-day retention option is not
+implementable. There is a six-month retention floor in `evidenceRetention.ts` _and_ a
+database CHECK constraint, with its recorded basis being Article 26(6).
 
 Two corrections an earlier draft got wrong. **Retention depth has no AI Act basis** —
 Article 26(6) is _six months_, not six years. The real anchors are §195 BGB's three-year
 limitation and the new Product Liability Directive's **ten-year long-stop** (25 years
 for latent injury, with court-ordered evidence disclosure), transposing 9 December 2026.
-And **qualified timestamps are per-unit COGS on the core artefact** — at €2.50 per token
-roughly 60 decisions consume the entire Team price. Timestamp the packet, not every
-decision, or make it a Business-tier feature.
+And **qualified timestamps are per-unit COGS on the core artefact** — at €2.50 per token,
+sixty decisions cost €150. Timestamp the packet, not every decision.
 
-### The model that matters
-
-Against a German UG cost base — bookkeeping €150–300/month, annual accounts
-€800–2,500, IHK contributions, plus a founder draw — a €3,000/month all-in base means
-**break-even at five Business customers or twenty Team customers.**
-
-That is the number to plan against. The $1M ARR table an earlier draft called "why this
-matters more than anything else" is a fantasy anchor; delete it from your thinking.
-
-Two inputs have no credible benchmark and must be modelled as scenarios: months to
-first paying customer, and free-to-paid conversion, where the top-to-bottom quintile
-spread is **10×**. Stripe Atlas's median time to first payment is 34 days from
-incorporation across 23,000 companies — not category-specific, but the right order of
-magnitude for a product that already exists and has users.
+Two inputs have no credible benchmark and must be treated as scenarios rather than
+estimates: months to first paying customer, and free-to-paid conversion, where the
+top-to-bottom quintile spread is **10×**. Stripe Atlas's median time to first payment is
+34 days from incorporation across 23,000 companies — not category-specific, but the right
+order of magnitude for a product that already exists and has users.
 
 ---
 
@@ -346,7 +308,7 @@ live counter of platforms currently filing, not the obligated population, and Ar
 is disapplied for micro and small enterprises, which excludes much of this ICP — naming ten of them is an hour's work and is
 the difference between a plan and an intention.
 
-**The regulatory hook that leads is DSA Article 42(2)(b)**, not Article 20(6) and not
+**The sharpest obligation is DSA Article 42(2)(b)**, not Article 20(6) and not
 the AI Act. Very large platforms must report **"the qualifications and linguistic
 expertise of the persons carrying out"** content moderation, "as well as the training
 and support given to such staff" — a **recurring, public, mandatory disclosure about
@@ -403,25 +365,17 @@ mandate.** That is the clearest external confirmation of this plan's direction f
 anywhere in the research, and simultaneously the sharpest warning against selling a
 mandate that does not exist.
 
-**Germany raised the federal direct-award threshold to €50,000 net on 1 July 2026** —
-a mid-five-figure public contract can now be signed with no tender. That lands on the
-Scale tier and does more than any channel programme. Above-threshold bidding is not
-realistic for one person.
-
 **Free artefacts worth producing:** a pre-drafted MCC-AI Annex E/F pack (Annex F is a
 blank "measures to ensure human oversight" box every AI supplier to an EU public body
 must fill), and a CSA STAR Level 1 self-assessment — free, no prerequisites, publicly
 registered, and the format cloud marketplaces accept.
 
-**Sell against ISO/IEC 42001 controls A.6.2.8 and A.9.4 before the AI Act.** That
-deadline exists now, the budget line exists, and it is jurisdiction-agnostic.
+**ISO/IEC 42001 controls A.6.2.8 and A.9.4 apply before the AI Act does.** That deadline
+exists now, the budget line exists, and it is jurisdiction-agnostic.
 
 **Not worth pursuing:** channel partnerships — no European SI publishes a door below
 ~€1M ARR, and certification bodies cannot resell into accounts they certify. Corporate
-innovation programmes convert screened startups at ~1.4%. EU funding — a text search of
-the 314-page Horizon Europe Cluster 4 programme returns five incidental hits and no
-topic funds compliance tooling; ZIM stopped accepting applications 7 July 2026; EXIST
-requires the company not to exist yet.
+innovation programmes convert screened startups at ~1.4%.
 
 **Refuse white-label.** The product sells evidence independent of the party being
 reviewed. Rebadged as an integrator's own output it is not independent.
@@ -493,8 +447,8 @@ inapplicable. If the buyer's mental model is "one expert, 30 traces, a spreadshe
 then alpha, Wilson bounds and blinded panels read as academic overhead. **Test this in
 the first five conversations.**
 
-**Solo operations.** No admin UI, no error tracking, no on-call. A €2,499 tier promising
-an evidence SLA is a contractual liability until that changes.
+**Solo operations.** No admin UI, no error tracking, no on-call. Promising an evidence
+SLA at four-figure monthly prices is a contractual liability until that changes.
 
 ### Kill criteria
 
@@ -510,13 +464,12 @@ an evidence SLA is a contractual liability until that changes.
 
 ## 9. The next ninety days
 
-1. **Answer §0.** One paragraph.
-2. **Reprice** to §4 and change the meter to agents plus retention. Fix the pricing
-   page's decision-allowance claim, which the code does not support.
-3. **Name ten accounts** from the DSA provider list.
-4. **Run the demand test.** Lead with Article 20(6) and the judge-calibration pitch.
-5. **Then unblock revenue:** Stripe on, business verification path, meter wired.
-6. **Ship the standalone verifier and the CI gate** — the two items that compound.
+1. **Change the meter** to agents plus retention, per §4. Fix the pricing page's
+   decision-allowance claim, which the code does not support.
+2. **Name ten accounts** from the DSA provider list.
+3. **Run the demand test.** Lead with Article 20(6) and the judge-calibration pitch.
+4. **Then unblock revenue:** Stripe on, business verification path, meter wired.
+5. **Ship the standalone verifier and the CI gate** — the two items that compound.
 
 Verify before anything becomes customer-facing copy: the consolidated Article 113 text
 on the deferral, and Article 5(2)–(3) of Regulation 537/2014, neither of which could be

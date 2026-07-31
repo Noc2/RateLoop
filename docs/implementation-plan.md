@@ -11,22 +11,13 @@ Effort is days for one experienced engineer. Confidence is stated where it is lo
 
 ## Decisions, now made
 
-All four were answered on 31 July 2026. Recorded here because the rest of the plan
+All three were answered on 31 July 2026. Recorded here because the rest of the plan
 re-sorts around them.
 
-**1. Objective: acquisition.** "I will start reaching out to chase an acquisition and
-business once everything actually works and I feel comfortable with it."
-
-This changes what to build. Revenue mechanics stop being the critical path — there is no
-point optimising a self-serve ladder for a founder who will not run one — and the
-**technical artefact, the standards position and a working demonstration** become the
-proof. Phase 0 stays, because a product that cannot take money reads as unfinished in
-diligence, but it drops behind the things that make the product legible to an acquirer.
-
-**2. Stripe: test mode.** Confirmed. No `sk_live_` anywhere, nothing touches `main`, and
+**1. Stripe: test mode.** Confirmed. No `sk_live_` anywhere, nothing touches `main`, and
 the production-readiness gate that forbids live keys off `main` is left alone.
 
-**3. Deployment: test via `rateloop-tokenless.vercel.app`, full redeploy at the end.**
+**2. Deployment: test via `rateloop-tokenless.vercel.app`, full redeploy at the end.**
 
 One caveat that has to be said plainly: **the current deployment is 80+ commits stale**,
 and `/docs/evidence/verify` returns 404 there. Testing against it today tests a product
@@ -34,98 +25,8 @@ that no longer exists in the repository. A redeploy is needed **before** testing
 not only after implementation ends — otherwise every test result is about the wrong
 build. Treat that as step zero.
 
-**4. Judge calibration leads.** Following the research rather than the earlier draft.
+**3. Judge calibration leads.** Following the research rather than the earlier draft.
 Phase 2 is therefore the product phase, not a follow-on.
-
----
-
-## What "acquisition" changes about the order — and what it does not
-
-An earlier version of this section moved revenue mechanics down to position nine on the
-reasoning that no acquirer buys a self-serve ladder. **Research contradicted that, and
-the correction is the most important thing on this page.**
-
-**Revenue at this stage is not a revenue question. It is a deal-category question.**
-
-Of thirteen acquisitions surveyed in this space since 2024, every one that cleared $180M
-had revenue and a team — Robust Intelligence at ~$10M ARR and seventy people, Langfuse
-at two thousand paying customers, Weights & Biases at ~$100M ARR. And the two that most
-resemble this company's shape, Humanloop and WhyLabs, were **people transactions where
-the product was explicitly excluded and then shut down.** Anthropic confirmed on the
-record that it took neither assets nor IP; Humanloop's platform sunset three weeks later.
-
-There is no middle pile. Pre-revenue code prices at replacement cost — a marketplace
-that lists such deals puts it at $1,000–$5,000 — and the main brokerage in this bracket
-will not list an unprofitable business at all.
-
-**The research found no verified case of a solo founder with zero revenue and no team
-selling to a strategic at a disclosed price, and no acquisition of a
-compliance-or-attestation tooling company at any revenue stage.** Those are absences,
-not rarities.
-
-So: **one paying customer or one signed design partner moves the conversation from
-"should we hire him" to "what is this worth."** That is the single highest-value item in
-either document, and Phase 0 is its precondition. It goes back to first.
-
-### What acquisition genuinely does change
-
-- **The standards work is a relationship channel, not a moat.** Once a spec is
-  published anyone can implement it. What it buys is that the in-toto predicate's
-  approvers work at Google, Verizon, Intel and two small supply-chain vendors — five
-  named people who will read the work closely. Every documented small-vendor acquisition
-  in this space started with a relationship, not with corp dev outreach.
-- **Diligence-survivability stops being hygiene and becomes value-preserving.** A claim
-  the reviewer can contradict from the code costs more here than in a sale. So every
-  honesty fix stays exactly where it is.
-- **Three structural items have long lead times and are worth more than several build
-  phases.** See below.
-
-### Structure, before any conversation
-
-- **Interpose a German holding company first.** Selling shares held personally taxes
-  sixty percent of the gain at the personal rate. Held through a corporate holding, the
-  disposal gain is roughly ninety-five percent exempt — no minimum holding period, no
-  minimum stake. This must be done _before_ a deal, not during, and it is worth more
-  than any single build item here.
-- **Do not flip to Delaware on a horizon under seven years.** The tax-neutral share
-  exchange carries a seven-year blocking period, and selling inside it retroactively
-  claws back the treatment. US strategics buy German entities routinely — Cohere bought
-  Aleph Alpha, SAP bought Prior Labs — so the notarial deed is friction, not refusal.
-- **Expect a foreign-investment filing.** The threshold drops to twenty percent for AI
-  and to ten percent, with a _mandatory_ filing, for IT-security products. A
-  signed-evidence product plausibly reads as the latter. Weeks and a counsel line item,
-  not a blocker.
-- **Know that an asset purchase is the likely buyer proposal and the worst seller
-  outcome** — taxed inside the company and again on distribution, with none of the
-  exemptions above. For a company that is essentially IP, expect it to be offered.
-
-### Process, from the sourced pattern
-
-Conversations begin through partnership, not through corp dev — corp dev rarely has the
-authority to buy without an operational sponsor. Build the relationship with the
-engineering or product leader who owns the gap. Do not run a banked process at this
-size, do not name a price first, and do not bring counsel into the first conversations —
-but do bring them in before the notarial deed, the investment filing and the holding
-structure, all of which have long lead times.
-
-### The honest assessment, recorded rather than softened
-
-**Acquisition is not a realistic objective for this product at this stage. It is a
-realistic outcome of pursuing something else.**
-
-Two paths are open and they call for different work. The founder gets hired, in which
-case public technical credibility matters and forty days of statistics work is the wrong
-forty days. Or a small product acquisition, which requires customers — not many, but
-some, and there is no documented path that skips them.
-
-The failure mode to name: **building for forty days toward "everything actually works",
-then finding that "works" was never the binding constraint.** This document's companion
-already says the modal failure for a bootstrapped company is that nobody replies.
-
-**Keep acquisition as the exit shape and run the customer plan as the strategy.** They
-are not in conflict: one paying customer, a working demo, a filed predicate and a clean
-codebase is simultaneously the minimum credible acquisition proof and the first rung of
-the ladder.
 
 ---
 
@@ -269,9 +170,9 @@ allocate for it, and report the others with their honest, wider intervals.
 | Endorsement rate to ±0.02 | ~495                 |
 | Specificity to ±0.10      | not reached at n=800 |
 
-**This is what the SKU must respect.** "±5 points at 95% confidence" is achievable at
+**This bounds what may be claimed.** "±5 points at 95% confidence" is achievable at
 roughly eighty labels **for the endorsement rate only**. It is not achievable for
-specificity at any budget that will sell. One price card must not imply both.
+specificity at any plausible label budget. One claim must not imply both.
 
 **Intervals: Korn–Graubard.** Replace n with the effective sample size and apply
 Clopper–Pearson in its incomplete-beta form, which is defined for the non-integer
@@ -475,11 +376,14 @@ asks for it; DSA, AI Act, MDR and FDA all accept a CV and a training record. Cen
 with 100,000+ clinical contributors, sells measured accuracy rather than credentials.
 Freshness is the real and unusual claim.
 
-**Reviewer scorecards (4.7's natural extension) need legal review first.** Per-reviewer
-performance measurement is works-council co-determination territory in Germany under
-§87(1)(6) BetrVG, and if a customer uses it to allocate or end work it becomes _their_
-Annex III(4)(a)/(b) problem. Ship as owner-visible analytics with an explicit
-not-for-employment-decisions boundary.
+**Reviewer scorecards (4.7's natural extension) need legal review first — this is a
+product constraint, not a footnote.** Per-reviewer performance measurement is worker
+monitoring. In Germany it is works-council co-determination territory under §87(1)(6)
+BetrVG, which means a customer with a works council cannot deploy the feature without an
+agreement — so the feature has to be switchable off per workspace, not merely
+disclaimed. And if a customer uses it to allocate or end work it becomes _their_
+Annex III(4)(a)/(b) problem. Ship as owner-visible analytics, off by default, with an
+explicit not-for-employment-decisions boundary.
 
 ---
 
@@ -543,24 +447,21 @@ architecturally foreclosed.
 
 ## Sequence
 
-Re-ordered for the acquisition objective. Revenue mechanics move down; the artefact,
-the statistics and the standards position move up.
-
-| Order | Work                                              | Days  | Note                                                              |
-| ----- | ------------------------------------------------- | ----- | ----------------------------------------------------------------- |
-| **0** | **Redeploy HEAD** — before the first test pass    | —     | Phases 1 and 3 not demonstrable until then                        |
-| 1     | Phase 0 — revenue mechanics, test mode            | 3     | **Precondition for the only fact that changes the deal category** |
-| 2     | Phase 1 — sampling disclosure + claim-gate rule   | 1     | Cheapest honesty win                                              |
-| 3     | 4.1 — demo workspace with synthetic data          | 2–3   | Nothing can be shown without it                                   |
-| 4     | **Name ten accounts and go get one signature**    | —     | Not engineering. Highest-value item here                          |
-| 5     | 3.3 — in-toto human-review predicate              | 3–5   | Relationship channel; approvers are the acquirer set              |
-| 6     | 3.1, 3.2 — OpenTelemetry, reconciled not proposed | 2     | See the correction below                                          |
-| 7     | 2.1 — version comparison                          | 5–7   | Bigger than first estimated                                       |
-| 8     | 4.3, 4.5 — model comparison, override analytics   | 4–5   | SQL joins over existing data                                      |
-| 9     | 4.2 — failure taxonomy                            | 3–5   | Turns a number into an action                                     |
-| 10    | 2.2 → 2.3 — judge calibration, then weighting     | 11–12 | Strictly in this order                                            |
-| 11    | 5.1, 5.3 — verifier package, flag flips           | 6     | Fix the digest defect before publishing                           |
-| 12    | 2.4, 4.6 — CI gate, trace scoring                 | 8–9   | Switching cost, adoption                                          |
+| Order | Work                                              | Days  | Note                                       |
+| ----- | ------------------------------------------------- | ----- | ------------------------------------------ |
+| **0** | **Redeploy HEAD** — before the first test pass    | —     | Phases 1 and 3 not demonstrable until then |
+| 1     | Phase 0 — revenue mechanics, test mode            | 3     | Precondition for taking a payment at all   |
+| 2     | Phase 1 — sampling disclosure + claim-gate rule   | 1     | Cheapest honesty win                       |
+| 3     | 4.1 — demo workspace with synthetic data          | 2–3   | Nothing can be shown without it            |
+| 4     | **Name ten accounts and go get one signature**    | —     | Not engineering. Highest-value item here   |
+| 5     | 3.3 — in-toto human-review predicate              | 3–5   | Unfilled since December 2021               |
+| 6     | 3.1, 3.2 — OpenTelemetry, reconciled not proposed | 2     | See the correction below                   |
+| 7     | 2.1 — version comparison                          | 5–7   | Bigger than first estimated                |
+| 8     | 4.3, 4.5 — model comparison, override analytics   | 4–5   | SQL joins over existing data               |
+| 9     | 4.2 — failure taxonomy                            | 3–5   | Turns a number into an action              |
+| 10    | 2.2 → 2.3 — judge calibration, then weighting     | 11–12 | Strictly in this order                     |
+| 11    | 5.1, 5.3 — verifier package, flag flips           | 6     | Fix the digest defect before publishing    |
+| 12    | 2.4, 4.6 — CI gate, trace scoring                 | 8–9   | Switching cost, adoption                   |
 
 **One correction to Phase 3 that changes how it is filed.** The OpenTelemetry window is
 **not** the open field this plan assumed. The GenAI special interest group is already
@@ -595,39 +496,24 @@ surface (5.4) touches nothing the others do.
 **The first four rows are the plan.** A working payment path, honest numbers, something
 demonstrable, and one signature — call it a week of engineering and an unbounded amount
 of outreach. Everything after row four improves a product that already has a customer,
-which is the correct order for both objectives at once.
+which is the correct order.
 
 ---
 
 ## Pricing, which the research says is the wrong archetype
 
-The €149/€599/€2,499 ladder prices _access_. Every comparable that sells a **measurement**
-prices the measurement — credit scores per score plus a fee when the score is used in a
-consequential decision, sustainability ratings on both sides of one assessment, ad
-verification per thousand impressions measured, market research per complete priced by
-how hard the respondent is to find.
+Charging for _access_ is the wrong archetype. Every comparable that sells a
+**measurement** prices the measurement — credit scores per score plus a fee when the
+score is used in a consequential decision, sustainability ratings on both sides of one
+assessment, ad verification per thousand impressions measured, market research per
+complete priced by how hard the respondent is to find.
 
-A three-part structure fits the cost curve better:
+The real cost curve underneath is reviewer scarcity: roughly **$0.50–3 per general
+preference pair against $5–20 for expert domains**. That curve explains itself without a
+margin argument, and it does not shrink the way adaptive coverage does.
 
-- **A platform subscription** for continuity, retention and the archive. Keep the tiers.
-- **A per-adjudicated-item price varying with reviewer scarcity** — general,
-  domain-qualified, licensed professional. This mirrors the real cost curve (roughly
-  $0.50–3 per general preference pair against $5–20 for expert domains), explains itself
-  without a margin argument, and removes the plan's own objection that the only metered
-  thing is the only one that shrinks.
-- **A per-report fee for the signed, dated artefact** — the thing an auditor or
-  underwriter actually consumes.
-
-And the SKU the research most strongly supports: **"±5 points at 95% confidence on the
-endorsement rate for your use case"** rather than "1,000 reviews". Roughly **eighty**
-human-labelled items buys that. Specificity does not reach ±10 points even at eight
-hundred labels, so the SKU must name **which** number it bounds — one price card cannot
-imply both. That is a price card a statistically literate buyer can check,
-which is an unusual thing to be able to offer.
-
-**One correction the pricing table needs regardless:** the Free tier at 30-day retention
-is not implementable. There is a six-month floor in code _and_ a database CHECK
-constraint. Free should be 12 months.
+**One correction needed regardless:** a 30-day retention offer is not implementable.
+There is a six-month floor in code _and_ a database CHECK constraint.
 
 ---
 
