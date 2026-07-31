@@ -26,8 +26,12 @@ Evaluation tooling is what gets cut in a consolidation year, and 2026 is one.
 **They are the same artefact.** A deterministically sampled, blinded, multi-rater
 verdict on live production output — reported as chance-corrected agreement plus a
 confidence-bounded endorsement rate — is simultaneously an engineering quality signal
-_and_ the systematic real-world performance record that Article 72 post-market
-monitoring asks providers to keep from **2 August 2026**. One measurement, two budgets.
+_and_ a candidate input to the systematic real-world performance record that Article 72
+post-market monitoring will require of Annex III providers from **2 December 2027**.
+Regulation (EU) 2026/1744 replaced the promised harmonised monitoring-plan implementing
+act with Commission guidance, including a voluntary template, due by 2 September 2027.
+The record is therefore a preparation artefact, not present-tense compliance. One
+measurement, two budgets once the provider has mapped it into its own monitoring plan.
 
 Every precedent runs in one direction. Snyk went developer-first from 2015 and only
 built the security-buyer narrative after thousands of developers were already using it.
@@ -188,10 +192,12 @@ Three claims survive the audit, and they are enough:
 > confidence bound — and how much they agreed with each other, chance-corrected, so you
 > know which parts of the job are genuinely ambiguous.
 
-For the risk buyer, the same sentence plus: _and the same dated, sampled, reproducible
-record a provider's post-market monitoring plan needs._ Note Article 72 binds the
-**provider**, not the deployer — this set's own legal document flags deployer-facing
-Article 72 citations as a defect, and an earlier draft reproduced it.
+For the risk buyer, the same sentence plus: _and a dated, sampled, reproducible input a
+provider can map into its post-market monitoring plan ahead of the December 2027
+deadline._ The Commission's voluntary template is not due until September 2027, so do
+not claim that the current artifact already satisfies a final official format. Note
+Article 72 binds the **provider**, not the deployer — this set's own legal document flags
+deployer-facing Article 72 citations as a defect, and an earlier draft reproduced it.
 
 Judge calibration is the natural next claim and it is **three build items away**:
 collect human labels on a sample of `pass` and `fail` receipts too, compute the
