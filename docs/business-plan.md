@@ -134,10 +134,20 @@ being reviewed, which is the opposite of structural independence.** Three other 
 in this set already say the independence question is unresolved; selling it as shipped
 was wrong.
 
-Two limits on alpha the earlier draft omitted: the privacy floor is three reviewers while
-the live lane's default panel size is **one**, so alpha is unavailable unless a customer
-deliberately runs three-reviewer panels; and on that lane choices are recoded, so the UI
-caption describes categories that do not exist there.
+**Two limits on alpha, both corrected once.** An earlier draft said the default panel
+size was one and the privacy floor three. Neither is current: the default was raised to
+**two** in July, and the floor **tracks the panel** rather than being fixed.
+
+The practical problem is worse in its corrected form. Alpha is not suppressed — it is
+computed on **two-rater cases**, the weakest possible reliability data, where it is a
+near-deterministic transform of the unanimity rate already displayed and its sampling
+variance is very large. **No confidence interval is reported at all**, only a
+small-sample boolean. And because the aggregation floor equals the panel size, every case
+where one of two reviewers did not respond drops out — non-randomly, which biases alpha.
+
+Do not report alpha as a headline without a bootstrap interval. Also note the database
+constraint still permits a panel of one and the SDK accepts up to five hundred, against
+an enforced floor of two — three bounds that disagree.
 
 ### What this does NOT yet do, stated before anyone sells it
 
