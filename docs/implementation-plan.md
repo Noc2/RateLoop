@@ -333,6 +333,21 @@ constraint. Free should be 12 months.
 
 ---
 
+## One finding that should shape the pitch
+
+Financial-services research produced the strongest regulatory citation of the whole
+session, and it is not about AI at all. **FINRA Rule 3110.07** mandates that evidence of
+review identify the reviewer, the item, the date and the actions taken — and says
+**"merely opening a communication is not sufficient review."** That is a binding rule
+with a named record schema matching what this product emits.
+
+It comes with a caution of equal weight. **No US or UK regulator prescribes a sampling
+percentage** — FINRA says so explicitly, the FCA has published nothing. There is no
+regulatory volume driver for human review anywhere. Sell the defensibility of a chosen
+methodology; never sell compliance with a rate that does not exist.
+
+---
+
 ## Verify before any of this becomes customer-facing
 
 - The Official Journal citation for the Digital Omnibus deferral. Three sources agree
