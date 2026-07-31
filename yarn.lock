@@ -1800,12 +1800,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@hono/node-server@npm:1.19.13":
-  version: 1.19.13
-  resolution: "@hono/node-server@npm:1.19.13"
+"@hono/node-server@npm:2.0.5":
+  version: 2.0.5
+  resolution: "@hono/node-server@npm:2.0.5"
   peerDependencies:
     hono: ^4
-  checksum: 0381b899e30765dfbba6f03333133498dd1111bafcd0be761046e7813a142e1b0e9cd20f2fa377cf3cf9f6c5ce531fc516387aab8f004b9288ad5d5484d331b7
+  checksum: 8e00f474161d24470d2a686e41253261b6cdcb65336659b7844dcf3a64f6a869fad46c6b0423330205d5a70eb66c817fb4f554cb941d25334f1ad7a4a050be03
   languageName: node
   linkType: hard
 
@@ -4345,7 +4345,7 @@ __metadata:
   resolution: "@rateloop/ponder@workspace:packages/ponder"
   dependencies:
     "@types/node": ^24.0.0
-    hono: 4.12.25
+    hono: 4.12.27
     ponder: ^1.0.0
     typescript: ~5.8.2
     viem: 2.39.0
@@ -12978,10 +12978,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"hono@npm:4.12.25":
-  version: 4.12.25
-  resolution: "hono@npm:4.12.25"
-  checksum: ff87027f2cd6c6c35dfb36f95a6b4ddfc914f6495080ad33785c68f87a5b58f72f5db69644654ab4948b6b6783f1b0547da175d29992ccec7e8475343f88efd5
+"hono@npm:4.12.27":
+  version: 4.12.27
+  resolution: "hono@npm:4.12.27"
+  checksum: 457d68bd1bc9bb94ea1ac0c996d098ad7d0aaa8e86137e28cd848097151539a23f50d8d2f12873cfe0633d4a6592ac5f7449ac0c5e6ffd837ece17ecfdc79354
   languageName: node
   linkType: hard
 

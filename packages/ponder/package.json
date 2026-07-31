@@ -15,7 +15,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "hono": "4.12.25",
+    "hono": "4.12.27",
     "ponder": "^1.0.0",
     "viem": "2.39.0"
   },
