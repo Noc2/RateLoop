@@ -14,6 +14,8 @@ const publicTask: PublicAnswerTask = {
   roundId: "41",
   contentId: `0x${"2".repeat(64)}`,
   reviewerSource: "customer_invited",
+  assignmentId: "assignment_public_task_queue_1",
+  issuanceId: "issuance_public_task_queue_1",
   question: {
     kind: "binary",
     prompt: "Does the summary match the transcript?",

@@ -62,6 +62,35 @@ function paidAdmissionPolicy() {
   };
 }
 
+function invitedPaidAdmissionPolicy() {
+  return {
+    schemaVersion: HUMAN_ASSURANCE_SCHEMA_VERSION,
+    policyId: "policy_invited_rater_tasks",
+    version: 1,
+    reviewerSource: "customer_invited" as const,
+    compensation: "paid" as const,
+    cohorts: [{ cohortId: "cohort_invited_rater_tasks", minimumReviewers: 3, maximumReviewers: 3 }],
+    selection: "customer_named" as const,
+    fallbacks: { allowed: false, sources: [] },
+    requiredQualifications: [],
+    assurance: {
+      requirements: [
+        {
+          capability: "customer_invitation" as const,
+          reviewerSources: ["customer_invited" as const],
+          allowedProviders: ["workspace-invitation"],
+        },
+      ],
+    },
+    buyerPrivacy: {
+      visibleFields: ["reviewer_source" as const],
+      minimumAggregationSize: 3,
+      suppressSmallCells: true,
+    },
+    legalEligibilityRequired: true,
+  };
+}
+
 beforeEach(async () => {
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
   await dbClient.execute({
@@ -480,8 +509,13 @@ test("receipt reconciliation records a reverted submitted rater commit as failed
   assert.deepEqual(voucher.rows[0], { committed_at: null, status: "issued" });
 });
 
-async function seedTask(executionState: "confirmed" | "submitted" = "confirmed") {
-  const frozenPolicy = freezeAdmissionPolicy(paidAdmissionPolicy());
+async function seedTask(
+  executionState: "confirmed" | "submitted" = "confirmed",
+  reviewerSource: "rateloop_network" | "customer_invited" = "rateloop_network",
+) {
+  const frozenPolicy = freezeAdmissionPolicy(
+    reviewerSource === "rateloop_network" ? paidAdmissionPolicy() : invitedPaidAdmissionPolicy(),
+  );
   await dbClient.execute({
     sql: "INSERT INTO tokenless_workspaces (workspace_id, name, status, created_at, updated_at) VALUES ('ws_tasks', 'Tasks', 'active', ?, ?)",
     args: [NOW, NOW],
@@ -559,6 +593,153 @@ async function seedTask(executionState: "confirmed" | "submitted" = "confirmed")
   return frozenPolicy;
 }
 
+async function seedCanonicalInvitedTaskBridge() {
+  const frozenPolicy = await seedTask("confirmed", "customer_invited");
+  const assignmentExpiresAt = new Date(NOW.getTime() + 60_000);
+  const eligibilityExpiresAt = new Date(NOW.getTime() + 120_000);
+
+  // The task-list join depends only on these five bridge records. Their production
+  // services separately cover the larger workspace/project setup graph, so this
+  // focused integration fixture removes only those peripheral foreign keys while
+  // retaining every bridge row, state, timestamp, hash, and identity relationship.
+  for (const [tableName, constraintName] of [
+    ["tokenless_paid_assignment_operations", "tokenless_paid_assignment_operations_opportunity_fk"],
+    ["tokenless_paid_assignment_operations", "tokenless_paid_assignment_operations_api_key_fk"],
+    ["tokenless_paid_assignment_operations", "tokenless_paid_assignment_operations_policy_fk"],
+    ["tokenless_paid_assignment_operations", "tokenless_paid_assignment_operations_prepaid_fk"],
+    ["tokenless_paid_assignment_operations", "tokenless_paid_assignment_operations_policy_reservation_fk"],
+    ["tokenless_private_unpaid_review_assignments", "tokenless_private_unpaid_review_assignments_delivery_id_fk"],
+    ["tokenless_private_unpaid_review_assignments", "tokenless_private_unpaid_review_assignments_workspace_id_fk"],
+    ["tokenless_private_unpaid_review_assignments", "tokenless_private_unpaid_review_assignments_project_id_fk"],
+    ["tokenless_private_unpaid_review_assignments", "tokenless_private_unpaid_review_assignments_private_review_id_fk"],
+    ["tokenless_private_unpaid_review_assignments", "tokenless_private_unpaid_review_assignments_private_group_id_fk"],
+    ["tokenless_private_unpaid_review_assignments", "tokenless_private_unpaid_review_assignments_cohort_reviewer_fk"],
+    ["tokenless_paid_review_eligibility_snapshots", "tokenless_paid_review_eligibility_snapshots_opportunity_fk"],
+    ["tokenless_paid_review_eligibility_snapshots", "tokenless_paid_review_eligibility_snapshots_profile_fk"],
+    ["tokenless_paid_review_voucher_issuances", "tokenless_paid_review_voucher_issuances_opportunity_fk"],
+    ["tokenless_paid_review_voucher_issuances", "tokenless_paid_review_voucher_issuances_profile_fk"],
+  ]) {
+    await dbClient.execute(`ALTER TABLE "${tableName}" DROP CONSTRAINT "${constraintName}"`);
+  }
+
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_rater_profiles
+          (rater_id,principal_id,account_address,nullifier_seed_ciphertext,nullifier_key_version,
+           nullifier_key_domain,created_at,updated_at)
+          VALUES ('rater_invited_task',? ,?,'ciphertext','v1','vote_mapping',?,?)`,
+    args: [PRINCIPAL, ACCOUNT.toLowerCase(), NOW, NOW],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_paid_assignment_operations
+          (operation_id,workspace_id,opportunity_id,lane,api_key_id,publishing_policy_id,
+           publishing_policy_version,request_idempotency_key,request_hash,prepared_request_hash,
+           economics_hash,reviewer_set_hash,audience_policy_hash,chain_admission_policy_hash,
+           admission_policy_json,artifact_commitments_json,artifact_binding_hash,expected_amount_atomic,
+           state,transition_revision,quote_id,quote_expires_at,ask_operation_key,prepaid_reservation_id,
+           policy_reservation_id,deployment_key,chain_id,panel_address,round_id,content_id,terms_hash,
+           round_terms_hash,payment_mode,payment_reference,commit_deadline,confirmed_at,bound_at,
+           created_at,updated_at)
+          VALUES ('operation_invited_task','ws_tasks','opportunity_invited_task','private_invited_paid',
+                  'api_key_invited_task','publishing_policy_invited_task',1,'paid:invited:task',
+                  ?,?,?,?,?,?,?,'[]',?,31875000,'round_bound',1,'quote_tasks',?,'op_tasks',
+                  'prepaid_invited_task','policy_reservation_invited_task','deployment',84532,?,42,?,?,?,
+                  'prepaid','prepaid_invited_task',?,?,?,?,?)`,
+    args: [
+      `sha256:${"1".repeat(64)}`,
+      `sha256:${"2".repeat(64)}`,
+      `sha256:${"3".repeat(64)}`,
+      `sha256:${"4".repeat(64)}`,
+      `sha256:${"5".repeat(64)}`,
+      frozenPolicy.admissionPolicyHash,
+      frozenPolicy.policyJson,
+      `sha256:${"6".repeat(64)}`,
+      assignmentExpiresAt,
+      "0x2222222222222222222222222222222222222222",
+      `0x${"11".repeat(32)}`,
+      `0x${"22".repeat(32)}`,
+      `sha256:${"7".repeat(64)}`,
+      assignmentExpiresAt,
+      NOW,
+      NOW,
+      NOW,
+      NOW,
+    ],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_private_unpaid_review_assignments
+          (assignment_id,delivery_id,workspace_id,project_id,private_review_id,cohort_id,private_group_id,
+           reviewer_account_address,membership_joined_at,membership_expires_at,membership_allowed_projects_hash,
+           qualification_snapshot_json,membership_snapshot_hash,snapshot_cutoff_at,reservation_expires_at,
+           response_deadline,status,accepted_at,assignment_expires_at,lease_state,created_at,updated_at)
+          VALUES ('assignment_invited_task','delivery_invited_task','ws_tasks','project_invited_task',
+                  'private_review_invited_task','cohort_invited_task','group_invited_task',?,?,?,?,
+                  '{}',?,?,?,?,'accepted',?,?,'issued',?,?)`,
+    args: [
+      ACCOUNT.toLowerCase(),
+      NOW,
+      assignmentExpiresAt,
+      `sha256:${"8".repeat(64)}`,
+      `sha256:${"9".repeat(64)}`,
+      NOW,
+      assignmentExpiresAt,
+      assignmentExpiresAt,
+      NOW,
+      assignmentExpiresAt,
+      NOW,
+      NOW,
+    ],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_paid_review_eligibility_snapshots
+          (snapshot_id,snapshot_version,workspace_id,opportunity_id,rater_id,request_profile_id,
+           request_profile_version,request_profile_hash,audience_binding_hash,economics_hash,
+           paid_eligibility_preflight_ref,paid_eligibility_preflight_hash,snapshot_json,snapshot_hash,
+           verified_at,expires_at,created_at)
+          VALUES ('snapshot_invited_task',1,'ws_tasks','opportunity_invited_task','rater_invited_task',
+                  'profile_invited_task',1,?,?,?,?,?,'{}',?,?,?,?)`,
+    args: [
+      `sha256:${"a".repeat(64)}`,
+      `sha256:${"b".repeat(64)}`,
+      `sha256:${"c".repeat(64)}`,
+      "preflight_invited_task",
+      `sha256:${"d".repeat(64)}`,
+      `sha256:${"e".repeat(64)}`,
+      NOW,
+      eligibilityExpiresAt,
+      NOW,
+    ],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_paid_review_voucher_issuances
+          (issuance_id,workspace_id,opportunity_id,rater_id,request_idempotency_key,request_hash,
+           snapshot_id,snapshot_version,snapshot_hash,request_profile_id,request_profile_version,
+           request_profile_hash,audience_binding_hash,economics_hash,paid_eligibility_preflight_ref,
+           paid_eligibility_preflight_hash,status,created_at,updated_at)
+          VALUES ('issuance_invited_task','ws_tasks','opportunity_invited_task','rater_invited_task',
+                  'voucher:invited:task',?,'snapshot_invited_task',1,?,'profile_invited_task',1,
+                  ?,?,?,?,?,'prepared',?,?)`,
+    args: [
+      `sha256:${"f".repeat(64)}`,
+      `sha256:${"e".repeat(64)}`,
+      `sha256:${"a".repeat(64)}`,
+      `sha256:${"b".repeat(64)}`,
+      `sha256:${"c".repeat(64)}`,
+      "preflight_invited_task",
+      `sha256:${"d".repeat(64)}`,
+      NOW,
+      NOW,
+    ],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_paid_assignment_seats
+          (seat_id,operation_id,position,reviewer_principal_id,rater_id,payout_account,identity_commitment,
+           assignment_id,voucher_issuance_id,state,transition_revision,created_at,updated_at)
+          VALUES ('seat_invited_task','operation_invited_task',0,?,'rater_invited_task',?,?,
+                  'assignment_invited_task','issuance_invited_task','voucher_prepared',1,?,?)`,
+    args: [PRINCIPAL, ACCOUNT.toLowerCase(), `sha256:${"0".repeat(64)}`, NOW, NOW],
+  });
+}
+
 test("task discovery fails closed until the real chain execution is confirmed", async () => {
   await seedTask("submitted");
   assert.deepEqual(await listPaidRaterTasks(PRINCIPAL, NOW), []);
@@ -568,6 +749,103 @@ test("network task discovery stays hidden until an exact selected seat exists", 
   await seedTask();
   const tasks = await listPaidRaterTasks(PRINCIPAL, NOW);
   assert.deepEqual(tasks, []);
+});
+
+test("customer-invited task discovery stays hidden without its exact prepared assignment and issuance", async () => {
+  await seedTask("confirmed", "customer_invited");
+  assert.deepEqual(await listPaidRaterTasks(PRINCIPAL, NOW), []);
+  assert.deepEqual(await listPaidRaterTasks(null, NOW), []);
+});
+
+test("customer-invited task discovery returns only the bound principal's canonical assignment and issuance", async () => {
+  await seedCanonicalInvitedTaskBridge();
+
+  const tasks = await listPaidRaterTasks(PRINCIPAL, NOW);
+  assert.equal(tasks.length, 1);
+  const task = tasks[0];
+  assert.ok(task);
+  assert.equal(task.reviewerSource, "customer_invited");
+  assert.equal(task.assignmentId, "assignment_invited_task");
+  assert.equal("issuanceId" in task ? task.issuanceId : null, "issuance_invited_task");
+  assert.deepEqual(await listPaidRaterTasks(RECOVERY_PRINCIPAL, NOW), []);
+});
+
+function invitedTaskBindingRow(
+  input: {
+    assignmentExpiresAt?: Date;
+    eligibilityExpiresAt?: Date;
+    principalId?: string;
+    issuanceStatus?: "prepared" | "issued";
+  } = {},
+) {
+  const frozen = freezeAdmissionPolicy(invitedPaidAdmissionPolicy());
+  return {
+    admission_policy_json: frozen.policyJson,
+    admission_policy_hash: frozen.admissionPolicyHash,
+    invited_assignment_id: "assignment_invited_task",
+    invited_issuance_id: "issuance_invited_task",
+    invited_principal_id: input.principalId ?? PRINCIPAL,
+    invited_assignment_status: "accepted",
+    invited_assignment_expires_at: input.assignmentExpiresAt ?? new Date(NOW.getTime() + 60_000),
+    invited_issuance_status: input.issuanceStatus ?? "prepared",
+    invited_eligibility_expires_at: input.eligibilityExpiresAt ?? new Date(NOW.getTime() + 60_000),
+  };
+}
+
+test("customer-invited task bindings preserve exact legitimate assignment and issuance access", () => {
+  assert.deepEqual(__raterServiceTestUtils.paidTaskAssignmentBinding(invitedTaskBindingRow(), PRINCIPAL, NOW), {
+    reviewerSource: "customer_invited",
+    assignmentId: "assignment_invited_task",
+    issuanceId: "issuance_invited_task",
+  });
+});
+
+test("customer-invited task bindings reject anonymous and cross-principal access", () => {
+  const row = invitedTaskBindingRow();
+  assert.equal(__raterServiceTestUtils.paidTaskAssignmentBinding(row, null, NOW), null);
+  assert.equal(__raterServiceTestUtils.paidTaskAssignmentBinding(row, RECOVERY_PRINCIPAL, NOW), null);
+  assert.equal(
+    __raterServiceTestUtils.paidTaskAssignmentBinding(
+      invitedTaskBindingRow({ principalId: RECOVERY_PRINCIPAL }),
+      PRINCIPAL,
+      NOW,
+    ),
+    null,
+  );
+});
+
+test("customer-invited task bindings reject expired assignments and stale prepared eligibility", () => {
+  assert.equal(
+    __raterServiceTestUtils.paidTaskAssignmentBinding(
+      invitedTaskBindingRow({ assignmentExpiresAt: new Date(NOW.getTime() - 1) }),
+      PRINCIPAL,
+      NOW,
+    ),
+    null,
+  );
+  assert.equal(
+    __raterServiceTestUtils.paidTaskAssignmentBinding(
+      invitedTaskBindingRow({ eligibilityExpiresAt: new Date(NOW.getTime() - 1) }),
+      PRINCIPAL,
+      NOW,
+    ),
+    null,
+  );
+  assert.deepEqual(
+    __raterServiceTestUtils.paidTaskAssignmentBinding(
+      invitedTaskBindingRow({
+        eligibilityExpiresAt: new Date(NOW.getTime() - 1),
+        issuanceStatus: "issued",
+      }),
+      PRINCIPAL,
+      NOW,
+    ),
+    {
+      reviewerSource: "customer_invited",
+      assignmentId: "assignment_invited_task",
+      issuanceId: "issuance_invited_task",
+    },
+  );
 });
 
 test("paid task discovery never exposes private question material through a public network round", async () => {
@@ -601,6 +879,33 @@ test("public voucher requests carry the exact network assignment binding", () =>
       reviewerSource: "rateloop_network",
       assignmentId: "assignment_exact",
       selectionBindingHash: `sha256:${"a".repeat(64)}`,
+    },
+  );
+});
+
+test("public voucher requests carry the exact invited assignment and issuance binding", () => {
+  assert.deepEqual(
+    buildPublicVoucherRequest(
+      {
+        roundId: "42",
+        contentId: `0x${"11".repeat(32)}`,
+        reviewerSource: "customer_invited",
+        assignmentId: "assignment_invited_task",
+        issuanceId: "issuance_invited_task",
+      },
+      {
+        idempotencyKey: "voucher:web:42",
+        voteKey: ACCOUNT,
+      },
+    ),
+    {
+      idempotencyKey: "voucher:web:42",
+      roundId: "42",
+      contentId: `0x${"11".repeat(32)}`,
+      voteKey: ACCOUNT,
+      reviewerSource: "customer_invited",
+      assignmentId: "assignment_invited_task",
+      issuanceId: "issuance_invited_task",
     },
   );
 });

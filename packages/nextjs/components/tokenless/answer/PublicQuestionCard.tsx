@@ -76,7 +76,7 @@ type PublicAnswerTaskBase = {
 
 export type PublicAnswerTask = PublicAnswerTaskBase &
   (
-    | { reviewerSource: "customer_invited" }
+    | { reviewerSource: "customer_invited"; assignmentId: string; issuanceId: string }
     | {
         reviewerSource: "rateloop_network";
         assignmentId: string;

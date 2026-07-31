@@ -109,6 +109,70 @@ function boundTaskReviewerSource(row: Row): "customer_invited" | "rateloop_netwo
   }
 }
 
+type PaidTaskAssignmentBinding =
+  | {
+      reviewerSource: "customer_invited";
+      assignmentId: string;
+      issuanceId: string;
+    }
+  | {
+      reviewerSource: "rateloop_network";
+      assignmentId: string;
+      assignmentStatus: "reserved" | "accepted";
+      assignmentExpiresAt: string;
+      confidentialityTermsHash: `sha256:${string}`;
+      selectionBindingHash: `sha256:${string}`;
+    };
+
+function paidTaskAssignmentBinding(row: Row, principalId: string | null, now: Date): PaidTaskAssignmentBinding | null {
+  const reviewerSource = boundTaskReviewerSource(row);
+  if (!reviewerSource || !principalId) return null;
+  if (reviewerSource === "customer_invited") {
+    const assignmentId = rowString(row, "invited_assignment_id");
+    const issuanceId = rowString(row, "invited_issuance_id");
+    const assignmentStatus = rowString(row, "invited_assignment_status");
+    const issuanceStatus = rowString(row, "invited_issuance_status");
+    const assignmentExpiresAt = row.invited_assignment_expires_at;
+    const eligibilityExpiresAt = row.invited_eligibility_expires_at;
+    if (
+      rowString(row, "invited_principal_id") !== principalId ||
+      !assignmentId ||
+      !issuanceId ||
+      !["reserved", "accepted"].includes(assignmentStatus ?? "") ||
+      !["prepared", "issued"].includes(issuanceStatus ?? "") ||
+      !assignmentExpiresAt ||
+      new Date(String(assignmentExpiresAt)) <= now ||
+      (issuanceStatus === "prepared" && (!eligibilityExpiresAt || new Date(String(eligibilityExpiresAt)) <= now))
+    ) {
+      return null;
+    }
+    return { reviewerSource, assignmentId, issuanceId };
+  }
+  const assignmentId = rowString(row, "network_assignment_id");
+  const assignmentStatus = rowString(row, "network_assignment_status");
+  const confidentialityTermsHash = rowString(row, "network_confidentiality_terms_hash");
+  const selectionBindingHash = rowString(row, "network_selection_binding_hash");
+  const assignmentExpiresAt = row.network_assignment_expires_at;
+  if (
+    !assignmentId ||
+    !["reserved", "accepted"].includes(assignmentStatus ?? "") ||
+    !SHA256.test(confidentialityTermsHash ?? "") ||
+    !SHA256.test(selectionBindingHash ?? "") ||
+    !assignmentExpiresAt ||
+    new Date(String(assignmentExpiresAt)) <= now
+  ) {
+    return null;
+  }
+  return {
+    reviewerSource,
+    assignmentId,
+    assignmentStatus: assignmentStatus as "reserved" | "accepted",
+    assignmentExpiresAt: new Date(String(assignmentExpiresAt)).toISOString(),
+    confidentialityTermsHash: confidentialityTermsHash as `sha256:${string}`,
+    selectionBindingHash: selectionBindingHash as `sha256:${string}`,
+  };
+}
+
 export async function listPaidRaterTasks(
   principalId: string | null,
   optionsOrNow: { query?: string; scope?: "all" | "public" } | Date = {},
@@ -132,6 +196,13 @@ export async function listPaidRaterTasks(
                  network_binding.assignment_status AS network_assignment_status,
                  network_binding.confidentiality_terms_hash AS network_confidentiality_terms_hash,
                  network_binding.assignment_expires_at AS network_assignment_expires_at,
+                 invited_binding.assignment_id AS invited_assignment_id,
+                 invited_binding.issuance_id AS invited_issuance_id,
+                 invited_binding.reviewer_principal_id AS invited_principal_id,
+                 invited_binding.assignment_status AS invited_assignment_status,
+                 invited_binding.assignment_expires_at AS invited_assignment_expires_at,
+                 invited_binding.issuance_status AS invited_issuance_status,
+                 invited_binding.eligibility_expires_at AS invited_eligibility_expires_at,
                  CASE WHEN v.voucher_id IS NULL THEN false ELSE true END AS already_vouchered
           FROM tokenless_voucher_rounds vr
           JOIN tokenless_chain_executions e ON e.chain_id = vr.chain_id AND e.panel_address = vr.panel_address
@@ -198,6 +269,55 @@ export async function listPaidRaterTasks(
            AND network_binding.round_id=e.round_id
            AND lower(network_binding.content_id)=lower(e.content_id)
            AND lower(network_binding.admission_policy_hash)=lower(vr.admission_policy_hash)
+          LEFT JOIN (
+            SELECT seat.assignment_id,seat.voucher_issuance_id AS issuance_id,
+                   seat.reviewer_principal_id,seat.rater_id,operation.ask_operation_key AS operation_key,
+                   operation.deployment_key,operation.chain_id,operation.panel_address,operation.round_id,
+                   operation.content_id,operation.chain_admission_policy_hash AS admission_policy_hash,
+                   assignment.status AS assignment_status,
+                   CASE WHEN assignment.status='reserved'
+                     THEN assignment.reservation_expires_at
+                     ELSE assignment.assignment_expires_at
+                   END AS assignment_expires_at,
+                   issuance.status AS issuance_status,eligibility.expires_at AS eligibility_expires_at
+            FROM tokenless_paid_assignment_seats seat
+            INNER JOIN tokenless_paid_assignment_operations operation
+              ON operation.operation_id=seat.operation_id
+             AND operation.lane='private_invited_paid'
+             AND operation.state IN ('round_bound','active','settling')
+            INNER JOIN tokenless_private_unpaid_review_assignments assignment
+              ON assignment.assignment_id=seat.assignment_id
+             AND assignment.workspace_id=operation.workspace_id
+             AND lower(assignment.reviewer_account_address)=lower(seat.payout_account)
+            INNER JOIN tokenless_paid_review_voucher_issuances issuance
+              ON issuance.issuance_id=seat.voucher_issuance_id
+             AND issuance.workspace_id=operation.workspace_id
+             AND issuance.opportunity_id=operation.opportunity_id
+             AND issuance.rater_id=seat.rater_id
+            INNER JOIN tokenless_paid_review_eligibility_snapshots eligibility
+              ON eligibility.snapshot_id=issuance.snapshot_id
+             AND eligibility.snapshot_version=issuance.snapshot_version
+             AND eligibility.snapshot_hash=issuance.snapshot_hash
+             AND eligibility.rater_id=seat.rater_id
+            WHERE seat.state IN ('voucher_prepared','accepted')
+              AND (
+                (assignment.status='reserved' AND assignment.reservation_expires_at > ?)
+                OR (assignment.status='accepted' AND assignment.assignment_expires_at > ?)
+              )
+              AND (
+                issuance.status='issued'
+                OR (issuance.status='prepared' AND eligibility.expires_at > ?)
+              )
+          ) invited_binding
+            ON invited_binding.reviewer_principal_id=?
+           AND invited_binding.rater_id=p.rater_id
+           AND invited_binding.operation_key=e.operation_key
+           AND invited_binding.deployment_key=e.deployment_key
+           AND invited_binding.chain_id=e.chain_id
+           AND lower(invited_binding.panel_address)=lower(e.panel_address)
+           AND invited_binding.round_id=e.round_id
+           AND lower(invited_binding.content_id)=lower(e.content_id)
+           AND lower(invited_binding.admission_policy_hash)=lower(vr.admission_policy_hash)
           LEFT JOIN tokenless_paid_vouchers v ON v.rater_id = p.rater_id AND v.round_id = vr.round_id
              AND v.chain_id=vr.chain_id AND lower(v.panel_address)=lower(vr.panel_address)
              AND (
@@ -212,22 +332,12 @@ export async function listPaidRaterTasks(
             AND q.moderation_status='approved' AND q.confirmed_no_sensitive_data=true
             AND (? = '' OR c.content_json ILIKE ?)
           ORDER BY vr.voucher_deadline ASC LIMIT 50`,
-    args: [principalId, now, now, now, query, `%${query}%`],
+    args: [principalId, now, now, now, now, now, principalId, now, query, `%${query}%`],
   });
   return result.rows.flatMap(value => {
     const row = value as Row;
-    const reviewerSource = boundTaskReviewerSource(row);
-    if (!reviewerSource) return [];
-    if (reviewerSource === "rateloop_network" && !rowString(row, "network_assignment_id")) return [];
-    if (
-      reviewerSource === "rateloop_network" &&
-      (!["reserved", "accepted"].includes(rowString(row, "network_assignment_status") ?? "") ||
-        !SHA256.test(rowString(row, "network_confidentiality_terms_hash") ?? "") ||
-        !row.network_assignment_expires_at ||
-        new Date(String(row.network_assignment_expires_at)) <= now)
-    ) {
-      return [];
-    }
+    const assignment = paidTaskAssignmentBinding(row, principalId, now);
+    if (!assignment) return [];
     const terms = JSON.parse(rowString(row, "round_terms_json")!) as Record<string, string | number>;
     const maximumCommits = Number(terms.maximumCommits);
     const disclosureBeaconRound = Number(terms.beaconRound);
@@ -250,16 +360,16 @@ export async function listPaidRaterTasks(
         contentId: rowString(row, "content_id") as Hex,
         question: JSON.parse(rowString(row, "content_json")!),
         admissionPolicyHash: rowString(row, "admission_policy_hash"),
-        reviewerSource,
-        ...(reviewerSource === "rateloop_network"
+        reviewerSource: assignment.reviewerSource,
+        ...(assignment.reviewerSource === "rateloop_network"
           ? {
-              assignmentId: rowString(row, "network_assignment_id")!,
-              selectionBindingHash: rowString(row, "network_selection_binding_hash") as `sha256:${string}`,
-              assignmentStatus: rowString(row, "network_assignment_status") as "reserved" | "accepted",
-              confidentialityTermsHash: rowString(row, "network_confidentiality_terms_hash") as `sha256:${string}`,
-              assignmentExpiresAt: new Date(String(row.network_assignment_expires_at)).toISOString(),
+              assignmentId: assignment.assignmentId,
+              selectionBindingHash: assignment.selectionBindingHash,
+              assignmentStatus: assignment.assignmentStatus,
+              confidentialityTermsHash: assignment.confidentialityTermsHash,
+              assignmentExpiresAt: assignment.assignmentExpiresAt,
             }
-          : {}),
+          : { assignmentId: assignment.assignmentId, issuanceId: assignment.issuanceId }),
         voucherDeadline: new Date(String(row.voucher_deadline)).toISOString(),
         alreadyVouchered: Boolean(row.already_vouchered),
         earnings: {
@@ -1138,6 +1248,7 @@ export const __raterServiceTestUtils = {
   broadcastPersistedRaterTransaction,
   lockCommitForVoucher,
   markRaterTransactionRetry,
+  paidTaskAssignmentBinding,
   preparePersistedRaterTransaction,
   reconcileSubmittedRaterCommitReceipt,
   reserveRelayNonce,
