@@ -90,6 +90,8 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
       "0146_hybrid_review_parent_settlement.sql",
       "0147_hybrid_request_profile_semantics.sql",
       "0166_employment_data_governance.sql",
+      "0167_reviewer_engagement_events.sql",
+      "0168_dsa_population_ledger.sql",
     ].includes(file) &&
     (/\bDO \$\$/u.test(statement) ||
       /\bCREATE OR REPLACE FUNCTION\b/u.test(statement) ||
