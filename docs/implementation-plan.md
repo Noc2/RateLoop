@@ -156,9 +156,10 @@ inability to demonstrate review is independently punished.
 
 **Start with two evidence artifacts and never merge them.** The primary artifact is a
 reference-standard performance packet for automated removal. The adjacent artifact is
-control evidence showing that Article 20 complaint decisions received qualified human
-supervision. Operational complaint reversals, panel reference labels and panel
-disagreement are different measures.
+control evidence showing that sampled complaint decisions received qualified human
+supervision and were not made solely by automation. It is evidence for the Article 20(6)
+control, not a claim of full Article 20 compliance. Operational complaint reversals,
+panel reference labels and panel disagreement are different measures.
 
 This is the strongest European fit because the obligation, artifact and adverse reader
 already exist:
@@ -175,11 +176,11 @@ already exist:
   with input criteria and calculation method. Control-group variation is requested where
   possible; human-reviewer accuracy is optional.
 - Article 17/24 statement-of-reasons submissions now use categories aligned with the
-  harmonised reports. The
+  harmonised reports, but not every private moderation decision requires a statement. The
   [Transparency Database](https://transparency.dsa.ec.europa.eu/page/api-documentation)
-  can supply receipts and a secondary reconciliation source, but it excludes personal
-  data and does not contain the reviewed content. It cannot replace the provider's
-  complete private source population.
+  can supply receipts and a secondary reconciliation source for the applicable subset,
+  but it excludes personal data and does not contain the reviewed content. It cannot
+  replace the provider's complete private source population.
 - VLOPs and VLOSEs undergo annual independent audits. The
   [DSA audit rules](https://eur-lex.europa.eu/eli/reg_del/2024/436/oj/eng) require
   sufficient reliable evidence and assessment that public disclosures are free from
@@ -240,25 +241,31 @@ denominator silently.
 
 The first implementation freezes these records rather than accepting a generic CSV:
 
-| Record               | Minimum frozen fields                                                                                                                                                                                                                                                                                                   |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Population           | service and reporting period; provider decision ID and statement-of-reasons receipt; event time; language; content format; harmonised category; trigger source; policy and automated-system version; original automated label/restriction; eligibility and exclusion reason; access-controlled content hash and locator |
-| Complaint control    | Article 20 decision type; submission, decision and notification times; grounds and outcome; reasoned result; supervisor pseudonym; qualification, training, authority and language evidence                                                                                                                             |
-| Reference assignment | source decision ID; reviewer and conflict/qualification snapshot; frozen audience source and material boundary; blinding state; payload and label-schema hashes; label, uncertainty/abstention, rationale and timestamps                                                                                                |
-| Draw                 | immutable population digest and count; strata; inclusion probability for every unit; commitment; future beacon network/round and reveal; selected flag; no replacement unless the precommitted method permits it                                                                                                        |
+| Record               | Minimum frozen fields                                                                                                                                                                                                                                                                                                                                                  |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Population           | service and reporting period; provider decision ID; statement-of-reasons applicability and coded basis; nullable statement receipt; event time; language; content format; harmonised category; trigger source; policy and automated-system version; original automated label/restriction; eligibility and exclusion reason; access-controlled content hash and locator |
+| Complaint control    | Article 20 decision type; submission, decision and notification times; grounds and outcome; reasoned result; supervisor pseudonym; qualification, training, authority and language evidence                                                                                                                                                                            |
+| Reference assignment | source decision ID; reviewer and conflict/qualification snapshot; frozen audience source and material boundary; blinding state; payload and label-schema hashes; label, uncertainty/abstention, rationale and timestamps                                                                                                                                               |
+| Draw                 | immutable population digest and count; strata; inclusion probability for every unit; commitment; future beacon network/round and reveal; selected flag; no replacement unless the precommitted method permits it                                                                                                                                                       |
+
+Statement applicability is one of `required`, `no_recipient_electronic_contact`,
+`deceptive_high_volume_commercial_content`, `article_9_order`,
+`service_not_online_platform`, `restriction_outside_article_17` or
+`other_documented_exclusion`. The basis is frozen before reconciliation, and a nullable
+receipt is valid only with a coded non-required basis.
 
 The output packet contains:
 
-1. source totals, statement-of-reasons totals and every missing, duplicate or unmatched
-   record;
+1. source totals; Article 17/24 applicable totals; coded non-applicable/excluded totals;
+   statement submission totals; and every missing, duplicate, failed or unmatched record;
 2. the population definition, frame digest, sampling algorithm, probabilities, seed and
    selected/non-selected manifest;
 3. per-system and per-language weighted confusion matrices, accuracy, precision, recall,
    error and explicit non-estimable cells;
 4. the reference-standard definition, reviewer disagreement and uncertainty, kept
    separate from operational complaint reversals;
-5. template-ready quantitative CSV rows plus qualitative method, input and safeguard
-   text; and
+5. Article 15(1)(e)/42(2)(c) automated-means evidence and template rows, not a complete
+   DSA transparency report; and
 6. a confidential calculation-input packet and a separate redacted/public disclosure.
 
 ### Contracting modes
@@ -270,6 +277,13 @@ The output packet contains:
 
 RateLoop must freeze one mode per engagement. Article 37's twelve-month non-audit-services
 restriction makes casually switching roles unsafe.
+
+The Transparency Database adapter is separately versioned from the harmonised-report
+taxonomy. It stores an opaque deterministic PUID, exact payload/schema, request hash,
+attempt and HTTP result, Commission UUID/ID/timestamps/links, validation errors and a
+private decision crosswalk. Only `201 Created` is a creation receipt; retry after an
+unknown outcome first checks that PUID. Direct production submission remains gated on DSC
+onboarding and sandbox conformance. No outbound field may contain personal data.
 
 ### Adjacent obligations, not the launch wedge
 
@@ -298,8 +312,8 @@ restriction makes casually switching roles unsafe.
 | 1.1  | Canonical commitment writes, legacy backfill and DB constraint    | 0.5  | Done   |
 | 1.2  | Real decision → persistence → export test across all policy modes | 0.5  | Done   |
 | 1.3  | Golden vectors for both domain-separated sampler manifests        | 0.5  | Done   |
-| 1.4a | Freeze estimands, support and gap rules                           | 1    | Open   |
-| 1.4b | Design-weighted estimator and typed export                        | 2–3  | Open   |
+| 1.4a | Freeze estimands, support and gap rules                           | 1    | Done   |
+| 1.4b | Design-weighted estimator and typed export                        | 2–3  | Done   |
 | 1.4c | Enumeration/simulation report and external method review          | 2    | Open   |
 | 1.5  | Decision-grade comparison in the existing Evaluations destination | 2    | Open   |
 | 1.6  | Sampling disclosure, locale scan and claim-gate rule              | 1    | Open   |
@@ -324,12 +338,17 @@ correct one, is the most persuasive thing available here. The view also shows fr
 selected and completed counts, certainty-unit share, effective support and the exact gap
 reason. It never shows a confidence interval when the design cannot justify one.
 
-**1.4 starts by naming the estimand.** For a binary outcome defined for every unit in a
-known complete frame, the population mean is the Horvitz–Thompson total divided by known
-`N`. “Agreement among comparable observations” is instead a domain ratio: the weighted
-agreement total divided by the weighted comparable total. Accuracy is a population mean;
-precision and recall are ratios of weighted confusion-matrix cells. The implementation
-must label these separately rather than calling every result “HT.”
+**1.4 starts by naming the estimand and probability.** The live operational field is the
+history-conditioned selection propensity at each decision, not generally a marginal
+first-order inclusion probability. Operational agreement is therefore reported as a
+self-normalized sequential inverse-probability-weighted domain ratio. A future closed-
+frame reference draw records actual inclusion probabilities. For a binary outcome
+defined for every unit in a known complete fixed frame, the population mean is the
+Horvitz–Thompson total divided by known `N`; “agreement among comparable observations” is
+instead a ratio of weighted agreement and comparable totals. Accuracy is a population
+mean; precision and recall are ratios of weighted confusion-matrix cells. The
+implementation labels the probability kind and estimand rather than calling every result
+“HT.”
 
 Do not hard-code Begg–Greenes, Korn–Graubard or another interval by name before the actual
 selection and non-response design is frozen. First-order inclusion probabilities are
@@ -384,8 +403,9 @@ auditor free to reject or redraw the sample.
 
 The concrete draw protocol is:
 
-1. close the reporting slice and reject it unless source counts, identifiers and
-   statement-of-reasons receipts reconcile;
+1. close the reporting slice and reject it unless source counts and identifiers
+   reconcile, every Article 17/24-applicable decision has a statement receipt, and every
+   difference has a frozen coded basis;
 2. commit the canonical frame root, exact eligible count, partition counts, method
    version and future beacon network/round through the existing attestation pipeline;
 3. after that round exists, fetch and verify the beacon with one shared implementation;
@@ -397,7 +417,7 @@ The concrete draw protocol is:
 | --- | --------------------------------------------------------------- | ---- |
 | 2.1 | Closed-frame sampling epochs and witnessed commitments          | 8–10 |
 | 2.2 | Future-beacon verification and domain-separated seed derivation | 3–4  |
-| 2.3 | Reviewer/scope override-pattern detector with privacy switch    | 2–3  |
+| 2.3 | Reviewer/scope override detector with employment-data gate      | 2–3  |
 | 2.4 | Auditable engagement events with aggregate-only mode            | 3–4  |
 | 2.5 | Separate reference-sampling channel for automated pass and fail | 7–8  |
 | 2.8 | Typed packet schema on DSSE + RFC 8785 canonicalisation         | 5    |
@@ -407,7 +427,11 @@ The concrete draw protocol is:
 **2.3 and 2.4 are the Uber and Cigna findings turned into features, but the raw material
 is not the finished feature.** Override outcomes are already aggregated in evidence
 packets, coverage exports and workspace metrics. The missing work is scope/reviewer-
-level pattern detection with a minimum denominator and works-council/privacy off switch.
+level pattern detection with a minimum denominator and an employment-data governance
+gate. Aggregate-only mode computes and persists no per-reviewer score; necessary identity
+evidence uses a restricted crosswalk and independent retention. Reviewer analytics also
+require recorded controller/processor roles, lawful-basis/necessity and DPIA decisions,
+worker notice, access/retention policy, data-subject process, and works-council status.
 Existing latency is workflow elapsed time, not active engagement; 2.4 must define first
 artifact access, idle, reopen and submission events before displaying reviewer metrics.
 
@@ -450,11 +474,11 @@ The four lanes have different decisions:
 
 | #   | Task                                                                           | Days       |
 | --- | ------------------------------------------------------------------------------ | ---------- |
-| 3.1 | Import, version and reconcile the complete population and Article 24 receipts  | 7–10       |
+| 3.1 | Import the complete population; reconcile applicable Article 17/24 statements  | 7–10       |
 | 3.2 | Freeze a separate reference sample from the §6 closed-frame draw               | 3–4        |
 | 3.3 | Authorize named private reviewers; freeze language, qualification and conflict | 4–5        |
 | 3.4 | Hide provider, machine outcome and appeal result in a DSA single-case view     | 4–5        |
-| 3.5 | Export system/category/language metrics and raw calculation inputs             | 5–7        |
+| 3.5 | Export Article 15/42 automated-means rows and raw calculation inputs           | 5–7        |
 | 3.6 | One audit-partner method review and two provider pilots                        | External   |
 | 3.7 | Separately validate paid network assignment, settlement and recovery           | 5–7 + soak |
 
@@ -527,10 +551,11 @@ system with RateLoop as provider. One hole to close: the boundary test scans one
 source directory but not its scripts directory, which is exactly where the repository's
 only outbound model call lives.
 
-**Reviewer scorecards without a per-workspace off switch.** Per-reviewer performance
+**Reviewer scorecards without an employment-data governance gate.** Per-reviewer performance
 measurement is worker monitoring, and German works-council co-determination under
 §87(1)(6) BetrVG means a customer cannot deploy it without an agreement. It must be
-switchable off, not merely disclaimed.
+aggregate-only by default and blocked until the required governance record is complete,
+not merely switchable or disclaimed.
 
 **An MCP "get a human to sign off" tool.** Nearly free given the existing servers, which is
 why it is tempting. It is also precisely the product HumanLayer abandoned while OpenAI
@@ -540,19 +565,19 @@ shipped native approve-and-resume.
 
 ## 9. Sequence
 
-| Order | Work                                                              | Days/Status  |
-| ----- | ----------------------------------------------------------------- | ------------ |
-| 1     | 1.1–1.3 — make the operational frame load and stay fixed          | Done         |
-| 2     | 1.4a–1.4c — estimand, estimator, variance decision and validation | 5–6          |
-| 3     | 1.5, 1.6 — decision view, disclosure and fail-closed claims       | 3            |
-| 4     | 2.3, 2.4 — privacy switch, override pattern and engagement events | 5–7          |
-| 5     | 2.8 — shared canonical packet schema before new public artifacts  | 5            |
-| 6     | 3.1 — complete DSA population import and reconciliation           | 7–10         |
-| 7     | 2.1, 2.2, 2.5 — committed frame, future beacon and reference draw | 18–22        |
-| 8     | 3.2–3.5 — frozen sample, authorized panel, blinding and metrics   | 16–21        |
-| 9     | 2.6, 2.7 — witnessed heads and compliance-reader access           | 7            |
-| 10    | 3.6 — audit-partner review and two provider pilots                | Release gate |
-| 11    | 3.7 — separate paid-network hosted/testnet validation             | Release gate |
+| Order | Work                                                               | Days/Status  |
+| ----- | ------------------------------------------------------------------ | ------------ |
+| 1     | 1.1–1.3 — make the operational frame load and stay fixed           | Done         |
+| 2     | 1.4a–1.4c — estimand, estimator, variance decision and validation  | 5–6          |
+| 3     | 1.5, 1.6 — decision view, disclosure and fail-closed claims        | 3            |
+| 4     | 2.3, 2.4 — governance gate, override pattern and engagement events | 5–7          |
+| 5     | 2.8 — shared canonical packet schema before new public artifacts   | 5            |
+| 6     | 3.1 — complete DSA population import and reconciliation            | 7–10         |
+| 7     | 2.1, 2.2, 2.5 — committed frame, future beacon and reference draw  | 18–22        |
+| 8     | 3.2–3.5 — frozen sample, authorized panel, blinding and metrics    | 16–21        |
+| 9     | 2.6, 2.7 — witnessed heads and compliance-reader access            | 7            |
+| 10    | 3.6 — audit-partner review and two provider pilots                 | Release gate |
+| 11    | 3.7 — separate paid-network hosted/testnet validation              | Release gate |
 
 Rows two and three ship useful provider-side measurement without claiming independence.
 Rows six through nine build the DSA artifact. Row ten decides whether the evidence product
@@ -643,6 +668,14 @@ this document should hold to the same standard.
   labels against a frozen policy and documented reference standard.
 - **Not that “independent panel” means Article 37 independence.** That term is reserved for
   an audit engagement that satisfies the DSA's organisational conditions.
+- **Not that the complaint-control artifact proves full Article 20 compliance.** It
+  evidences qualified human supervision and the non-solely-automated decision control.
+- **Not that the automated-means export is a complete DSA transparency report.** It is a
+  reproducible section and set of compatible template rows.
+- **Not that RateLoop submits to the Transparency Database.** That claim stays false until
+  the official sandbox, delegated-token model and zero-personal-data gate pass.
+- **Not that reviewer analytics are lawful because a switch exists.** Employment-data
+  governance and, where applicable, a works-council agreement remain customer gates.
 - **Not that the DSA product is implemented.** Generic assurance, privacy, assignment and
   evidence primitives exist; the population schema, single-case blinding, reference draw,
   estimator and DSA export remain open work below.
@@ -696,8 +729,9 @@ done only when the named consumer path and exit tests pass together.
   `adaptiveCoverageExport.ts`/`assuranceMetrics.ts`, and latency data in
   `agentReviewQuality.ts`. Keep reviewer disagreement, decision-owner override, reversal
   and supersession as separate events.
-- Add the per-workspace worker-monitoring switch before persisting or displaying reviewer-
-  level engagement. Aggregate-only mode remains functional.
+- Add the per-workspace employment-data governance record before persisting or displaying
+  reviewer-level engagement. Aggregate-only mode computes no per-reviewer score and
+  remains functional.
 - Exit with minimum-denominator, zero-override, supersession, idle/reopen, timestamp,
   privacy-role, EN/DE and works-council-off tests.
 
@@ -727,9 +761,11 @@ done only when the named consumer path and exit tests pass together.
 - Add versioned population, decision, reconciliation, frame and sample tables plus paged
   ingest/freeze APIs. Do not reuse the generic 200-case comparative run importer or the
   5,000-row coverage-export response as the population store.
-- Store the §4 population contract, Article 24 receipt linkage, corrections and exact
-  source/partition totals. Freeze inclusion status and probability for **every** frame
-  unit, including non-selected units.
+- Store the §4 population contract, Article 17/24 applicability/basis, nullable statement
+  receipt, corrections and exact source/partition totals. Freeze inclusion status and
+  probability for **every** frame unit, including non-selected units. Keep the official
+  Transparency Database payload/receipt ledger separately versioned and enforce no
+  personal data in every outbound field.
 - Exit when idempotent large imports reproduce the exact root/count; conflicting IDs are
   rejected or explicitly versioned; missing/extra rows block freeze; and the full sample
   recomputes offline without reading mutable provider state.
@@ -737,8 +773,10 @@ done only when the named consumer path and exit tests pass together.
 ### 3.3–3.4 — authorized panel and DSA blinding
 
 - Reuse `workspaceReviewers.ts`, `reviewerExpertise.ts`, `artifactPrivacy.ts`, assignments
-  and short leases. Add structured language/CEFR evidence, policy-category competence and
+  and short leases. Add structured language evidence, policy-category competence and
   conflict declarations, frozen at assignment rather than resolved from a later profile.
+  A contractual CEFR threshold for this panel must not be described as Article 42
+  moderator-staffing compliance.
 - Add a single-case reviewer projection that withholds provider identity, machine outcome
   and appeal result. Randomized baseline/candidate swap in `assuranceRunOrchestration.ts`
   is not sufficient, and `directPrivateReviewEvidence.ts` currently fixes `swap:false`.
@@ -751,7 +789,10 @@ done only when the named consumer path and exit tests pass together.
 - Add a typed exporter over the 1.4 estimator and 3.1/3.2 frame. Emit the official
   service/reporting-period/system/scope/value/context rows, per-language cells for VLOPs,
   raw calculation inputs, reconciliation report, reference definition, uncertainty and
-  limitations.
+  limitations. Produce UTF-8 RFC 4180-compatible CSV/ODF values: percentages in `[0,1]`,
+  integer counts and median durations in hours. Preserve every published version for at
+  least five years while retaining identifiable reviewer telemetry only as separately
+  justified.
 - Exit when an offline verifier exactly reproduces every published cell; missing
   dimensions, small/empty cells and incomplete support become gaps; and confidential and
   public packet projections have deterministic, separately signed digests.
@@ -764,6 +805,9 @@ done only when the named consumer path and exit tests pass together.
   Next.js, Ponder, keeper and contracts: eligibility → assignment → acceptance → commit →
   reveal/beacon → payout or compensation → claim/recovery. Exercise keeper outage, retry,
   reorg, beacon failure, expiry and old-key rejection.
+- The current active v4 registry is intentionally empty and the canonical tokenless app
+  is stale. A fresh Base Sepolia deployment and synchronized Vercel/Railway bundle are a
+  hard prerequisite; a web-only deployment must fail closed.
 - Neither task enables the closed network automatically. Activation still requires the
   legal/privacy/payment gates in §7 and explicit evidence of demand beyond the named
   panel.
