@@ -1,12 +1,28 @@
 # RateLoop tokenless — implementation plan
 
-Rewritten 31 July 2026 from six research passes into the question that matters: **what
-should this be, so that an enterprise wants it and can be made to need it?**
+Rewritten and independently rechecked 31 July 2026 from six research passes into the
+question that matters: **what should this be, so that an enterprise wants it and can be
+made to need it?**
 
-**Written for a German vendor.** The first reachable obligation is European: DSA
-content-moderation accuracy reporting and independent audit. An earlier draft picked a
-US vertical that a German company could not credibly sell into. Everything else here is
-jurisdiction-independent.
+**Written for a German vendor.** The first regulated market hypothesis is DSA automated-
+moderation reporting. Article 15 reporting applies to non-exempt intermediary providers;
+Article 20 complaint supervision applies to non-exempt online platforms; Article 37
+independent audit applies only to designated VLOPs and VLOSEs. The combined moderation-
+and-complaint product below primarily targets VLOPs with third-party content. An earlier
+draft picked a US vertical that a German company could not credibly sell into.
+
+This document is the product and engineering backlog, not release approval. The
+[immutable implementation plan](./tokenless-immutable-implementation-plan-2026-07.md)
+controls architecture, and the production-readiness register controls deployment.
+
+The decisions after this second pass are explicit:
+
+1. Build the measurement and DSA evidence workflow before expanding reviewer supply.
+2. Run representative pilots through the private, customer-authorized lane with a small
+   RateLoop-recruited named panel.
+3. Retain the closed RateLoop-network lane, but test it only on a separately reported
+   public-safe benchmark and keep it default-off.
+4. Do not build an open task marketplace or activate hybrid review.
 
 Effort is days for one experienced engineer.
 
@@ -138,12 +154,11 @@ inability to demonstrate review is independently punished.
 
 ## 4. First reachable market — DSA content-moderation assurance
 
-**Start with audit-ready, independently sampled accuracy evidence for automated content
-moderation and complaint review.** The platform retains the complete moderation and
-appeal population. Its own qualified staff or controlled contractors remain responsible
-for statutory complaint decisions. A separate, blinded and language-qualified panel
-re-reviews a precommitted sample and produces reproducible accuracy, precision, recall,
-error, agreement and override evidence.
+**Start with two evidence artifacts and never merge them.** The primary artifact is a
+reference-standard performance packet for automated removal. The adjacent artifact is
+control evidence showing that Article 20 complaint decisions received qualified human
+supervision. Operational complaint reversals, panel reference labels and panel
+disagreement are different measures.
 
 This is the strongest European fit because the obligation, artifact and adverse reader
 already exist:
@@ -151,54 +166,110 @@ already exist:
 - The [Digital Services Act](https://eur-lex.europa.eu/eli/reg/2022/2065/oj/eng) is in
   force. Article 20 requires complaint decisions to be supervised by appropriately
   qualified staff and not made solely by automation. Articles 15 and 42 require public
-  reporting of automated-moderation accuracy and possible error rates; VLOPs and VLOSEs
-  report the measures by official EU language.
-- The harmonised reporting rules have applied since 1 July 2025. The
-  [mandatory template](https://eur-lex.europa.eu/eli/reg_impl/2024/2835/oj/eng) asks for
-  accuracy, precision and recall per moderation system, plus the input criteria,
-  methodology, control-group variation and, optionally, human-reviewer accuracy. The
-  first harmonised reports were due in February 2026, so this is a current recurring
-  workflow rather than a future mandate.
+  reporting of automated-moderation accuracy and possible error rates; VLOPs report the
+  measures by official EU language.
+- The harmonised rules have applied since 1 July 2025 and the
+  [first reports were published in February 2026](https://digital-strategy.ec.europa.eu/en/news/harmonised-transparency-reports-under-dsa-bring-enhanced-clarity-content-moderation-practices).
+  The [mandatory template](https://eur-lex.europa.eu/eli/reg_impl/2024/2835/oj/eng)
+  requires accuracy, precision and recall for each automated-removal system, together
+  with input criteria and calculation method. Control-group variation is requested where
+  possible; human-reviewer accuracy is optional.
+- Article 17/24 statement-of-reasons submissions now use categories aligned with the
+  harmonised reports. The
+  [Transparency Database](https://transparency.dsa.ec.europa.eu/page/api-documentation)
+  can supply receipts and a secondary reconciliation source, but it excludes personal
+  data and does not contain the reviewed content. It cannot replace the provider's
+  complete private source population.
 - VLOPs and VLOSEs undergo annual independent audits. The
   [DSA audit rules](https://eur-lex.europa.eu/eli/reg_del/2024/436/oj/eng) require
-  sufficient reliable evidence, tests of algorithmic systems, assessment that public
-  disclosures are free from material error, and representative sampling selected
-  without interference by the audited provider. They specifically contemplate
-  independently reproducing accuracy indicators.
+  sufficient reliable evidence and assessment that public disclosures are free from
+  material error. When an auditing organisation uses a sample, it must choose a
+  representative method without provider interference and justify that method.
 - German enforcement is concrete. The
-  [Bundesnetzagentur's 2025 report](https://www.bundesnetzagentur.de/SharedDocs/Pressemitteilungen/EN/2026/20260430_TB_DSC.html)
-  records more than 2,000 complaints and names Articles 16, 17 and 20 among its
-  enforcement priorities.
+  [Bundesnetzagentur's 2025 report](https://www.bundesnetzagentur.de/DE/Fachthemen/DSC/3_Aktuell/Downloads/Taetigkeitsberichte/DSC_Bericht2025_EN.pdf?__blob=publicationFile&v=3)
+  records 2,033 Article 53 complaints and names Articles 16, 17 and 20 among its focus
+  areas. It is not automatically the adverse regulator for every engagement; the DSC of
+  establishment and Commission often are.
 - The evidence failure is observable rather than hypothetical. Booking.com's
   [published DSA audit](https://q-xx.bstatic.com/data/mobile/2025%20-%20Audit%20report.pdf)
-  used samples of appeals and training records, but unreconciled datasets prevented
-  reasonable assurance for several obligations and the auditor found material
-  discrepancies in Article 42 accuracy disclosures.
+  sampled appeals and training records, but unreconciled datasets blocked reasonable
+  assurance for several obligations and the auditor found material discrepancies in
+  reported automated accuracy.
 
 ### The product boundary
 
-The independent panel is an **additional calibration and reference-label layer**. It is
-not the Article 20 decision-maker, and its existence does not prove that the platform's
-human supervision occurred. The DSA prescribes supervision, reporting and audit; it does
-not prescribe RateLoop's sample rate, multi-rater consensus, commitments or metric.
+The panel supplies an **adjudicated reference label**, not legal or objective ground
+truth. It is not the Article 20 decision-maker, and its existence does not prove that the
+platform's human supervision occurred. “Independent panel” may describe reviewer
+separation only; it does not mean Article 37 auditor independence.
 
-The current permanent operator-held sampler key also does not yet support a claim that
-selection occurred without provider interference. The epoch precommitment and
-beacon-seeded draw in §6 are therefore prerequisites for an **independent sampling**
-claim, not optional hardening.
+A provider-side RateLoop reference sample is supporting control evidence, not the
+statutory audit sample. The auditor must remain free to define or draw its own sample and
+independently reperform the metrics. RateLoop may participate in the audit only when the
+auditing organisation controls the method and contracts RateLoop or its reviewers under
+the audit rules' independence, expertise, ethics and confidentiality requirements.
+
+The current operator-held sampler key supports reproducibility, not a no-interference
+claim. The closed-frame, future-beacon draw in §6 can prove that records were not selected
+after their outcomes were known. It still cannot prove that the provider supplied a
+complete, correctly timestamped or correctly classified population; §7 therefore makes
+source reconciliation a separate fail-closed gate.
 
 ### Buyer and first pilot
 
-The operational champion is a moderation-quality lead, Head of Trust & Safety or DSA
-compliance officer. The adverse reader is the statutory auditor, Commission or Digital
-Services Coordinator. Begin with EU-established platforms using automated moderation;
-VLOPs and VLOSEs are the enterprise segment because the external audit recurs annually,
-while the wider Article 15 market supplies the reporting adjacency.
+For a VLOP, the account owner is the head of the Article 41 compliance function, which
+organises and supervises the independent audit. The operational champion is a moderation-
+quality, Trust & Safety or data-controls lead. The first adverse reader is the statutory
+auditing organisation; the Commission, relevant DSC and public receive the resulting
+reports or disclosures.
 
-Run concierge pilots with a small named, contracted, language-qualified panel and only
-public, synthetic, owner-confirmed redacted or contractually permitted material. Validate
-the packet and sampling method with one audit-organisation design partner and two
-provider-side pilots before deciding whether to expand the reviewer network.
+Run the representative pilot with a small RateLoop-recruited, customer-authorized, named
+and language-qualified private panel. The initial scope is one automated-removal system,
+one policy category and one language. Use the RateLoop-network lane only for a separately
+reported stratum established as public, synthetic or safely redacted **before** sample
+selection. Post-selection redaction or lane switching changes the estimand and is
+forbidden.
+
+The product is not validated until one audit-organisation design partner accepts the
+method and packet as usable evidence, two provider pilots reproduce the calculation, and
+at least one provider requests a paid repeat engagement. Failure to obtain the complete
+frame or lawful access to the selected cases stops the pilot rather than narrowing the
+denominator silently.
+
+### Pilot data contract
+
+The first implementation freezes these records rather than accepting a generic CSV:
+
+| Record               | Minimum frozen fields                                                                                                                                                                                                                                                                                                   |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Population           | service and reporting period; provider decision ID and statement-of-reasons receipt; event time; language; content format; harmonised category; trigger source; policy and automated-system version; original automated label/restriction; eligibility and exclusion reason; access-controlled content hash and locator |
+| Complaint control    | Article 20 decision type; submission, decision and notification times; grounds and outcome; reasoned result; supervisor pseudonym; qualification, training, authority and language evidence                                                                                                                             |
+| Reference assignment | source decision ID; reviewer and conflict/qualification snapshot; frozen audience source and material boundary; blinding state; payload and label-schema hashes; label, uncertainty/abstention, rationale and timestamps                                                                                                |
+| Draw                 | immutable population digest and count; strata; inclusion probability for every unit; commitment; future beacon network/round and reveal; selected flag; no replacement unless the precommitted method permits it                                                                                                        |
+
+The output packet contains:
+
+1. source totals, statement-of-reasons totals and every missing, duplicate or unmatched
+   record;
+2. the population definition, frame digest, sampling algorithm, probabilities, seed and
+   selected/non-selected manifest;
+3. per-system and per-language weighted confusion matrices, accuracy, precision, recall,
+   error and explicit non-estimable cells;
+4. the reference-standard definition, reviewer disagreement and uncertainty, kept
+   separate from operational complaint reversals;
+5. template-ready quantitative CSV rows plus qualitative method, input and safeguard
+   text; and
+6. a confidential calculation-input packet and a separate redacted/public disclosure.
+
+### Contracting modes
+
+| Mode                       | Who controls the frame and sample                                                                                   | Permitted claim                                                                                   |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Provider evidence supplier | Provider supplies the population; RateLoop freezes and draws the reference sample                                   | Audit preparation and reproducible reference evidence; never the statutory audit sample           |
+| Audit subcontractor        | Auditing organisation controls the method, seed, exclusions and replacements and contracts RateLoop under its audit | Evidence produced under that audit engagement; the auditing organisation alone issues the opinion |
+
+RateLoop must freeze one mode per engagement. Article 37's twelve-month non-audit-services
+restriction makes casually switching roles unsafe.
 
 ### Adjacent obligations, not the launch wedge
 
@@ -220,22 +291,26 @@ provider-side pilots before deciding whether to expand the reviewer network.
 
 ---
 
-## 5. The two-week version
+## 5. The next shippable slice
 
-| #   | Task                                                              | Days | Status |
-| --- | ----------------------------------------------------------------- | ---- | ------ |
-| 1.1 | Canonical commitment writes, legacy backfill and DB constraint    | 0.5  | Done   |
-| 1.2 | Real decision → persistence → export test across all policy modes | 0.5  | Done   |
-| 1.3 | Golden vectors for both domain-separated sampler manifests        | 0.5  | Done   |
-| 1.4 | Horvitz–Thompson weighted estimator                               | 3–4  | Open   |
-| 1.5 | The one screen                                                    | 2    | Open   |
-| 1.6 | Sampling disclosure + claim-gate rule                             | 1    | Open   |
+| #    | Task                                                              | Days | Status |
+| ---- | ----------------------------------------------------------------- | ---- | ------ |
+| 1.1  | Canonical commitment writes, legacy backfill and DB constraint    | 0.5  | Done   |
+| 1.2  | Real decision → persistence → export test across all policy modes | 0.5  | Done   |
+| 1.3  | Golden vectors for both domain-separated sampler manifests        | 0.5  | Done   |
+| 1.4a | Freeze estimands, support and gap rules                           | 1    | Open   |
+| 1.4b | Design-weighted estimator and typed export                        | 2–3  | Open   |
+| 1.4c | Enumeration/simulation report and external method review          | 2    | Open   |
+| 1.5  | Decision-grade comparison in the existing Evaluations destination | 2    | Open   |
+| 1.6  | Sampling disclosure, locale scan and claim-gate rule              | 1    | Open   |
 
 **1.3 matters more than its size.** Before it landed, the test asserted only
 self-consistency, so reordering the manifest string could silently re-roll every bucket
 with a green suite. The fixed and adaptive vectors now freeze both commitment and bucket.
 
-**1.5 — the single screen that sells this.** Two numbers side by side:
+**1.5 — the single view that sells this.** Extend the existing authenticated
+`/agents/evaluations` destination instead of adding another navigation item. Show two
+numbers side by side:
 
 > Sampled agreement: 96.2% (n=740)
 >
@@ -245,65 +320,107 @@ with a green suite. The fixed and adaptive vectors now freeze both commitment an
 > already agreeing._
 
 A vendor telling a risk officer their own headline number is wrong, and then showing the
-correct one, is the most persuasive thing available here. Give it its own top-level route
-and its own auth path — not a tab inside an engineer's workspace.
+correct one, is the most persuasive thing available here. The view also shows frame size,
+selected and completed counts, certainty-unit share, effective support and the exact gap
+reason. It never shows a confidence interval when the design cannot justify one.
 
-**On the estimator.** Horvitz–Thompson over the recorded selection probabilities, and
-Begg–Greenes for any sensitivity or specificity figure. **Do not use Rogan–Gladen** — it
-assumes strata defined by the human label, this design stratifies by the machine's, and
-simulated on realistic numbers it returned an endorsement rate of 4.53 against a truth of
-0.85. Intervals via Korn–Graubard, because weighting produces non-integer counts the
-Wilson helper rejects. Forced strata carry probability 1 by construction, so they weight
-correctly for free — but report the forced share, because a mostly-deterministic design is
-not a probability sample and saying so is the point.
+**1.4 starts by naming the estimand.** For a binary outcome defined for every unit in a
+known complete frame, the population mean is the Horvitz–Thompson total divided by known
+`N`. “Agreement among comparable observations” is instead a domain ratio: the weighted
+agreement total divided by the weighted comparable total. Accuracy is a population mean;
+precision and recall are ratios of weighted confusion-matrix cells. The implementation
+must label these separately rather than calling every result “HT.”
 
-**Where the design does not support an estimate, return a coverage gap rather than a
-number.** Manual and rules modes record zero selection probability; for those scopes the
-honest output is always a gap. Treat that as the common case, not an edge case.
+Do not hard-code Begg–Greenes, Korn–Graubard or another interval by name before the actual
+selection and non-response design is frozen. First-order inclusion probabilities are
+enough for point totals but not automatically for variance under history-conditioned
+adaptive and maximum-gap selection. The method review must specify the design variance,
+dependency assumptions, effective sample size and degrees of freedom, then approve the
+public interval method against enumeration or simulation. Rogan–Gladen is the wrong
+estimand here because it corrects apparent prevalence for an imperfect test; its previous
+rejection rationale in this document was incorrect.
+
+Certainty units with inclusion probability `1` remain valid probability-sample units and
+produce no sampling uncertainty for themselves. Report their share because they can
+dominate the observed sample, not because they invalidate the design. Full-population
+inference fails when an in-scope unit has probability `0` or unknown, the population is
+incomplete, the source can alter selection after outcomes are known, or a selected unit
+lacks the predeclared reference outcome. Return a typed coverage gap in each case.
+
+**1.4 acceptance suite:**
+
+- hand-calculated unequal-probability totals and domain ratios, including a fixture where
+  `HT/N` and the comparable-only ratio intentionally differ;
+- a census with probability `1` returning the exact finite-population result and zero
+  sampling uncertainty;
+- probability `0`, unknown probability, missing frame members, missing selected outcomes,
+  zero denominators and non-finite weights returning named gaps;
+- exact decision-to-observation binding and explicit exclusion of the later §6 reference-
+  sample channel from operational adaptive rollups;
+- deterministic reproduction, ordering invariance and no `NaN`/infinite output; and
+- a checked-in enumeration/simulation report covering rare outcomes, unequal rates,
+  certainty shares, adaptive transitions and multiple scopes, with public confidence
+  intervals disabled until the external method review accepts the result.
 
 ---
 
-## 6. The six-month version: a draw that could not have been rigged
+## 6. The six-month version: a closed-frame, externally seeded draw
 
-The move that changes the category, reusing code already in the repository.
+Operational sampling and reporting evidence are separate channels.
 
-Rotate the sampler key per epoch. Publish the **hash** of the next epoch's key to a
-transparency log _before_ the epoch opens. Publish the **key itself** after the epoch
-closes. Anyone can then recompute every bucket for that period and confirm which outputs
-were selected — and that the operator could not have chosen them after seeing outcomes.
+- **Operational adaptive/fixed sampling** decides before each output's outcome and uses
+  the current committed HMAC scheme. It is reproducible after key disclosure but not
+  independent while the operator holds the secret.
+- **DSA reference sampling** is retrospective. Close and reconcile the reporting frame,
+  commit its root, count, strata, algorithm and a later drand round, then use that future
+  verified beacon to derive the sample. The provider cannot replace a selected private
+  case with a public one or feed the resulting labels into adaptive promotion.
 
-Stronger still: **seed the epoch key from a future drand round**, so the operator cannot
-grind the key at all. The beacon client already exists.
+The externally generated seed proves that, **given the committed eligible population and
+stated algorithm**, records were not selected after their outcomes were known. It does
+not prove that the source population was complete, correctly classified or honestly
+timestamped. That stronger statement requires the reconciliation evidence in §4 and an
+auditor free to reject or redraw the sample.
 
-**That is the difference between "we sampled honestly" and "we could not have sampled
-dishonestly."** It is the only claim here that no competitor can answer by shipping a
-feature, and it is why the deterministic-decision boundary stops being a restriction and
-becomes the reason the number is admissible.
+The concrete draw protocol is:
 
-| #   | Task                                                      | Days |
-| --- | --------------------------------------------------------- | ---- |
-| 2.1 | Epoch key rotation + pre-commitment to a transparency log | 8–10 |
-| 2.2 | Beacon-seeded key derivation                              | 3–4  |
-| 2.3 | Override analytics — the rubber-stamp detector            | 2    |
-| 2.4 | Engagement measurement per reviewer and scope             | 2–3  |
-| 2.5 | Sample a fraction of automated `pass` and `fail`          | 7–8  |
-| 2.6 | Anchor the audit chain                                    | 2    |
-| 2.7 | Compliance-reader entry point                             | 5    |
-| 2.8 | Typed packet schema on DSSE + RFC 8785 canonicalisation   | 5    |
+1. close the reporting slice and reject it unless source counts, identifiers and
+   statement-of-reasons receipts reconcile;
+2. commit the canonical frame root, exact eligible count, partition counts, method
+   version and future beacon network/round through the existing attestation pipeline;
+3. after that round exists, fetch and verify the beacon with one shared implementation;
+4. derive the domain-separated seed and calculate the selection decision and inclusion
+   probability for every frame unit; and
+5. freeze the complete selected/non-selected manifest before assignment.
 
-**2.3 and 2.4 are the Uber and Cigna findings turned into features**, and both are close
-to free. Override decisions are already recorded and never aggregated; decision-time
-percentiles are already computed. Together they answer "prove what the human did", which
-is the question the case law actually asks.
+| #   | Task                                                            | Days |
+| --- | --------------------------------------------------------------- | ---- |
+| 2.1 | Closed-frame sampling epochs and witnessed commitments          | 8–10 |
+| 2.2 | Future-beacon verification and domain-separated seed derivation | 3–4  |
+| 2.3 | Reviewer/scope override-pattern detector with privacy switch    | 2–3  |
+| 2.4 | Auditable engagement events with aggregate-only mode            | 3–4  |
+| 2.5 | Separate reference-sampling channel for automated pass and fail | 7–8  |
+| 2.8 | Typed packet schema on DSSE + RFC 8785 canonicalisation         | 5    |
+| 2.6 | Bind audit/coverage heads to the existing attestation pipeline  | 2    |
+| 2.7 | Least-privileged compliance-reader grant and bounded view       | 5    |
 
-**2.5 needs its ordering respected.** Audit-sampled reviews must be excluded from the
-adaptive coverage window _before_ the weighted estimator reads it, or the estimator
-computes weights over a population the audit then changes. Make the audit a **one-way
-ratchet**: it may force a reset to full coverage, never a promotion.
+**2.3 and 2.4 are the Uber and Cigna findings turned into features, but the raw material
+is not the finished feature.** Override outcomes are already aggregated in evidence
+packets, coverage exports and workspace metrics. The missing work is scope/reviewer-
+level pattern detection with a minimum denominator and works-council/privacy off switch.
+Existing latency is workflow elapsed time, not active engagement; 2.4 must define first
+artifact access, idle, reopen and submission events before displaying reviewer metrics.
 
-**2.8 changes digests.** Do it before anyone depends on them. The repository already
-implements DSSE correctly, and there are currently six divergent hand-rolled canonical-JSON
-implementations.
+**2.5 is a separate append-only channel.** It samples automated `pass` and `fail` while
+`uncertain` remains always reviewed. Its labels never enter operational adaptive rollups.
+Disagreement may reset a scope to full coverage, but agreement from this channel never
+promotes it.
+
+**2.8 changes digests and therefore precedes 2.6, 2.7 and every pilot artifact.** The
+repository already implements DSSE pre-authentication encoding correctly. Replace the
+divergent hand-rolled canonical JSON implementations with one RFC 8785 producer/verifier
+implementation, bump the packet version and retain verification of immutable legacy
+packets.
 
 ---
 
@@ -315,30 +432,61 @@ the immutable fund core, paid eligibility, reviewer access, audience policies, v
 keeper, indexer and paid assignment-to-settlement release work. The stack also supports
 paid customer-invited review, so it is not a detachable public-marketplace page.
 
-Keep the RateLoop-network lane **default-off and outside the initial release**. Test it
-first as the narrow DSA reference-panel workflow in §4, using named contracted reviewers,
-language and qualification evidence, blind assignment and public-safe material. Do not
-finish or market a general crowd marketplace until those pilots show demand and an
-external legal/privacy review approves the operating model.
+The current implementation is also **not an open marketplace**: network tasks are visible
+only to an exact selected, principal-bound seat. Keep that closed network default-off and
+outside the initial release. Do not add public task browsing, rankings, streaks, dynamic
+bonuses or self-selection.
+
+The four lanes have different decisions:
+
+| Lane                     | Decision now                                               | Reason                                                                                                                                                                                          |
+| ------------------------ | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Private customer-invited | Keep and use for the representative DSA pilot              | It supports encrypted private artifacts, explicit project authorization and short leases. “Customer-invited” is the authorization model; RateLoop may recruit and contract the named reviewers. |
+| Named RateLoop panel     | Pilot as a curated roster through the private lane         | Real moderation populations commonly include removed/private content, complaint records and personal or sensitive context.                                                                      |
+| Closed RateLoop network  | Preserve and test only on a separate public-safe benchmark | It accepts only public, synthetic or owner-confirmed redacted material. Excluding or redacting private cases after selection changes the estimand.                                              |
+| Hybrid                   | Keep reserved and unavailable                              | It lacks precommitted material strata, lane-specific estimation and complete child terminal/refund processing.                                                                                  |
 
 ### DSA reference-panel pilot
 
-| #   | Task                                                                   | Days       |
-| --- | ---------------------------------------------------------------------- | ---------- |
-| 3.1 | Import and reconcile the complete moderation/appeal population         | 5–7        |
-| 3.2 | Freeze a separate audit sample from the §6 provider-independent draw   | 3–4        |
-| 3.3 | Bind named reviewer identity, language, qualification and conflict     | 4–5        |
-| 3.4 | Blind source outcome and provider identity in assignment and review    | 4–5        |
-| 3.5 | Export DSA classifier/category/language metrics and calculation inputs | 5–7        |
-| 3.6 | One audit-partner review and two provider pilots                       | External   |
-| 3.7 | Deployment-pinned paid assignment-to-settlement and recovery suite     | 5–7 + soak |
+| #   | Task                                                                           | Days       |
+| --- | ------------------------------------------------------------------------------ | ---------- |
+| 3.1 | Import, version and reconcile the complete population and Article 24 receipts  | 7–10       |
+| 3.2 | Freeze a separate reference sample from the §6 closed-frame draw               | 3–4        |
+| 3.3 | Authorize named private reviewers; freeze language, qualification and conflict | 4–5        |
+| 3.4 | Hide provider, machine outcome and appeal result in a DSA single-case view     | 4–5        |
+| 3.5 | Export system/category/language metrics and raw calculation inputs             | 5–7        |
+| 3.6 | One audit-partner method review and two provider pilots                        | External   |
+| 3.7 | Separately validate paid network assignment, settlement and recovery           | 5–7 + soak |
 
-The audit sample is separate from the operational adaptive-review sample. It must never
-feed the adaptive promotion window, and the provider must not choose its seed, exclusions
-or replacements. Population reconciliation fails closed: a packet with missing,
-duplicated or unmatched moderation decisions produces a gap, not an estimate.
+The planning target for each first pilot is one system/category/language scope, a
+100–200-case sample sized with the audit partner, five named reviewers and three
+independent labels per case. Those numbers are a test configuration, not a prescribed
+DSA sampling rate. Compensation may be handled by the pilot contract so that evidence
+usability is tested before on-chain network settlement becomes a dependency.
 
-Activation requires all of the following on one fresh complete deployment:
+The reference sample is separate from the operational adaptive-review sample. It never
+feeds the adaptive promotion window. In provider-evidence mode RateLoop controls only its
+reference draw; in audit-subcontractor mode the auditing organisation controls the
+method, seed, exclusions and replacements. Population reconciliation fails closed: a
+packet with missing, duplicated or unmatched decisions produces a gap, not an estimate.
+
+Immediate pilot stop conditions are:
+
+- an unreconciled frame or missing/duplicate source decisions;
+- a selected case that cannot lawfully be provided to its authorized private panel;
+- any post-outcome change to seed, eligibility, exclusions, replacement or audience lane;
+- leakage of provider identity, machine outcome or appeal result to the reviewer;
+- any material privacy/security incident; or
+- a case that requires manual database or chain mutation to reach its promised terminal
+  state.
+
+**Evidence-product expansion** requires the external acceptance and paid-repeat signals
+in §4. **Closed-network activation** is a separate decision and additionally requires at
+least two completed pilots to request supply beyond a named contracted panel. If named
+panels satisfy the buyer need, leave the network off.
+
+Any real-money network activation also requires all of the following on one fresh
+complete deployment:
 
 - exact activation evidence and a deployment-pinned eligibility → assignment →
   acceptance → commit/reveal → settlement/claim exercise;
@@ -354,9 +502,10 @@ terminal, expiry, refund, restart and compensation processing. Crowd Forecast,
 Surprisingly Popular and Feedback Bonus remain separately gated experiments, not reasons
 to activate the network.
 
-If pilots reject the network, reopen the governing design explicitly and then follow the
-ordered cross-package deletion rule. Until then, irreversible deletion destroys the only
-existing supply path for the DSA wedge before it has been tested.
+If completed pilots produce no demand for network supply, leave it disabled and reopen
+the governing design explicitly. Only then decide whether to retain it as a benchmark
+lane or follow the ordered cross-package deletion rule. The DSA wedge does not itself
+justify public-network activation.
 
 ---
 
@@ -391,34 +540,42 @@ shipped native approve-and-resume.
 
 ## 9. Sequence
 
-| Order | Work                                                        | Days/Status  |
-| ----- | ----------------------------------------------------------- | ------------ |
-| 1     | 1.1–1.3 — make the frame load and stay fixed                | Done         |
-| 2     | 1.4, 1.5 — the estimator and the screen                     | 5–6          |
-| 3     | 1.6 — disclosure and claim gate                             | 1            |
-| 4     | 2.3, 2.4 — override and engagement analytics                | 4–5          |
-| 5     | 2.1, 2.2 — the provider-independent verifiable draw         | 11–14        |
-| 6     | 2.7 — compliance-reader entry point                         | 5            |
-| 7     | 2.5 — stratified automated-eval sampling                    | 7–8          |
-| 8     | 2.6, 2.8 — anchoring and schema                             | 7            |
-| 9     | 3.1–3.7 — DSA panel pilot, deployed validation and decision | Release gate |
+| Order | Work                                                              | Days/Status  |
+| ----- | ----------------------------------------------------------------- | ------------ |
+| 1     | 1.1–1.3 — make the operational frame load and stay fixed          | Done         |
+| 2     | 1.4a–1.4c — estimand, estimator, variance decision and validation | 5–6          |
+| 3     | 1.5, 1.6 — decision view, disclosure and fail-closed claims       | 3            |
+| 4     | 2.3, 2.4 — privacy switch, override pattern and engagement events | 5–7          |
+| 5     | 2.8 — shared canonical packet schema before new public artifacts  | 5            |
+| 6     | 3.1 — complete DSA population import and reconciliation           | 7–10         |
+| 7     | 2.1, 2.2, 2.5 — committed frame, future beacon and reference draw | 18–22        |
+| 8     | 3.2–3.5 — frozen sample, authorized panel, blinding and metrics   | 16–21        |
+| 9     | 2.6, 2.7 — witnessed heads and compliance-reader access           | 7            |
+| 10    | 3.6 — audit-partner review and two provider pilots                | Release gate |
+| 11    | 3.7 — separate paid-network hosted/testnet validation             | Release gate |
 
-The frame in row one is repaired. Row two produces the number; row five makes an
-independent-sampling claim supportable. The intervening work makes the output honest and
-operationally useful without claiming independence early.
+Rows two and three ship useful provider-side measurement without claiming independence.
+Rows six through nine build the DSA artifact. Row ten decides whether the evidence product
+has a market. Row eleven decides separately whether the closed network deserves activation.
 
 ### Ordering hazards
 
-- **2.5 before any weighting that reads its output**, never in parallel.
+- **Reference and operational channels never share rollups.** Implement the exclusion in
+  1.4 before 2.5 writes its first label.
 - **One migration in flight at a time.** `0165` is taken; the next is `0166`.
-- **Copy fixes now span four files**, because public strings moved into message catalogs
-  and the German translations are already written. Editing a page component alone breaks no
-  test and leaves the other language asserting the old claim.
-- **The claim-gate walker never scans the message catalogs.** Adding a rule without
-  extending it certifies English and ignores German — worse than no gate.
+- **The claim-gate walker does not scan message catalogs.** Extend it to English and German
+  JSON before adding estimator or DSA copy; editing a component alone can leave localized
+  overclaims green.
 - **Fix the locale-dependent canonicalisation before publishing any verifier.** Key
   ordering uses locale comparison, so two machines can derive different digests for the
   same packet.
+- **Do not precommit the final beacon-derived seed before the beacon exists.** Commit the
+  frame, method and future round first; derive and freeze the seed afterward.
+- **The current coverage export is bounded at 5,000 rows.** DSA population import and raw
+  calculation inputs need paged or object-backed manifests, not a raised in-memory cap.
+- **No post-selection redaction, replacement or audience switching.** A case that cannot
+  enter its frozen lane becomes an explicit gap unless the precommitted method already
+  defines a provider-independent replacement rule.
 
 ---
 
@@ -465,8 +622,9 @@ this document should hold to the same standard.
   explicitly.
 - **Not that the evidence is legally privileged.** Signed evidence is admissible and
   carries no presumption without a qualified timestamp.
-- **Not that blinding or independence hold on the live lane.** They do not — the swap flag
-  is hardcoded false and reviewers are customer-invited and customer-named.
+- **Not that DSA blinding or independence hold on the live lane.** Full assurance runs
+  randomize A/B position, while direct private evidence fixes `swap:false`; neither proves
+  that a DSA reviewer cannot see provider identity, machine outcome or appeal result.
 - **Not that "we cannot prove what happened" is a named buyer category.** It is not; no
   major survey isolates it. That is both the opportunity and the sales-cycle risk.
 - **Not that signing is what makes the evidence credible.** No regulator requires or has
@@ -477,3 +635,135 @@ this document should hold to the same standard.
 - **Not that an outside panel satisfies statutory human oversight.** It supplies a
   separate calibration/reference label. Article 20 decisions remain with appropriately
   qualified people under the platform's supervision.
+- **Not that a provider-side reference sample is the statutory audit sample.** The
+  auditing organisation retains method and sampling authority.
+- **Not that a future beacon proves the population is complete.** It constrains selection
+  from the committed frame; reconciliation and source integrity remain separate evidence.
+- **Not that panel labels are objective or legal ground truth.** They are adjudicated
+  labels against a frozen policy and documented reference standard.
+- **Not that “independent panel” means Article 37 independence.** That term is reserved for
+  an audit engagement that satisfies the DSA's organisational conditions.
+- **Not that the DSA product is implemented.** Generic assurance, privacy, assignment and
+  evidence primitives exist; the population schema, single-case blinding, reference draw,
+  estimator and DSA export remain open work below.
+
+---
+
+## 12. File-level implementation packets
+
+These are issue-sized contracts. A task is not done because a unit helper exists; it is
+done only when the named consumer path and exit tests pass together.
+
+### 1.4 — population estimator
+
+- Add a pure `packages/nextjs/lib/tokenless/populationEstimates.ts` and tests. Read immutable
+  opportunities and observations from `adaptiveCoverageExport.ts`; never derive estimates
+  from the existing unweighted rollups in `assuranceMetrics.ts`.
+- Extend the coverage-export schema with typed `estimable` and `coverage_gap` results,
+  estimand ID, frame/selected/completed counts, weighted cells, certainty share, variance
+  method and limitations.
+- Exit when the §5 acceptance suite passes and an external statistician or audit-method
+  partner approves the interval method. Until then, export point estimates and gaps only;
+  the public capability remains false.
+
+### 1.5–1.6 — decision view and claims
+
+- Extend `AdaptiveCoverageSummary.tsx`, `EvaluationDashboardPanel.tsx` and
+  `evaluationDashboard.ts` in the existing authenticated Evaluations route. Add English
+  and German message-catalog entries and interaction tests for the exact two-number and
+  gap states, tenant isolation, accessibility and absence of raw internal IDs.
+- Add estimator/DSA capability rules to `publicEvidenceClaims.ts` and its cross-consumer
+  test. Expand the source walker to `messages/en` and `messages/de` before any copy lands.
+- Exit when either locale fails CI for an unearned claim and the capability stays false
+  without deployed exercise evidence.
+
+### 2.1–2.2 — committed reference draw
+
+- Add dedicated sampling-epoch/frame tables beginning with the next available migration;
+  do not reuse reviewer-integrity epochs in `integrityEpochs.ts`. States are `draft`,
+  `frame_committed`, `beacon_available`, `sample_frozen` and `closed`, with one immutable
+  transition record per state change.
+- Extract the reusable verification core from `packages/keeper/src/drand.ts` into a shared
+  package consumed by both keeper and Next.js. A cross-consumer golden-vector test must
+  bind exact network, round, signature, randomness and derivation domain.
+- Exit when an altered frame, method, round or beacon fails; a frozen manifest reproduces
+  every bucket; the commitment predates beacon availability; and neither consumer can
+  rederive a different result.
+
+### 2.3–2.4 — supervision quality
+
+- Build on append-only overrides in `evidencePackets.ts`, existing aggregation in
+  `adaptiveCoverageExport.ts`/`assuranceMetrics.ts`, and latency data in
+  `agentReviewQuality.ts`. Keep reviewer disagreement, decision-owner override, reversal
+  and supersession as separate events.
+- Add the per-workspace worker-monitoring switch before persisting or displaying reviewer-
+  level engagement. Aggregate-only mode remains functional.
+- Exit with minimum-denominator, zero-override, supersession, idle/reopen, timestamp,
+  privacy-role, EN/DE and works-council-off tests.
+
+### 2.5 — reference-sampling channel
+
+- Extend `automatedEvalReceipts.ts` with a separate append-only reference-sample record,
+  not an ordinary adaptive opportunity. Stratify automated `pass` and `fail`; retain
+  always-review for `uncertain`.
+- Exit when both strata are sampled reproducibly, labels are excluded from adaptive
+  promotion, disagreement can reset coverage, agreement cannot promote it, and exports
+  identify the reference stratum and method.
+
+### 2.8, then 2.6–2.7 — packet and adverse-reader path
+
+- Replace hand-rolled canonical JSON in `assuranceAttestations.ts`, `evidencePackets.ts`,
+  `adaptiveCoverageExport.ts` and their script verifiers with one RFC 8785 implementation.
+  Version the new JSON Schema and keep legacy verification; never rewrite old evidence.
+- Enqueue real `audit_export_head` checkpoints through
+  `assuranceAttestationPipeline.ts`, then extend `evidenceShareGrants.ts` from a single
+  packet to a bounded, revocable project/window grant.
+- Exit on official RFC vectors including Unicode and numbers, browser/Node byte identity,
+  DSSE negative cases, legacy verification, exact boundary digests, expiry/revocation and
+  a public view containing no ciphertext, private content or reviewer identifiers.
+
+### 3.1–3.2 — DSA population and frozen sample
+
+- Add versioned population, decision, reconciliation, frame and sample tables plus paged
+  ingest/freeze APIs. Do not reuse the generic 200-case comparative run importer or the
+  5,000-row coverage-export response as the population store.
+- Store the §4 population contract, Article 24 receipt linkage, corrections and exact
+  source/partition totals. Freeze inclusion status and probability for **every** frame
+  unit, including non-selected units.
+- Exit when idempotent large imports reproduce the exact root/count; conflicting IDs are
+  rejected or explicitly versioned; missing/extra rows block freeze; and the full sample
+  recomputes offline without reading mutable provider state.
+
+### 3.3–3.4 — authorized panel and DSA blinding
+
+- Reuse `workspaceReviewers.ts`, `reviewerExpertise.ts`, `artifactPrivacy.ts`, assignments
+  and short leases. Add structured language/CEFR evidence, policy-category competence and
+  conflict declarations, frozen at assignment rather than resolved from a later profile.
+- Add a single-case reviewer projection that withholds provider identity, machine outcome
+  and appeal result. Randomized baseline/candidate swap in `assuranceRunOrchestration.ts`
+  is not sufficient, and `directPrivateReviewEvidence.ts` currently fixes `swap:false`.
+- Exit when only authorized private reviewers receive the exact frozen content; artifact
+  and metadata leakage tests find none of the withheld fields; qualification expiry and
+  conflicts fail closed; and the authorized reveal reproduces the committed mapping.
+
+### 3.5 — DSA output
+
+- Add a typed exporter over the 1.4 estimator and 3.1/3.2 frame. Emit the official
+  service/reporting-period/system/scope/value/context rows, per-language cells for VLOPs,
+  raw calculation inputs, reconciliation report, reference definition, uncertainty and
+  limitations.
+- Exit when an offline verifier exactly reproduces every published cell; missing
+  dimensions, small/empty cells and incomplete support become gaps; and confidential and
+  public packet projections have deterministic, separately signed digests.
+
+### 3.6–3.7 — external decision and network validation
+
+- 3.6 completes only with dated method acceptance from one audit organisation, two
+  provider pilot issue logs, offline calculation reproduction and one paid-repeat request.
+- 3.7 uses one fresh complete deployment key and the real hosted/testnet path across
+  Next.js, Ponder, keeper and contracts: eligibility → assignment → acceptance → commit →
+  reveal/beacon → payout or compensation → claim/recovery. Exercise keeper outage, retry,
+  reorg, beacon failure, expiry and old-key rejection.
+- Neither task enables the closed network automatically. Activation still requires the
+  legal/privacy/payment gates in §7 and explicit evidence of demand beyond the named
+  panel.
