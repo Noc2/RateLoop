@@ -153,6 +153,13 @@ a second long-poll implementation.
 **This is the cheapest defensibility available anywhere in either document, and it is
 time-critical in a way nothing else here is.**
 
+It matters more after the competitor survey, not less. The differentiator is not any
+single statistic — Langfuse computes kappa, LangSmith runs blind panels, Galileo ships an
+agreement chart — it is **the join**, and a vocabulary that can express the join is
+exactly what these standards lack. Getting `evaluator.panel`, `agreement.alpha` and a
+confidence bound into the schema makes the joined thing nameable by everyone, including
+by buyers comparing vendors.
+
 The business plan lists standards participation as slow and unpaid via CEN-CENELEC
 JTC 21. That is true of JTC 21 and false of these. The vocabulary for "a human graded
 this AI output" is being written **this month**, and every one of this product's

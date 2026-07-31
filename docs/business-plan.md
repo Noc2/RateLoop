@@ -74,18 +74,55 @@ Anthropic's own engineering guidance names human grading the **gold standard use
 calibrate model-based graders**, with its binding weakness stated plainly: _access to
 human experts at scale_.
 
-**Four things this product does that no evaluation platform does.** Verified in code:
+**The differentiation claim, corrected twice and now narrow enough to survive.**
 
-|                                                               | Where                       | Why it matters                                                                                                                                                                                                                   |
-| ------------------------------------------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Chance-corrected agreement** — nominal Krippendorff's alpha | `agentReviewQuality.ts:155` | The 2026 methodology literature prescribes this as the _headline_ number. **No platform in the category computes κ or α.** They ship raw percentage agreement, which the same literature calls misleading under class imbalance. |
-| **Confidence-bounded endorsement** — Wilson lower bound       | four modules                | No platform documents intervals. Human labelling operates in the sample-size regime where normal-approximation intervals dramatically understate uncertainty.                                                                    |
-| **Reproducible sampling** — HMAC over scope and opportunity   | `adaptiveReview.ts:175`     | Every documented competitor samples randomly at a rate. Nothing else can be re-derived.                                                                                                                                          |
-| **Blinded independent panels**                                | throughout                  | Structural independence from the deciding party, which no first-party tool can supply.                                                                                                                                           |
+An earlier draft said no platform computes chance-corrected agreement and none uses
+blinded panels. **Both are false.** Langfuse's Score Analytics computes Cohen's kappa,
+F1, confusion matrices and correlation coefficients. LangSmith runs genuinely blind
+multi-annotator review — reviewers cannot see each other's scores — with reservations
+and configurable reviewer counts. Galileo shipped a raw-percentage annotator-agreement
+chart in May 2026. Confident AI reports a per-metric confusion matrix against human
+labels. Label Studio Enterprise has consensus and pairwise agreement, gold-standard
+honeypots, annotator performance scoring and bot detection — more mature quality control
+than any evaluation vendor.
 
-Three vendors do route production traffic to humans — Datadog (shipped March 2026,
-capped at 5% sampling and 1,000 records), Confident AI, and LangSmith. **None computes
-an agreement statistic, none supplies humans, and none samples reproducibly.**
+**What is actually unoccupied is the join.** Each capability exists somewhere and no
+product has two of them at once:
+
+- **Langfuse has the statistics and cannot collect the data.** A second annotator's
+  submission overwrites the first; the maintainers' own workaround leaves prior labels
+  visible, so there is no blinded path. Its kappa compares two _score sources_, not
+  multiple human raters.
+- **LangSmith collects genuinely blind independent labels and computes nothing from
+  them.** Its "alignment score" is raw percentage match.
+- **Braintrust states outright that it does not support blind review**, and averages
+  multiple scores together. Weave shows "has annotation" badges before you rate,
+  anchoring the second rater. Datadog resolves disagreement by intersection, majority
+  vote or averaging — destroying the signal, though its CSV export keeps per-reviewer
+  columns so a customer could compute kappa themselves.
+- **Arize publishes a guide prescribing Cohen's kappa, Fleiss' kappa and Krippendorff's
+  alpha, and ships none of them.**
+
+So the honest claim is: **blind independent multi-rater collection, chance-corrected
+agreement over it, a confidence bound, reproducible sampling, and a signed artefact — in
+one product.** Every piece exists in isolation; nothing joins them.
+
+Two further gaps worth naming, both verified across the category. **No vendor computes
+statistical significance on experiment comparisons.** And **no signed, machine-readable
+evaluation artefact exists anywhere** — model cards are prose, leaderboards are HTML,
+audits are PDFs. The signing technology exists (sigstore, in-toto, C2PA's conformance
+programme) and the assurance market exists, and nobody has joined those either. Verifiable
+inference proved the machine ran correctly; nobody proves _N qualified humans
+independently rated the same items and reached this level of agreement_.
+
+Do not sell the arithmetic. Krippendorff's alpha calculators are free and several
+qualitative-research tools have computed these coefficients for decades — ATLAS.ti built
+its implementation with Krippendorff himself. **The commercial object is the
+independence, the panel and the verifiability, never the coefficient.**
+
+Verified in code: nominal Krippendorff's alpha at `agentReviewQuality.ts:155`, Wilson
+bounds in four modules, HMAC-keyed sampling at `adaptiveReview.ts:175`, blinded panels
+throughout.
 
 ### What this does NOT yet do, stated before anyone sells it
 
@@ -225,10 +262,16 @@ magnitude for a product that already exists and has users.
 
 ## 5. Competition
 
-**Evaluation platforms** — LangSmith ($39/seat), Braintrust ($249/mo, $80M Series B at
-~$800M), Langfuse ($29–2,499, **acquired by ClickHouse January 2026**), Arize, Galileo,
-Confident AI. Well funded, consolidating, and all selling software with unlimited seats.
-None wants a services margin, which is why none supplies humans.
+**Evaluation platforms** — LangSmith ($39/seat), Braintrust ($249/mo flat, no per-seat
+charge at any tier), Langfuse ($29/$199/$2,499, MIT core including annotation queues),
+Arize ($50/mo, unlimited users and annotations on every tier), Galileo ($100/mo),
+Confident AI ($200/$2,000, Apache-2.0 core). Well funded and consolidating: Datadog
+acquired Adaptive ML in June 2026 and invested in Patronus's $50M Series B, Humanloop's
+platform sunset in September 2025, and Argilla has been frozen since March 2025.
+
+**All of them sell software with unlimited or cheap seats. None wants a services
+margin**, which is why none supplies humans — and why the labour side went to Mercor,
+Handshake and Surge instead, selling labour plus rubrics rather than tooling.
 
 **Signed-evidence micro-vendors** — the closest is Monaco-based **KLA Digital**, selling
 tamper-evident records and human approvals **from €5,000 per application with no free
