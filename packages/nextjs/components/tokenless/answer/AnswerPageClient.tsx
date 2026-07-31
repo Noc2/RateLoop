@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { SignedOutGate } from "~~/components/auth/SignedOutGate";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { HumanAssuranceRaterClient } from "~~/components/tokenless/HumanAssuranceRaterClient";
@@ -18,6 +18,7 @@ import {
 import { HumanTabs } from "~~/components/tokenless/human/HumanTabs";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import { Card } from "~~/components/tokenless/ui/Card";
+import { usePathname, useRouter } from "~~/i18n/navigation";
 import { readBrowserSession, subscribeToBrowserAuthSessionChanges } from "~~/lib/auth/client";
 import { AnswerRequestError, loadAnswerQueues, readAccountBoundAssignments } from "~~/lib/tokenless/answerQueue";
 
@@ -49,6 +50,7 @@ export function AnswerPageClient({
   initialScope?: VisibleScope;
   initialView?: ReviewView;
 }) {
+  const t = useTranslations("review.queue");
   const router = useRouter();
   const pathname = usePathname();
   const query = initialQuery;
@@ -70,11 +72,11 @@ export function AnswerPageClient({
   const assignmentTitleCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const assignment of assignments) {
-      const title = assignment.projectName ?? "Private review";
+      const title = assignment.projectName ?? t("privateReview");
       counts.set(title, (counts.get(title) ?? 0) + 1);
     }
     return counts;
-  }, [assignments]);
+  }, [assignments, t]);
   const loadGenerationRef = useRef(0);
   const loadControllerRef = useRef<AbortController | null>(null);
 
@@ -134,12 +136,12 @@ export function AnswerPageClient({
       } catch (cause) {
         if (controller.signal.aborted || generation !== loadGenerationRef.current) return;
         if (cause instanceof AnswerRequestError && cause.status === 401) setSignedOut(true);
-        else setError(cause instanceof Error ? cause.message : "Unable to load the Answer queue.");
+        else setError(t("loadFailed"));
       } finally {
         if (!controller.signal.aborted && generation === loadGenerationRef.current) setLoading(false);
       }
     },
-    [query, view],
+    [query, t, view],
   );
 
   useEffect(() => {
@@ -174,7 +176,7 @@ export function AnswerPageClient({
 
   return (
     <AppPageShell outerClassName="pb-8" contentClassName="space-y-4">
-      <h1 className="sr-only">{view === "history" ? "Review history" : "Review work"}</h1>
+      <h1 className="sr-only">{view === "history" ? t("historyTitle") : t("activeTitle")}</h1>
       <HumanTabs
         active={view === "history" ? "history" : "discover"}
         endAction={
@@ -186,7 +188,7 @@ export function AnswerPageClient({
               aria-expanded={invitationOpen}
               onClick={() => setInvitationOpen(current => !current)}
             >
-              {invitationOpen ? "Hide invitation" : "Have an invitation?"}
+              {invitationOpen ? t("hideInvitation") : t("haveInvitation")}
             </button>
           ) : null
         }
@@ -201,7 +203,7 @@ export function AnswerPageClient({
       {showScopeControls || query ? (
         <div className="flex flex-wrap items-center gap-2">
           {showScopeControls ? (
-            <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Review sources">
+            <div className="flex flex-wrap items-center gap-2" role="group" aria-label={t("sources")}>
               {(["all", "public", "private"] as const).map(value => (
                 <button
                   key={value}
@@ -212,25 +214,32 @@ export function AnswerPageClient({
                     visibleScope === value ? "pill-active" : "pill-inactive"
                   }`}
                 >
-                  {value}
+                  {t(`scope.${value}`)}
                 </button>
               ))}
             </div>
           ) : null}
           {query ? (
             <Card as="span" variant="nested" className="ml-auto rounded-lg px-3 py-2 text-sm text-base-content/65">
-              Results for <strong className="font-medium text-base-content">&quot;{query}&quot;</strong>
+              {t.rich("resultsFor", {
+                query,
+              })}
             </Card>
           ) : null}
         </div>
       ) : null}
 
       <div className="space-y-4">
-        <AsyncSection loading={loading} loadingLabel="Loading review work">
+        <AsyncSection loading={loading} loadingLabel={t("loading")}>
           {null}
         </AsyncSection>
         {!loading && !signedOut && visibleScope !== "public" && view === "active" && assignments.length > 1 ? (
-          <Card as="div" role="group" className="flex flex-wrap gap-2 rounded-lg p-3" aria-label="Private assignments">
+          <Card
+            as="div"
+            role="group"
+            className="flex flex-wrap gap-2 rounded-lg p-3"
+            aria-label={t("privateAssignments")}
+          >
             {assignments.map((assignment, index) => (
               <button
                 key={assignment.assignmentId}
@@ -239,13 +248,13 @@ export function AnswerPageClient({
                 onClick={() => setFocusedAssignmentId(assignment.assignmentId)}
                 className={`rounded-lg px-3 py-2 text-sm font-medium ${
                   focusedAssignmentId === assignment.assignmentId
-                    ? "bg-white text-black"
-                    : "bg-white/[0.04] text-base-content/65 hover:bg-white/[0.08]"
+                    ? "bg-base-content text-base-100"
+                    : "bg-base-content/[0.04] text-base-content/65 hover:bg-base-content/[0.08]"
                 }`}
               >
-                {(assignmentTitleCounts.get(assignment.projectName ?? "Private review") ?? 0) > 1
-                  ? `${assignment.projectName ?? "Private review"} · ${index + 1}`
-                  : (assignment.projectName ?? "Private review")}
+                {(assignmentTitleCounts.get(assignment.projectName ?? t("privateReview")) ?? 0) > 1
+                  ? `${assignment.projectName ?? t("privateReview")} · ${index + 1}`
+                  : (assignment.projectName ?? t("privateReview"))}
               </button>
             ))}
           </Card>
@@ -261,7 +270,7 @@ export function AnswerPageClient({
                   initialAssignmentId={assignment.assignmentId}
                   initialTermsHash={assignment.confidentialityTermsHash ?? ""}
                   presentation="embedded"
-                  assignmentTitle={assignment.projectName ?? "Assigned private review"}
+                  assignmentTitle={assignment.projectName ?? t("assignedPrivateReview")}
                   assignmentExpiresAt={assignment.assignmentExpiresAt}
                   onContinue={() => void load()}
                 />
@@ -288,11 +297,11 @@ export function AnswerPageClient({
           : null}
         {!loading && signedOut ? (
           <SignedOutGate
-            description="Review work is available to eligible, signed-in RateLoop humans."
+            description={t("signInDescription")}
             headingLevel={2}
             layout="embedded"
             returnTo={discoverHref(pathname, query, scope, initialInvitationOpen, view)}
-            title="Sign in to discover review work"
+            title={t("signInTitle")}
             titleId="human-discover-sign-in-title"
           />
         ) : null}
@@ -302,11 +311,7 @@ export function AnswerPageClient({
             className="flex min-h-36 flex-col items-center justify-center gap-3 rounded-lg p-6 text-center"
           >
             <p className="text-base text-base-content/60">
-              {query
-                ? "No review work matches this search."
-                : view === "history"
-                  ? "No review history yet."
-                  : "No review work is available right now."}
+              {query ? t("noSearchResults") : view === "history" ? t("noHistory") : t("noneAvailable")}
             </p>
             {!query && view === "active" && !invitationOpen ? (
               <button
@@ -315,13 +320,13 @@ export function AnswerPageClient({
                 aria-controls="discover-invitation-panel"
                 onClick={() => setInvitationOpen(true)}
               >
-                Use an invitation
+                {t("useInvitation")}
               </button>
             ) : null}
           </Card>
         ) : null}
         {error ? (
-          <p role="alert" className="rounded-lg bg-red-400/10 p-4 text-sm text-red-100">
+          <p role="alert" className="rounded-lg bg-error/10 p-4 text-sm text-error">
             {error}
           </p>
         ) : null}

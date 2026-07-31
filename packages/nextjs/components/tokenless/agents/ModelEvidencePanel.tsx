@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
+import { AgentText } from "./AgentText";
+import { useAgentFormatter, useAgentLocale, useAgentTranslations } from "./AgentsLocaleProvider";
 import { SelectField } from "~~/components/tokenless/forms/Field";
 import { Card } from "~~/components/tokenless/ui/Card";
 import type {
@@ -10,49 +12,57 @@ import type {
   EvaluationModelScope,
 } from "~~/lib/tokenless/evaluationDashboard";
 
-const dateFormatter = new Intl.DateTimeFormat("en", {
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-  timeZone: "UTC",
-});
-
 function modelName(profile: EvaluationModelProfile["primary"]) {
   return profile.resolvedModel ?? profile.requestedModel;
 }
 
-function profileLabel(profile: EvaluationModelProfile) {
+type Translate = (key: string, values?: Record<string, number | string>) => string;
+
+function profileLabel(profile: EvaluationModelProfile, copy: Translate) {
   const version = profile.primary.modelVersion ? ` · ${profile.primary.modelVersion}` : "";
-  const contributors = profile.contributors.length > 0 ? ` + ${profile.contributors.length} more` : "";
+  const contributors =
+    profile.contributors.length > 0 ? ` + ${copy("contributorsMore", { count: profile.contributors.length })}` : "";
   return `${profile.primary.provider} · ${modelName(profile.primary)}${version}${contributors}`;
 }
 
-function percent(bps: number | null) {
-  return bps === null ? "Pending" : `${(bps / 100).toFixed(1)}%`;
+function percent(bps: number | null, copy: Translate, format: ReturnType<typeof useAgentFormatter>) {
+  return bps === null
+    ? copy("pending")
+    : `${format.number(bps / 100, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 }
 
-function duration(milliseconds: number | null) {
-  if (milliseconds === null) return "Not reported";
+function duration(milliseconds: number | null, copy: Translate, format: ReturnType<typeof useAgentFormatter>) {
+  if (milliseconds === null) return copy("notReported");
   if (milliseconds < 1_000) return `${Math.round(milliseconds)} ms`;
-  return `${(milliseconds / 1_000).toFixed(milliseconds < 10_000 ? 1 : 0)} sec`;
+  return copy("seconds", {
+    value: format.number(milliseconds / 1_000, {
+      minimumFractionDigits: milliseconds < 10_000 ? 1 : 0,
+      maximumFractionDigits: milliseconds < 10_000 ? 1 : 0,
+    }),
+  });
 }
 
-function tokenCount(value: number | null) {
-  return value === null ? "—" : value.toLocaleString();
+function tokenCount(value: number | null, locale: string) {
+  return value === null ? "—" : value.toLocaleString(locale);
 }
 
-function stageLabel(stage: EvaluationModelScope["stage"]) {
-  if (stage === "high_coverage") return "High coverage";
-  if (stage === "medium_coverage") return "Medium coverage";
-  return stage === "monitoring" ? "Monitoring" : "Calibrating";
+function stageLabel(stage: EvaluationModelScope["stage"], copy: Translate) {
+  return copy(`stage.${stage}`);
 }
 
-function reviewLabel(execution: EvaluationModelExecution) {
-  if (execution.reviewStatus === "completed") return "Reviewed";
-  if (execution.reviewStatus === "review_requested") return "In review";
-  if (execution.reviewStatus === "skipped") return "Skipped";
-  if (execution.reviewStatus === "failed") return "Review failed";
-  return execution.reviewStatus === "decided" ? "Decision recorded" : "Not evaluated";
+function reviewLabel(execution: EvaluationModelExecution, copy: Translate) {
+  const known = new Set(["completed", "review_requested", "skipped", "failed", "decided"]);
+  return copy(
+    `review.${execution.reviewStatus && known.has(execution.reviewStatus) ? execution.reviewStatus : "not_evaluated"}`,
+  );
+}
+
+function riskLabel(riskTier: string, copy: Translate) {
+  return copy(`risk.${["low", "medium", "high", "critical"].includes(riskTier) ? riskTier : "unknown"}`);
+}
+
+function agreementLabel(agreement: string, copy: Translate) {
+  return copy(`agreement.${["agreed", "disagreed"].includes(agreement) ? agreement : "unknown"}`);
 }
 
 function safeId(value: string) {
@@ -81,6 +91,7 @@ export function modelVolumeCalendarPoints(daily: EvaluationModelDailyPoint[], en
 }
 
 function EvaluationVolumeChart({ profile }: { profile: EvaluationModelProfile }) {
+  const copy = useAgentTranslations("evidencePanels.model");
   const points = modelVolumeCalendarPoints(profile.daily);
   const width = 560;
   const height = 150;
@@ -102,8 +113,12 @@ function EvaluationVolumeChart({ profile }: { profile: EvaluationModelProfile })
 
   return (
     <div>
-      <h3 className="text-sm font-semibold">Evaluation volume</h3>
-      <p className="mt-1 text-xs text-base-content/55">Eligible outputs and human-review requests by day.</p>
+      <h3 className="text-sm font-semibold">
+        <AgentText id="evaluationVolume" />
+      </h3>
+      <p className="mt-1 text-xs text-base-content/55">
+        <AgentText id="evaluationVolumeDescription" />
+      </p>
       {profile.daily.length > 0 ? (
         <svg
           className="mt-4 h-40 w-full text-[var(--rateloop-blue)]"
@@ -111,10 +126,11 @@ function EvaluationVolumeChart({ profile }: { profile: EvaluationModelProfile })
           role="img"
           aria-labelledby={`${id}-title ${id}-description`}
         >
-          <title id={`${id}-title`}>{`Evaluation volume for ${profileLabel(profile)}`}</title>
+          <title id={`${id}-title`}>{copy("volumeFor", { profile: profileLabel(profile, copy) })}</title>
           <desc id={`${id}-description`}>
-            {totals.opportunities} eligible outputs and {totals.reviewed} human-review requests across {points.length}
-            calendar days.
+            {totals.opportunities} <AgentText id="translated197" /> {totals.reviewed} <AgentText id="translated198" />{" "}
+            {points.length}
+            <AgentText id="translated199" />
           </desc>
           <line
             x1={left}
@@ -166,14 +182,16 @@ function EvaluationVolumeChart({ profile }: { profile: EvaluationModelProfile })
           })}
         </svg>
       ) : (
-        <p className="mt-4 text-sm text-base-content/55">No request history yet.</p>
+        <p className="mt-4 text-sm text-base-content/55">
+          <AgentText id="noRequestHistory" />
+        </p>
       )}
       <div className="mt-2 flex flex-wrap gap-4 text-xs text-base-content/55" aria-hidden="true">
         <span className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-sm bg-[var(--rateloop-blue)]/25" /> Eligible
+          <span className="h-2.5 w-2.5 rounded-sm bg-[var(--rateloop-blue)]/25" /> <AgentText id="translated200" />
         </span>
         <span className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-sm bg-[var(--rateloop-blue)]" /> Human review
+          <span className="h-2.5 w-2.5 rounded-sm bg-[var(--rateloop-blue)]" /> <AgentText id="translated201" />
         </span>
       </div>
     </div>
@@ -181,6 +199,8 @@ function EvaluationVolumeChart({ profile }: { profile: EvaluationModelProfile })
 }
 
 function AgreementChart({ profile }: { profile: EvaluationModelProfile }) {
+  const copy = useAgentTranslations("evidencePanels.model");
+  const locale = useAgentLocale();
   const agreed = profile.agreementCount;
   const disagreed = Math.max(0, profile.comparableCount - agreed);
   const total = Math.max(1, profile.comparableCount);
@@ -189,37 +209,52 @@ function AgreementChart({ profile }: { profile: EvaluationModelProfile }) {
 
   return (
     <div>
-      <h3 className="text-sm font-semibold">Human agreement</h3>
-      <p className="mt-1 text-xs text-base-content/55">Comparable reviewed outputs for this model profile.</p>
+      <h3 className="text-sm font-semibold">
+        <AgentText id="humanAgreement" />
+      </h3>
+      <p className="mt-1 text-xs text-base-content/55">
+        <AgentText id="humanAgreementDescription" />
+      </p>
       {profile.comparableCount > 0 ? (
         <div
           className="mt-6"
           role="img"
-          aria-label={`${agreed} agreed and ${disagreed} disagreed comparable outputs for ${profileLabel(profile)}.`}
+          aria-label={copy("agreementAria", {
+            agreed,
+            disagreed,
+            profile: profileLabel(profile, copy),
+          })}
         >
-          <div className="flex h-5 overflow-hidden rounded-full bg-white/[0.06]">
-            <div className="bg-emerald-300/80" style={{ width: agreedWidth }} />
+          <div className="flex h-5 overflow-hidden rounded-full bg-base-content/[0.06]">
+            <div className="bg-success/80" style={{ width: agreedWidth }} />
             <div className="bg-rose-300/75" style={{ width: disagreedWidth }} />
           </div>
           <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
             <div>
-              <p className="text-xs text-base-content/55">Agreed</p>
-              <p className="mt-1 font-mono text-lg">{agreed.toLocaleString()}</p>
+              <p className="text-xs text-base-content/55">
+                <AgentText id="agreed" />
+              </p>
+              <p className="mt-1 font-mono text-lg">{agreed.toLocaleString(locale)}</p>
             </div>
             <div>
-              <p className="text-xs text-base-content/55">Disagreed</p>
-              <p className="mt-1 font-mono text-lg">{disagreed.toLocaleString()}</p>
+              <p className="text-xs text-base-content/55">
+                <AgentText id="disagreed" />
+              </p>
+              <p className="mt-1 font-mono text-lg">{disagreed.toLocaleString(locale)}</p>
             </div>
           </div>
         </div>
       ) : (
-        <p className="mt-4 text-sm text-base-content/55">No comparable human results yet.</p>
+        <p className="mt-4 text-sm text-base-content/55">
+          <AgentText id="noComparableResults" />
+        </p>
       )}
     </div>
   );
 }
 
 function ModelScopeList({ scopes }: { scopes: EvaluationModelScope[] }) {
+  const copy = useAgentTranslations("evidencePanels.model");
   const visible = scopes.slice(0, 6);
   const additional = scopes.slice(6);
   if (visible.length === 0) return null;
@@ -228,20 +263,23 @@ function ModelScopeList({ scopes }: { scopes: EvaluationModelScope[] }) {
       <Card as="div" variant="nested" key={scope.scopeId} className="rounded-xl p-3 text-sm">
         <p className="font-medium">{scope.workflowKey}</p>
         <p className="mt-1 text-xs text-base-content/55">
-          <span className="capitalize">{scope.riskTier} risk</span> · {stageLabel(scope.stage)}
+          <span className="capitalize">
+            {riskLabel(scope.riskTier, copy)} <AgentText id="translated202" />
+          </span>{" "}
+          · {stageLabel(scope.stage, copy)}
         </p>
       </Card>
     ));
   return (
     <section aria-labelledby="model-coverage-heading">
       <h3 id="model-coverage-heading" className="text-sm font-semibold">
-        Coverage
+        <AgentText id="translated203" />
       </h3>
       <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{cards(visible)}</div>
       {additional.length > 0 ? (
         <details className="mt-3">
           <summary className="cursor-pointer text-xs font-medium text-base-content/65">
-            Show {additional.length} more scopes
+            <AgentText id="translated204" /> {additional.length} <AgentText id="translated205" />
           </summary>
           <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{cards(additional)}</div>
         </details>
@@ -251,51 +289,78 @@ function ModelScopeList({ scopes }: { scopes: EvaluationModelScope[] }) {
 }
 
 function RecentExecutions({ executions }: { executions: EvaluationModelExecution[] }) {
+  const copy = useAgentTranslations("evidencePanels.model");
+  const format = useAgentFormatter();
+  const locale = useAgentLocale();
   if (executions.length === 0) return null;
   return (
     <section aria-labelledby="model-requests-heading">
       <h3 id="model-requests-heading" className="text-sm font-semibold">
-        Recent requests
+        <AgentText id="translated206" />
       </h3>
-      <div className="mt-3 overflow-x-auto rounded-xl border border-white/10">
+      <div className="mt-3 overflow-x-auto rounded-xl border border-base-content/10">
         <table className="w-full min-w-[720px] text-left text-sm">
-          <thead className="bg-white/[0.03] text-xs text-base-content/55">
+          <thead className="bg-base-content/[0.03] text-xs text-base-content/55">
             <tr>
-              <th className="px-4 py-3 font-medium">Time</th>
-              <th className="px-4 py-3 font-medium">Scope</th>
-              <th className="px-4 py-3 font-medium">Execution</th>
-              <th className="px-4 py-3 font-medium">Tokens</th>
-              <th className="px-4 py-3 font-medium">Review</th>
+              <th className="px-4 py-3 font-medium">
+                <AgentText id="time" />
+              </th>
+              <th className="px-4 py-3 font-medium">
+                <AgentText id="scope" />
+              </th>
+              <th className="px-4 py-3 font-medium">
+                <AgentText id="execution" />
+              </th>
+              <th className="px-4 py-3 font-medium">
+                <AgentText id="tokens" />
+              </th>
+              <th className="px-4 py-3 font-medium">
+                <AgentText id="review" />
+              </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-white/10">
+          <tbody className="divide-y divide-base-content/10">
             {executions.slice(0, 10).map(execution => (
               <tr key={execution.executionId}>
                 <td className="px-4 py-3 text-xs text-base-content/60">
-                  <time dateTime={execution.occurredAt}>{dateFormatter.format(new Date(execution.occurredAt))}</time>
+                  <time dateTime={execution.occurredAt}>
+                    {format.dateTime(new Date(execution.occurredAt), {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                      timeZone: "UTC",
+                    })}
+                  </time>
                 </td>
                 <td className="px-4 py-3">
-                  <p>{execution.workflowKey ?? "Not reported"}</p>
+                  <p>{execution.workflowKey ?? <AgentText id="dynamic050" />}</p>
                   {execution.riskTier ? (
-                    <p className="mt-1 text-xs capitalize text-base-content/55">{execution.riskTier} risk</p>
+                    <p className="mt-1 text-xs capitalize text-base-content/55">
+                      {riskLabel(execution.riskTier, copy)} <AgentText id="translated202" />
+                    </p>
                   ) : null}
                 </td>
                 <td className="px-4 py-3">
                   <p>
-                    {execution.modelCallCount} {execution.modelCallCount === 1 ? "model call" : "model calls"}
+                    {copy(execution.modelCallCount === 1 ? "modelCallOne" : "modelCallMany", {
+                      count: execution.modelCallCount,
+                    })}
                   </p>
-                  <p className="mt-1 text-xs text-base-content/55">{duration(execution.durationMs)}</p>
+                  <p className="mt-1 text-xs text-base-content/55">{duration(execution.durationMs, copy, format)}</p>
                 </td>
                 <td className="px-4 py-3 font-mono text-xs">
-                  {tokenCount(execution.inputTokens)} in · {tokenCount(execution.outputTokens)} out
+                  {tokenCount(execution.inputTokens, locale)} <AgentText id="translated207" />{" "}
+                  {tokenCount(execution.outputTokens, locale)} <AgentText id="translated208" />
                 </td>
                 <td className="px-4 py-3">
-                  <p>{reviewLabel(execution)}</p>
+                  <p>{reviewLabel(execution, copy)}</p>
                   {execution.agreement ? (
-                    <p className="mt-1 text-xs capitalize text-base-content/55">{execution.agreement}</p>
+                    <p className="mt-1 text-xs text-base-content/55">{agreementLabel(execution.agreement, copy)}</p>
                   ) : null}
                   {execution.metadataComplete === false ? (
-                    <p className="mt-1 text-xs text-amber-100/80">Metadata incomplete</p>
+                    <p className="mt-1 text-xs text-warning/80">
+                      <AgentText id="metadataIncomplete" />
+                    </p>
                   ) : null}
                 </td>
               </tr>
@@ -308,6 +373,9 @@ function RecentExecutions({ executions }: { executions: EvaluationModelExecution
 }
 
 export function ModelEvidencePanel({ profiles }: { profiles: EvaluationModelProfile[] }) {
+  const copy = useAgentTranslations("evidencePanels.model");
+  const format = useAgentFormatter();
+  const locale = useAgentLocale();
   const [selectedProfileHash, setSelectedProfileHash] = useState("");
   const selected = profiles.find(profile => profile.profileHash === selectedProfileHash) ?? profiles[0] ?? null;
   if (!selected) return null;
@@ -317,39 +385,41 @@ export function ModelEvidencePanel({ profiles }: { profiles: EvaluationModelProf
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h2 id="model-evidence-heading" className="text-xl font-semibold">
-            Model evidence
+            <AgentText id="translated209" />
           </h2>
-          <p className="mt-1 text-sm text-base-content/60">Execution evidence from eligible outputs.</p>
+          <p className="mt-1 text-sm text-base-content/60">
+            <AgentText id="executionEvidence" />
+          </p>
         </div>
         {profiles.length > 1 ? (
           <SelectField
             containerClassName="lg:min-w-80"
-            className="border-white/10 bg-[var(--rateloop-field)]"
-            label="Model profile"
+            className="border-base-content/10 bg-[var(--rateloop-field)]"
+            label={<AgentText id="attribute031" />}
             labelClassName="text-sm text-base-content/65"
             value={selected.profileHash}
             onChange={event => setSelectedProfileHash(event.target.value)}
           >
             {profiles.map(profile => (
               <option key={profile.profileHash} value={profile.profileHash}>
-                {profileLabel(profile)}
+                {profileLabel(profile, copy)}
               </option>
             ))}
           </SelectField>
         ) : null}
       </div>
 
-      <div className="mt-5 flex flex-wrap items-start justify-between gap-4 border-t border-white/10 pt-5">
+      <div className="mt-5 flex flex-wrap items-start justify-between gap-4 border-t border-base-content/10 pt-5">
         <div>
-          <p className="text-lg font-semibold">{profileLabel(selected)}</p>
+          <p className="text-lg font-semibold">{profileLabel(selected, copy)}</p>
           <p className="mt-1 text-xs text-base-content/55">
-            {selected.agentNames.length > 0 ? selected.agentNames.join(", ") : "Connected agent"}
-            {selected.orchestrationMode === "multi_model" ? " · Multi-model execution" : " · Single model"}
+            {selected.agentNames.length > 0 ? selected.agentNames.join(", ") : <AgentText id="dynamic046" />}
+            {` · ${copy(selected.orchestrationMode === "multi_model" ? "multiModel" : "singleModel")}`}
           </p>
         </div>
         {selected.contributors.length > 0 ? (
           <p className="max-w-xl text-xs leading-5 text-base-content/55">
-            Contributors:{" "}
+            <AgentText id="translated210" />{" "}
             {selected.contributors.map(contributor => `${contributor.provider} · ${modelName(contributor)}`).join(", ")}
           </p>
         ) : null}
@@ -357,10 +427,10 @@ export function ModelEvidencePanel({ profiles }: { profiles: EvaluationModelProf
 
       <dl className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
-          ["Eligible outputs", selected.opportunityCount.toLocaleString()],
-          ["Sent to human review", selected.reviewRequestedCount.toLocaleString()],
-          ["Human agreement", percent(selected.humanAgreementBps)],
-          ["Mean execution time", duration(selected.averageDurationMs)],
+          [copy("eligibleOutputs"), selected.opportunityCount.toLocaleString(locale)],
+          [copy("sentToReview"), selected.reviewRequestedCount.toLocaleString(locale)],
+          [copy("humanAgreement"), percent(selected.humanAgreementBps, copy, format)],
+          [copy("meanExecutionTime"), duration(selected.averageDurationMs, copy, format)],
         ].map(([label, value]) => (
           <Card as="div" variant="nested" key={label} className="rounded-xl p-4">
             <dt className="text-xs text-base-content/55">{label}</dt>
@@ -383,8 +453,8 @@ export function ModelEvidencePanel({ profiles }: { profiles: EvaluationModelProf
         <RecentExecutions executions={selected.recentExecutions} />
       </div>
 
-      <p className="mt-5 border-t border-white/10 pt-4 text-xs text-base-content/55">
-        Model and execution metadata is reported by the connected host, not independently verified.
+      <p className="mt-5 border-t border-base-content/10 pt-4 text-xs text-base-content/55">
+        <AgentText id="translated211" />
       </p>
     </Card>
   );

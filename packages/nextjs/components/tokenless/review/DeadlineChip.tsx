@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useFormatter, useTranslations } from "next-intl";
 
 export function deadlineLabel(deadline: string, now = Date.now()) {
   const deadlineMs = new Date(deadline).getTime();
@@ -15,6 +16,8 @@ export function deadlineLabel(deadline: string, now = Date.now()) {
 }
 
 export function DeadlineChip({ deadline, label }: { deadline: string | null; label: string }) {
+  const t = useTranslations("review.deadline");
+  const format = useFormatter();
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -23,15 +26,30 @@ export function DeadlineChip({ deadline, label }: { deadline: string | null; lab
   }, []);
 
   if (!deadline) return null;
+  const deadlineMs = new Date(deadline).getTime();
+  const remainingMs = deadlineMs - now;
+  const remaining = !Number.isFinite(deadlineMs)
+    ? t("unavailable")
+    : remainingMs <= 0
+      ? t("passed")
+      : remainingMs < 3_600_000
+        ? t("minutes", { count: Math.ceil(remainingMs / 60_000) })
+        : remainingMs < 172_800_000
+          ? t("hours", { count: Math.ceil(remainingMs / 3_600_000) })
+          : t("days", { count: Math.ceil(remainingMs / 86_400_000) });
   return (
     <span
-      className="mt-2 inline-flex min-h-6 items-center rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs text-base-content/65"
+      className="mt-2 inline-flex min-h-6 items-center rounded-full border border-base-content/10 bg-base-content/[0.03] px-2.5 py-1 text-xs text-base-content/65"
       role="timer"
       aria-live="off"
-      title={new Date(deadline).toLocaleString()}
+      title={
+        Number.isFinite(deadlineMs)
+          ? format.dateTime(new Date(deadline), { dateStyle: "medium", timeStyle: "short" })
+          : t("unavailable")
+      }
       suppressHydrationWarning
     >
-      {label}: {deadlineLabel(deadline, now)}
+      {t("label", { label, remaining })}
     </span>
   );
 }

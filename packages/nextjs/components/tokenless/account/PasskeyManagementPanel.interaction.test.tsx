@@ -3,11 +3,13 @@ import axe from "axe-core";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 test("passkey management exposes named controls and blocks removal of the last factor", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, waitFor } = await import("@testing-library/react");
+  const { cleanup, render: baseRender, waitFor } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const { PasskeyManagementPanel } = await import("./PasskeyManagementPanel");
   const previousFetch = globalThis.fetch;
   globalThis.fetch = async input => {
@@ -45,12 +47,15 @@ test("passkey management exposes named controls and blocks removal of the last f
 });
 
 test("passkey mutations require matching-account reauthentication and keep credentials out of storage", () => {
-  const source = readFileSync(new URL("./PasskeyManagementPanel.tsx", import.meta.url), "utf8");
+  const source = [
+    readFileSync(new URL("./PasskeyManagementPanel.tsx", import.meta.url), "utf8"),
+    readFileSync(new URL("../../../messages/en/account.json", import.meta.url), "utf8"),
+  ].join("\n");
   assert.match(source, /useFormErrors\(\)/);
   assert.equal(source.match(/<Field/g)?.length, 3);
   assert.match(source, /format="oneTimeCode"/);
-  assert.match(source, /new PasskeyFieldError\([^)]*, "email"\)/);
-  assert.match(source, /new PasskeyFieldError\([^)]*, "otp"\)/);
+  assert.match(source, /new PasskeyFieldError\(result\.error\.message \|\| t\("sendFailed"\), "email"\)/);
+  assert.match(source, /new PasskeyFieldError\(result\.error\.message \|\| t\("invalidCode"\), "otp"\)/);
   assert.match(source, /betterAuthClient\.passkey\.addPasskey/);
   assert.doesNotMatch(source, /betterAuthClient\.passkey\.deletePasskey/);
   assert.match(source, /betterAuthClient\.signIn\.passkey/);

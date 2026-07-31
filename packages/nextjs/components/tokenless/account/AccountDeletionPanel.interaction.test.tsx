@@ -2,11 +2,13 @@ import React from "react";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 test("account deletion starts from a visible action and loads its review on demand", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, waitFor } = await import("@testing-library/react");
+  const { cleanup, render: baseRender, waitFor } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { AccountDeletionPanel } = await import("./AccountDeletionPanel");
   const previousFetch = globalThis.fetch;
@@ -49,7 +51,10 @@ test("account deletion starts from a visible action and loads its review on dema
 });
 
 test("account deletion requires fresh OTP or passkey proof kept only in memory", () => {
-  const source = readFileSync(new URL("./AccountDeletionPanel.tsx", import.meta.url), "utf8");
+  const source = [
+    readFileSync(new URL("./AccountDeletionPanel.tsx", import.meta.url), "utf8"),
+    readFileSync(new URL("../../../messages/en/account.json", import.meta.url), "utf8"),
+  ].join("\n");
   assert.match(source, /Verify and delete/);
   assert.match(source, /betterAuthClient\.emailOtp\.sendVerificationOtp/);
   assert.match(source, /betterAuthClient\.signIn\.passkey/);

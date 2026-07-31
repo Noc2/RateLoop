@@ -16,7 +16,7 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   primary: "rateloop-gradient-action",
   secondary: "rateloop-secondary-action",
   ghost: "btn-ghost",
-  danger: "border border-red-300/20 bg-red-300/[0.06] text-red-100",
+  danger: "border border-error/20 bg-error/[0.06] text-error",
 };
 
 const SIZE_CLASSES: Record<ButtonSize, string> = {

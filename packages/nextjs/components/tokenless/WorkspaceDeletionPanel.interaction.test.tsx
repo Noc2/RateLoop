@@ -1,11 +1,13 @@
 import React from "react";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 test("a funded workspace owner can queue verified fund resolution without forfeiting the balance", async () => {
   const restoreDom = installTestDom();
-  const { act, cleanup, render } = await import("@testing-library/react");
+  const { act, cleanup, render: baseRender } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { WorkspaceDeletionPanel } = await import("./WorkspaceDeletionPanel");
   const previousFetch = globalThis.fetch;

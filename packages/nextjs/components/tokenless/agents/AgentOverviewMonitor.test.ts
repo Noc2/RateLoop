@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const source = readFileSync(new URL("./AgentOverviewMonitor.tsx", import.meta.url), "utf8");
+const messages = readFileSync(new URL("../../../messages/en/agents.json", import.meta.url), "utf8");
+const localizedSource = `${source}\n${messages}`;
 const workspaceSource = readFileSync(new URL("./AgentWorkspacePanels.tsx", import.meta.url), "utf8");
 const routeSource = readFileSync(
   new URL("../../../app/api/account/workspaces/[workspaceId]/agents/overview/route.ts", import.meta.url),
@@ -12,29 +14,29 @@ const projectionSource = readFileSync(new URL("../../../lib/tokenless/agentOverv
 
 test("the connected-agent overview mounts the fixed monitor", () => {
   assert.match(workspaceSource, /<AgentOverviewMonitor workspaceId=\{workspaceId\} \/>/);
-  assert.match(source, /Completed decisions/);
-  assert.match(source, /Reviewer endorsement/);
-  assert.match(source, /Median time to decision/);
-  assert.match(source, /Cost per decision/);
+  assert.match(localizedSource, /Completed decisions/);
+  assert.match(localizedSource, /Reviewer endorsement/);
+  assert.match(localizedSource, /Median time to decision/);
+  assert.match(localizedSource, /Cost per decision/);
   assert.match(source, /overview\.window\.label/);
-  assert.match(source, /Review outcome trend/);
-  assert.match(source, /Decision-time trend/);
-  assert.match(source, /Review quality/);
-  assert.match(source, /Reviewer consensus/);
-  assert.match(source, /Reviewer consistency \(α\)/);
-  assert.match(source, /Panel-split distribution/);
-  assert.match(source, /Workflow hotspots/);
-  assert.match(source, /Risk-tier hotspots/);
-  assert.match(source, /Time to decision/);
+  assert.match(localizedSource, /Review outcome trend/);
+  assert.match(localizedSource, /Decision-time trend/);
+  assert.match(localizedSource, /Review quality/);
+  assert.match(localizedSource, /Reviewer consensus/);
+  assert.match(localizedSource, /Reviewer consistency \(α\)/);
+  assert.match(localizedSource, /Panel-split distribution/);
+  assert.match(localizedSource, /Workflow hotspots/);
+  assert.match(localizedSource, /Risk-tier hotspots/);
+  assert.match(localizedSource, /Time to decision/);
   assert.match(source, /overview\.reviewQuality/);
   assert.match(source, /overview\.attention\.periodLabel/);
-  assert.match(source, /Low confidence/);
-  assert.match(source, /Insufficient evidence/);
+  assert.match(localizedSource, /Low confidence/);
+  assert.match(localizedSource, /Insufficient evidence/);
   assert.match(source, /onPageChange=\{page => updateQuery\(\{ page \}\)\}/);
-  assert.match(source, /All workflows/);
-  assert.match(source, /All risk tiers/);
-  assert.match(source, /All stages/);
-  assert.match(source, /All current versions/);
+  assert.match(localizedSource, /All workflows/);
+  assert.match(localizedSource, /All risk tiers/);
+  assert.match(localizedSource, /All stages/);
+  assert.match(localizedSource, /All current versions/);
   assert.match(source, /agentOverviewApiSearch/);
   assert.match(source, /hasPreviousPage/);
   assert.match(source, /hasNextPage/);
@@ -67,7 +69,7 @@ test("production overview defaults to current versions with active assurance bin
 });
 
 test("agent-version parents disclose bounded scope evidence without reviewer axes or a scope average", () => {
-  assert.match(source, /Parent rows show scope composition and the lowest observed scope\s*bound,\s*never an average/);
+  assert.match(messages, /Parent rows show scope composition and the lowest observed scope bound, never an average/);
   assert.match(source, /overview\.agentVersions\.parents\.map/);
   assert.match(source, /parent\.lowestEndorsement\.lower95Bps/);
   assert.match(source, /parent\.scopes\.map/);

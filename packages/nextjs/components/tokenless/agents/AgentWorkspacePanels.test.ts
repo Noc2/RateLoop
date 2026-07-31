@@ -21,10 +21,13 @@ const panelsSource = readFileSync(new URL("./AgentWorkspacePanels.tsx", import.m
 const tabsSource = readFileSync(new URL("./AgentTabs.tsx", import.meta.url), "utf8");
 const registrySource = readFileSync(new URL("./AgentRegistryPanel.tsx", import.meta.url), "utf8");
 const editorSource = readFileSync(new URL("./AgentHumanReviewEditor.tsx", import.meta.url), "utf8");
-const pageSource = readFileSync(new URL("../../../app/(app)/agents/AgentsSectionPage.tsx", import.meta.url), "utf8");
-const legacyPageSource = readFileSync(new URL("../../../app/(app)/agents/page.tsx", import.meta.url), "utf8");
+const pageSource = readFileSync(
+  new URL("../../../app/[locale]/(app)/agents/AgentsSectionPage.tsx", import.meta.url),
+  "utf8",
+);
+const legacyPageSource = readFileSync(new URL("../../../app/[locale]/(app)/agents/page.tsx", import.meta.url), "utf8");
 const sectionPageSource = readFileSync(
-  new URL("../../../app/(app)/agents/[section]/page.tsx", import.meta.url),
+  new URL("../../../app/[locale]/(app)/agents/[section]/page.tsx", import.meta.url),
   "utf8",
 );
 
@@ -38,7 +41,7 @@ test("the requested accessible workspace wins and invalid returning links requir
   assert.equal(selectRequestedWorkspace(workspaces, "unknown"), null);
   assert.equal(selectRequestedWorkspace(workspaces)?.workspaceId, "workspace-a");
   assert.equal(selectRequestedWorkspace([], "workspace-b"), null);
-  assert.match(panelsSource, /The workspace in this link is unavailable/);
+  assert.match(panelsSource, /t\("chooseDescription"\)/);
   assert.doesNotMatch(panelsSource, /find\(entry => entry\.workspaceId === workspaceId\) \?\? workspaces\[0\]/);
 });
 
@@ -199,19 +202,18 @@ test("connected navigation splits the owner stack into URL-backed task tabs", ()
     "/agents/results?billing=success&date=30&outcome=fail&packet=packet+one&q=release&returning=oauth&run=run+one&step=people&workspace=workspace+one",
   );
   assert.match(pageSource, /returning === "oauth" && !requestedWorkspaceId/);
-  assert.match(legacyPageSource, /redirect\(legacyAgentRouteHref\(await searchParams\)\)/);
+  assert.match(legacyPageSource, /redirect\(\{ href: legacyAgentRouteHref\(requestedSearchParams\), locale \}\)/);
   assert.match(sectionPageSource, /section !== agentSectionForTab\(tab\)/);
-  assert.match(tabsSource, /value: "overview", label: "Overview"/);
-  assert.match(tabsSource, /value: "connect", label: "Connections"/);
-  assert.match(tabsSource, /value: "inbox", label: "Approvals"/);
-  assert.match(tabsSource, /value: "registry", label: "Review setup"/);
-  assert.match(tabsSource, /value: "evaluations", label: "Results"/);
-  assert.match(tabsSource, /value: "billing", label: "Billing & settings"/);
+  assert.match(
+    tabsSource,
+    /const tabs: AgentTab\[\] = \["overview", "connect", "inbox", "registry", "evaluations", "billing"\]/,
+  );
+  assert.match(tabsSource, /\{t\(tab\)\}/);
   assert.doesNotMatch(tabsSource, /value: "evidence"|label: "Evidence"/);
 });
 
 test("agent sections use normal route links instead of tab-widget semantics", () => {
-  assert.match(tabsSource, /aria-current=\{active === tab\.value \? "page" : undefined\}/);
+  assert.match(tabsSource, /aria-current=\{active === tab \? "page" : undefined\}/);
   assert.match(tabsSource, /href=\{agentTabHref\(/);
   assert.doesNotMatch(tabsSource, /role="tablist"|role="tab"|aria-selected=|tabIndex=/);
   assert.doesNotMatch(panelsSource, /role="tabpanel"|aria-labelledby=\{`agent-tab-/);
@@ -224,12 +226,12 @@ test("registered-agent search links open and focus the exact workflow version", 
   assert.match(panelsSource, /selectedVersionId=\{selectedVersionId\}/);
   assert.match(registrySource, /agent\.versions\.find\(version => version\.versionId === selectedVersionId\)/);
   assert.match(registrySource, /registered-agent-\$\{selectedAgentId\}/);
-  assert.match(registrySource, /Selected workflow version/);
+  assert.match(registrySource, /<AgentText id="translated094" \/>/);
 });
 
 test("the active workspace selector keeps a stable row and clears record-specific state", () => {
   assert.match(tabsSource, /<SelectField/);
-  assert.match(tabsSource, /label="Active workspace"/);
+  assert.match(tabsSource, /label=\{t\("workspace"\)\}/);
   assert.match(tabsSource, /labelClassName="sr-only"/);
   assert.match(tabsSource, /overflow-x-auto/);
   assert.match(tabsSource, /min-w-max/);
@@ -252,7 +254,10 @@ test("the server resolves onboarding before the client renders downstream panels
   assert.match(pageSource, /getWorkspaceAgentSetup\(/);
   assert.match(pageSource, /requestedStep/);
   assert.match(pageSource, /resolveAvailableAgentTab\(tab, visibleTabs\)/);
-  assert.match(pageSource, /redirect\(agentTabHref\(resolvedTab, workspace\.workspaceId, searchParams\)\)/);
+  assert.match(
+    pageSource,
+    /redirect\(\{ href: agentTabHref\(resolvedTab, workspace\.workspaceId, searchParams\), locale \}\)/,
+  );
   assert.doesNotMatch(pageSource, /listPrivateGroups\(/);
   assert.doesNotMatch(pageSource, /getWorkspaceEvaluationDashboard\(/);
   assert.doesNotMatch(panelsSource, /fetch\("\/api\/account\/workspaces"/);
@@ -352,7 +357,7 @@ test("agent and human-review mutations still refresh dependent panels", () => {
 });
 
 test("agent versions open from a direct secondary action on the connection view", () => {
-  assert.match(panelsSource, /Update agent version/);
+  assert.match(panelsSource, /t\("updateVersion"\)/);
   assert.doesNotMatch(panelsSource, /Manage agent versions/);
   assert.match(panelsSource, /aria-controls="agent-version-management"/);
   assert.match(panelsSource, /aria-expanded=\{showAgentManagement\}/);

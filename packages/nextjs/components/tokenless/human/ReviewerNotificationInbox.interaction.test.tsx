@@ -1,11 +1,13 @@
 import React from "react";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 test("the reviewer inbox separates urgent actions and marks notifications read only on request", async () => {
   const restoreDom = installTestDom();
-  const { act, cleanup, render, waitFor } = await import("@testing-library/react");
+  const { act, cleanup, render: baseRender, waitFor } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { ReviewerNotificationInbox } = await import("./ReviewerNotificationInbox");
   const previousFetch = globalThis.fetch;

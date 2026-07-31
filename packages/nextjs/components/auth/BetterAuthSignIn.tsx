@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { normalizeSignInReturnPath } from "./signInReturnPath";
+import { useTranslations } from "next-intl";
 import { Field } from "~~/components/tokenless/forms/Field";
 import {
   type BrowserSessionResponse,
@@ -36,9 +37,9 @@ export async function runBetterAuthAction({
   }
 }
 
-export function maskedEmailDestination(value: string) {
+export function maskedEmailDestination(value: string, fallback = "your email address") {
   const separator = value.lastIndexOf("@");
-  if (separator <= 0 || separator === value.length - 1) return "your email address";
+  if (separator <= 0 || separator === value.length - 1) return fallback;
   const local = value.slice(0, separator);
   const domain = value.slice(separator + 1);
   const visible = local.length === 1 ? "•" : `${local[0]}${"•".repeat(Math.min(4, local.length - 1))}`;
@@ -82,6 +83,7 @@ function safeReturnPath() {
 }
 
 export function BetterAuthSignIn() {
+  const t = useTranslations("auth.signIn");
   const [configuration, setConfiguration] = useState<Awaited<ReturnType<typeof readBrowserAuthConfiguration>> | null>(
     null,
   );
@@ -125,8 +127,8 @@ export function BetterAuthSignIn() {
       await exchangeBetterAuthSession();
       await betterAuthClient.signOut().catch(() => undefined);
       window.location.assign(safeReturnPath());
-    }, "Unable to finish sign-in.");
-  }, [perform]);
+    }, t("errors.finish"));
+  }, [perform, t]);
 
   useEffect(() => {
     if (new URL(window.location.href).searchParams.get("exchange") === "1") {
@@ -155,7 +157,7 @@ export function BetterAuthSignIn() {
       setOtp("");
       setOtpSent(true);
       setResendCooldown(RESEND_COOLDOWN_SECONDS);
-    }, "We couldn't send a code. Check the email address and try again.");
+    }, t("errors.sendCode"));
   }
 
   async function sendCode(event: FormEvent) {
@@ -169,7 +171,7 @@ export function BetterAuthSignIn() {
       const result = await betterAuthClient.signIn.emailOtp({ email, otp });
       if (result.error) throw new Error("verification failed");
       else setVerified(true);
-    }, "That code is invalid or expired. Request a new code and try again.");
+    }, t("errors.invalidCode"));
   }
 
   async function signInWithPasskey() {
@@ -181,7 +183,7 @@ export function BetterAuthSignIn() {
         await betterAuthClient.signOut().catch(() => undefined);
         window.location.assign(safeReturnPath());
       }
-    }, "We couldn't sign you in with a passkey. Try again or use an email code.");
+    }, t("errors.passkey"));
   }
 
   async function signInWithSso() {
@@ -189,7 +191,7 @@ export function BetterAuthSignIn() {
     await perform(async () => {
       const result = await betterAuthClient.signIn.sso({ email, callbackURL });
       if (result.error) throw new Error("SSO failed");
-    }, "Company SSO isn't available for this email address. Try another sign-in method.");
+    }, t("errors.sso"));
   }
 
   async function addPasskey() {
@@ -201,7 +203,7 @@ export function BetterAuthSignIn() {
         await betterAuthClient.signOut().catch(() => undefined);
         window.location.assign(safeReturnPath());
       }
-    }, "We couldn't add this passkey. Finish sign-in now and add one later in Settings.");
+    }, t("errors.addPasskey"));
   }
 
   async function social(provider: "apple" | "google") {
@@ -211,7 +213,7 @@ export function BetterAuthSignIn() {
         const result = await betterAuthClient.signIn.social({ provider, callbackURL });
         if (result.error) throw new Error(`${provider} failed`);
       },
-      `We couldn't continue with ${provider === "google" ? "Google" : "Apple"}. Try again or use an email code.`,
+      t("errors.social", { provider: provider === "google" ? "Google" : "Apple" }),
     );
   }
 
@@ -224,27 +226,25 @@ export function BetterAuthSignIn() {
       setOtpSent(false);
       setVerified(false);
       setResendCooldown(0);
-    }, "We couldn't sign out this account. Try again.");
+    }, t("errors.signOut"));
   }
 
   if (completingExchange || session === undefined) {
     return (
       <p className="text-sm text-base-content/60" role="status">
-        Checking your account…
+        {t("checkingAccount")}
       </p>
     );
   }
   if (session) {
-    const accountLabel = session.displayName?.trim() || "your RateLoop account";
+    const accountLabel = session.displayName?.trim() || t("yourAccount");
     return (
       <section className="space-y-4" aria-labelledby="active-account-heading">
         <div>
           <h2 id="active-account-heading" className="text-lg font-semibold text-base-content">
-            You&apos;re already signed in
+            {t("alreadySignedIn")}
           </h2>
-          <p className="mt-2 text-sm leading-6 text-base-content/65">
-            Continue with this account, or sign out before using another one.
-          </p>
+          <p className="mt-2 text-sm leading-6 text-base-content/65">{t("alreadySignedInDescription")}</p>
         </div>
         <button
           className="rateloop-gradient-action min-h-11 w-full px-4"
@@ -252,7 +252,7 @@ export function BetterAuthSignIn() {
           onClick={() => window.location.assign(safeReturnPath())}
           type="button"
         >
-          Continue as {accountLabel}
+          {t("continueAs", { account: accountLabel })}
         </button>
         <button
           className="btn btn-outline min-h-11 w-full"
@@ -260,7 +260,7 @@ export function BetterAuthSignIn() {
           onClick={() => void switchAccount()}
           type="button"
         >
-          Use another account
+          {t("anotherAccount")}
         </button>
         {error ? (
           <p className="text-sm leading-6 text-error" role="alert">
@@ -275,21 +275,21 @@ export function BetterAuthSignIn() {
     return (
       <div className="space-y-3">
         <p className="text-sm text-error" role="alert">
-          Sign-in options could not be loaded.
+          {t("errors.configuration")}
         </p>
         <button className="btn btn-outline min-h-11 w-full" type="button" onClick={() => void loadConfiguration()}>
-          Try again
+          {t("tryAgain")}
         </button>
       </div>
     );
   }
   if (!configuration) {
-    return <p className="text-sm text-base-content/60">Checking sign-in configuration…</p>;
+    return <p className="text-sm text-base-content/60">{t("checkingConfiguration")}</p>;
   }
   if (!configuration.configured) {
     return (
       <p className="rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm leading-6 text-base-content/70">
-        Account sign-in is not configured for this deployment yet.
+        {t("notConfigured")}
       </p>
     );
   }
@@ -298,30 +298,27 @@ export function BetterAuthSignIn() {
     <div className="space-y-5">
       {verified ? (
         <div className="space-y-3">
-          <p className="text-sm leading-6 text-base-content/70">
-            Email verified. Finish now, or add a passkey first for passwordless sign-in next time.
-          </p>
+          <p className="text-sm leading-6 text-base-content/70">{t("verified")}</p>
           <button
             className="rateloop-gradient-action min-h-11 w-full px-4"
             disabled={busy}
             onClick={() => void finishSignIn()}
           >
-            Finish sign-in
+            {t("finish")}
           </button>
           <button className="btn btn-outline min-h-11 w-full" disabled={busy} onClick={() => void addPasskey()}>
-            Add a passkey and finish
+            {t("addPasskey")}
           </button>
         </div>
       ) : otpSent ? (
         <div className="space-y-4">
           <p className="text-sm leading-6 text-base-content/65" role="status">
-            We sent a code to <strong className="font-medium text-base-content">{maskedEmailDestination(email)}</strong>
-            .
+            {t("sentCode", { email: maskedEmailDestination(email, t("maskedEmailFallback")) })}
           </p>
           <form className="space-y-4" onSubmit={verifyCode}>
             <Field
               id="rateloop-otp"
-              label="Six-digit code"
+              label={t("sixDigitCode")}
               className="font-mono tracking-[0.25em]"
               inputMode="numeric"
               autoComplete="one-time-code"
@@ -334,7 +331,7 @@ export function BetterAuthSignIn() {
               }}
             />
             <button className="rateloop-gradient-action min-h-11 w-full px-4" disabled={busy || otp.length !== 6}>
-              Verify code
+              {t("verifyCode")}
             </button>
           </form>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -349,7 +346,7 @@ export function BetterAuthSignIn() {
               }}
               type="button"
             >
-              Change email
+              {t("changeEmail")}
             </button>
             <button
               className="btn btn-outline min-h-11 w-full"
@@ -357,7 +354,7 @@ export function BetterAuthSignIn() {
               onClick={() => void requestCode()}
               type="button"
             >
-              {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : "Resend code"}
+              {resendCooldown > 0 ? t("resendIn", { seconds: resendCooldown }) : t("resendCode")}
             </button>
           </div>
         </div>
@@ -365,7 +362,7 @@ export function BetterAuthSignIn() {
         <form className="space-y-4" onSubmit={sendCode}>
           <Field
             id="rateloop-email"
-            label="Email address"
+            label={t("emailAddress")}
             type="email"
             autoComplete="email"
             required
@@ -379,7 +376,7 @@ export function BetterAuthSignIn() {
             className="rateloop-gradient-action min-h-11 w-full px-4"
             disabled={busy || !configuration.methods.emailOtp}
           >
-            Email me a code
+            {t("emailCode")}
           </button>
           {configuration.methods.sso ? (
             <button
@@ -388,7 +385,7 @@ export function BetterAuthSignIn() {
               onClick={() => void signInWithSso()}
               type="button"
             >
-              Continue with company SSO
+              {t("companySso")}
             </button>
           ) : null}
         </form>
@@ -398,7 +395,7 @@ export function BetterAuthSignIn() {
         <>
           <div className="flex items-center gap-3 text-xs uppercase tracking-wider text-base-content/35">
             <span className="h-px grow bg-base-content/10" />
-            or
+            {t("or")}
             <span className="h-px grow bg-base-content/10" />
           </div>
           <button
@@ -406,7 +403,7 @@ export function BetterAuthSignIn() {
             disabled={busy || !configuration.methods.passkey}
             onClick={() => void signInWithPasskey()}
           >
-            Sign in with a passkey
+            {t("passkey")}
           </button>
           <div className="grid gap-3 sm:grid-cols-2">
             <button
@@ -415,7 +412,7 @@ export function BetterAuthSignIn() {
               onClick={() => void social("google")}
             >
               <GoogleIcon />
-              Continue with Google
+              {t("google")}
             </button>
             <button
               className="btn rateloop-secondary-action gap-3"
@@ -423,7 +420,7 @@ export function BetterAuthSignIn() {
               onClick={() => void social("apple")}
             >
               <AppleIcon />
-              Continue with Apple
+              {t("apple")}
             </button>
           </div>
         </>

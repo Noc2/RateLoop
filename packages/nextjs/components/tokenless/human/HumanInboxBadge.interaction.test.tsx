@@ -2,11 +2,13 @@ import React from "react";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { HumanInboxBadge } from "~~/components/tokenless/human/HumanInboxBadge";
+import { withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 test("Human inbox badge counts only unread reviewer notifications", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, waitFor } = await import("@testing-library/react");
+  const { cleanup, render: baseRender, waitFor } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const previousFetch = globalThis.fetch;
   const requests: string[] = [];
   globalThis.fetch = async input => {
@@ -37,7 +39,8 @@ test("Human inbox badge counts only unread reviewer notifications", async () => 
 
 test("Human inbox badge fails quietly for signed-out visitors", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, waitFor } = await import("@testing-library/react");
+  const { cleanup, render: baseRender, waitFor } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const previousFetch = globalThis.fetch;
   const requests: string[] = [];
   globalThis.fetch = async input => {
@@ -57,7 +60,8 @@ test("Human inbox badge fails quietly for signed-out visitors", async () => {
 
 test("opening Human navigation never marks reviewer notifications read", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, waitFor } = await import("@testing-library/react");
+  const { cleanup, render: baseRender, waitFor } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const previousFetch = globalThis.fetch;
   const requests: Array<{ body?: string; method: string; url: string }> = [];
   globalThis.fetch = async (input, init) => {

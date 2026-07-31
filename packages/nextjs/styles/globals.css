@@ -8,11 +8,78 @@
 }
 
 @plugin "daisyui" {
-  themes: dark --prefersdark;
+  themes:
+    light --default,
+    dark --prefersdark;
+}
+
+@plugin "daisyui/theme" {
+  name: "light";
+  color-scheme: light;
+  --color-primary: #171717;
+  --color-primary-content: #ffffff;
+  --color-secondary: #e7e5e4;
+  --color-secondary-content: #171717;
+  --color-accent: #359eee;
+  --color-accent-content: #07131c;
+  --color-neutral: #292524;
+  --color-neutral-content: #fafaf9;
+  --color-base-100: #ffffff;
+  --color-base-200: #f5f5f4;
+  --color-base-300: #e7e5e4;
+  --color-base-content: #171717;
+  --color-info: #0e7490;
+  --color-info-content: #ffffff;
+  --color-success: #057a55;
+  --color-success-content: #ffffff;
+  --color-warning: #9a5600;
+  --color-warning-content: #ffffff;
+  --color-error: #c52952;
+  --color-error-content: #ffffff;
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.5rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+  --rateloop-surface: #f7f7f5;
+  --rateloop-text-secondary: rgb(23 23 23 / 0.7);
+  --rateloop-text-tertiary: rgb(23 23 23 / 0.62);
+  --rateloop-surface-elevated: #ffffff;
+  --rateloop-surface-elevated-rgb: 255 255 255;
+  --rateloop-surface-elevated-hover: #f1f1ee;
+  --rateloop-surface-nested: #f1f1ee;
+  --rateloop-field: #ffffff;
+  --rateloop-control-idle: rgb(23 23 23 / 0.08);
+  --rateloop-control-idle-hover: rgb(23 23 23 / 0.13);
+  --rateloop-secondary-button-bg: rgb(23 23 23 / 0.1);
+  --rateloop-secondary-button-bg-hover: rgb(23 23 23 / 0.16);
+  --rateloop-disabled-control-bg: rgb(23 23 23 / 0.055);
+  --rateloop-disabled-control-text: rgb(23 23 23 / 0.48);
+  --rateloop-shell-border: rgb(23 23 23 / 0.12);
+  --rateloop-shell-border-strong: rgb(23 23 23 / 0.18);
+  --rateloop-card-background: #ffffff;
+  --rateloop-active-control-bg: #171717;
+  --rateloop-active-control-text: #ffffff;
+  --rateloop-tab-idle: rgb(255 255 255 / 0.96);
+  --rateloop-action-surface: #ffffff;
+  --rateloop-action-text: #171717;
+  --rateloop-action-shadow: 0 18px 36px rgb(23 23 23 / 0.13);
+  --rateloop-notification-shadow: 0 18px 44px rgb(23 23 23 / 0.16);
+  --rateloop-prose-link: #075985;
+  --rateloop-prose-code: #075985;
+  --rateloop-code-surface: #ffffff;
+  --rateloop-blue: #12669e;
+  --rateloop-green: #00785d;
+  --rateloop-yellow: #8a5b00;
+  --rateloop-pink: #c02b52;
 }
 
 @plugin "daisyui/theme" {
   name: "dark";
+  color-scheme: dark;
   --color-primary: #f5f5f5;
   --color-primary-content: #050505;
   --color-secondary: #a3a3a3;
@@ -25,30 +92,70 @@
   --color-base-200: #121212;
   --color-base-300: #1a1a1a;
   --color-base-content: #f5f5f5;
-  --color-info: #a3a3a3;
-  --color-success: #03cea4;
-  --color-warning: #ffc43d;
-  --color-error: #ef476f;
+  --color-info: #7dd3fc;
+  --color-info-content: #071319;
+  --color-success: #5eead4;
+  --color-success-content: #05201a;
+  --color-warning: #fcd34d;
+  --color-warning-content: #271900;
+  --color-error: #fb7185;
+  --color-error-content: #2d0710;
   --radius-selector: 0.5rem;
   --radius-field: 0.5rem;
   --radius-box: 0.5rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+  --rateloop-surface: #0a0a0a;
+  --rateloop-text-secondary: rgb(245 245 245 / 0.7);
+  --rateloop-text-tertiary: rgb(245 245 245 / 0.55);
+  --rateloop-surface-elevated: #121212;
+  --rateloop-surface-elevated-rgb: 18 18 18;
+  --rateloop-surface-elevated-hover: #1a1a1a;
+  --rateloop-surface-nested: #1a1a1a;
+  --rateloop-field: #1d1d1d;
+  --rateloop-control-idle: rgb(245 245 245 / 0.11);
+  --rateloop-control-idle-hover: rgb(245 245 245 / 0.18);
+  --rateloop-secondary-button-bg: rgb(245 245 245 / 0.18);
+  --rateloop-secondary-button-bg-hover: rgb(245 245 245 / 0.24);
+  --rateloop-disabled-control-bg: rgb(245 245 245 / 0.055);
+  --rateloop-disabled-control-text: rgb(245 245 245 / 0.5);
+  --rateloop-shell-border: rgb(245 245 245 / 0.1);
+  --rateloop-shell-border-strong: rgb(245 245 245 / 0.14);
+  --rateloop-card-background: rgb(245 245 245 / 0.035);
+  --rateloop-active-control-bg: #f5f5f5;
+  --rateloop-active-control-text: #050505;
+  --rateloop-tab-idle: rgb(18 18 18 / 0.96);
+  --rateloop-action-surface: #121212;
+  --rateloop-action-text: #f5f5f5;
+  --rateloop-action-shadow: 0 18px 36px rgb(0 0 0 / 0.32);
+  --rateloop-notification-shadow: 0 18px 44px rgb(0 0 0 / 0.48);
+  --rateloop-prose-link: #7dd3fc;
+  --rateloop-prose-code: #bae6fd;
+  --rateloop-code-surface: #121212;
+  --rateloop-blue: #359eee;
+  --rateloop-green: #03cea4;
+  --rateloop-yellow: #ffc43d;
+  --rateloop-pink: #ef476f;
 }
 
 @layer base {
   *,
   ::before,
   ::after {
-    border-color: rgb(255 255 255 / 0.1);
+    border-color: var(--rateloop-shell-border);
   }
 
   html {
-    background: #0a0a0a;
+    background: var(--rateloop-surface);
   }
 
   body {
     min-height: 100vh;
-    background: #0a0a0a;
-    color: #f5f5f5;
+    background: var(--rateloop-surface);
+    color: var(--color-base-content);
     font-family: var(--font-sans);
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     -webkit-font-smoothing: antialiased;
@@ -65,28 +172,15 @@
 }
 
 :root {
-  --rateloop-blue: #359eee;
-  --rateloop-green: #03cea4;
-  --rateloop-yellow: #ffc43d;
-  --rateloop-pink: #ef476f;
   --rateloop-warm-white: #f5f5f5;
   --rateloop-steel: #a3a3a3;
-  --rateloop-surface: #0a0a0a;
-  --rateloop-text-secondary: rgb(245 245 245 / 0.7);
-  --rateloop-text-tertiary: rgb(245 245 245 / 0.55);
-  --rateloop-surface-elevated: #121212;
-  --rateloop-surface-elevated-rgb: 18 18 18;
-  --rateloop-surface-elevated-hover: #1a1a1a;
-  --rateloop-surface-nested: #1a1a1a;
-  --rateloop-field: #1d1d1d;
-  --rateloop-control-idle: rgb(245 245 245 / 0.11);
-  --rateloop-control-idle-hover: rgb(245 245 245 / 0.18);
-  --rateloop-secondary-button-bg: rgb(245 245 245 / 0.18);
-  --rateloop-secondary-button-bg-hover: rgb(245 245 245 / 0.24);
   --rateloop-radius-control: 0.5rem;
   --rateloop-card-radius: 0.5rem;
-  --rateloop-shell-border: rgb(245 245 245 / 0.1);
-  --rateloop-shell-border-strong: rgb(245 245 245 / 0.14);
+  --rateloop-rail-surface: #050505;
+  --rateloop-rail-surface-elevated: #121212;
+  --rateloop-rail-text: #f5f5f5;
+  --rateloop-rail-text-secondary: rgb(245 245 245 / 0.7);
+  --rateloop-rail-border: rgb(245 245 245 / 0.12);
   --rateloop-spectrum-gradient: linear-gradient(
     90deg,
     var(--rateloop-blue),
@@ -106,6 +200,7 @@
 }
 
 /* Keep legacy opacity utilities readable while components migrate to named text tokens. */
+.text-base-content\/55,
 .text-base-content\/45 {
   color: var(--rateloop-text-secondary);
 }
@@ -172,7 +267,7 @@
 .rateloop-surface-card {
   border: 1px solid var(--rateloop-shell-border);
   border-radius: 0.5rem;
-  background: rgb(245 245 245 / 0.035);
+  background: var(--rateloop-card-background);
 }
 
 /* Preserve the compact app surfaces and controls used by the original RateLoop pages. */
@@ -196,8 +291,8 @@
 .pill-active {
   border-color: transparent;
   border-radius: var(--rateloop-radius-control);
-  background: var(--rateloop-warm-white);
-  color: #050505;
+  background: var(--rateloop-active-control-bg);
+  color: var(--rateloop-active-control-text);
   box-shadow: none;
 }
 
@@ -219,7 +314,7 @@
 }
 
 .tab-control.pill-inactive {
-  background: rgb(18 18 18 / 0.96);
+  background: var(--rateloop-tab-idle);
 }
 
 .tab-control.pill-inactive:hover {
@@ -236,10 +331,10 @@
   border: 1px solid transparent;
   border-radius: 0.5rem;
   background:
-    linear-gradient(#121212, #121212) padding-box,
+    linear-gradient(var(--rateloop-action-surface), var(--rateloop-action-surface)) padding-box,
     var(--rateloop-spectrum-gradient) border-box;
-  box-shadow: 0 18px 36px rgb(0 0 0 / 0.32);
-  color: var(--rateloop-warm-white);
+  box-shadow: var(--rateloop-action-shadow);
+  color: var(--rateloop-action-text);
   font-weight: 700;
   transition:
     transform 0.2s ease,
@@ -268,7 +363,7 @@
       )
       padding-box,
     var(--rateloop-orbit-gradient) border-box;
-  box-shadow: 0 18px 44px rgb(0 0 0 / 0.48);
+  box-shadow: var(--rateloop-notification-shadow);
   isolation: isolate;
 }
 
@@ -303,9 +398,79 @@
 .btn.btn-secondary:not(.btn-circle):not(.btn-square):disabled,
 .btn.btn-secondary:not(.btn-circle):not(.btn-square).btn-disabled {
   border-color: transparent;
-  background: rgb(245 245 245 / 0.055);
+  background: var(--rateloop-disabled-control-bg);
   box-shadow: none;
-  color: rgb(245 245 245 / 0.36);
+  color: var(--rateloop-disabled-control-text);
+}
+
+.rateloop-rail,
+[data-rateloop-rail] {
+  --color-base-100: var(--rateloop-rail-surface);
+  --color-base-200: var(--rateloop-rail-surface-elevated);
+  --color-base-300: #1a1a1a;
+  --color-base-content: var(--rateloop-rail-text);
+  --rateloop-control-idle: rgb(245 245 245 / 0.11);
+  --rateloop-control-idle-hover: rgb(245 245 245 / 0.18);
+  --rateloop-shell-border: var(--rateloop-rail-border);
+  --rateloop-text-secondary: var(--rateloop-rail-text-secondary);
+  background: var(--rateloop-rail-surface);
+  color: var(--rateloop-rail-text);
+  color-scheme: dark;
+}
+
+.rateloop-theme-toggle {
+  display: inline-grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  place-items: center;
+  border: 1px solid var(--rateloop-shell-border);
+  border-radius: var(--rateloop-radius-control);
+  background: var(--rateloop-control-idle);
+  color: var(--color-base-content);
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.rateloop-theme-toggle:hover {
+  background: var(--rateloop-control-idle-hover);
+}
+
+.rateloop-theme-toggle:focus-visible {
+  outline: 2px solid var(--rateloop-blue);
+  outline-offset: 2px;
+}
+
+.rateloop-theme-toggle svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.rateloop-theme-toggle__sun {
+  display: none;
+}
+
+.rateloop-theme-toggle__moon {
+  display: inline-flex;
+}
+
+[data-theme="dark"] .rateloop-theme-toggle__sun {
+  display: inline-flex;
+}
+
+[data-theme="dark"] .rateloop-theme-toggle__moon {
+  display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .rateloop-theme-toggle__sun {
+    display: inline-flex;
+  }
+
+  :root:not([data-theme]) .rateloop-theme-toggle__moon {
+    display: none;
+  }
 }
 
 .rateloop-back-action::before {
@@ -389,7 +554,7 @@
 }
 
 .prose {
-  color: rgb(245 245 245 / 0.68);
+  color: var(--rateloop-text-secondary);
   font-size: 1rem;
   line-height: 1.75;
 }
@@ -397,7 +562,7 @@
 .prose h1,
 .prose h2,
 .prose h3 {
-  color: #f5f5f5;
+  color: var(--color-base-content);
 }
 
 .prose h1 {
@@ -439,21 +604,21 @@
 }
 
 .prose a {
-  color: #7dd3fc;
+  color: var(--rateloop-prose-link);
   text-decoration: underline;
   text-underline-offset: 0.2em;
 }
 
 .prose code {
-  color: #bae6fd;
+  color: var(--rateloop-prose-code);
 }
 
 .prose pre {
   max-width: 100%;
   overflow-x: auto;
-  border: 1px solid rgb(255 255 255 / 0.1);
+  border: 1px solid var(--rateloop-shell-border);
   border-radius: 0.75rem;
-  background: #121212;
+  background: var(--rateloop-code-surface);
   padding: 1rem;
 }
 
@@ -464,7 +629,7 @@
 
 .prose th,
 .prose td {
-  border-bottom: 1px solid rgb(255 255 255 / 0.1);
+  border-bottom: 1px solid var(--rateloop-shell-border);
   padding: 0.75rem;
   text-align: left;
   vertical-align: top;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useFormatter, useTranslations } from "next-intl";
 import { SelectField } from "~~/components/tokenless/forms/Field";
 import { Card } from "~~/components/tokenless/ui/Card";
 
@@ -36,25 +37,15 @@ type IntegrityResponse = {
   items: IntegrityItem[];
 };
 
-const REASON_LABELS: Record<string, string> = {
-  forecast_invariant: "Forecasts changed too little",
-  forecast_discrimination_absent: "Forecasts did not distinguish outcomes",
-  forecast_vote_decoupled: "Forecasts moved independently of your ratings",
-  forecast_pair_lockstep: "A reviewer pair moved in lockstep",
-};
-
-const CONSEQUENCE_LABELS: Record<IntegrityItem["consequence"], string> = {
-  none: "No assignment effect",
-  future_assignment_restriction: "New assignments paused",
-  suspended_by_open_appeal: "Assignment pause suspended during appeal",
-};
-
 export function formatForecastPercentage(valueBps: number) {
   const percentage = valueBps / 100;
   return `${Number.isInteger(percentage) ? percentage.toFixed(0) : percentage.toFixed(1)}%`;
 }
 
 export function ForecastIntegrityClient() {
+  const t = useTranslations("human.forecastIntegrity");
+  const format = useFormatter();
+  const percentage = (valueBps: number) => `${format.number(valueBps / 100, { maximumFractionDigits: 1 })}%`;
   const [data, setData] = useState<IntegrityResponse | null>(null);
   const [appealReasons, setAppealReasons] = useState<Record<string, string>>({});
   const [busyFinding, setBusyFinding] = useState<string | null>(null);
@@ -75,13 +66,13 @@ export function ForecastIntegrityClient() {
         body?.schemaVersion !== "rateloop.reviewer-forecast-integrity.v1" ||
         !Array.isArray(body.items)
       ) {
-        throw new Error(body?.message ?? "Unable to load forecast integrity.");
+        throw new Error(body?.message ?? t("loadFailed"));
       }
       setData(body as IntegrityResponse);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to load forecast integrity.");
+    } catch {
+      setError(t("loadFailed"));
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void refresh();
@@ -101,10 +92,10 @@ export function ForecastIntegrityClient() {
         }),
       });
       const body = (await response.json().catch(() => null)) as { message?: string } | null;
-      if (!response.ok) throw new Error(body?.message ?? "Unable to open the appeal.");
+      if (!response.ok) throw new Error(body?.message ?? t("openFailed"));
       await refresh();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to open the appeal.");
+    } catch {
+      setError(t("openFailed"));
     } finally {
       setBusyFinding(null);
     }
@@ -121,10 +112,10 @@ export function ForecastIntegrityClient() {
         body: JSON.stringify({ appealId }),
       });
       const body = (await response.json().catch(() => null)) as { message?: string } | null;
-      if (!response.ok) throw new Error(body?.message ?? "Unable to withdraw the appeal.");
+      if (!response.ok) throw new Error(body?.message ?? t("withdrawFailed"));
       await refresh();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to withdraw the appeal.");
+    } catch {
+      setError(t("withdrawFailed"));
     } finally {
       setBusyFinding(null);
     }
@@ -134,10 +125,10 @@ export function ForecastIntegrityClient() {
   return (
     <Card as="section" className="rounded-2xl p-5" aria-labelledby="forecast-integrity-title">
       <h2 id="forecast-integrity-title" className="text-xl font-semibold">
-        Crowd forecast record
+        {t("title")}
       </h2>
       {error ? (
-        <p role="alert" className="mt-3 text-sm text-red-200">
+        <p role="alert" className="mt-3 text-sm text-error">
           {error}
         </p>
       ) : null}
@@ -153,74 +144,75 @@ export function ForecastIntegrityClient() {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-semibold">
-                    {item.subjectSpace === "network_rater" ? "Network reviews" : "Invited workspace reviews"}
+                    {item.subjectSpace === "network_rater" ? t("network") : t("invited")}
                   </h3>
-                  <p className="mt-1 text-xs text-base-content/55">{item.observationCount} terminal forecasts</p>
+                  <p className="mt-1 text-xs text-base-content/55">
+                    {t("observations", { count: item.observationCount })}
+                  </p>
                 </div>
-                <span className="rounded-md bg-white/5 px-3 py-1 text-xs">{CONSEQUENCE_LABELS[item.consequence]}</span>
+                <span className="rounded-md bg-base-content/5 px-3 py-1 text-xs">
+                  {t(`consequences.${item.consequence}`)}
+                </span>
               </div>
               <dl className="mt-4 grid gap-3 text-xs sm:grid-cols-2">
                 <div>
-                  <dt className="text-base-content/55">Accuracy vs baseline</dt>
+                  <dt className="text-base-content/55">{t("accuracy")}</dt>
                   <dd className="mt-1">
-                    {item.brierSkillScoreBps === null
-                      ? "Awaiting outcome variety"
-                      : formatForecastPercentage(item.brierSkillScoreBps)}
+                    {item.brierSkillScoreBps === null ? t("awaitingVariety") : percentage(item.brierSkillScoreBps)}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-base-content/55">Outcome separation</dt>
+                  <dt className="text-base-content/55">{t("separation")}</dt>
                   <dd className="mt-1">
                     {item.outcomeDiscriminationBps === null
-                      ? "Not enough outcomes"
-                      : `${formatForecastPercentage(item.outcomeDiscriminationBps)} point gap`}
+                      ? t("notEnough")
+                      : t("pointGap", { value: percentage(item.outcomeDiscriminationBps) })}
                   </dd>
                 </div>
               </dl>
-              <p className="mt-3 text-xs leading-5 text-base-content/55">
-                Accuracy compares your forecasts with a baseline; higher is better. Outcome separation is the forecast
-                gap between positive and negative outcomes.
-              </p>
+              <p className="mt-3 text-xs leading-5 text-base-content/55">{t("explanation")}</p>
               {item.findings.length ? (
                 <div className="mt-4 space-y-3">
                   {item.findings.map(finding => (
-                    <div className="rounded-lg border border-white/10 p-3" key={finding.findingId}>
+                    <div className="rounded-lg border border-base-content/10 p-3" key={finding.findingId}>
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-sm">{REASON_LABELS[finding.reasonCode] ?? finding.reasonCode}</p>
+                        <p className="text-sm">
+                          {t.has(`reasons.${finding.reasonCode}`)
+                            ? t(`reasons.${finding.reasonCode}`)
+                            : finding.reasonCode}
+                        </p>
                         <span className="text-xs text-base-content/55">
-                          {finding.severity === "hard" ? "Assignment signal" : "Advisory signal"}
+                          {finding.severity === "hard" ? t("assignmentSignal") : t("advisorySignal")}
                         </span>
                       </div>
                       {finding.appealOpen && finding.openAppealId ? (
                         <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <p className="text-xs text-amber-100">
-                            Appeal open. Only this finding’s assignment consequence is suspended.
-                          </p>
+                          <p className="text-xs text-warning">{t("appealOpen")}</p>
                           <button
                             type="button"
                             className="rateloop-secondary-action rounded-lg px-3 py-2 text-sm"
                             disabled={busyFinding === finding.findingId}
                             onClick={() => void withdraw(finding.openAppealId!, finding.findingId)}
                           >
-                            {busyFinding === finding.findingId ? "Withdrawing…" : "Withdraw appeal"}
+                            {busyFinding === finding.findingId ? t("withdrawing") : t("withdraw")}
                           </button>
                         </div>
                       ) : finding.severity === "hard" ? (
                         <div className="mt-3 flex flex-wrap items-end gap-2">
                           <SelectField
                             containerClassName="text-xs"
-                            className="mt-1 block rounded-lg border-white/15 bg-black px-3 py-2"
-                            label="Appeal reason"
+                            className="mt-1 block rounded-lg border-base-content/15 bg-[var(--rateloop-field)] px-3 py-2"
+                            label={t("reason")}
                             labelClassName="mb-0 text-xs"
                             value={appealReasons[finding.findingId] ?? "context_missing"}
                             onChange={event =>
                               setAppealReasons(current => ({ ...current, [finding.findingId]: event.target.value }))
                             }
                           >
-                            <option value="context_missing">Context was missing</option>
-                            <option value="shared_process">Shared review process</option>
-                            <option value="measurement_error">Measurement error</option>
-                            <option value="other">Other</option>
+                            <option value="context_missing">{t("contextMissing")}</option>
+                            <option value="shared_process">{t("sharedProcess")}</option>
+                            <option value="measurement_error">{t("measurementError")}</option>
+                            <option value="other">{t("other")}</option>
                           </SelectField>
                           <button
                             type="button"
@@ -228,7 +220,7 @@ export function ForecastIntegrityClient() {
                             disabled={busyFinding === finding.findingId}
                             onClick={() => void appeal(finding.findingId)}
                           >
-                            {busyFinding === finding.findingId ? "Opening…" : "Open appeal"}
+                            {busyFinding === finding.findingId ? t("opening") : t("open")}
                           </button>
                         </div>
                       ) : null}
@@ -236,15 +228,13 @@ export function ForecastIntegrityClient() {
                   ))}
                 </div>
               ) : (
-                <p className="mt-4 text-sm text-base-content/55">No forecast integrity findings.</p>
+                <p className="mt-4 text-sm text-base-content/55">{t("empty")}</p>
               )}
             </Card>
           ))}
         </div>
       ) : data ? (
-        <p className="mt-4 text-sm text-base-content/55">
-          Counters appear after a terminal review includes a forecast.
-        </p>
+        <p className="mt-4 text-sm text-base-content/55">{t("waiting")}</p>
       ) : null}
     </Card>
   );

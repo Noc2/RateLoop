@@ -1,3 +1,5 @@
+import { translatePublicString } from "~~/components/docs/LocalizedPublicContent";
+import type { Locale } from "~~/i18n/config";
 import { TOKENLESS_HOST_CAPABILITIES } from "~~/lib/tokenless/hostCapabilities";
 
 export type SiteSearchEntry = {
@@ -401,13 +403,20 @@ function score(entry: SiteSearchEntry, terms: readonly string[], normalizedQuery
   return value;
 }
 
-export function searchSite(query: string, limit = 12): SiteSearchEntry[] {
+export function searchSite(query: string, limit = 12, locale: Locale = "en"): SiteSearchEntry[] {
   const normalizedQuery = normalize(query);
   if (!normalizedQuery) return [];
   const terms = normalizedQuery.split(/\s+/);
+  const localizedIndex = SITE_SEARCH_INDEX.map(entry => ({
+    ...entry,
+    title: translatePublicString(entry.title, locale, "site"),
+    description: translatePublicString(entry.description, locale, "site"),
+    keywords: entry.keywords?.map(keyword => translatePublicString(keyword, locale, "site")),
+  }));
 
   const seenHrefs = new Set<string>();
-  return SITE_SEARCH_INDEX.map((entry, index) => ({ entry, index, score: score(entry, terms, normalizedQuery) }))
+  return localizedIndex
+    .map((entry, index) => ({ entry, index, score: score(entry, terms, normalizedQuery) }))
     .filter(result => result.score >= 0)
     .sort((left, right) => right.score - left.score || left.index - right.index)
     .flatMap(result => {

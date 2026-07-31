@@ -104,7 +104,7 @@ export function InfoPopover({ label, children }: { label: string; children: Reac
         aria-expanded={open}
         aria-controls={open ? popoverId : undefined}
         aria-describedby={open ? popoverId : undefined}
-        className="flex size-11 shrink-0 items-center justify-center rounded-full border border-white/15 text-sm font-semibold text-base-content/65 transition hover:border-white/30 hover:text-base-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--rateloop-blue)]"
+        className="flex size-11 shrink-0 items-center justify-center rounded-full border border-base-content/15 text-sm font-semibold text-base-content/65 transition hover:border-base-content/30 hover:text-base-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--rateloop-blue)]"
         onClick={() => {
           if (open) close();
           else setOpen(true);
@@ -117,7 +117,7 @@ export function InfoPopover({ label, children }: { label: string; children: Reac
           ref={popoverRef}
           id={popoverId}
           role="tooltip"
-          className="fixed z-50 max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-xl border border-white/10 bg-[var(--rateloop-field)] p-4 text-sm leading-6 text-base-content/75 shadow-2xl"
+          className="fixed z-50 max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-xl border border-base-content/10 bg-[var(--rateloop-field)] p-4 text-sm leading-6 text-base-content/75 shadow-2xl"
           style={popoverStyle}
         >
           {children}

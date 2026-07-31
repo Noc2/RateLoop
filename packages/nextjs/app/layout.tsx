@@ -1,4 +1,8 @@
 import { Inter, Space_Grotesk } from "next/font/google";
+import { cookies, headers } from "next/headers";
+import { DEFAULT_LOCALE, isLocale } from "~~/i18n/config";
+import { getMessagesForLocale } from "~~/i18n/messages";
+import { THEME_COOKIE_NAME, parseThemePreference } from "~~/lib/ui/themePreference";
 import { AppProviders } from "~~/providers/AppProviders";
 import "~~/styles/globals.css";
 import { getMetadata } from "~~/utils/scaffold-eth/getMetadata";
@@ -25,18 +29,27 @@ const inter = Inter({
   variable: "--font-hawig-body",
 });
 
-const RootLayout = ({ children }: { children: React.ReactNode }) => (
-  <html
-    lang="en"
-    className={`${spaceGrotesk.variable} ${inter.variable}`}
-    data-theme="dark"
-    suppressHydrationWarning
-    style={{ colorScheme: "dark" }}
-  >
-    <body suppressHydrationWarning>
-      <AppProviders>{children}</AppProviders>
-    </body>
-  </html>
-);
+const RootLayout = async ({ children }: { children: React.ReactNode }) => {
+  const [requestHeaders, cookieStore] = await Promise.all([headers(), cookies()]);
+  const requestedLocale = requestHeaders.get("x-next-intl-locale");
+  const locale = isLocale(requestedLocale) ? requestedLocale : DEFAULT_LOCALE;
+  const explicitTheme = parseThemePreference(cookieStore.get(THEME_COOKIE_NAME)?.value);
+
+  return (
+    <html
+      lang={locale}
+      className={`${spaceGrotesk.variable} ${inter.variable}`}
+      data-theme={explicitTheme}
+      suppressHydrationWarning
+      style={explicitTheme ? { colorScheme: explicitTheme } : undefined}
+    >
+      <body suppressHydrationWarning>
+        <AppProviders notificationDismissLabel={getMessagesForLocale(locale).shared.notifications.dismiss}>
+          {children}
+        </AppProviders>
+      </body>
+    </html>
+  );
+};
 
 export default RootLayout;

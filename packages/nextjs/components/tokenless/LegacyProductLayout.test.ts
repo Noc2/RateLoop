@@ -3,6 +3,13 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 function source(relativePath: string) {
+  const catalogs = ["account", "agents", "human", "review", "shared"].map(name =>
+    readFileSync(new URL(`../../messages/en/${name}.json`, import.meta.url), "utf8"),
+  );
+  return [readFileSync(new URL(relativePath, import.meta.url), "utf8"), ...catalogs].join("\n");
+}
+
+function rawSource(relativePath: string) {
   return readFileSync(new URL(relativePath, import.meta.url), "utf8");
 }
 
@@ -26,8 +33,8 @@ test("Human Discover keeps the compact legacy feed and action-rail composition",
 
 test("Agents uses URL-backed workspace tabs", () => {
   const tabs = source("./agents/AgentTabs.tsx");
-  const page = source("../../app/(app)/agents/AgentsSectionPage.tsx");
-  const legacyAsk = source("../../app/(app)/ask/page.tsx");
+  const page = source("../../app/[locale]/(app)/agents/AgentsSectionPage.tsx");
+  const legacyAsk = source("../../app/[locale]/(app)/ask/page.tsx");
 
   assert.match(tabs, /tab-control/);
   assert.match(tabs, /pill-active/);
@@ -38,18 +45,19 @@ test("Agents uses URL-backed workspace tabs", () => {
   assert.match(tabs, /Review setup/);
   assert.match(tabs, /Results/);
   assert.doesNotMatch(page, /integrate/);
-  assert.match(legacyAsk, /redirect\("\/agents\/overview"\)/);
+  assert.match(legacyAsk, /redirect\(\{ href: "\/agents\/overview", locale \}\)/);
 });
 
 test("Human profile keeps established surface cards without a dashboard hero", () => {
   const profile = source("./account/ProfileClient.tsx");
 
   assert.match(profile, /<Card as="section" className="rounded-2xl/);
-  assert.match(profile, /<h2 id="profile-display-name-heading"[\s\S]*Display name[\s\S]*<\/h2>/);
-  assert.match(profile, /<Field[\s\S]*id="profile-display-name"[\s\S]*label="Display name"/);
-  assert.doesNotMatch(profile, /How RateLoop addresses you/);
-  assert.doesNotMatch(profile, /NotificationSettingsPanel/);
-  assert.doesNotMatch(profile, /lg:grid-cols-\[minmax\(0,1fr\)_340px\]/);
+  assert.match(profile, /<h2 id="profile-display-name-heading"[\s\S]*\{t\("title"\)\}[\s\S]*<\/h2>/);
+  assert.match(profile, /<Field[\s\S]*id="profile-display-name"[\s\S]*label=\{t\("label"\)\}/);
+  const rawProfile = rawSource("./account/ProfileClient.tsx");
+  assert.doesNotMatch(rawProfile, /How RateLoop addresses you/);
+  assert.doesNotMatch(rawProfile, /NotificationSettingsPanel/);
+  assert.doesNotMatch(rawProfile, /lg:grid-cols-\[minmax\(0,1fr\)_340px\]/);
 });
 
 test("Human Discover keeps sign-in requirements concise", () => {
@@ -77,17 +85,16 @@ test("Human Discover offers exactly the legacy source filters and empty state", 
   assert.match(page, /No review work is available right now/);
   assert.match(page, /No review history yet/);
   assert.match(page, /Use an invitation/);
-  assert.doesNotMatch(page, /Check again/);
+  assert.doesNotMatch(rawSource("./answer/AnswerPageClient.tsx"), /Check again/);
   assert.match(card, /Public reviews can be browsed now/);
   assert.match(card, /\/settings\/wallets/);
 });
 
 test("Human profile and settings render their controls directly", () => {
-  const page = source("../../app/(app)/human/HumanSectionPage.tsx");
+  const page = source("../../app/[locale]/(app)/human/HumanSectionPage.tsx");
   const signInPrompt = source("./human/HumanAccountSignInPrompt.tsx");
   const profileContent = source("./human/HumanProfileContent.tsx");
   const profileSectionFocus = source("./human/ProfileSectionFocus.tsx");
-  const profile = source("./account/ProfileClient.tsx");
   const invitations = source("./account/InvitationRouterPanel.tsx");
 
   assert.match(page, /<HumanProfileContent worldIdEnabled=\{isWorldIdAssuranceEnabled\(\)\} \/>/);
@@ -117,19 +124,25 @@ test("Human profile and settings render their controls directly", () => {
   ]) {
     assert.match(profileContent, new RegExp(surface));
   }
-  assert.doesNotMatch(page, /ProfileOverview|SettingsOverview|Customize|SectionBackLink/);
-  assert.doesNotMatch(profile, /<details|<summary/);
-  assert.doesNotMatch(profile, /Sign-in details|Provider|Not provided|Account ID|\/api\/auth\/session/);
-  assert.doesNotMatch(profile, /InvitationRedemption|reviewer memberships/);
+  assert.doesNotMatch(
+    rawSource("../../app/[locale]/(app)/human/HumanSectionPage.tsx"),
+    /ProfileOverview|SettingsOverview|Customize|SectionBackLink/,
+  );
+  assert.doesNotMatch(rawSource("./account/ProfileClient.tsx"), /<details|<summary/);
+  assert.doesNotMatch(
+    rawSource("./account/ProfileClient.tsx"),
+    /Sign-in details|Provider|Not provided|Account ID|\/api\/auth\/session/,
+  );
+  assert.doesNotMatch(rawSource("./account/ProfileClient.tsx"), /InvitationRedemption|reviewer memberships/);
   assert.match(invitations, /startsWith\("rli_"\)/);
   assert.match(invitations, /startsWith\("rlri_"\)/);
-  assert.doesNotMatch(invitations, /rlgi_|private-groups/);
-  assert.match(invitations, /label="Invitation code"/);
+  assert.doesNotMatch(rawSource("./account/InvitationRouterPanel.tsx"), /rlgi_|private-groups/);
+  assert.match(invitations, /label=\{t\("code"\)\}/);
   assert.doesNotMatch(invitations, /<label/);
 });
 
 test("Human Discover relies on the shell-level site search", () => {
-  const page = source("../../app/(app)/human/HumanSectionPage.tsx");
+  const page = source("../../app/[locale]/(app)/human/HumanSectionPage.tsx");
   const shell = source("./TokenlessShell.tsx");
 
   assert.doesNotMatch(page, /AnswerSearch|SiteSearch/);

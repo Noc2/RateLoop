@@ -1,11 +1,13 @@
 import React from "react";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 test("workspace invitation codes use the workspace redemption path", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, waitFor } = await import("@testing-library/react");
+  const { cleanup, render: baseRender, waitFor } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { InvitationRouterPanel } = await import("./InvitationRouterPanel");
   const previousFetch = globalThis.fetch;
@@ -41,7 +43,8 @@ test("workspace invitation codes use the workspace redemption path", async () =>
 
 test("workspace reviewer invitations are previewed, redeemed from the body, and notify the caller", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, waitFor } = await import("@testing-library/react");
+  const { cleanup, render: baseRender, waitFor } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { InvitationRouterPanel } = await import("./InvitationRouterPanel");
   const previousFetch = globalThis.fetch;
@@ -97,7 +100,8 @@ test("workspace reviewer invitations are previewed, redeemed from the body, and 
 
 test("workspace reviewer invitation links hydrate from the fragment without leaking the token in a request URL", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render } = await import("@testing-library/react");
+  const { cleanup, render: baseRender } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const { InvitationRouterPanel } = await import("./InvitationRouterPanel");
   const previousFetch = globalThis.fetch;
   const calls: Array<{ body: string; url: string }> = [];
@@ -136,7 +140,8 @@ test("workspace reviewer invitation links hydrate from the fragment without leak
 
 test("legacy private-group invitation codes are no longer accepted", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, waitFor } = await import("@testing-library/react");
+  const { cleanup, render: baseRender, waitFor } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { InvitationRouterPanel } = await import("./InvitationRouterPanel");
   const previousFetch = globalThis.fetch;

@@ -1,0 +1,57 @@
+{
+  "brandTagline": "Human Assurance",
+  "navigation": {
+    "primary": "Primary",
+    "humans": "Humans",
+    "agents": "Agents",
+    "docs": "Docs",
+    "open": "Open navigation",
+    "close": "Close navigation"
+  },
+  "docs": {
+    "startHere": "Start Here",
+    "introduction": "Introduction",
+    "howItWorks": "How It Works",
+    "useCases": "Use Cases",
+    "platform": "Platform",
+    "humanOversight": "Human Oversight",
+    "evidence": "Evidence",
+    "verifyEvidence": "Verify Evidence",
+    "connectHost": "Connect a Host",
+    "agentsMcp": "Agents & MCP",
+    "techStack": "Tech Stack",
+    "smartContracts": "Smart Contracts",
+    "build": "Build",
+    "sdk": "SDK",
+    "apiErrors": "API Errors"
+  },
+  "workspace": {
+    "back": "Back to workspace"
+  },
+  "footer": {
+    "label": "Footer",
+    "pricing": "Pricing",
+    "terms": "Terms",
+    "privacy": "Privacy",
+    "imprint": "Imprint",
+    "legal": "Legal"
+  },
+  "search": {
+    "label": "Search RateLoop",
+    "placeholder": "Search",
+    "submit": "Search",
+    "clear": "Clear site search"
+  },
+  "preferences": {
+    "language": "Language",
+    "english": "English",
+    "german": "German",
+    "switchToLight": "Use light theme",
+    "switchToDark": "Use dark theme",
+    "lightActive": "Light theme active",
+    "darkActive": "Dark theme active"
+  },
+  "accessibility": {
+    "skipToContent": "Skip to main content"
+  }
+}

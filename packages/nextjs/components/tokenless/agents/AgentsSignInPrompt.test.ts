@@ -4,7 +4,10 @@ import test from "node:test";
 
 const promptSource = readFileSync(new URL("./AgentsSignInPrompt.tsx", import.meta.url), "utf8");
 const sharedSurfaceSource = readFileSync(new URL("../../auth/SignInSurface.tsx", import.meta.url), "utf8");
-const pageSource = readFileSync(new URL("../../../app/(app)/agents/AgentsSectionPage.tsx", import.meta.url), "utf8");
+const pageSource = readFileSync(
+  new URL("../../../app/[locale]/(app)/agents/AgentsSectionPage.tsx", import.meta.url),
+  "utf8",
+);
 
 test("anonymous visitors see the Agents sign-in prompt without exposing workspace controls", () => {
   assert.match(pageSource, /await findAuthSession\(cookieStore\.get\(AUTH_SESSION_COOKIE\)\?\.value\)/);
@@ -15,11 +18,12 @@ test("anonymous visitors see the Agents sign-in prompt without exposing workspac
   assert.match(promptSource, /<SignedOutGate/);
   assert.match(promptSource, /returnTo=\{browserReturnTo\}/);
   assert.match(promptSource, /agentSignInReturnToWithHash\(returnTo, window\.location\.hash\)/);
-  assert.match(promptSource, /title="Agents"/);
+  assert.match(promptSource, /title=\{t\("title"\)\}/);
   assert.doesNotMatch(promptSource, /For Agents/);
-  assert.match(promptSource, /Sign in to connect an agent/);
+  assert.match(promptSource, /description=\{t\("description"\)\}/);
   assert.doesNotMatch(promptSource, /AgentWorkspaceExample|Example workspace|preview=/);
   assert.match(promptSource, /href="\/docs\/ai"/);
+  assert.match(promptSource, /\{t\("docs"\)\}/);
   assert.match(promptSource, /<Button/);
   assert.match(promptSource, /variant="secondary"/);
   assert.match(promptSource, /h-10 min-h-10 px-\[0\.9rem\] text-base font-bold leading-none/);

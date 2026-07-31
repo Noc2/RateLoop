@@ -1,21 +1,23 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { AgentText } from "./AgentText";
+import { useAgentFormatter, useAgentTranslations } from "./AgentsLocaleProvider";
 import { OneTimeSecretNotice } from "./OneTimeSecretNotice";
-import { formatEvidenceDeliveryDate, readEvidenceDeliveryJson } from "./evidenceDeliveryClient";
+import { readEvidenceDeliveryJson } from "./evidenceDeliveryClient";
 import { ChoiceInput, Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { Card } from "~~/components/tokenless/ui/Card";
 
 const EVENT_TYPES = [
-  ["ai.rateloop.review.completed", "Review completed"],
-  ["ai.rateloop.review.failed", "Review failed"],
-  ["ai.rateloop.review.expired", "Review expired"],
-  ["ai.rateloop.packet.anchored", "Packet anchored"],
-  ["ai.rateloop.gate.blocked", "Gate blocked"],
+  "ai.rateloop.review.completed",
+  "ai.rateloop.review.failed",
+  "ai.rateloop.review.expired",
+  "ai.rateloop.packet.anchored",
+  "ai.rateloop.gate.blocked",
 ] as const;
 
-type EventType = (typeof EVENT_TYPES)[number][0];
+type EventType = (typeof EVENT_TYPES)[number];
 type EventStream = {
   endpointId: string;
   url: string;
@@ -29,15 +31,19 @@ function eventStreamOrigin(value: string) {
   try {
     return new URL(value).origin;
   } catch {
-    return "Configured HTTPS receiver";
+    return null;
   }
 }
 
 export function SiemEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
+  const copy = useAgentTranslations("evidencePanels.delivery");
+  const errors = useAgentTranslations("errors");
+  const format = useAgentFormatter();
+  const statusCopy = useAgentTranslations("status");
   const endpoint = `/api/account/workspaces/${encodeURIComponent(workspaceId)}/assurance/event-streams`;
   const [streams, setStreams] = useState<EventStream[]>([]);
   const [url, setUrl] = useState("");
-  const [selectedTypes, setSelectedTypes] = useState<EventType[]>(EVENT_TYPES.map(([value]) => value));
+  const [selectedTypes, setSelectedTypes] = useState<EventType[]>([...EVENT_TYPES]);
   const [showForm, setShowForm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -52,8 +58,8 @@ export function SiemEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
   }, [endpoint]);
 
   useEffect(() => {
-    void load().catch(error => capture(error, "Unable to load event streams."));
-  }, [capture, load]);
+    void load().catch(() => capture(errors("loadStreams"), errors("loadStreams")));
+  }, [capture, errors, load]);
 
   const deactivate = async (stream: EventStream) => {
     setBusy(true);
@@ -66,9 +72,9 @@ export function SiemEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
       });
       if (!response.ok) await readEvidenceDeliveryJson(response);
       await load();
-      setMessage("Event stream disabled.");
-    } catch (error) {
-      capture(error, "Unable to disable event stream.");
+      setMessage(statusCopy("streamDisabled"));
+    } catch {
+      capture(errors("disableStream"), errors("disableStream"));
     } finally {
       setBusy(false);
     }
@@ -79,47 +85,54 @@ export function SiemEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 id="siem-event-streams-heading" className="font-semibold">
-            SIEM event streams
+            <AgentText id="translated219" />
           </h3>
           <p className="mt-2 text-sm leading-6 text-base-content/55">
-            Send CloudEvents and OCSF findings to a public HTTPS receiver.
+            <AgentText id="translated220" />
           </p>
         </div>
-        <span className="badge badge-ghost">{streams.filter(stream => stream.active).length} active</span>
+        <span className="badge badge-ghost">
+          <AgentText id="activeStreams" values={{ count: streams.filter(stream => stream.active).length }} />
+        </span>
       </div>
 
       {streams.length > 0 ? (
         <div className="mt-4 space-y-3">
           {streams.map(stream => (
-            <article key={stream.endpointId} className="rounded-xl border border-white/10 p-4">
+            <article key={stream.endpointId} className="rounded-xl border border-base-content/10 p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="break-all text-sm font-semibold">{eventStreamOrigin(stream.url)}</p>
+                  <p className="break-all text-sm font-semibold">
+                    {eventStreamOrigin(stream.url) ?? copy("configuredReceiver")}
+                  </p>
                   <p className="mt-1 text-xs text-base-content/55">
-                    {stream.eventTypes.length} event types · added {formatEvidenceDeliveryDate(stream.createdAt)}
+                    {stream.eventTypes.length} <AgentText id="translated221" />{" "}
+                    {format.dateTime(new Date(stream.createdAt), { dateStyle: "medium", timeStyle: "short" })}
                   </p>
                 </div>
                 <span
-                  className={`badge border-0 ${stream.active ? "bg-emerald-300/10 text-emerald-100" : "bg-white/[0.06] text-base-content/55"}`}
+                  className={`badge border-0 ${stream.active ? "bg-success/10 text-success" : "bg-base-content/[0.06] text-base-content/55"}`}
                 >
-                  {stream.active ? "Active" : "Disabled"}
+                  {stream.active ? <AgentText id="dynamic058" /> : <AgentText id="dynamic060" />}
                 </span>
               </div>
               {stream.active ? (
                 <button
                   type="button"
-                  className="btn btn-xs mt-3 border-red-300/20 bg-red-300/[0.04] text-red-100"
+                  className="btn btn-xs mt-3 border-error/20 bg-error/[0.04] text-error"
                   disabled={busy}
                   onClick={() => void deactivate(stream)}
                 >
-                  Disable
+                  <AgentText id="translated222" />
                 </button>
               ) : null}
             </article>
           ))}
         </div>
       ) : (
-        <p className="mt-4 text-sm text-base-content/55">No SIEM stream is configured.</p>
+        <p className="mt-4 text-sm text-base-content/55">
+          <AgentText id="noSiem" />
+        </p>
       )}
 
       {oneTimeSecret ? (
@@ -138,12 +151,12 @@ export function SiemEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
         disabled={busy || oneTimeSecret !== null}
         onClick={() => setShowForm(true)}
       >
-        Add event stream
+        <AgentText id="translated223" />
       </button>
       {showForm ? (
         <form
           id="siem-event-stream-form"
-          className="mt-4 space-y-4 rounded-xl border border-white/10 p-4"
+          className="mt-4 space-y-4 rounded-xl border border-base-content/10 p-4"
           onSubmit={event => {
             event.preventDefault();
             setBusy(true);
@@ -157,21 +170,21 @@ export function SiemEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
             })
               .then(response => readEvidenceDeliveryJson<CreatedEventStream>(response))
               .then(created => {
-                setOneTimeSecret({ label: "SIEM signing secret", value: created.signingSecret });
+                setOneTimeSecret({ label: copy("siemSigningSecret"), value: created.signingSecret });
                 return load();
               })
               .then(() => {
                 setUrl("");
-                setSelectedTypes(EVENT_TYPES.map(([value]) => value));
+                setSelectedTypes([...EVENT_TYPES]);
                 setShowForm(false);
-                setMessage("Event stream created.");
+                setMessage(statusCopy("streamCreated"));
               })
-              .catch(error => capture(error, "Unable to create event stream."))
+              .catch(() => capture(errors("createStream"), errors("createStream")))
               .finally(() => setBusy(false));
           }}
         >
           <Field
-            label="Receiver URL"
+            label={<AgentText id="attribute033" />}
             type="url"
             value={url}
             error={fieldErrors.url}
@@ -183,9 +196,11 @@ export function SiemEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
             required
           />
           <fieldset>
-            <legend className="text-sm text-base-content/65">Events</legend>
+            <legend className="text-sm text-base-content/65">
+              <AgentText id="events" />
+            </legend>
             <div className="mt-2 grid gap-2 sm:grid-cols-3">
-              {EVENT_TYPES.map(([value, label]) => (
+              {EVENT_TYPES.map(value => (
                 <label key={value} className="flex items-center gap-2 text-sm text-base-content/65">
                   <ChoiceInput
                     className="checkbox checkbox-sm"
@@ -197,7 +212,7 @@ export function SiemEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
                       )
                     }
                   />
-                  {label}
+                  {copy(`event.${value}`)}
                 </label>
               ))}
             </div>
@@ -208,7 +223,7 @@ export function SiemEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
               className="btn btn-sm rateloop-gradient-action"
               disabled={busy || selectedTypes.length === 0 || oneTimeSecret !== null}
             >
-              {busy ? "Adding…" : "Add stream"}
+              {busy ? <AgentText id="dynamic040" /> : <AgentText id="dynamic059" />}
             </button>
             <button
               type="button"
@@ -216,11 +231,11 @@ export function SiemEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
               disabled={busy}
               onClick={() => {
                 setUrl("");
-                setSelectedTypes(EVENT_TYPES.map(([value]) => value));
+                setSelectedTypes([...EVENT_TYPES]);
                 setShowForm(false);
               }}
             >
-              Cancel
+              <AgentText id="translated183" />
             </button>
           </div>
         </form>
@@ -231,7 +246,7 @@ export function SiemEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
         </p>
       ) : null}
       {formError ? (
-        <p className="mt-4 text-sm text-red-100" role="alert">
+        <p className="mt-4 text-sm text-error" role="alert">
           {formError}
         </p>
       ) : null}

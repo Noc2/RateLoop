@@ -1,6 +1,7 @@
 import React from "react";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { EnglishAgentTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 const overview = {
@@ -298,7 +299,9 @@ test("the overview renders four fixed answers and expands lifetime scope evidenc
   const { AgentOverviewMonitor } = await import("./AgentOverviewMonitor");
 
   try {
-    const view = render(<AgentOverviewMonitor workspaceId="workspace-overview" />);
+    const view = render(<AgentOverviewMonitor workspaceId="workspace-overview" />, {
+      wrapper: EnglishAgentTestProviders,
+    });
     assert.ok(await view.findByRole("heading", { name: "Agent monitor" }));
     for (const label of [
       "Completed decisions",

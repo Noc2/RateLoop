@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AgentText } from "./AgentText";
+import { useAgentFormatter, useAgentTranslations } from "./AgentsLocaleProvider";
 import {
   type ApprovalDecision,
   applyOptimisticApprovalDecision,
@@ -19,10 +21,10 @@ export function formatApprovalUsdc(atomic: string) {
   return formatUsdcAtomic(atomic);
 }
 
-function audienceLabel(kind: string) {
-  if (kind === "private_invited") return "Invited reviewers";
-  if (kind === "public_network") return "RateLoop network";
-  if (kind === "hybrid") return "Invited and RateLoop reviewers";
+function audienceLabel(kind: string, t: (key: string) => string) {
+  if (kind === "private_invited") return t("audienceInvited");
+  if (kind === "public_network") return t("audienceNetwork");
+  if (kind === "hybrid") return t("audienceHybrid");
   return kind;
 }
 
@@ -33,6 +35,9 @@ function ApprovalCard({
   approval: HumanReviewApproval;
   decide: (approval: HumanReviewApproval, decision: ApprovalDecision) => Promise<void>;
 }) {
+  const format = useAgentFormatter();
+  const copy = useAgentTranslations("approvalInbox");
+  const reviewersCopy = useAgentTranslations("reviewersPanel");
   const [busy, setBusy] = useState(false);
   const request = approval.preparedRequest;
   const economics = approval.economics;
@@ -63,106 +68,169 @@ function ApprovalCard({
             {request.question.criterion}
           </h3>
           {request.question.questionAuthority === "agent_per_request" ? (
-            <p className="mt-2 text-xs font-medium text-[var(--rateloop-yellow)]">Agent-written feedback question</p>
+            <p className="mt-2 text-xs font-medium text-[var(--rateloop-yellow)]">
+              <AgentText id="agentWrittenQuestion" />
+            </p>
           ) : null}
         </div>
-        <Badge className="self-start capitalize">{approval.status}</Badge>
+        <Badge className="self-start">
+          {copy(
+            approval.status === "pending"
+              ? "statusPending"
+              : approval.status === "approved"
+                ? "statusApproved"
+                : "statusRejected",
+          )}
+        </Badge>
       </div>
 
       <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
         <div>
-          <dt className="text-xs text-base-content/55">Reviewers</dt>
-          <dd className="mt-1">{audienceLabel(request.audience.kind)}</dd>
+          <dt className="text-xs text-base-content/55">
+            <AgentText id="reviewers" />
+          </dt>
+          <dd className="mt-1">{audienceLabel(request.audience.kind, copy)}</dd>
         </div>
         <div>
-          <dt className="text-xs text-base-content/55">Answer window</dt>
-          <dd className="mt-1">{Math.round(request.timing.responseWindowSeconds / 60)} minutes</dd>
+          <dt className="text-xs text-base-content/55">
+            <AgentText id="answerWindow" />
+          </dt>
+          <dd className="mt-1">
+            {Math.round(request.timing.responseWindowSeconds / 60)} <AgentText id="translated184" />
+          </dd>
         </div>
         <div>
-          <dt className="text-xs text-base-content/55">Panel</dt>
-          <dd className="mt-1">{request.panel.size} people</dd>
+          <dt className="text-xs text-base-content/55">
+            <AgentText id="panel" />
+          </dt>
+          <dd className="mt-1">
+            {request.panel.size} <AgentText id="translated185" />
+          </dd>
         </div>
         <div>
-          <dt className="text-xs text-base-content/55">Maximum charge</dt>
+          <dt className="text-xs text-base-content/55">
+            <AgentText id="maximumCharge" />
+          </dt>
           <dd className="mt-1">{formatApprovalUsdc(approval.maximumConsentAtomic)}</dd>
         </div>
         <div>
-          <dt className="text-xs text-base-content/55">Compensation</dt>
+          <dt className="text-xs text-base-content/55">
+            <AgentText id="compensation" />
+          </dt>
           <dd className="mt-1 capitalize">
-            {economics.compensationMode === "usdc"
-              ? `${formatApprovalUsdc(economics.bountyPerSeatAtomic)} each`
-              : "Unpaid"}
+            {economics.compensationMode === "usdc" ? (
+              copy("each", { amount: formatApprovalUsdc(economics.bountyPerSeatAtomic) })
+            ) : (
+              <AgentText id="dynamic043" />
+            )}
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-base-content/55">Fee</dt>
+          <dt className="text-xs text-base-content/55">
+            <AgentText id="fee" />
+          </dt>
           <dd className="mt-1">
-            {formatApprovalUsdc(economics.feeAtomic)} ({(economics.feeBps / 100).toFixed(2)}%)
+            {formatApprovalUsdc(economics.feeAtomic)} (
+            {format.number(economics.feeBps / 100, { maximumFractionDigits: 2 })}%)
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-base-content/55">Feedback Bonus</dt>
+          <dt className="text-xs text-base-content/55">
+            <AgentText id="feedbackBonus" />
+          </dt>
           <dd className="mt-1">
-            {approval.feedbackBonusEconomics.enabled
-              ? `${formatApprovalUsdc(approval.feedbackBonusEconomics.poolAtomic)} · human-awarded`
-              : "Off"}
+            {approval.feedbackBonusEconomics.enabled ? (
+              copy("humanAwarded", { amount: formatApprovalUsdc(approval.feedbackBonusEconomics.poolAtomic) })
+            ) : (
+              <AgentText id="dynamic042" />
+            )}
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-base-content/55">Material</dt>
+          <dt className="text-xs text-base-content/55">
+            <AgentText id="material" />
+          </dt>
           <dd className="mt-1">
-            {request.audience.contentBoundary.replaceAll("_", " ")}
-            {request.audience.privateSensitivity ? ` · ${request.audience.privateSensitivity}` : ""}
+            {request.audience.contentBoundary === "private_workspace"
+              ? copy("materialPrivate")
+              : copy("materialPublic")}
+            {request.audience.privateSensitivity
+              ? ` · ${reviewersCopy(`sensitivity${request.audience.privateSensitivity[0]?.toUpperCase()}${request.audience.privateSensitivity.slice(1)}`)}`
+              : ""}
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-base-content/55">Expires</dt>
-          <dd className="mt-1">{new Date(approval.expiresAt).toLocaleString()}</dd>
+          <dt className="text-xs text-base-content/55">
+            <AgentText id="expires" />
+          </dt>
+          <dd className="mt-1">
+            {format.dateTime(new Date(approval.expiresAt), { dateStyle: "medium", timeStyle: "short" })}
+          </dd>
         </div>
       </dl>
 
-      <details className="mt-5 border-t border-white/10 pt-4">
+      <details className="mt-5 border-t border-base-content/10 pt-4">
         <summary className="cursor-pointer text-sm font-semibold text-base-content/65">
-          Frozen terms and provenance
+          <AgentText id="translated186" />
         </summary>
         <dl className="mt-4 grid gap-3 text-xs sm:grid-cols-2">
           <div>
-            <dt className="text-base-content/55">Answer labels</dt>
+            <dt className="text-base-content/55">
+              <AgentText id="answerLabels" />
+            </dt>
             <dd className="mt-1">
-              {request.question.positiveLabel} / {request.question.negativeLabel} · rationale{" "}
-              {request.question.rationaleMode}
+              {request.question.positiveLabel} / {request.question.negativeLabel} <AgentText id="translated187" />{" "}
+              {copy(
+                request.question.rationaleMode === "off"
+                  ? "rationaleOff"
+                  : request.question.rationaleMode === "optional"
+                    ? "rationaleOptional"
+                    : "rationaleRequired",
+              )}
             </dd>
           </div>
           {request.question.questionHash ? (
             <div>
-              <dt className="text-base-content/55">Question commitment</dt>
+              <dt className="text-base-content/55">
+                <AgentText id="questionCommitment" />
+              </dt>
               <dd className="mt-1 break-all font-mono">{request.question.questionHash}</dd>
             </div>
           ) : null}
           <div>
-            <dt className="text-base-content/55">Agent version</dt>
+            <dt className="text-base-content/55">
+              <AgentText id="agentVersion" />
+            </dt>
             <dd className="mt-1 break-all font-mono">
               {request.provenance.agentId} · {request.provenance.agentVersionId}
             </dd>
           </div>
           <div>
-            <dt className="text-base-content/55">Selection policy</dt>
+            <dt className="text-base-content/55">
+              <AgentText id="selectionPolicy" />
+            </dt>
             <dd className="mt-1 break-all font-mono">
               {request.provenance.selectionPolicyId} v{request.provenance.selectionPolicyVersion}
             </dd>
           </div>
           <div>
-            <dt className="text-base-content/55">Request profile</dt>
+            <dt className="text-base-content/55">
+              <AgentText id="requestProfile" />
+            </dt>
             <dd className="mt-1 break-all font-mono">
               {request.requestProfile.id} v{request.requestProfile.version}
             </dd>
           </div>
           <div>
-            <dt className="text-base-content/55">Source commitment</dt>
+            <dt className="text-base-content/55">
+              <AgentText id="sourceCommitment" />
+            </dt>
             <dd className="mt-1 break-all font-mono">{request.contentCommitments.source}</dd>
           </div>
           <div>
-            <dt className="text-base-content/55">Suggestion commitment</dt>
+            <dt className="text-base-content/55">
+              <AgentText id="suggestionCommitment" />
+            </dt>
             <dd className="mt-1 break-all font-mono">{request.contentCommitments.suggestion}</dd>
           </div>
         </dl>
@@ -171,20 +239,24 @@ function ApprovalCard({
       {approval.status === "pending" ? (
         <div className="mt-5 flex flex-wrap gap-3">
           <Button type="button" disabled={busy} onClick={() => void act("approve")}>
-            Approve
+            <AgentText id="translated188" />
           </Button>
           <Button type="button" variant="ghost" disabled={busy} onClick={() => void act("reject")}>
-            Decline
+            <AgentText id="translated189" />
           </Button>
         </div>
       ) : (
-        <p className="mt-5 text-sm text-base-content/55">Approved and ready for the request adapter.</p>
+        <p className="mt-5 text-sm text-base-content/55">
+          <AgentText id="approvalReady" />
+        </p>
       )}
     </Card>
   );
 }
 
 export function HumanReviewApprovalInbox({ workspaceId }: { workspaceId: string }) {
+  const errors = useAgentTranslations("errors");
+  const copy = useAgentTranslations("approvalInbox");
   const [approvals, setApprovals] = useState<HumanReviewApproval[]>([]);
   const approvalsRef = useRef<HumanReviewApproval[]>([]);
   const approvalSectionRef = useRef<HTMLElement>(null);
@@ -214,13 +286,13 @@ export function HumanReviewApprovalInbox({ workspaceId }: { workspaceId: string 
           }),
         );
         if (!signal?.aborted) commitApprovals((body.approvals ?? []) as HumanReviewApproval[]);
-      } catch (cause) {
-        if (!signal?.aborted) setError(cause instanceof Error ? cause.message : "Unable to load approvals.");
+      } catch {
+        if (!signal?.aborted) setError(errors("loadApprovals"));
       } finally {
         if (!signal?.aborted && foreground) setLoading(false);
       }
     },
-    [commitApprovals, workspaceId],
+    [commitApprovals, errors, workspaceId],
   );
 
   useEffect(() => {
@@ -258,14 +330,13 @@ export function HumanReviewApprovalInbox({ workspaceId }: { workspaceId: string 
           throw new Error("The approval response was incomplete.");
         }
         commitApprovals(confirmApprovalDecision(approvalsRef.current, decided));
-      } catch (cause) {
+      } catch {
         commitApprovals(rollbackApprovalDecision(approvalsRef.current, optimistic.rollback));
-        const action = decision === "approve" ? "approve" : "decline";
-        const message = cause instanceof Error ? cause.message : "Try again.";
-        setError(`Could not ${action} the request. ${message}`);
+        const action = decision === "approve" ? copy("approveAction") : copy("declineAction");
+        setError(copy("decisionFailed", { action }));
       }
     },
-    [commitApprovals, workspaceId],
+    [commitApprovals, copy, workspaceId],
   );
 
   const handleKeyboardTriage = useCallback(
@@ -317,27 +388,29 @@ export function HumanReviewApprovalInbox({ workspaceId }: { workspaceId: string 
     >
       <div>
         <h2 id="human-review-approval-inbox-title" className="text-2xl font-semibold">
-          Requests awaiting approval
+          <AgentText id="translated190" />
         </h2>
         <p className="mt-2 text-sm text-base-content/55">
-          Review the frozen audience, timing, panel, and cost before anything is published or funded.
+          <AgentText id="translated191" />
         </p>
         {approvals.length > 0 ? (
-          <p className="mt-1 text-xs text-base-content/55">Keys: J/K move · A approve · D decline</p>
+          <p className="mt-1 text-xs text-base-content/55">
+            <AgentText id="keyboardShortcuts" />
+          </p>
         ) : null}
       </div>
       {error && approvals.length > 0 ? (
-        <p role="alert" className="text-sm text-red-300">
+        <p role="alert" className="text-sm text-error">
           {error}
         </p>
       ) : null}
       <AsyncSection
         loading={loading}
-        loadingLabel="Loading approval requests…"
+        loadingLabel={copy("loading")}
         error={approvals.length === 0 ? error : null}
         empty={approvals.length === 0}
-        emptyTitle="No requests need approval"
-        emptyDescription="Prepared review requests will appear here."
+        emptyTitle={copy("empty")}
+        emptyDescription={copy("emptyDescription")}
       >
         {approvals.map(approval => (
           <ApprovalCard key={approval.approvalId} approval={approval} decide={decide} />

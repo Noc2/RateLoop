@@ -1,17 +1,25 @@
 "use client";
 
-export function RuntimeErrorActions({ reset }: { reset: () => void }) {
+export function RuntimeErrorActions({
+  goBackLabel = "Go back",
+  reset,
+  tryAgainLabel = "Try again",
+}: {
+  goBackLabel?: string;
+  reset: () => void;
+  tryAgainLabel?: string;
+}) {
   return (
     <>
       <button type="button" onClick={reset} className="rateloop-gradient-action min-h-11 px-4">
-        Try again
+        {tryAgainLabel}
       </button>
       <button
         type="button"
         onClick={() => window.history.back()}
         className="btn rateloop-secondary-action min-h-11 px-4"
       >
-        Go back
+        {goBackLabel}
       </button>
     </>
   );

@@ -1,11 +1,13 @@
 import React from "react";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 test("API key permissions explain their tasks while the request keeps the raw scope contract", async () => {
   const restoreDom = installTestDom();
-  const { act, cleanup, render, waitFor } = await import("@testing-library/react");
+  const { act, cleanup, render: baseRender, waitFor } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { WorkspaceApiKeysPanel } = await import("./WorkspaceApiKeysPanel");
   const previousFetch = globalThis.fetch;
@@ -76,7 +78,8 @@ test("API key permissions explain their tasks while the request keeps the raw sc
 
 test("API key revocation waits for explicit confirmation and keeps the dialog busy during deletion", async () => {
   const restoreDom = installTestDom();
-  const { act, cleanup, render, waitFor, within } = await import("@testing-library/react");
+  const { act, cleanup, render: baseRender, waitFor, within } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { WorkspaceApiKeysPanel } = await import("./WorkspaceApiKeysPanel");
   const previousFetch = globalThis.fetch;

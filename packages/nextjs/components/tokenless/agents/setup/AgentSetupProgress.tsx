@@ -1,3 +1,6 @@
+"use client";
+
+import { useAgentTranslations } from "../AgentsLocaleProvider";
 import type { AgentSetupScreenStep } from "~~/lib/tokenless/agentSetupNavigation";
 
 export const AGENT_SETUP_STAGE_LABELS: Record<AgentSetupScreenStep, string> = {
@@ -58,24 +61,40 @@ export function AgentSetupProgress({
   /** Blocks step navigation while a save or load is in flight so the two cannot race. */
   busy?: boolean;
 }) {
+  const t = useAgentTranslations("setup");
+  const stageLabel = (step: AgentSetupScreenStep) =>
+    ({
+      workspace: t("stageWorkspace"),
+      connect: t("stageConnect"),
+      agent: t("stageAgent"),
+      reviews: t("stageReviews"),
+      people: t("stagePeople"),
+    })[step];
   const currentIndex = stages.findIndex(stage => stage.key === currentStep);
   const currentVisual = AGENT_SETUP_STAGE_VISUALS[currentStep];
   return (
-    <nav aria-label="Workspace setup progress">
+    <nav aria-label={t("progress")}>
       <div className="flex items-center justify-between gap-4">
         <p className="font-mono text-xs uppercase tracking-[0.22em] text-base-content/55">
-          Step {currentIndex + 1} of {stages.length}
+          {t("stepCount", { current: currentIndex + 1, total: stages.length })}
         </p>
         <p className="flex items-center gap-2 text-sm font-medium">
           <span className="h-2 w-2 rounded-full" style={{ background: currentVisual.color }} aria-hidden="true" />
-          {AGENT_SETUP_STAGE_LABELS[currentStep]}
+          {stageLabel(currentStep)}
         </p>
       </div>
-      <ol className="mt-4 grid grid-cols-5" aria-label={`Step ${currentIndex + 1} of ${stages.length}`}>
+      <ol
+        className="mt-4 grid grid-cols-5"
+        aria-label={t("stepCount", { current: currentIndex + 1, total: stages.length })}
+      >
         {stages.map((stage, index) => {
           const visual = AGENT_SETUP_STAGE_VISUALS[stage.key];
           const statusLabel =
-            stage.key === currentStep ? "Current" : stage.status === "complete" ? "Complete" : "Not started";
+            stage.key === currentStep
+              ? t("statusCurrent")
+              : stage.status === "complete"
+                ? t("statusComplete")
+                : t("statusNotStarted");
           const completedConnector = index < currentIndex;
           const markerStyle =
             stage.key === "people" && stage.key === currentStep
@@ -110,7 +129,7 @@ export function AgentSetupProgress({
                 <span style={stage.status === "not_started" ? undefined : { color: visual.color }}>
                   {visual.number}
                 </span>{" "}
-                {AGENT_SETUP_STAGE_LABELS[stage.key]}
+                {stageLabel(stage.key)}
               </span>
               <span className="sr-only">{statusLabel}</span>
             </>

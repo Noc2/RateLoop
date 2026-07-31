@@ -8,6 +8,8 @@ import {
   saveAgentConnectionHostChoice,
 } from "./AgentConnectionHostPicker";
 import { AgentConnectionTroubleshooting } from "./AgentConnectionTroubleshooting";
+import { AgentText } from "./AgentText";
+import { useAgentFormatter, useAgentTranslations } from "./AgentsLocaleProvider";
 import type { AgentConnectionHistoryEntry } from "./agentAuditHistory";
 import { buildAgentConnectionMessage, buildAgentConnectionMessageForHost } from "./agentConnectionMessage";
 import {
@@ -15,7 +17,7 @@ import {
   isUsableAgentConnection,
   selectReconnectableOAuthConnections,
 } from "./agentWorkspaceState";
-import { reviewPolicyCopy } from "./reviewPolicyCopy";
+import { useLocalizedReviewPolicyCopy } from "./reviewPolicyCopy";
 import { Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
@@ -138,42 +140,43 @@ type PendingConnectionConfirmation =
   | { kind: "rotate-integration"; integration: AgentIntegration }
   | { kind: "revoke-integration"; integration: AgentIntegration };
 
-function confirmationCopy(confirmation: PendingConnectionConfirmation) {
+type AgentTranslate = (key: string, values?: Record<string, number | string>) => string;
+
+function confirmationCopy(confirmation: PendingConnectionConfirmation, t: AgentTranslate) {
   if (confirmation.kind === "cancel-intent") {
     return {
-      title: "Cancel this connection attempt?",
-      description: "Its original message will stop working.",
-      confirmLabel: "Cancel attempt",
+      title: t("cancelTitle"),
+      description: t("cancelDescription"),
+      confirmLabel: t("cancelAttempt"),
     };
   }
   if (confirmation.kind === "approve-workspace-move") {
     return {
-      title: "Reconnect this agent here?",
-      description:
-        "Its current RateLoop workspace connection will stop, and this agent's previous credential will be replaced.",
-      confirmLabel: "Approve reconnect",
+      title: t("reconnectTitle"),
+      description: t("reconnectDescription"),
+      confirmLabel: t("approveReconnect"),
     };
   }
   if (confirmation.kind === "reject-pairing") {
     return {
-      title: "Reject this agent registration request?",
-      description: "The pairing secret cannot be reused.",
-      confirmLabel: "Reject request",
+      title: t("rejectTitle"),
+      description: t("rejectDescription"),
+      confirmLabel: t("rejectRequest"),
     };
   }
   if (confirmation.kind === "rotate-integration") {
     const name = confirmation.integration.agentDisplayName || confirmation.integration.agentId;
     return {
-      title: `Rotate the credential for ${name}?`,
-      description: "The previous credential will no longer be valid. The replacement is shown once.",
-      confirmLabel: "Rotate credential",
+      title: t("rotateTitle", { name }),
+      description: t("rotateDescription"),
+      confirmLabel: t("rotateCredential"),
     };
   }
   const name = confirmation.integration.agentDisplayName || confirmation.integration.agentId;
   return {
-    title: `Disconnect ${name} from RateLoop?`,
-    description: "Its current RateLoop access will stop.",
-    confirmLabel: "Disconnect",
+    title: t("disconnectTitle", { name }),
+    description: t("disconnectDescription"),
+    confirmLabel: t("disconnect"),
   };
 }
 
@@ -274,7 +277,10 @@ export function normalizeAgentIntegration(value: unknown): AgentIntegration {
   };
 }
 
-export function normalizeAgentConnectionIntent(value: unknown): AgentConnectionIntent {
+export function normalizeAgentConnectionIntent(
+  value: unknown,
+  fallbackSummary = "Can check when human review is needed. Cannot spend, publish, read private files, or administer the workspace.",
+): AgentConnectionIntent {
   const row = record(value);
   const profile = record(row.profile);
   const workspaceMove = record(row.workspaceMove);
@@ -303,9 +309,7 @@ export function normalizeAgentConnectionIntent(value: unknown): AgentConnectionI
     profile: {
       key: stringField(profile, "key"),
       version: numberField(profile, "version") ?? 1,
-      summary:
-        stringField(profile, "summary") ||
-        "Can check when human review is needed. Cannot spend, publish, read private files, or administer the workspace.",
+      summary: stringField(profile, "summary") || fallbackSummary,
     },
     createdAt: nullableStringField(row, "createdAt"),
     claimExpiresAt: nullableStringField(row, "claimExpiresAt"),
@@ -331,11 +335,11 @@ export function normalizeAgentConnectionIntent(value: unknown): AgentConnectionI
   };
 }
 
-function normalizePublishingPolicy(value: unknown): PublishingPolicy {
+function normalizePublishingPolicy(value: unknown, unnamedPolicy = "Unnamed policy"): PublishingPolicy {
   const row = record(value);
   return {
     policyId: stringField(row, "policyId", "id"),
-    name: stringField(row, "name") || "Unnamed policy",
+    name: stringField(row, "name") || unnamedPolicy,
     version: numberField(row, "version") ?? 1,
     enabled: row.enabled !== false,
     revokedAt: nullableStringField(row, "revokedAt"),
@@ -361,45 +365,39 @@ function workflowKeys(value: string) {
   return entries;
 }
 
-function formatTimestamp(value: string | null, empty = "Never") {
-  if (!value) return empty;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
-}
-
-function connectionIntentCopy(status: ConnectionIntentStatus) {
+function connectionIntentCopy(status: ConnectionIntentStatus, t: AgentTranslate) {
   switch (status) {
     case "issued":
-      return { heading: "Waiting for the agent to open your connection", detail: "Paste the copied message once." };
+      return { heading: t("intentIssuedTitle"), detail: t("intentIssuedDescription") };
     case "install_required":
       return {
-        heading: "Host install or trust required",
-        detail: "Complete the native host prompt once. The original connection resumes automatically.",
+        heading: t("intentInstallTitle"),
+        detail: t("intentInstallDescription"),
       };
     case "authorizing":
       return {
-        heading: "Waiting for authorization",
-        detail: "Complete the RateLoop authorization prompt if your host opened one.",
+        heading: t("intentAuthorizingTitle"),
+        detail: t("intentAuthorizingDescription"),
       };
     case "approval_required":
       return {
-        heading: "Additional access needs approval",
-        detail: "The agent requested more than the safe default. Review the exact access before continuing.",
+        heading: t("intentApprovalTitle"),
+        detail: t("intentApprovalDescription"),
       };
     case "testing":
-      return { heading: "Verifying safe access", detail: "The agent and RateLoop are finishing automatically." };
+      return { heading: t("intentTestingTitle"), detail: t("intentTestingDescription") };
     case "action_required":
       return {
-        heading: "Connection needs attention",
-        detail: "Return to the agent for one exact recovery action. Do not paste the message again.",
+        heading: t("intentActionTitle"),
+        detail: t("intentActionDescription"),
       };
     case "connected":
       return {
-        heading: "Connected with safe access",
-        detail: "Review decisions are available; spending, publishing, private files, and administration stay blocked.",
+        heading: t("intentConnectedTitle"),
+        detail: t("intentConnectedDescription"),
       };
     default:
-      return { heading: "Connection ended", detail: "Create a new connection message to try again." };
+      return { heading: t("intentEndedTitle"), detail: t("intentEndedDescription") };
   }
 }
 
@@ -458,6 +456,10 @@ function PairingApprovalCard({
   onApprove: (payload: ApprovalPayload) => Promise<void>;
   onReject: () => Promise<void>;
 }) {
+  const format = useAgentFormatter();
+  const t = useAgentTranslations("connection");
+  const errors = useAgentTranslations("errors");
+  const policyCopy = useLocalizedReviewPolicyCopy();
   const [externalId, setExternalId] = useState(pairing.externalId);
   const [displayName, setDisplayName] = useState(pairing.displayName);
   const [description, setDescription] = useState(pairing.description);
@@ -487,8 +489,8 @@ function PairingApprovalCard({
         publishingPolicyId,
         allowedWorkflowKeys: workflowKeys(allowedWorkflows),
       });
-    } catch (cause) {
-      capture(cause, "Unable to approve this agent.");
+    } catch {
+      capture(errors("approveAgent"), errors("approveAgent"));
     }
   }
 
@@ -500,35 +502,37 @@ function PairingApprovalCard({
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h4 className="font-semibold">Agent is waiting for approval</h4>
-            <Badge variant="warning">declared metadata</Badge>
+            <h4 className="font-semibold">{t("waitingApproval")}</h4>
+            <Badge variant="warning">{t("declaredMetadata")}</Badge>
           </div>
           <p className="mt-2 text-sm text-base-content/60">
-            {pairing.clientName || "Unknown MCP client"}
-            {pairing.clientVersion ? ` ${pairing.clientVersion}` : ""} submitted this registration. Verify and edit
-            every field before activation.
+            {pairing.clientName || t("unknownMcpClient")}
+            {pairing.clientVersion ? ` ${pairing.clientVersion}` : ""} <AgentText id="translated001" />
           </p>
           {pairing.requestedWorkflowKeys.length > 0 ? (
             <p className="mt-2 text-xs text-base-content/55">
-              Requested workflows: {pairing.requestedWorkflowKeys.join(", ")}
+              <AgentText id="translated002" /> {pairing.requestedWorkflowKeys.join(", ")}
             </p>
           ) : null}
         </div>
         <time className="font-mono text-xs text-base-content/55" dateTime={pairing.expiresAt ?? undefined}>
-          Expires {formatTimestamp(pairing.expiresAt, "soon")}
+          {t("expires", {
+            date: pairing.expiresAt
+              ? format.dateTime(new Date(pairing.expiresAt), { dateStyle: "medium", timeStyle: "short" })
+              : t("soon"),
+          })}
         </time>
       </div>
 
       <fieldset className="mt-5">
-        <legend className="text-sm font-semibold">1. Confirm the agent identity</legend>
+        <legend className="text-sm font-semibold">{t("confirmIdentity")}</legend>
         <p className="mt-1 text-xs leading-5 text-base-content/55">
-          Provider and model values are agent-declared, not provider-attested. Approval records your edited declaration
-          as immutable version 1.
+          <AgentText id="translated003" />
         </p>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <Field
-            label="Display name"
-            className="border-white/10 bg-[var(--rateloop-field)]"
+            label={t("displayName")}
+            className="border-base-content/10 bg-[var(--rateloop-field)]"
             value={displayName}
             error={fieldErrors.displayName}
             onChange={event => {
@@ -539,8 +543,8 @@ function PairingApprovalCard({
             required
           />
           <Field
-            label="Stable external ID"
-            className="border-white/10 bg-[var(--rateloop-field)] font-mono text-xs"
+            label={t("externalId")}
+            className="border-base-content/10 bg-[var(--rateloop-field)] font-mono text-xs"
             value={externalId}
             error={fieldErrors.externalId}
             onChange={event => {
@@ -551,8 +555,8 @@ function PairingApprovalCard({
             required
           />
           <Field
-            label="Declared provider"
-            className="border-white/10 bg-[var(--rateloop-field)]"
+            label={t("provider")}
+            className="border-base-content/10 bg-[var(--rateloop-field)]"
             value={declaredProvider}
             error={fieldErrors.provider}
             onChange={event => {
@@ -563,8 +567,8 @@ function PairingApprovalCard({
             required
           />
           <Field
-            label="Declared model"
-            className="border-white/10 bg-[var(--rateloop-field)]"
+            label={t("model")}
+            className="border-base-content/10 bg-[var(--rateloop-field)]"
             value={declaredModel}
             error={fieldErrors.model}
             onChange={event => {
@@ -575,8 +579,8 @@ function PairingApprovalCard({
             required
           />
           <Field
-            label="Declared model version (optional)"
-            className="border-white/10 bg-[var(--rateloop-field)]"
+            label={t("modelVersion")}
+            className="border-base-content/10 bg-[var(--rateloop-field)]"
             value={declaredModelVersion}
             error={fieldErrors.modelVersion}
             onChange={event => {
@@ -586,8 +590,8 @@ function PairingApprovalCard({
             maxLength={160}
           />
           <SelectField
-            label="Environment"
-            className="border-white/10 bg-[var(--rateloop-field)]"
+            label={t("environment")}
+            className="border-base-content/10 bg-[var(--rateloop-field)]"
             value={environment}
             error={fieldErrors.environment}
             onChange={event => {
@@ -595,13 +599,13 @@ function PairingApprovalCard({
               setEnvironment(event.target.value as AgentPairing["environment"]);
             }}
           >
-            <option value="staging">Staging</option>
-            <option value="production">Production</option>
+            <option value="staging">{t("staging")}</option>
+            <option value="production">{t("production")}</option>
           </SelectField>
           <div className="md:col-span-2">
             <TextareaField
-              label="Description"
-              className="min-h-24 border-white/10 bg-[var(--rateloop-field)]"
+              label={t("descriptionField")}
+              className="min-h-24 border-base-content/10 bg-[var(--rateloop-field)]"
               value={description}
               error={fieldErrors.description}
               onChange={event => {
@@ -614,12 +618,12 @@ function PairingApprovalCard({
         </div>
       </fieldset>
 
-      <fieldset className="mt-6 border-t border-white/10 pt-5">
-        <legend className="text-sm font-semibold">2. Choose publishing and workflow controls</legend>
+      <fieldset className="mt-6 border-t border-base-content/10 pt-5">
+        <legend className="text-sm font-semibold">{t("controls")}</legend>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <SelectField
-            label="Publishing policy"
-            className="border-white/10 bg-[var(--rateloop-field)]"
+            label={t("policy")}
+            className="border-base-content/10 bg-[var(--rateloop-field)]"
             value={publishingPolicyId}
             error={fieldErrors.publishingPolicyId}
             onChange={event => {
@@ -629,7 +633,7 @@ function PairingApprovalCard({
             required
           >
             <option value="" disabled>
-              Select an active policy
+              <AgentText id="translated004" />
             </option>
             {policies.map(policy => (
               <option key={policy.policyId} value={policy.policyId}>
@@ -638,11 +642,11 @@ function PairingApprovalCard({
             ))}
           </SelectField>
           <Field
-            label="Allowed workflows"
-            className="border-white/10 bg-[var(--rateloop-field)]"
+            label={t("workflows")}
+            className="border-base-content/10 bg-[var(--rateloop-field)]"
             value={allowedWorkflows}
             error={fieldErrors.allowedWorkflowKeys}
-            hint="You may remove requested workflows before approval. The credential cannot add workflows later."
+            hint={t("workflowsHint")}
             onChange={event => {
               clear("allowedWorkflowKeys");
               setAllowedWorkflows(event.target.value);
@@ -652,32 +656,32 @@ function PairingApprovalCard({
           />
         </div>
         <div className="mt-4 flex items-center gap-2 text-xs text-base-content/60">
-          <span>{reviewPolicyCopy.limits.adaptiveSummary}</span>
-          <InfoPopover label="About the adaptive preset">{reviewPolicyCopy.limits.adaptiveConnectionHelp}</InfoPopover>
+          <span>{policyCopy.limits.adaptiveSummary}</span>
+          <InfoPopover label={t("adaptivePreset")}>{policyCopy.limits.adaptiveConnectionHelp}</InfoPopover>
         </div>
       </fieldset>
 
       {policies.length === 0 ? (
-        <p className="mt-4 rounded-lg bg-amber-300/10 p-3 text-sm text-amber-100">
-          Create an active publishing policy below before approving this agent.
+        <p className="mt-4 rounded-lg bg-warning/10 p-3 text-sm text-warning">
+          <AgentText id="translated005" />
         </p>
       ) : null}
       {formError ? (
-        <p className="mt-4 rounded-lg bg-red-400/10 p-3 text-sm text-red-100" role="alert">
+        <p className="mt-4 rounded-lg bg-error/10 p-3 text-sm text-error" role="alert">
           {formError}
         </p>
       ) : null}
       <div className="mt-5 flex flex-wrap gap-3">
         <button type="submit" className="rateloop-gradient-action px-5" disabled={busy || !publishingPolicyId}>
-          {busy ? "Approving…" : "Approve and activate"}
+          {busy ? t("approving") : t("approveActivate")}
         </button>
         <button
           type="button"
-          className="btn border border-red-300/20 bg-red-300/[0.06] text-red-100"
+          className="btn border border-error/20 bg-error/[0.06] text-error"
           disabled={busy}
           onClick={() => void onReject()}
         >
-          Reject request
+          {t("rejectRequest")}
         </button>
       </div>
     </form>
@@ -697,6 +701,10 @@ export function AgentConnectionPanel({
   onConnectionStateChange?: (connected: boolean) => void;
   onConnectionHistoryChange?: (history: AgentConnectionHistoryEntry[]) => void;
 }) {
+  const format = useAgentFormatter();
+  const t = useAgentTranslations("connection");
+  const errors = useAgentTranslations("errors");
+  const statusCopy = useAgentTranslations("status");
   const [connectionIntents, setConnectionIntents] = useState<AgentConnectionIntent[]>([]);
   const [pairings, setPairings] = useState<AgentPairing[]>([]);
   const [integrations, setIntegrations] = useState<AgentIntegration[]>([]);
@@ -750,7 +758,9 @@ export function AgentConnectionPanel({
           await fetch(`${base}/agent-publishing-policies`, { cache: "no-store", credentials: "same-origin", signal }),
         ),
       ]);
-      setConnectionIntents(responseList(intentBody, "intents").map(normalizeAgentConnectionIntent));
+      setConnectionIntents(
+        responseList(intentBody, "intents").map(value => normalizeAgentConnectionIntent(value, t("safeSummary"))),
+      );
       setPairings(responseList(pairingBody, "pairings", "sessions").map(normalizeAgentPairing));
       const nextIntegrations = responseList(integrationBody, "integrations").map(normalizeAgentIntegration);
       setIntegrations(nextIntegrations);
@@ -766,11 +776,11 @@ export function AgentConnectionPanel({
       );
       setPublishingPolicies(
         responseList(policyBody, "policies")
-          .map(normalizePublishingPolicy)
+          .map(value => normalizePublishingPolicy(value, t("unnamedPolicy")))
           .filter(policy => policy.enabled && !policy.revokedAt),
       );
     },
-    [reportConnectionState],
+    [reportConnectionState, t],
   );
 
   useEffect(() => {
@@ -780,16 +790,16 @@ export function AgentConnectionPanel({
       setError(null);
       try {
         await loadConnectionState(workspaceId, controller.signal);
-      } catch (cause) {
+      } catch {
         if (!controller.signal.aborted) {
-          setError(cause instanceof Error ? cause.message : "Unable to load agent connections.");
+          setError(errors("loadConnections"));
         }
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
     })();
     return () => controller.abort();
-  }, [loadConnectionState, publishingRevision, workspaceId]);
+  }, [errors, loadConnectionState, publishingRevision, workspaceId]);
 
   useEffect(() => {
     setSelectedHostId(loadAgentConnectionHostChoice(workspaceId));
@@ -834,7 +844,7 @@ export function AgentConnectionPanel({
         setConnectionClock(Date.now());
       } catch {
         failures += 1;
-        setError("Connection status could not refresh. RateLoop will retry while this page is visible.");
+        setError(errors("refreshConnection"));
       }
       if (!stopped && document.visibilityState === "visible") {
         schedule(Math.min(PAIRING_POLL_INTERVAL_MS * Math.max(1, failures), PAIRING_HIDDEN_POLL_INTERVAL_MS));
@@ -853,7 +863,7 @@ export function AgentConnectionPanel({
       document.removeEventListener("visibilitychange", onVisibilityChange);
       if (timer !== null) window.clearTimeout(timer);
     };
-  }, [loadConnectionState, shouldPoll, workspaceId]);
+  }, [errors, loadConnectionState, shouldPoll, workspaceId]);
 
   async function copyConnectionMessage(reconnectIntegrationId?: string) {
     if (!workspaceId) return;
@@ -880,11 +890,7 @@ export function AgentConnectionPanel({
       try {
         await navigator.clipboard.writeText(message);
         copied = true;
-        setStatus(
-          reconnectIntegrationId
-            ? "Reconnect message copied. Paste it once into the same agent task."
-            : "Connection message copied. Paste it once into the agent chat you want to connect.",
-        );
+        setStatus(reconnectIntegrationId ? t("reconnectCopied") : t("connectionCopied"));
         void fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/agent-connections/onboarding-events`, {
           method: "POST",
           body: JSON.stringify({ event: "connection_message_copied" }),
@@ -893,7 +899,7 @@ export function AgentConnectionPanel({
           keepalive: true,
         }).catch(() => undefined);
       } catch {
-        setError("Clipboard access was denied. The complete message is selected below for one manual copy.");
+        setError(errors("clipboardSelected"));
         window.requestAnimationFrame(() => {
           manualMessageRef.current?.focus();
           manualMessageRef.current?.select();
@@ -903,11 +909,11 @@ export function AgentConnectionPanel({
         await loadConnectionState(workspaceId);
       } catch {
         if (copied) {
-          setError("The message was copied, but live status could not refresh yet. The connection can still continue.");
+          setError(errors("copiedRefresh"));
         }
       }
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to create the connection message.");
+    } catch {
+      setError(errors("createConnection"));
     } finally {
       setBusyAction(null);
     }
@@ -918,7 +924,7 @@ export function AgentConnectionPanel({
     try {
       await navigator.clipboard.writeText(manualConnectionMessage);
       setError(null);
-      setStatus("Connection message copied. Paste it once into the agent chat you want to connect.");
+      setStatus(statusCopy("connectionCopied"));
       void fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/agent-connections/onboarding-events`, {
         method: "POST",
         body: JSON.stringify({ event: "connection_message_copied" }),
@@ -927,7 +933,7 @@ export function AgentConnectionPanel({
         keepalive: true,
       }).catch(() => undefined);
     } catch {
-      setError("Clipboard access was denied. The complete message is selected below for manual copying.");
+      setError(errors("clipboardSelected"));
       manualMessageRef.current?.focus();
       manualMessageRef.current?.select();
     }
@@ -947,9 +953,9 @@ export function AgentConnectionPanel({
       await loadConnectionState(workspaceId);
       setManualConnectionMessage(null);
       setManualConnectionUrl(null);
-      setStatus("Connection attempt cancelled. You can create a new message when ready.");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to cancel the connection attempt.");
+      setStatus(statusCopy("connectionCancelled"));
+    } catch {
+      setError(errors("cancelConnection"));
     } finally {
       setBusyAction(null);
     }
@@ -974,9 +980,9 @@ export function AgentConnectionPanel({
         ),
       );
       await loadConnectionState(workspaceId);
-      setStatus("Reconnect approved. Return to the same agent task; it can now finish automatically.");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to approve the reconnect.");
+      setStatus(statusCopy("reconnectApproved"));
+    } catch {
+      setError(errors("approveReconnect"));
     } finally {
       setBusyAction(null);
     }
@@ -988,9 +994,9 @@ export function AgentConnectionPanel({
     try {
       await loadConnectionState(workspaceId);
       setConnectionClock(Date.now());
-      setStatus("Connection status refreshed. The agent can keep using the original message.");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to refresh connection status.");
+      setStatus(statusCopy("connectionRefreshed"));
+    } catch {
+      setError(errors("refreshStatus"));
     } finally {
       setBusyAction(null);
     }
@@ -1014,9 +1020,9 @@ export function AgentConnectionPanel({
       );
       await loadConnectionState(workspaceId);
       onAgentApproved?.();
-      setStatus("Agent approved. Its credential is now bound to this workspace, immutable version, and policies.");
+      setStatus(statusCopy("agentApproved"));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to approve the agent.");
+      setError(errors("approveRegistration"));
       throw cause;
     } finally {
       setBusyAction(null);
@@ -1035,9 +1041,9 @@ export function AgentConnectionPanel({
         ),
       );
       await loadConnectionState(workspaceId);
-      setStatus("Agent registration rejected.");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to reject the agent.");
+      setStatus(statusCopy("agentRejected"));
+    } catch {
+      setError(errors("rejectRegistration"));
     } finally {
       setBusyAction(null);
     }
@@ -1055,13 +1061,13 @@ export function AgentConnectionPanel({
           { method: "POST", credentials: "same-origin" },
         ),
       );
-      const nextReveal = revealFromResponse(body, "Rotated agent credential");
+      const nextReveal = revealFromResponse(body, t("rotatedCredential"));
       if (!nextReveal.secret) throw new Error("The server did not return the rotated credential.");
       setReveal(nextReveal);
       await loadConnectionState(workspaceId);
-      setStatus("Credential rotated. The previous credential is no longer valid.");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to rotate the credential.");
+      setStatus(statusCopy("credentialRotated"));
+    } catch {
+      setError(errors("rotateCredential"));
     } finally {
       setBusyAction(null);
     }
@@ -1079,9 +1085,9 @@ export function AgentConnectionPanel({
         ),
       );
       await loadConnectionState(workspaceId);
-      setStatus("Agent disconnected.");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to revoke the agent connection.");
+      setStatus(statusCopy("agentDisconnected"));
+    } catch {
+      setError(errors("revokeConnection"));
     } finally {
       setBusyAction(null);
     }
@@ -1120,9 +1126,9 @@ export function AgentConnectionPanel({
         ),
       );
       await loadConnectionState(workspaceId);
-      setStatus("Codex connection restored. The agent can resume with its existing credential.");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to restore the OAuth connection.");
+      setStatus(statusCopy("oauthRestored"));
+    } catch {
+      setError(errors("restoreOauth"));
     } finally {
       setBusyAction(null);
     }
@@ -1132,9 +1138,9 @@ export function AgentConnectionPanel({
     if (!reveal) return;
     try {
       await navigator.clipboard.writeText(reveal.secret);
-      setStatus("Legacy credential copied. Store it only in the existing agent host's secure credential setting.");
+      setStatus(statusCopy("legacyCopied"));
     } catch {
-      setError("Clipboard access was denied. Copy the legacy credential manually from the one-time reveal.");
+      setError(errors("legacyClipboard"));
     }
   }
 
@@ -1165,7 +1171,7 @@ export function AgentConnectionPanel({
         .filter(intent => !isActiveAgentConnectionIntent(intent, connectionClock))
         .map(intent => ({
           eventId: `connection-intent:${intent.intentId}`,
-          clientName: intent.clientName || "Agent connection",
+          clientName: intent.clientName || t("agentConnection"),
           status:
             intent.status === "connected" ||
             !intent.hardExpiresAt ||
@@ -1185,7 +1191,7 @@ export function AgentConnectionPanel({
           const status = expired ? "expired" : pairing.status;
           return {
             eventId: `legacy-pairing:${pairing.pairingId}`,
-            clientName: pairing.displayName || pairing.clientName || "Agent connection",
+            clientName: pairing.displayName || pairing.clientName || t("agentConnection"),
             status,
             occurredAt:
               (status === "approved" ? pairing.approvedAt : null) ??
@@ -1196,7 +1202,7 @@ export function AgentConnectionPanel({
           };
         }),
     ],
-    [connectionClock, connectionIntents, pairings],
+    [connectionClock, connectionIntents, pairings, t],
   );
 
   useEffect(() => {
@@ -1210,17 +1216,17 @@ export function AgentConnectionPanel({
           <div>
             <h2 className="text-2xl font-semibold">
               {reconnectableIntegrations.length > 0
-                ? "Reconnect your agent"
+                ? t("titleReconnect")
                 : activeIntegrations.length > 0
-                  ? "Connect another agent"
-                  : "Connect your agent"}
+                  ? t("titleAnother")
+                  : t("title")}
             </h2>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-base-content/60">
               {reconnectableIntegrations.length > 0
-                ? "Reconnect a saved agent without changing its review settings."
+                ? t("descriptionReconnect")
                 : activeIntegrations.length > 0
-                  ? "Copy one message into the additional agent chat you want to connect."
-                  : "Copy one message into the agent chat you want to connect."}
+                  ? t("descriptionAnother")
+                  : t("description")}
             </p>
           </div>
           <div className="mt-5 flex flex-wrap items-center gap-3">
@@ -1233,8 +1239,8 @@ export function AgentConnectionPanel({
                   onClick={() => void copyConnectionMessage(integration.integrationId)}
                 >
                   {busyAction === "create-intent"
-                    ? "Creating and copying…"
-                    : `Reconnect ${integration.agentDisplayName || "agent"}`}
+                    ? t("creatingCopying")
+                    : t("reconnectNamed", { name: integration.agentDisplayName || t("agentFallback") })}
                 </Button>
               ))
             ) : (
@@ -1243,12 +1249,11 @@ export function AgentConnectionPanel({
                 disabled={!workspaceId || loading || Boolean(busyAction) || activeConnectionIntents.length > 0}
                 onClick={() => void copyConnectionMessage()}
               >
-                {busyAction === "create-intent" ? "Creating and copying…" : "Copy connection message"}
+                {busyAction === "create-intent" ? t("creatingCopying") : t("copyMessage")}
               </Button>
             )}
-            <InfoPopover label="About safe agent access">
-              This creates safe access. The agent cannot spend, publish, read private workspace content, or change
-              workspace settings.
+            <InfoPopover label={t("safeAccess")}>
+              <AgentText id="translated006" />
             </InfoPopover>
           </div>
           {status ? (
@@ -1257,7 +1262,7 @@ export function AgentConnectionPanel({
               role="status"
               aria-live="polite"
               tabIndex={-1}
-              className="mt-4 text-sm text-emerald-100"
+              className="mt-4 text-sm text-success"
             >
               {status}
             </p>
@@ -1267,7 +1272,7 @@ export function AgentConnectionPanel({
               ref={actionFeedbackRef}
               role="alert"
               tabIndex={-1}
-              className="mt-4 rounded-lg bg-red-400/10 p-3 text-sm text-red-100"
+              className="mt-4 rounded-lg bg-error/10 p-3 text-sm text-error"
             >
               {error}
             </p>
@@ -1282,18 +1287,13 @@ export function AgentConnectionPanel({
           role="status"
           aria-live="polite"
           tabIndex={-1}
-          className="rounded-lg bg-emerald-300/10 p-3 text-sm text-emerald-100"
+          className="rounded-lg bg-success/10 p-3 text-sm text-success"
         >
           {status}
         </p>
       ) : null}
       {!showConnectionStart && error ? (
-        <p
-          ref={actionFeedbackRef}
-          role="alert"
-          tabIndex={-1}
-          className="rounded-lg bg-red-400/10 p-3 text-sm text-red-100"
-        >
+        <p ref={actionFeedbackRef} role="alert" tabIndex={-1} className="rounded-lg bg-error/10 p-3 text-sm text-error">
           {error}
         </p>
       ) : null}
@@ -1301,16 +1301,16 @@ export function AgentConnectionPanel({
       {manualConnectionMessage ? (
         <Card as="section" className="rounded-2xl p-5" aria-labelledby="manual-agent-message-heading">
           <h3 id="manual-agent-message-heading" className="font-semibold">
-            Connection message
+            <AgentText id="translated007" />
           </h3>
           <p id="manual-agent-message-help" className="mt-2 text-sm leading-6 text-base-content/60">
-            Review or copy the complete message below, then paste it once into the intended agent chat.
+            <AgentText id="translated008" />
           </p>
           <TextareaField
             ref={manualMessageRef}
             containerClassName="mt-4"
-            className="min-h-32 border-white/10 bg-[var(--rateloop-field)] font-mono text-xs leading-5"
-            label="Connection message"
+            className="min-h-32 border-base-content/10 bg-[var(--rateloop-field)] font-mono text-xs leading-5"
+            label={t("message")}
             labelClassName="sr-only"
             aria-describedby="manual-agent-message-help"
             readOnly
@@ -1319,7 +1319,7 @@ export function AgentConnectionPanel({
           />
           <div className="mt-3 flex flex-wrap gap-3">
             <Button type="button" size="sm" variant="secondary" onClick={() => void copyVisibleConnectionMessage()}>
-              Copy message
+              <AgentText id="translated009" />
             </Button>
             <Button
               type="button"
@@ -1330,7 +1330,7 @@ export function AgentConnectionPanel({
                 setManualConnectionUrl(null);
               }}
             >
-              Hide message
+              <AgentText id="translated010" />
             </Button>
           </div>
           <AgentConnectionTroubleshooting />
@@ -1348,27 +1348,37 @@ export function AgentConnectionPanel({
                 {reveal.title}
               </h3>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-base-content/65">
-                This is a one-time compatibility reveal for an existing legacy integration. Store it directly in that
-                host&apos;s secure credential setting; do not paste it into a model chat.
+                <AgentText id="translated011" />
               </p>
             </div>
             <button type="button" className="btn btn-sm rateloop-secondary-action" onClick={() => void copyReveal()}>
-              Copy legacy credential
+              <AgentText id="translated012" />
             </button>
           </div>
-          <dl className="mt-4 space-y-3 rounded-lg bg-black/30 p-4 font-mono text-xs">
+          <dl className="mt-4 space-y-3 rounded-lg bg-base-content/[0.055] p-4 font-mono text-xs">
             <div>
-              <dt className="text-base-content/55">MCP URL</dt>
+              <dt className="text-base-content/55">
+                <AgentText id="mcpUrl" />
+              </dt>
               <dd className="mt-1 break-all">{reveal.mcpUrl}</dd>
             </div>
             <div>
-              <dt className="text-base-content/55">Legacy bearer credential</dt>
+              <dt className="text-base-content/55">
+                <AgentText id="legacyCredential" />
+              </dt>
               <dd className="mt-1 break-all">{reveal.secret}</dd>
             </div>
             {reveal.expiresAt ? (
               <div>
-                <dt className="text-base-content/55">Expires</dt>
-                <dd className="mt-1">{formatTimestamp(reveal.expiresAt)}</dd>
+                <dt className="text-base-content/55">
+                  <AgentText id="expires" />
+                </dt>
+                <dd className="mt-1">
+                  {format.dateTime(new Date(reveal.expiresAt), {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  })}
+                </dd>
               </div>
             ) : null}
           </dl>
@@ -1377,12 +1387,12 @@ export function AgentConnectionPanel({
             className="mt-3 text-xs text-base-content/55 underline underline-offset-4"
             onClick={() => setReveal(null)}
           >
-            I stored it securely — hide secret
+            <AgentText id="translated013" />
           </button>
         </section>
       ) : null}
 
-      <AsyncSection loading={loading} loadingLabel="Loading agent connections">
+      <AsyncSection loading={loading} loadingLabel={t("loading")}>
         {null}
       </AsyncSection>
 
@@ -1397,15 +1407,15 @@ export function AgentConnectionPanel({
                 const copy =
                   move?.status === "source_confirmation_required"
                     ? {
-                        heading: "Confirm the reconnect in your agent",
-                        detail: "Return to the same agent task and confirm moving its RateLoop connection.",
+                        heading: t("confirmReconnectHost"),
+                        detail: t("confirmReconnectHostDetail"),
                       }
                     : move?.status === "owner_approval_required"
                       ? {
-                          heading: "Approve reconnecting this agent",
-                          detail: "The agent confirmed the move. Approve it here to keep this agent's settings.",
+                          heading: t("approveReconnectAgent"),
+                          detail: t("approveReconnectAgentDetail"),
                         }
-                      : connectionIntentCopy(intent.status);
+                      : connectionIntentCopy(intent.status, t);
                 const recoveryAction = intent.recoveryAction;
                 return (
                   <article key={intent.intentId}>
@@ -1419,33 +1429,34 @@ export function AgentConnectionPanel({
                         </div>
                         <p className="mt-2 text-sm leading-6 text-base-content/55">{copy.detail}</p>
                         {move ? (
-                          <p className="mt-4 max-w-3xl rounded-xl border border-amber-300/25 bg-amber-300/[0.07] p-4 text-sm leading-6 text-amber-50/85">
-                            This disconnects that Codex credential from its current RateLoop workspace and replaces this
-                            agent&apos;s previous connection. This agent&apos;s review and publishing settings stay
-                            unchanged.
+                          <p className="mt-4 max-w-3xl rounded-xl border border-warning/25 bg-warning/[0.07] p-4 text-sm leading-6 text-warning/85">
+                            <AgentText id="translated014" />
                           </p>
                         ) : null}
                         {recoveryAction ? (
-                          <div
-                            className="mt-4 rounded-xl border border-amber-300/25 bg-amber-300/[0.07] p-4"
-                            role="alert"
-                          >
-                            <p className="text-sm font-semibold text-amber-100">Resolve this connection</p>
-                            <p className="mt-1 text-sm leading-6 text-amber-50/80">{recoveryAction}</p>
+                          <div className="mt-4 rounded-xl border border-warning/25 bg-warning/[0.07] p-4" role="alert">
+                            <p className="text-sm font-semibold text-warning">{t("resolve")}</p>
+                            <p className="mt-1 text-sm leading-6 text-warning/80">{t("recoveryAction")}</p>
                           </div>
                         ) : !move ? (
-                          <p className="mt-2 text-sm text-base-content/55">You can close this page.</p>
+                          <p className="mt-2 text-sm text-base-content/55">{t("closePage")}</p>
                         ) : null}
                         {(intent.clientName || intent.clientVersion) && (
                           <p className="mt-2 text-xs text-base-content/55">
-                            {intent.clientName || "Agent host"}
+                            {intent.clientName || t("agentHost")}
                             {intent.clientVersion ? ` ${intent.clientVersion}` : ""}
                           </p>
                         )}
                       </div>
                       <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
                         <time className="text-xs text-base-content/55" dateTime={intent.hardExpiresAt ?? undefined}>
-                          Finishes by {formatTimestamp(intent.hardExpiresAt, "soon")}
+                          <AgentText id="translated015" />{" "}
+                          {intent.hardExpiresAt
+                            ? format.dateTime(new Date(intent.hardExpiresAt), {
+                                dateStyle: "medium",
+                                timeStyle: "short",
+                              })
+                            : t("soon")}
                         </time>
                         <div className="flex flex-wrap gap-2">
                           {move?.status === "owner_approval_required" ? (
@@ -1455,7 +1466,9 @@ export function AgentConnectionPanel({
                               disabled={Boolean(busyAction)}
                               onClick={() => setPendingConfirmation({ kind: "approve-workspace-move", intent })}
                             >
-                              {busyAction === `approve-move:${move.transferId}` ? "Approving…" : "Approve reconnect"}
+                              {busyAction === `approve-move:${move.transferId}`
+                                ? t("approving")
+                                : t("approveReconnect")}
                             </Button>
                           ) : null}
                           <button
@@ -1464,7 +1477,7 @@ export function AgentConnectionPanel({
                             disabled={Boolean(busyAction)}
                             onClick={() => void retryConnectionStatus()}
                           >
-                            {busyAction === "refresh-intents" ? "Checking…" : "Check status"}
+                            {busyAction === "refresh-intents" ? t("checking") : t("checkStatus")}
                           </button>
                           <button
                             type="button"
@@ -1472,7 +1485,7 @@ export function AgentConnectionPanel({
                             disabled={Boolean(busyAction)}
                             onClick={() => setPendingConfirmation({ kind: "cancel-intent", intentId: intent.intentId })}
                           >
-                            {busyAction === `cancel-intent:${intent.intentId}` ? "Cancelling…" : "Cancel attempt"}
+                            {busyAction === `cancel-intent:${intent.intentId}` ? t("cancelling") : t("cancelAttempt")}
                           </button>
                         </div>
                       </div>
@@ -1492,13 +1505,14 @@ export function AgentConnectionPanel({
         >
           <div className="flex flex-wrap items-center gap-2">
             <h2 id="legacy-pairing-actions-heading" className="text-xl font-semibold">
-              Legacy connection needs attention
+              <AgentText id="translated016" />
             </h2>
-            <Badge variant="warning">{activePairings.length} action needed</Badge>
+            <Badge variant="warning">
+              {activePairings.length} <AgentText id="translated017" />
+            </Badge>
           </div>
           <p className="mt-3 text-sm leading-6 text-base-content/55">
-            These requests were created by the retired bearer-pairing flow. Finish or reject them here; new connections
-            use the one-message OAuth flow above.
+            <AgentText id="translated018" />
           </p>
           <div className="mt-5 space-y-4">
             {activePairings.map(pairing =>
@@ -1512,7 +1526,7 @@ export function AgentConnectionPanel({
                         variant="secondary"
                         onClick={() => setExpandedLegacyPairingId(null)}
                       >
-                        Cancel review
+                        <AgentText id="translated019" />
                       </Button>
                     </div>
                     <PairingApprovalCard
@@ -1532,10 +1546,11 @@ export function AgentConnectionPanel({
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <h3 className="font-semibold">
-                          {pairing.displayName || pairing.clientName || "Agent"} is waiting for approval
+                          {pairing.displayName || pairing.clientName || t("agentFallback")}{" "}
+                          <AgentText id="translated020" />
                         </h3>
                         <p className="mt-1 text-sm text-base-content/55">
-                          Verify its identity, workflows, and publishing policy before activation.
+                          <AgentText id="translated021" />
                         </p>
                       </div>
                       <Button
@@ -1544,7 +1559,7 @@ export function AgentConnectionPanel({
                         variant="secondary"
                         onClick={() => setExpandedLegacyPairingId(pairing.pairingId)}
                       >
-                        Review legacy approval
+                        <AgentText id="translated022" />
                       </Button>
                     </div>
                   </Card>
@@ -1553,8 +1568,12 @@ export function AgentConnectionPanel({
                 <Card as="article" variant="nested" key={pairing.pairingId} className="rounded-xl p-4">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <h4 className="font-semibold">Waiting for legacy agent metadata</h4>
-                      <p className="mt-1 text-sm text-base-content/55">Cancel if this request is no longer needed.</p>
+                      <h4 className="font-semibold">
+                        <AgentText id="legacyWaiting" />
+                      </h4>
+                      <p className="mt-1 text-sm text-base-content/55">
+                        <AgentText id="legacyCancel" />
+                      </p>
                     </div>
                     <button
                       type="button"
@@ -1562,7 +1581,7 @@ export function AgentConnectionPanel({
                       disabled={busyAction === `reject:${pairing.pairingId}`}
                       onClick={() => setPendingConfirmation({ kind: "reject-pairing", pairingId: pairing.pairingId })}
                     >
-                      Cancel legacy request
+                      <AgentText id="translated023" />
                     </button>
                   </div>
                 </Card>
@@ -1578,12 +1597,14 @@ export function AgentConnectionPanel({
             <div>
               <h2 id="connected-agents-heading" className="text-xl font-semibold">
                 {activeIntegrations.length === 1
-                  ? `${activeIntegrations[0].agentDisplayName || "Agent"} connected`
-                  : `${activeIntegrations.length} agents connected`}
+                  ? t("connectedOne", {
+                      name: activeIntegrations[0].agentDisplayName || t("agentFallback"),
+                    })
+                  : t("connectedMany", { count: activeIntegrations.length })}
               </h2>
               {allActiveIntegrationsUseSafeAccess ? (
                 <p className="mt-2 text-sm leading-6 text-base-content/55">
-                  Safe access · No spending or private workspace content
+                  <AgentText id="translated024" />
                 </p>
               ) : null}
             </div>
@@ -1596,7 +1617,7 @@ export function AgentConnectionPanel({
                   disabled={Boolean(busyAction) || activeConnectionIntents.length > 0}
                   onClick={() => void copyConnectionMessage(activeIntegrations[0].integrationId)}
                 >
-                  {busyAction === "create-intent" ? "Creating…" : "Reconnect"}
+                  {busyAction === "create-intent" ? t("creating") : t("reconnect")}
                 </Button>
               ) : null}
               <Button
@@ -1607,7 +1628,7 @@ export function AgentConnectionPanel({
                 aria-expanded={showConnectionManagement}
                 onClick={() => setShowConnectionManagement(current => !current)}
               >
-                {showConnectionManagement ? "Done" : "Manage connected agents"}
+                {showConnectionManagement ? t("done") : t("manage")}
               </Button>
             </div>
           </div>
@@ -1616,12 +1637,14 @@ export function AgentConnectionPanel({
             .map(integration => (
               <div
                 key={`oauth-recovery:${integration.integrationId}`}
-                className="mt-5 flex flex-col gap-3 rounded-xl border border-amber-300/20 bg-amber-300/[0.06] p-4 sm:flex-row sm:items-center sm:justify-between"
+                className="mt-5 flex flex-col gap-3 rounded-xl border border-warning/20 bg-warning/[0.06] p-4 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div>
-                  <p className="font-medium">{integration.agentDisplayName || "Codex"} needs its connection restored</p>
+                  <p className="font-medium">
+                    {integration.agentDisplayName || "Codex"} <AgentText id="translated025" />
+                  </p>
                   <p className="mt-1 text-sm text-base-content/60">
-                    This revokes its current access tokens and restores the existing safe OAuth credential.
+                    <AgentText id="translated026" />
                   </p>
                 </div>
                 <Button
@@ -1631,7 +1654,7 @@ export function AgentConnectionPanel({
                   disabled={Boolean(busyAction)}
                   onClick={() => void recoverOAuthIntegration(integration)}
                 >
-                  {busyAction === `recover-oauth:${integration.integrationId}` ? "Restoring…" : "Restore connection"}
+                  {busyAction === `recover-oauth:${integration.integrationId}` ? t("restoring") : t("restore")}
                 </Button>
               </div>
             ))}
@@ -1643,7 +1666,7 @@ export function AgentConnectionPanel({
                 return (
                   <article
                     key={integration.integrationId}
-                    className="rounded-xl border border-white/10 bg-white/[0.025] p-5"
+                    className="rounded-xl border border-base-content/10 bg-base-content/[0.025] p-5"
                   >
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <div>
@@ -1653,7 +1676,7 @@ export function AgentConnectionPanel({
                             <span className="badge badge-ghost">v{integration.agentVersionNumber}</span>
                           ) : null}
                           <span
-                            className={`badge border-0 ${active ? "bg-emerald-300/10 text-emerald-100" : "bg-white/[0.06] text-base-content/55"}`}
+                            className={`badge border-0 ${active ? "bg-success/10 text-success" : "bg-base-content/[0.06] text-base-content/55"}`}
                           >
                             {integration.status}
                           </span>
@@ -1661,7 +1684,7 @@ export function AgentConnectionPanel({
                             {integration.enforcementMode === "host_enforced" ? "host-enforced" : "advisory"}
                           </span>
                           <span className="badge badge-ghost">
-                            {legacyCredential ? "legacy credential" : "safe OAuth"}
+                            {legacyCredential ? t("legacyCredentialShort") : t("safeOauth")}
                           </span>
                         </div>
                       </div>
@@ -1674,7 +1697,7 @@ export function AgentConnectionPanel({
                               disabled={Boolean(busyAction)}
                               onClick={() => setPendingConfirmation({ kind: "rotate-integration", integration })}
                             >
-                              Rotate legacy credential
+                              <AgentText id="translated027" />
                             </button>
                           ) : null}
                           {!legacyCredential && activeIntegrations.length > 1 ? (
@@ -1684,7 +1707,7 @@ export function AgentConnectionPanel({
                               disabled={Boolean(busyAction) || activeConnectionIntents.length > 0}
                               onClick={() => void copyConnectionMessage(integration.integrationId)}
                             >
-                              Reconnect
+                              <AgentText id="translated028" />
                             </button>
                           ) : null}
                           <button
@@ -1693,49 +1716,59 @@ export function AgentConnectionPanel({
                             disabled={Boolean(busyAction)}
                             onClick={() => setPendingConfirmation({ kind: "revoke-integration", integration })}
                           >
-                            Disconnect
+                            <AgentText id="translated029" />
                           </button>
                         </div>
                       ) : null}
                     </div>
-                    <details className="mt-4 border-t border-white/10 pt-4">
+                    <details className="mt-4 border-t border-base-content/10 pt-4">
                       <summary className="cursor-pointer text-sm font-medium text-base-content/65">
-                        Connection details
+                        <AgentText id="translated030" />
                       </summary>
                       <div className="mt-3">
                         <p className="font-mono text-xs text-base-content/55">{integration.integrationId}</p>
                         <p className="mt-2 text-sm text-base-content/60">
-                          {integration.clientName || "Unknown client"}
+                          {integration.clientName || t("unknownClient")}
                           {integration.clientVersion ? ` ${integration.clientVersion}` : ""}
                         </p>
                         <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
                           <div>
-                            <dt className="text-xs text-base-content/55">Last seen</dt>
-                            <dd className="mt-1">{formatTimestamp(integration.lastSeenAt, "Never connected")}</dd>
-                          </div>
-                          <div>
-                            <dt className="text-xs text-base-content/55">
-                              {legacyCredential ? "Credential expiry" : "Access"}
-                            </dt>
+                            <dt className="text-xs text-base-content/55">{t("lastSeen")}</dt>
                             <dd className="mt-1">
-                              {legacyCredential
-                                ? formatTimestamp(integration.credentialExpiresAt, "No expiry")
-                                : "OAuth-managed safe access"}
+                              {integration.lastSeenAt
+                                ? format.dateTime(new Date(integration.lastSeenAt), {
+                                    dateStyle: "medium",
+                                    timeStyle: "short",
+                                  })
+                                : t("neverConnected")}
                             </dd>
                           </div>
                           <div>
-                            <dt className="text-xs text-base-content/55">Review policy</dt>
+                            <dt className="text-xs text-base-content/55">
+                              {legacyCredential ? t("credentialExpiry") : t("access")}
+                            </dt>
                             <dd className="mt-1">
-                              {integration.reviewPolicyId || "Unknown"}
+                              {legacyCredential
+                                ? integration.credentialExpiresAt
+                                  ? format.dateTime(new Date(integration.credentialExpiresAt), {
+                                      dateStyle: "medium",
+                                      timeStyle: "short",
+                                    })
+                                  : t("noExpiry")
+                                : t("oauthAccess")}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-base-content/55">{t("reviewPolicy")}</dt>
+                            <dd className="mt-1">
+                              {integration.reviewPolicyId || t("unknown")}
                               {integration.reviewPolicyVersion ? ` · v${integration.reviewPolicyVersion}` : ""}
                             </dd>
                           </div>
                           <div>
-                            <dt className="text-xs text-base-content/55">Publishing policy</dt>
+                            <dt className="text-xs text-base-content/55">{t("publishingPolicy")}</dt>
                             <dd className="mt-1">
-                              {integration.publishingPolicyName ||
-                                integration.publishingPolicyId ||
-                                "No publishing access"}
+                              {integration.publishingPolicyName || integration.publishingPolicyId || t("noPublishing")}
                             </dd>
                           </div>
                         </dl>
@@ -1750,9 +1783,9 @@ export function AgentConnectionPanel({
       ) : null}
       <ConfirmDialog
         open={pendingConfirmation !== null}
-        title={pendingConfirmation ? confirmationCopy(pendingConfirmation).title : "Confirm this action"}
-        description={pendingConfirmation ? confirmationCopy(pendingConfirmation).description : ""}
-        confirmLabel={pendingConfirmation ? confirmationCopy(pendingConfirmation).confirmLabel : "Confirm"}
+        title={pendingConfirmation ? confirmationCopy(pendingConfirmation, t).title : t("confirmAction")}
+        description={pendingConfirmation ? confirmationCopy(pendingConfirmation, t).description : ""}
+        confirmLabel={pendingConfirmation ? confirmationCopy(pendingConfirmation, t).confirmLabel : t("confirm")}
         busy={Boolean(busyAction)}
         onCancel={() => setPendingConfirmation(null)}
         onConfirm={() => void confirmPendingAction()}

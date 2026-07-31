@@ -2,8 +2,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+const source = [
+  readFileSync(new URL("./FeedbackBonusClaimsClient.tsx", import.meta.url), "utf8"),
+  readFileSync(new URL("../../../messages/en/human.json", import.meta.url), "utf8"),
+].join("\n");
+
 test("Feedback Bonus claims keep the recovery preimage in the browser", () => {
-  const source = readFileSync(new URL("./FeedbackBonusClaimsClient.tsx", import.meta.url), "utf8");
   assert.match(source, /Claim a Feedback Bonus/u);
   assert.match(source, /importTokenlessRecoveryPackage/u);
   assert.match(source, /listDeviceRecoveries/u);
@@ -21,7 +25,7 @@ test("Feedback Bonus claims keep the recovery preimage in the browser", () => {
   assert.match(source, /verifyFeedbackBonusClaimEvidence/u);
   assert.match(source, /sendTransaction/u);
   assert.match(source, /Feedback Bonus evidence matches this saved review/u);
-  assert.match(source, /paid commit(?:&apos;|')s\s+public tlock ciphertext becomes decryptable/u);
+  assert.match(source, /paid commit’s public tlock ciphertext becomes decryptable/u);
   assert.match(source, /vote, prediction, response hash, payout address, and salt/u);
   assert.match(source, /even\s+without a reveal or claim/u);
   assert.match(
@@ -32,11 +36,10 @@ test("Feedback Bonus claims keep the recovery preimage in the browser", () => {
 });
 
 test("recovery and public-chain consequences appear after review selection and before claim", () => {
-  const source = readFileSync(new URL("./FeedbackBonusClaimsClient.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(source, /<details/u);
-  assert.match(source, /needsRecoverySecret \? \([\s\S]*<div[\s\S]*Recovery secret[\s\S]*type="password"/u);
-  assert.match(source, /\{activeSource \? \([\s\S]*public tlock ciphertext becomes decryptable/u);
+  assert.match(source, /needsRecoverySecret \? \([\s\S]*label=\{t\("recoverySecret"\)\}[\s\S]*type="password"/u);
+  assert.match(source, /\{activeSource \? <p[^>]*>\{t\("privacy"\)\}<\/p> : null\}/u);
   assert.match(source, /Claiming later\s+submits the payout address and salt on-chain/u);
-  assert.ok(source.indexOf("Choose a review") < source.indexOf("public tlock ciphertext becomes decryptable"));
-  assert.ok(source.indexOf("public tlock ciphertext becomes decryptable") < source.indexOf('"Claim bonus"'));
+  assert.match(source, /label=\{t\("savedReview"\)\}[\s\S]*\{activeSource \? <p[^>]*>\{t\("privacy"\)\}/u);
+  assert.match(source, /\{items\.map\(item =>[\s\S]*t\("claim"\)/u);
 });

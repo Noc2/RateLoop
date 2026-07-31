@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { AgentText } from "./AgentText";
+import { useAgentFormatter, useAgentTranslations } from "./AgentsLocaleProvider";
 import { prepareTransaction, sendTransaction } from "thirdweb";
 import { baseSepolia } from "thirdweb/chains";
 import { ConnectButton, ThirdwebProvider, useActiveAccount } from "thirdweb/react";
@@ -19,18 +21,23 @@ export function formatFeedbackBonusUsdc(atomic: string) {
   return formatUsdcAtomic(atomic);
 }
 
-function decimalToAtomic(value: string) {
+class BonusValidationError extends Error {}
+
+function decimalToAtomic(value: string, t: (key: string) => string) {
   let result: string;
   try {
     result = parseUsdcDecimal(value);
   } catch {
-    throw new Error("Award amount must be USDC with up to six decimal places.");
+    throw new BonusValidationError(t("decimalPlaces"));
   }
-  if (BigInt(result) <= 0n) throw new Error("Award amount must be greater than zero.");
+  if (BigInt(result) <= 0n) throw new BonusValidationError(t("greaterThanZero"));
   return result;
 }
 
 function AwardCard({ item, onAwarded }: { item: FeedbackBonusAwardInboxItem; onAwarded: () => Promise<void> }) {
+  const format = useAgentFormatter();
+  const errors = useAgentTranslations("errors");
+  const copy = useAgentTranslations("bonusInbox");
   const account = useActiveAccount();
   const [amount, setAmount] = useState(() => {
     const remaining = BigInt(item.remainingPoolAtomic);
@@ -44,9 +51,11 @@ function AwardCard({ item, onAwarded }: { item: FeedbackBonusAwardInboxItem; onA
     setBusy(true);
     setError(null);
     try {
-      const amountAtomic = decimalToAtomic(amount);
+      const amountAtomic = decimalToAtomic(amount, copy);
       if (BigInt(amountAtomic) > BigInt(item.remainingPoolAtomic)) {
-        throw new Error(`This pool has ${formatFeedbackBonusUsdc(item.remainingPoolAtomic)} left.`);
+        throw new BonusValidationError(
+          copy("poolRemaining", { amount: formatFeedbackBonusUsdc(item.remainingPoolAtomic) }),
+        );
       }
       const idempotencyKey = `feedback-bonus:${item.opportunityId}:${item.feedbackId}`;
       const endpoint = `/api/account/workspaces/${encodeURIComponent(
@@ -64,15 +73,15 @@ function AwardCard({ item, onAwarded }: { item: FeedbackBonusAwardInboxItem; onA
         await onAwarded();
         return;
       }
-      if (!account || !thirdwebBrowserClient) throw new Error("Connect the human awarder wallet first.");
+      if (!account || !thirdwebBrowserClient) throw new BonusValidationError(copy("connectFirst"));
       if (prepared.status !== "human_wallet_required") {
-        throw new Error("RateLoop did not return a human-wallet award authorization.");
+        throw new BonusValidationError(copy("authorizationMissing"));
       }
       const authorization = prepared.authorization as FeedbackBonusHumanWalletAuthorization;
       if (account.address.toLowerCase() !== authorization.awarderAddress.toLowerCase()) {
-        throw new Error(`Connect the designated awarder wallet ${authorization.awarderAddress}.`);
+        throw new BonusValidationError(copy("designatedWallet", { address: authorization.awarderAddress }));
       }
-      if (authorization.chainId !== baseSepolia.id) throw new Error("The Feedback Bonus is on an unsupported chain.");
+      if (authorization.chainId !== baseSepolia.id) throw new BonusValidationError(copy("unsupportedChain"));
       const transactionHash =
         pendingTransactionHash ??
         (
@@ -98,7 +107,7 @@ function AwardCard({ item, onAwarded }: { item: FeedbackBonusAwardInboxItem; onA
       setPendingTransactionHash(null);
       await onAwarded();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to award this feedback.");
+      setError(cause instanceof BonusValidationError ? cause.message : errors("awardFeedback"));
     } finally {
       setBusy(false);
     }
@@ -108,32 +117,37 @@ function AwardCard({ item, onAwarded }: { item: FeedbackBonusAwardInboxItem; onA
     <Card as="article" className="rounded-2xl p-5" aria-labelledby={`feedback-bonus-${item.feedbackId}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="font-mono text-xs uppercase tracking-wider text-[var(--rateloop-pink)]">Feedback Bonus</p>
+          <p className="font-mono text-xs uppercase tracking-wider text-[var(--rateloop-pink)]">
+            <AgentText id="feedbackBonus" />
+          </p>
           <h3 id={`feedback-bonus-${item.feedbackId}`} className="mt-1 font-semibold">
-            Select useful written feedback
+            <AgentText id="translated170" />
           </h3>
         </div>
-        <Badge>{formatFeedbackBonusUsdc(item.remainingPoolAtomic)} left</Badge>
+        <Badge>
+          {formatFeedbackBonusUsdc(item.remainingPoolAtomic)} <AgentText id="translated171" />
+        </Badge>
       </div>
-      <blockquote className="mt-4 whitespace-pre-wrap rounded-xl border border-white/10 bg-white/[0.02] p-4 text-sm leading-6 text-base-content/75">
+      <blockquote className="mt-4 whitespace-pre-wrap rounded-xl border border-base-content/10 bg-base-content/[0.02] p-4 text-sm leading-6 text-base-content/75">
         {item.feedbackBody}
       </blockquote>
       <div className="mt-4 grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
         <Field
-          className="border-white/10 bg-[var(--rateloop-field)]"
-          label="Award amount (USDC)"
+          className="border-base-content/10 bg-[var(--rateloop-field)]"
+          label={<AgentText id="attribute020" />}
           labelClassName="text-sm"
           inputMode="decimal"
           value={amount}
           onChange={event => setAmount(event.target.value)}
         />
         <Button type="button" disabled={busy} onClick={() => void award()}>
-          {busy ? "Confirming…" : "Award this feedback"}
+          {busy ? <AgentText id="dynamic036" /> : <AgentText id="dynamic035" />}
         </Button>
       </div>
       <p className="mt-3 text-xs text-base-content/55">
-        Award by {new Date(item.awardDeadline).toLocaleString()}. Awards are final and use the feedback&apos;s immutable
-        payout commitment.
+        <AgentText id="translated172" />{" "}
+        {format.dateTime(new Date(item.awardDeadline), { dateStyle: "medium", timeStyle: "short" })}
+        <AgentText id="translated173" />
       </p>
       {error ? (
         <p className="mt-3 rounded-lg border border-error/30 bg-error/10 p-3 text-sm text-error" role="alert">
@@ -145,6 +159,8 @@ function AwardCard({ item, onAwarded }: { item: FeedbackBonusAwardInboxItem; onA
 }
 
 function FeedbackBonusAwardInboxControls({ workspaceId }: { workspaceId: string }) {
+  const errors = useAgentTranslations("errors");
+  const copy = useAgentTranslations("bonusInbox");
   const account = useActiveAccount();
   const [items, setItems] = useState<FeedbackBonusAwardInboxItem[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -160,12 +176,12 @@ function FeedbackBonusAwardInboxControls({ workspaceId }: { workspaceId: string 
       );
       setItems((body.items ?? []) as FeedbackBonusAwardInboxItem[]);
       setError(null);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to load Feedback Bonuses.");
+    } catch {
+      setError(errors("loadBonuses"));
     } finally {
       setLoaded(true);
     }
-  }, [workspaceId]);
+  }, [errors, workspaceId]);
 
   useEffect(() => void load(), [load]);
 
@@ -173,31 +189,33 @@ function FeedbackBonusAwardInboxControls({ workspaceId }: { workspaceId: string 
     <section className="space-y-4" aria-labelledby="feedback-bonus-award-inbox-title">
       <div>
         <h2 id="feedback-bonus-award-inbox-title" className="text-2xl font-semibold">
-          Award Feedback Bonus
+          <AgentText id="translated174" />
         </h2>
         <p className="mt-2 text-sm text-base-content/55">
-          Choose eligible written feedback and an amount. The agent cannot make this decision.
+          <AgentText id="translated175" />
         </p>
       </div>
       {!account && thirdwebBrowserClient ? (
         <Card className="flex flex-wrap items-center justify-between gap-4 rounded-2xl p-4">
-          <p className="text-sm text-base-content/60">Connect the human awarder wallet to make a final award.</p>
+          <p className="text-sm text-base-content/60">
+            <AgentText id="connectAwarder" />
+          </p>
           <ConnectButton
             client={thirdwebBrowserClient}
             chain={baseSepolia}
             chains={[baseSepolia]}
             wallets={rateLoopThirdwebWallets}
-            connectButton={{ label: "Connect awarder wallet" }}
-            connectModal={{ showThirdwebBranding: false, size: "compact", title: "Connect the awarder wallet" }}
+            connectButton={{ label: copy("connectButton") }}
+            connectModal={{ showThirdwebBranding: false, size: "compact", title: copy("connectTitle") }}
           />
         </Card>
       ) : null}
       <AsyncSection
         loading={!loaded}
-        loadingLabel="Loading feedback bonuses…"
+        loadingLabel={copy("loading")}
         error={error}
         empty={items.length === 0}
-        emptyTitle="No feedback bonuses need an award."
+        emptyTitle={copy("empty")}
       >
         {items.map(item => (
           <AwardCard key={`${item.opportunityId}:${item.feedbackId}`} item={item} onAwarded={load} />

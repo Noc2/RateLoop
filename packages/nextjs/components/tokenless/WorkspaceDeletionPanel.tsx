@@ -1,6 +1,8 @@
 "use client";
 
 import { type FormEvent, useState } from "react";
+import { useLocale } from "next-intl";
+import { LocalizedSharedContent } from "~~/components/tokenless/LocalizedSharedContent";
 import { Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { readJson } from "~~/lib/tokenless/http";
@@ -50,20 +52,18 @@ function hasAtomicValue(value: string) {
   }
 }
 
-function usdc(value: string) {
+function usdc(value: string, locale: string) {
   try {
     const amount = BigInt(value);
-    const sign = amount < 0n ? "-" : "";
-    const absolute = amount < 0n ? -amount : amount;
-    const whole = absolute / 1_000_000n;
-    const fraction = absolute % 1_000_000n;
-    return `${sign}${whole.toString()}.${fraction.toString().padStart(6, "0").slice(0, 2)}`;
+    return new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
+      Number(amount) / 1_000_000,
+    );
   } catch {
     return value;
   }
 }
 
-function impactRows(preview: WorkspaceDeletionPreview) {
+function impactRows(preview: WorkspaceDeletionPreview, locale: string) {
   const { impact } = preview;
   return [
     impact.otherMembers
@@ -87,9 +87,9 @@ function impactRows(preview: WorkspaceDeletionPreview) {
     impact.legalHolds
       ? countLabel(impact.legalHolds, "legal hold delays deletion", "legal holds delay deletion")
       : null,
-    hasAtomicValue(impact.settledAtomic) ? `${usdc(impact.settledAtomic)} USDC settled` : null,
-    hasAtomicValue(impact.reservedAtomic) ? `${usdc(impact.reservedAtomic)} USDC reserved` : null,
-    hasAtomicValue(impact.availableAtomic) ? `${usdc(impact.availableAtomic)} USDC available` : null,
+    hasAtomicValue(impact.settledAtomic) ? `${usdc(impact.settledAtomic, locale)} USDC settled` : null,
+    hasAtomicValue(impact.reservedAtomic) ? `${usdc(impact.reservedAtomic, locale)} USDC reserved` : null,
+    hasAtomicValue(impact.availableAtomic) ? `${usdc(impact.availableAtomic, locale)} USDC available` : null,
   ].filter((value): value is string => Boolean(value));
 }
 
@@ -98,6 +98,7 @@ function requiresFundResolution(preview: WorkspaceDeletionPreview) {
 }
 
 export function WorkspaceDeletionPanel({ workspaceId, workspaceName }: WorkspaceDeletionPanelProps) {
+  const locale = useLocale();
   const [preview, setPreview] = useState<WorkspaceDeletionPreview | null>(null);
   const [confirmation, setConfirmation] = useState("");
   const [loading, setLoading] = useState(false);
@@ -152,141 +153,143 @@ export function WorkspaceDeletionPanel({ workspaceId, workspaceName }: Workspace
     }
   }
 
-  const impacts = preview ? impactRows(preview) : [];
+  const impacts = preview ? impactRows(preview, locale) : [];
   const confirmed = confirmation === "DELETE";
   const fundResolutionRequired = preview ? requiresFundResolution(preview) : false;
   const canRequest = preview ? preview.blockers.length === 0 || fundResolutionRequired : false;
 
   return (
-    <section className="p-5 sm:p-6" aria-labelledby="workspace-deletion-heading">
-      <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h3 id="workspace-deletion-heading" className="font-semibold">
-            Delete workspace
-          </h3>
-          <p className="mt-1 max-w-3xl text-sm leading-6 text-base-content/65">
-            Permanently closes {workspaceName} and removes its private data. Records that must be retained stay
-            restricted.
-          </p>
-        </div>
-        {!preview ? (
-          <button
-            type="button"
-            className="btn btn-sm shrink-0 border-red-400/40 bg-base-content/[0.06] text-red-200 hover:border-red-400/60 hover:bg-red-400/10"
-            onClick={() => void loadPreview()}
-            disabled={loading}
-          >
-            {loading ? "Checking…" : "Delete workspace"}
-          </button>
-        ) : null}
-      </div>
-
-      {preview ? (
-        <div className="mt-5 border-t border-red-400/20 pt-5">
-          <h4 className="font-semibold">Delete {preview.workspace.name}</h4>
-
-          <form className="mt-3" onSubmit={requestDeletion}>
-            <p className="text-sm leading-6 text-base-content/65">
-              {fundResolutionRequired
-                ? "Confirm the request to queue verified fund resolution. The workspace and its balance remain active until an operator records the external refund."
-                : preview.blockers.length > 0
-                  ? "Resolve the items below before deleting this workspace."
-                  : preview.immediate
-                    ? "This workspace has no work or funds. Deletion is immediate."
-                    : "The workspace closes immediately. Stored objects are deleted afterward, while required records remain restricted."}
+    <LocalizedSharedContent>
+      <section className="p-5 sm:p-6" aria-labelledby="workspace-deletion-heading">
+        <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 id="workspace-deletion-heading" className="font-semibold">
+              Delete workspace
+            </h3>
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-base-content/65">
+              Permanently closes {workspaceName} and removes its private data. Records that must be retained stay
+              restricted.
             </p>
-
-            {impacts.length > 0 ? (
-              <ul className="mt-4 list-disc space-y-1 pl-5 text-sm text-base-content/65">
-                {impacts.map(value => (
-                  <li key={value}>{value}</li>
-                ))}
-              </ul>
-            ) : null}
-
-            {preview.warnings.length > 0 ? (
-              <div className="mt-4 space-y-2">
-                {preview.warnings.map(warning => (
-                  <p key={warning} className="rounded-lg bg-amber-300/[0.07] p-3 text-sm leading-6 text-amber-50">
-                    {warning}
-                  </p>
-                ))}
-              </div>
-            ) : null}
-
-            {preview.blockers.length > 0 ? (
-              <div className="mt-4 space-y-2" role="alert">
-                {preview.blockers.map(blocker => (
-                  <p key={blocker.code} className="rounded-lg bg-red-400/10 p-3 text-sm leading-6 text-red-100">
-                    {blocker.message}
-                  </p>
-                ))}
-              </div>
-            ) : null}
-
-            {canRequest ? (
-              <div className="mt-5">
-                <Field
-                  label="Type DELETE to confirm"
-                  className="rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                  value={confirmation}
-                  error={fieldErrors.confirmation}
-                  onChange={event => {
-                    clear("confirmation");
-                    setConfirmation(event.target.value);
-                  }}
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-              </div>
-            ) : null}
-
-            {resolutionQueued ? (
-              <p className="mt-4 rounded-lg bg-emerald-300/[0.08] p-3 text-sm text-emerald-100" role="status">
-                Fund resolution queued. Your balance has not been forfeited. Reference:{" "}
-                <span className="font-mono text-xs">{resolutionQueued}</span>
-              </p>
-            ) : null}
-
-            <div className="mt-4 flex flex-wrap gap-3">
-              {canRequest ? (
-                <button
-                  type="submit"
-                  className="btn btn-error min-h-10 px-4"
-                  disabled={submitting || !confirmed || Boolean(resolutionQueued)}
-                >
-                  {submitting
-                    ? fundResolutionRequired
-                      ? "Queuing…"
-                      : "Deleting…"
-                    : fundResolutionRequired
-                      ? "Request verified refund"
-                      : "Delete workspace"}
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className="btn btn-ghost min-h-10 px-4"
-                disabled={submitting}
-                onClick={() => {
-                  setPreview(null);
-                  setConfirmation("");
-                  setResolutionQueued(null);
-                  clear();
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
+          </div>
+          {!preview ? (
+            <button
+              type="button"
+              className="btn btn-sm shrink-0 border-error/40 bg-base-content/[0.06] text-error hover:border-error/60 hover:bg-error/10"
+              onClick={() => void loadPreview()}
+              disabled={loading}
+            >
+              {loading ? "Checking…" : "Delete workspace"}
+            </button>
+          ) : null}
         </div>
-      ) : null}
 
-      {formError ? (
-        <p className="mt-4 rounded-lg bg-red-400/10 p-3 text-sm text-red-100" role="alert">
-          {formError}
-        </p>
-      ) : null}
-    </section>
+        {preview ? (
+          <div className="mt-5 border-t border-error/20 pt-5">
+            <h4 className="font-semibold">Delete {preview.workspace.name}</h4>
+
+            <form className="mt-3" onSubmit={requestDeletion}>
+              <p className="text-sm leading-6 text-base-content/65">
+                {fundResolutionRequired
+                  ? "Confirm the request to queue verified fund resolution. The workspace and its balance remain active until an operator records the external refund."
+                  : preview.blockers.length > 0
+                    ? "Resolve the items below before deleting this workspace."
+                    : preview.immediate
+                      ? "This workspace has no work or funds. Deletion is immediate."
+                      : "The workspace closes immediately. Stored objects are deleted afterward, while required records remain restricted."}
+              </p>
+
+              {impacts.length > 0 ? (
+                <ul className="mt-4 list-disc space-y-1 pl-5 text-sm text-base-content/65">
+                  {impacts.map(value => (
+                    <li key={value}>{value}</li>
+                  ))}
+                </ul>
+              ) : null}
+
+              {preview.warnings.length > 0 ? (
+                <div className="mt-4 space-y-2">
+                  {preview.warnings.map(warning => (
+                    <p key={warning} className="rounded-lg bg-warning/[0.07] p-3 text-sm leading-6 text-warning">
+                      {warning}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
+
+              {preview.blockers.length > 0 ? (
+                <div className="mt-4 space-y-2" role="alert">
+                  {preview.blockers.map(blocker => (
+                    <p key={blocker.code} className="rounded-lg bg-error/10 p-3 text-sm leading-6 text-error">
+                      {blocker.message}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
+
+              {canRequest ? (
+                <div className="mt-5">
+                  <Field
+                    label="Type DELETE to confirm"
+                    className="rounded-lg border-base-content/10 bg-[var(--rateloop-field)]"
+                    value={confirmation}
+                    error={fieldErrors.confirmation}
+                    onChange={event => {
+                      clear("confirmation");
+                      setConfirmation(event.target.value);
+                    }}
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                </div>
+              ) : null}
+
+              {resolutionQueued ? (
+                <p className="mt-4 rounded-lg bg-success/[0.08] p-3 text-sm text-success" role="status">
+                  Fund resolution queued. Your balance has not been forfeited. Reference:{" "}
+                  <span className="font-mono text-xs">{resolutionQueued}</span>
+                </p>
+              ) : null}
+
+              <div className="mt-4 flex flex-wrap gap-3">
+                {canRequest ? (
+                  <button
+                    type="submit"
+                    className="btn btn-error min-h-10 px-4"
+                    disabled={submitting || !confirmed || Boolean(resolutionQueued)}
+                  >
+                    {submitting
+                      ? fundResolutionRequired
+                        ? "Queuing…"
+                        : "Deleting…"
+                      : fundResolutionRequired
+                        ? "Request verified refund"
+                        : "Delete workspace"}
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="btn btn-ghost min-h-10 px-4"
+                  disabled={submitting}
+                  onClick={() => {
+                    setPreview(null);
+                    setConfirmation("");
+                    setResolutionQueued(null);
+                    clear();
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        ) : null}
+
+        {formError ? (
+          <p className="mt-4 rounded-lg bg-error/10 p-3 text-sm text-error" role="alert">
+            {formError}
+          </p>
+        ) : null}
+      </section>
+    </LocalizedSharedContent>
   );
 }

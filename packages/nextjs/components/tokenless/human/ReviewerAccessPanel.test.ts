@@ -7,7 +7,7 @@ function source(relativePath: string) {
 }
 
 test("reviewers can see and leave workspace reviewer access without group concepts", () => {
-  const panel = source("./ReviewerAccessPanel.tsx");
+  const panel = [source("./ReviewerAccessPanel.tsx"), source("../../../messages/en/human.json")].join("\n");
   const profile = source("./HumanProfileContent.tsx");
 
   assert.match(panel, /\/api\/account\/reviewer-access/);
@@ -23,7 +23,10 @@ test("reviewers can see and leave workspace reviewer access without group concep
 });
 
 test("reviewer invitation routing previews exact access and rejects legacy group codes", () => {
-  const invitations = source("../account/InvitationRouterPanel.tsx");
+  const invitations = [
+    source("../account/InvitationRouterPanel.tsx"),
+    source("../../../messages/en/account.json"),
+  ].join("\n");
 
   assert.match(invitations, /reviewer-invitations\/preview/);
   assert.match(invitations, /reviewer-invitations\/redeem/);

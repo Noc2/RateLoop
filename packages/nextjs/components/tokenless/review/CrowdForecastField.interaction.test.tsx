@@ -1,11 +1,13 @@
 import React from "react";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 test("the shared crowd forecast starts unset and reveals its slider only after an exact value", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, fireEvent, render, screen } = await import("@testing-library/react");
+  const { cleanup, fireEvent, render: baseRender, screen } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const { CrowdForecastField } = await import("./CrowdForecastField");
   let value: number | null = null;
   try {

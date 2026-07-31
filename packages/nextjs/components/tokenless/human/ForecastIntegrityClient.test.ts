@@ -3,7 +3,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const source = readFileSync(new URL("./ForecastIntegrityClient.tsx", import.meta.url), "utf8");
+const source = [
+  readFileSync(new URL("./ForecastIntegrityClient.tsx", import.meta.url), "utf8"),
+  readFileSync(new URL("../../../messages/en/human.json", import.meta.url), "utf8"),
+].join("\n");
 
 test("reviewers see quality counters and can open or withdraw a scoped appeal", () => {
   assert.match(source, /Accuracy vs baseline/u);

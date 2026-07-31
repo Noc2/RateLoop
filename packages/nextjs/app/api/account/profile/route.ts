@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
-import { getAccountProfile, updateAccountProfile } from "~~/lib/tokenless/accountProfile";
+import {
+  getAccountProfile,
+  normalizeAccountProfileUpdate,
+  updateAccountProfile,
+} from "~~/lib/tokenless/accountProfile";
 import { readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import { tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
@@ -25,12 +29,12 @@ export async function GET(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
-    const body = (await readApiJsonRequestBody(request)) as { displayName?: unknown };
+    const update = normalizeAccountProfileUpdate(await readApiJsonRequestBody(request));
     return NextResponse.json(
       await updateAccountProfile({
         principalAddress: session.principalId,
         providerDisplayName: session.displayName,
-        displayName: body.displayName,
+        ...update,
       }),
       { headers: noStore },
     );

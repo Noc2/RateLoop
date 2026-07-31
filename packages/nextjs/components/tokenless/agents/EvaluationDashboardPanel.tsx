@@ -1,7 +1,8 @@
 "use client";
 
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { AgentText } from "./AgentText";
+import { useAgentFormatter, useAgentLocale, useAgentTranslations } from "./AgentsLocaleProvider";
 import { AdaptiveCoverageSummary } from "~~/components/tokenless/agents/AdaptiveCoverageSummary";
 import { ModelEvidencePanel } from "~~/components/tokenless/agents/ModelEvidencePanel";
 import { agentTabHref } from "~~/components/tokenless/agents/agentWorkspaceState";
@@ -16,44 +17,56 @@ import { Field, SelectField, TextareaField } from "~~/components/tokenless/forms
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import { Card } from "~~/components/tokenless/ui/Card";
-import { formatHumanDurationFromSeconds } from "~~/lib/humanDuration";
+import { Link } from "~~/i18n/navigation";
 import type { AssuranceMetricsSnapshot } from "~~/lib/tokenless/assuranceMetrics";
 import type { DeciderDecisionTrend, EvaluationDashboard, EvaluationRun } from "~~/lib/tokenless/evaluationDashboard";
 import { readJson } from "~~/lib/tokenless/http";
 import type { OversightRunCaseView } from "~~/lib/tokenless/oversightCaseView";
 
 type Workspace = { workspaceId: string; name: string; role: string };
+type Translate = (key: string, values?: Record<string, number | string>) => string;
 
-function percent(bps: number | null) {
-  return bps === null ? "Suppressed" : `${(bps / 100).toFixed(1)}%`;
+function percent(bps: number | null, copy: Translate, locale: string) {
+  return bps === null
+    ? copy("suppressed")
+    : `${(bps / 100).toLocaleString(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 }
 
-function percentagePointsSquared(value: string | null) {
-  if (value === null) return "Not available";
+function percentagePointsSquared(value: string | null, copy: Translate, locale: string) {
+  if (value === null) return copy("notAvailable");
   try {
     const roundedHundredths = (BigInt(value) + 50n) / 100n;
-    return `${roundedHundredths / 100n}.${(roundedHundredths % 100n).toString().padStart(2, "0")}`;
+    return (Number(roundedHundredths) / 100).toLocaleString(locale, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
   } catch {
-    return "Not available";
+    return copy("notAvailable");
   }
 }
 
-function usdc(atomic: string) {
+function usdc(atomic: string, locale: string, copy: Translate) {
   try {
     const amount = BigInt(atomic);
     const whole = amount / 1_000_000n;
     const fractional = (amount % 1_000_000n).toString().padStart(6, "0").replace(/0+$/u, "");
-    return `${whole.toLocaleString()}${fractional ? `.${fractional}` : ""} USDC`;
+    const decimal =
+      new Intl.NumberFormat(locale).formatToParts(1.1).find(part => part.type === "decimal")?.value ?? ".";
+    return `${whole.toLocaleString(locale)}${fractional ? `${decimal}${fractional}` : ""} USDC`;
   } catch {
-    return `${atomic} atomic units`;
+    return copy("atomicUnits", { value: atomic });
   }
 }
 
-function decisionLabel(decision: EvaluationRun["clientDecision"]) {
-  if (decision === "go") return "Go";
-  if (decision === "revise") return "Revise";
-  if (decision === "stop") return "Stop";
-  return null;
+function decisionLabel(decision: EvaluationRun["clientDecision"], copy: Translate) {
+  return decision ? copy(`decision.${decision}`) : null;
+}
+
+function humanDuration(seconds: number, copy: Translate) {
+  if (seconds < 60) return copy("durationSeconds", { count: seconds });
+  if (seconds < 3_600) return copy("durationMinutes", { count: Math.round(seconds / 60) });
+  if (seconds < 86_400) return copy("durationHours", { count: Math.round(seconds / 3_600) });
+  return copy("durationDays", { count: Math.round(seconds / 86_400) });
 }
 
 function runNeedsDecision(run: EvaluationRun) {
@@ -78,6 +91,8 @@ function evidenceHrefForRun(workspaceId: string, runId: string, currentSearch: s
 }
 
 function AssuranceMetricsSummary({ snapshot }: { snapshot: AssuranceMetricsSnapshot }) {
+  const copy = useAgentTranslations("evidencePanels.evaluation");
+  const locale = useAgentLocale();
   const totals = snapshot.scopes.reduce(
     (sum, scope) => ({
       eligible: sum.eligible + scope.eligible,
@@ -89,34 +104,53 @@ function AssuranceMetricsSummary({ snapshot }: { snapshot: AssuranceMetricsSnaps
     }),
     { eligible: 0, requested: 0, comparable: 0, disagreements: 0, latencyCount: 0, latencyMilliseconds: 0 },
   );
-  const sampling = totals.eligible > 0 ? `${((totals.requested / totals.eligible) * 100).toFixed(1)}%` : "No data";
+  const sampling =
+    totals.eligible > 0
+      ? `${((totals.requested / totals.eligible) * 100).toLocaleString(locale, {
+          minimumFractionDigits: 1,
+          maximumFractionDigits: 1,
+        })}%`
+      : copy("noData");
   const disagreement =
-    totals.comparable > 0 ? `${((totals.disagreements / totals.comparable) * 100).toFixed(1)}%` : "No data";
+    totals.comparable > 0
+      ? `${((totals.disagreements / totals.comparable) * 100).toLocaleString(locale, {
+          minimumFractionDigits: 1,
+          maximumFractionDigits: 1,
+        })}%`
+      : copy("noData");
   const latency =
     totals.latencyCount > 0
-      ? formatHumanDurationFromSeconds(Math.round(totals.latencyMilliseconds / totals.latencyCount / 1_000))
-      : "No data";
+      ? humanDuration(Math.round(totals.latencyMilliseconds / totals.latencyCount / 1_000), copy)
+      : copy("noData");
   const anchor =
     snapshot.evidenceAnchor.state === "absent"
-      ? "No anchor"
-      : `${snapshot.evidenceAnchor.state} · ${formatHumanDurationFromSeconds(snapshot.evidenceAnchor.lagSeconds)}`;
+      ? copy("noAnchor")
+      : `${copy(`anchor.${snapshot.evidenceAnchor.state}`)} · ${humanDuration(snapshot.evidenceAnchor.lagSeconds, copy)}`;
   const overrideRate =
     snapshot.overrideDecisions.overrideRateBps === null
-      ? "No data"
-      : `${(snapshot.overrideDecisions.overrideRateBps / 100).toFixed(1)}% of ${snapshot.overrideDecisions.decided}`;
+      ? copy("noData")
+      : copy("overrideRateValue", {
+          percent: (snapshot.overrideDecisions.overrideRateBps / 100).toLocaleString(locale, {
+            minimumFractionDigits: 1,
+            maximumFractionDigits: 1,
+          }),
+          count: snapshot.overrideDecisions.decided,
+        });
   return (
     <Card as="section" className="rounded-2xl p-6" aria-labelledby="assurance-metrics-heading">
-      <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Last 30 days</p>
+      <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">
+        <AgentText id="last30Days" />
+      </p>
       <h2 id="assurance-metrics-heading" className="mt-2 text-xl font-semibold">
-        Assurance operations
+        <AgentText id="translated099" />
       </h2>
       <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {[
-          ["Sampling rate", sampling],
-          ["Mean verdict latency", latency],
-          ["Disagreement rate", disagreement],
-          ["Override rate", overrideRate],
-          ["Latest evidence anchor", anchor],
+          [copy("samplingRate"), sampling],
+          [copy("meanVerdictLatency"), latency],
+          [copy("disagreementRate"), disagreement],
+          [copy("overrideRate"), overrideRate],
+          [copy("latestEvidenceAnchor"), anchor],
         ].map(([label, value]) => (
           <Card as="div" variant="nested" key={label} className="rounded-xl p-4">
             <dt className="text-xs text-base-content/55">{label}</dt>
@@ -125,8 +159,9 @@ function AssuranceMetricsSummary({ snapshot }: { snapshot: AssuranceMetricsSnaps
         ))}
       </dl>
       <p className="mt-3 text-xs text-base-content/55">
-        {snapshot.reviewsRequested} requested · {snapshot.reviewsCompleted} completed · {snapshot.blocked} blocked ·{" "}
-        {snapshot.approvalRequired} awaiting approval
+        {snapshot.reviewsRequested} <AgentText id="translated100" /> {snapshot.reviewsCompleted}{" "}
+        <AgentText id="translated101" /> {snapshot.blocked} <AgentText id="translated102" /> {snapshot.approvalRequired}{" "}
+        <AgentText id="translated103" />
       </p>
     </Card>
   );
@@ -135,19 +170,25 @@ function AssuranceMetricsSummary({ snapshot }: { snapshot: AssuranceMetricsSnaps
 function SampleNote({ run }: { run: EvaluationRun }) {
   if (run.sampleStatus === "suppressed") {
     return (
-      <p className="mt-2 text-xs leading-5 text-amber-100/80" role="status">
-        Result hidden until {run.minimumAggregationSize} reviewers respond.
+      <p className="mt-2 text-xs leading-5 text-warning/80" role="status">
+        <AgentText id="translated104" /> {run.minimumAggregationSize} <AgentText id="translated105" />
       </p>
     );
   }
   if (run.sampleStatus === "small") {
     return (
-      <p className="mt-2 text-xs leading-5 text-amber-100/80">
-        Small sample ({run.validResponses}); treat this result as directional.
+      <p className="mt-2 text-xs leading-5 text-warning/80">
+        <AgentText id="translated106" />
+        {run.validResponses}
+        <AgentText id="translated107" />
       </p>
     );
   }
-  return <p className="mt-2 text-xs text-base-content/55">{run.validResponses} valid responses</p>;
+  return (
+    <p className="mt-2 text-xs text-base-content/55">
+      {run.validResponses} <AgentText id="translated108" />
+    </p>
+  );
 }
 
 /**
@@ -156,37 +197,41 @@ function SampleNote({ run }: { run: EvaluationRun }) {
  * the evidence is. Rendered above every decision and override control.
  */
 function DecisionSignals({ run }: { run: EvaluationRun }) {
+  const copy = useAgentTranslations("evidencePanels.evaluation");
+  const locale = useAgentLocale();
   const share = run.candidateSelectionShareBps;
   const dissentBps = share === null ? null : Math.min(share, 10_000 - share);
   const evidenceAgeHours = run.completedAt
     ? Math.max(0, Math.round((Date.now() - new Date(run.completedAt).getTime()) / 3_600_000))
     : null;
   const signals: Array<[string, string]> = [
-    ["Reviewer dissent", dissentBps === null ? "Suppressed" : percent(dissentBps)],
+    [copy("reviewerDissent"), percent(dissentBps, copy, locale)],
     [
-      "Calibration failure rate",
+      copy("calibrationFailureRate"),
       run.mechanismHealth?.goldFailureRateBps === null || run.mechanismHealth === null
-        ? "No calibration data"
-        : percent(run.mechanismHealth.goldFailureRateBps),
+        ? copy("noCalibrationData")
+        : percent(run.mechanismHealth.goldFailureRateBps, copy, locale),
     ],
     [
-      "Quorum-case unanimity",
+      copy("quorumCaseUnanimity"),
       run.mechanismHealth?.unanimityRateBps === null || run.mechanismHealth === null
-        ? "No data"
-        : percent(run.mechanismHealth.unanimityRateBps),
+        ? copy("noData")
+        : percent(run.mechanismHealth.unanimityRateBps, copy, locale),
     ],
     [
-      "Time since evidence",
+      copy("timeSinceEvidence"),
       evidenceAgeHours === null
-        ? "Not completed"
+        ? copy("notCompleted")
         : evidenceAgeHours < 48
-          ? `${evidenceAgeHours} h`
-          : `${Math.round(evidenceAgeHours / 24)} days`,
+          ? copy("durationHours", { count: evidenceAgeHours })
+          : copy("durationDays", { count: Math.round(evidenceAgeHours / 24) }),
     ],
   ];
   return (
-    <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.02] p-3" role="note">
-      <p className="text-xs font-semibold text-base-content/55">Before you decide</p>
+    <div className="mt-3 rounded-xl border border-base-content/10 bg-base-content/[0.02] p-3" role="note">
+      <p className="text-xs font-semibold text-base-content/55">
+        <AgentText id="beforeDecide" />
+      </p>
       <dl className="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
         {signals.map(([label, value]) => (
           <div key={label}>
@@ -199,16 +244,16 @@ function DecisionSignals({ run }: { run: EvaluationRun }) {
   );
 }
 
-function deciderTrendLabel(trend: DeciderDecisionTrend | undefined) {
+function deciderTrendLabel(trend: DeciderDecisionTrend | undefined, copy: Translate) {
   if (!trend) return null;
   const parts: string[] = [];
   if (trend.clientDecisions.total > 0) {
     const share = Math.round((trend.clientDecisions.goCount / trend.clientDecisions.total) * 100);
-    parts.push(`You chose go on ${share}% of your last ${trend.clientDecisions.total} sign-offs`);
+    parts.push(copy("goTrend", { percent: share, count: trend.clientDecisions.total }));
   }
   if (trend.overrides.total > 0) {
     const share = Math.round((trend.overrides.acceptedCount / trend.overrides.total) * 100);
-    parts.push(`you accepted ${share}% of your last ${trend.overrides.total} recorded outcomes`);
+    parts.push(copy("acceptedTrend", { percent: share, count: trend.overrides.total }));
   }
   return parts.length > 0 ? `${parts.join(" · ")}.` : null;
 }
@@ -224,11 +269,14 @@ function ClientDecisionButtons({
   trend?: DeciderDecisionTrend;
   onDecided: (decision: NonNullable<EvaluationRun["clientDecision"]>) => void;
 }) {
+  const ui = useAgentTranslations("ui");
+  const copy = useAgentTranslations("evidencePanels.evaluation");
+  const errors = useAgentTranslations("errors");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const { capture, clear, fieldErrors, formError } = useFormErrors();
   const explanationMissing = run.explanationRequired && note.trim().length < 10;
-  const trendLabel = deciderTrendLabel(trend);
+  const trendLabel = deciderTrendLabel(trend, copy);
 
   async function submit(decision: NonNullable<EvaluationRun["clientDecision"]>) {
     setBusy(true);
@@ -246,8 +294,8 @@ function ClientDecisionButtons({
         ),
       );
       onDecided(decision);
-    } catch (cause) {
-      capture(cause, "Unable to record the decision.");
+    } catch {
+      capture(errors("recordDecision"), errors("recordDecision"));
     } finally {
       setBusy(false);
     }
@@ -255,22 +303,26 @@ function ClientDecisionButtons({
 
   return (
     <div className="mt-3">
-      <p className="text-xs text-base-content/55">Sign off on this run — no choice is preselected.</p>
+      <p className="text-xs text-base-content/55">
+        <AgentText id="signOff" />
+      </p>
       {trendLabel ? <p className="mt-1 text-xs text-base-content/55">{trendLabel}</p> : null}
       {run.explanationRequired ? (
-        <div className="mt-2 rounded-lg border border-amber-200/20 bg-amber-300/[0.06] p-3">
-          <p className="text-xs font-semibold text-amber-100/90">Explain this decision</p>
-          <p className="mt-1 text-xs leading-5 text-amber-100/70">
-            This run was sampled for an explained decision: write your reasons before choosing — even for go.
+        <div className="mt-2 rounded-lg border border-warning/20 bg-warning/[0.06] p-3">
+          <p className="text-xs font-semibold text-warning/90">
+            <AgentText id="explainDecision" />
+          </p>
+          <p className="mt-1 text-xs leading-5 text-warning/70">
+            <AgentText id="translated109" />
           </p>
           <TextareaField
-            label="Reasons"
-            className="mt-2 w-full border-white/10 bg-[var(--rateloop-field)] text-sm"
-            placeholder="Reasons (required for this run, at least 10 characters)"
+            label={<AgentText id="attribute007" />}
+            className="mt-2 w-full border-base-content/10 bg-[var(--rateloop-field)] text-sm"
+            placeholder={ui("reasonsRunPlaceholder")}
             hint={
               explanationMissing
-                ? `At least 10 characters are required before you can sign off — ${10 - note.trim().length} to go.`
-                : "Long enough to sign off."
+                ? copy("signOffCharactersRemaining", { count: 10 - note.trim().length })
+                : copy("signOffReady")
             }
             value={note}
             error={fieldErrors.note}
@@ -292,12 +344,12 @@ function ClientDecisionButtons({
             onClick={() => void submit(choice)}
             disabled={busy || explanationMissing}
           >
-            {decisionLabel(choice)}
+            {decisionLabel(choice, copy)}
           </button>
         ))}
       </div>
       {formError ? (
-        <p className="mt-2 text-xs text-red-100" role="alert">
+        <p className="mt-2 text-xs text-error" role="alert">
           {formError}
         </p>
       ) : null}
@@ -316,6 +368,9 @@ function OverrideRecordForm({
   workspaceId: string;
   trend?: DeciderDecisionTrend;
 }) {
+  const ui = useAgentTranslations("ui");
+  const copy = useAgentTranslations("evidencePanels.evaluation");
+  const errors = useAgentTranslations("errors");
   const [reasons, setReasons] = useState("");
   const [correctiveAction, setCorrectiveAction] = useState("");
   const [recorded, setRecorded] = useState<string | null>(null);
@@ -345,36 +400,39 @@ function OverrideRecordForm({
       setRecorded(outcome);
       setReasons("");
       setCorrectiveAction("");
-    } catch (cause) {
-      capture(cause, "Unable to record the override decision.");
+    } catch {
+      capture(errors("recordOverride"), errors("recordOverride"));
     } finally {
       setBusy(false);
     }
   }
 
-  const trendLabel = deciderTrendLabel(trend);
+  const trendLabel = deciderTrendLabel(trend, copy);
   const reasonsTooShort = reasons.trim().length < 10;
   return (
-    <form className="mt-4 border-t border-white/10 pt-4" onSubmit={event => event.preventDefault()}>
-      <p className="text-sm font-semibold text-base-content/65">Record what you did with this output</p>
+    <form className="mt-4 border-t border-base-content/10 pt-4" onSubmit={event => event.preventDefault()}>
+      <p className="text-sm font-semibold text-base-content/65">
+        <AgentText id="recordAction" />
+      </p>
       <p className="mt-1 text-xs text-base-content/55">
-        Append-only record with mandatory reasons; a new record supersedes, never edits. No choice is preselected.
+        <AgentText id="translated110" />
       </p>
       {trendLabel ? <p className="mt-1 text-xs text-base-content/55">{trendLabel}</p> : null}
       <DecisionSignals run={run} />
       {recorded ? (
-        <p className="mt-2 text-xs text-emerald-100" role="status">
-          Recorded as {recorded}. Recording again supersedes this record.
+        <p className="mt-2 text-xs text-success" role="status">
+          <AgentText id="translated111" /> {copy(`override.${recorded}`)}
+          <AgentText id="translated112" />
         </p>
       ) : null}
       <TextareaField
-        label="Reasons"
-        className="mt-3 w-full border-white/10 bg-[var(--rateloop-field)] text-sm"
-        placeholder="Reasons (required, 10-2000 characters)"
+        label={<AgentText id="attribute007" />}
+        className="mt-3 w-full border-base-content/10 bg-[var(--rateloop-field)] text-sm"
+        placeholder={ui("reasonsPlaceholder")}
         hint={
           reasonsTooShort
-            ? `At least 10 characters are required before you can record an outcome — ${10 - reasons.trim().length} to go.`
-            : "Long enough to record an outcome."
+            ? copy("outcomeCharactersRemaining", { count: 10 - reasons.trim().length })
+            : copy("outcomeReady")
         }
         value={reasons}
         error={fieldErrors.reasons}
@@ -386,9 +444,9 @@ function OverrideRecordForm({
         rows={2}
       />
       <Field
-        label="Linked corrective action"
-        className="mt-2 w-full border-white/10 bg-[var(--rateloop-field)] text-sm"
-        placeholder="Linked corrective action (optional)"
+        label={<AgentText id="attribute008" />}
+        className="mt-2 w-full border-base-content/10 bg-[var(--rateloop-field)] text-sm"
+        placeholder={ui("correctiveActionPlaceholder")}
         value={correctiveAction}
         error={fieldErrors.correctiveAction}
         onChange={event => {
@@ -406,12 +464,12 @@ function OverrideRecordForm({
             onClick={event => void submit(event, outcome)}
             disabled={busy || reasonsTooShort}
           >
-            {outcome}
+            {copy(`override.${outcome}`)}
           </button>
         ))}
       </div>
       {formError ? (
-        <p className="mt-2 text-xs text-red-100" role="alert">
+        <p className="mt-2 text-xs text-error" role="alert">
           {formError}
         </p>
       ) : null}
@@ -420,6 +478,9 @@ function OverrideRecordForm({
 }
 
 function OversightCaseDetail({ run, workspaceId }: { run: EvaluationRun; workspaceId: string }) {
+  const copy = useAgentTranslations("evidencePanels.evaluation");
+  const format = useAgentFormatter();
+  const locale = useAgentLocale();
   const [view, setView] = useState<OversightRunCaseView | null>(null);
   const [state, setState] = useState<"idle" | "loading" | "denied" | "error">("idle");
 
@@ -443,46 +504,63 @@ function OversightCaseDetail({ run, workspaceId }: { run: EvaluationRun; workspa
   }
 
   return (
-    <details className="mt-4 border-t border-white/10 pt-4" onToggle={event => event.currentTarget.open && void load()}>
+    <details
+      className="mt-4 border-t border-base-content/10 pt-4"
+      onToggle={event => event.currentTarget.open && void load()}
+    >
       <summary className="cursor-pointer text-sm font-semibold text-base-content/65">
-        {run.failureSummary ? "Why this failed: case detail and reviewer reasons" : "Case detail and reviewer reasons"}
+        {copy(run.failureSummary ? "failedCaseDetails" : "caseDetails")}
       </summary>
-      {state === "loading" ? <p className="mt-3 text-xs text-base-content/55">Loading case material…</p> : null}
+      {state === "loading" ? (
+        <p className="mt-3 text-xs text-base-content/55">
+          <AgentText id="loadingCase" />
+        </p>
+      ) : null}
       {state === "denied" ? (
         <p className="mt-3 text-xs text-base-content/55">
-          Case material opens only for workspace owners, admins, and designated decision owners.
+          <AgentText id="translated113" />
         </p>
       ) : null}
       {state === "error" ? (
-        <p className="mt-3 text-xs text-red-100" role="alert">
-          Unable to load the case detail.
+        <p className="mt-3 text-xs text-error" role="alert">
+          <AgentText id="translated114" />
         </p>
       ) : null}
       {view && !view.detailAvailable ? (
-        <p className="mt-3 text-xs leading-5 text-base-content/55">{view.note}</p>
+        <p className="mt-3 text-xs leading-5 text-base-content/55">{copy("caseDetailUnavailable")}</p>
       ) : null}
       {view?.detailAvailable ? (
         <div className="mt-3 space-y-3">
-          {view.note ? <p className="text-xs leading-5 text-base-content/55">{view.note}</p> : null}
+          {view.note ? (
+            <p className="text-xs leading-5 text-base-content/55">
+              {locale === "en" ? view.note : copy("caseNoteFallback")}
+            </p>
+          ) : null}
           {view.cases.some(caseView => caseView.responses.length > 0) ? (
             <p className="text-xs leading-5 text-base-content/55">
-              Reviewer labels are run-specific pseudonyms by design. Responses are not linked here to roster identities.
+              <AgentText id="translated115" />
             </p>
           ) : null}
           {view.cases.map(caseView => (
-            <article key={caseView.caseId} className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+            <article
+              key={caseView.caseId}
+              className="rounded-xl border border-base-content/10 bg-base-content/[0.02] p-4"
+            >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h4 className="text-sm font-semibold">
                   {caseView.title}
                   {caseView.isCalibration ? (
-                    <span className="ml-2 rounded bg-white/[0.08] px-1.5 py-0.5 text-[10px] uppercase">
-                      Calibration
+                    <span className="ml-2 rounded bg-base-content/[0.08] px-1.5 py-0.5 text-[10px] uppercase">
+                      <AgentText id="translated116" />
                     </span>
                   ) : null}
                 </h4>
                 <p className="text-xs text-base-content/55">
-                  {caseView.choiceCounts.candidate} candidate · {caseView.choiceCounts.baseline} baseline
-                  {caseView.disagreementBps !== null ? ` · ${percent(caseView.disagreementBps)} dissent` : ""}
+                  {caseView.choiceCounts.candidate} <AgentText id="translated117" /> {caseView.choiceCounts.baseline}{" "}
+                  <AgentText id="translated118" />
+                  {caseView.disagreementBps !== null
+                    ? ` · ${copy("dissentValue", { value: percent(caseView.disagreementBps, copy, locale) })}`
+                    : ""}
                 </p>
               </div>
               <p className="mt-2 text-xs leading-5 text-base-content/60">{caseView.instructions}</p>
@@ -490,7 +568,7 @@ function OversightCaseDetail({ run, workspaceId }: { run: EvaluationRun; workspa
                 {caseView.artifacts.map(artifact => (
                   <a
                     key={artifact.artifactId}
-                    className="rounded-md bg-white/[0.06] px-2 py-1 capitalize text-[var(--rateloop-blue)]"
+                    className="rounded-md bg-base-content/[0.06] px-2 py-1 capitalize text-[var(--rateloop-blue)]"
                     href={`/api/account/workspaces/${encodeURIComponent(workspaceId)}/assurance/projects/${encodeURIComponent(view.projectId)}/artifacts/${encodeURIComponent(artifact.artifactId)}`}
                     target="_blank"
                     rel="noreferrer"
@@ -502,32 +580,42 @@ function OversightCaseDetail({ run, workspaceId }: { run: EvaluationRun; workspa
               {caseView.responses.length > 0 ? (
                 <ul className="mt-3 space-y-2">
                   {caseView.responses.map((response, index) => (
-                    <li key={`${caseView.caseId}-${index}`} className="rounded-lg bg-black/20 p-3 text-xs leading-5">
+                    <li
+                      key={`${caseView.caseId}-${index}`}
+                      className="rounded-lg bg-base-content/[0.04] p-3 text-xs leading-5"
+                    >
                       <p className="text-base-content/55">
-                        {response.reviewerPseudonym} · chose {response.choice}
+                        {response.reviewerPseudonym} <AgentText id="translated119" /> {response.choice}
                         {response.failureTagKeys.length > 0 ? ` · ${response.failureTagKeys.join(", ")}` : ""}
                       </p>
                       {response.rationale ? (
                         <p className="mt-1 whitespace-pre-wrap text-base-content/70">{response.rationale}</p>
                       ) : (
-                        <p className="mt-1 text-base-content/55">No workspace-owned rationale for this response.</p>
+                        <p className="mt-1 text-base-content/55">
+                          <AgentText id="noRationale" />
+                        </p>
                       )}
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="mt-3 text-xs text-base-content/55">No valid responses recorded for this case.</p>
+                <p className="mt-3 text-xs text-base-content/55">
+                  <AgentText id="noResponses" />
+                </p>
               )}
             </article>
           ))}
           {view.overrideDecisions.length > 0 ? (
-            <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
-              <h4 className="text-sm font-semibold">Override history</h4>
+            <div className="rounded-xl border border-base-content/10 bg-base-content/[0.02] p-4">
+              <h4 className="text-sm font-semibold">
+                <AgentText id="overrideHistory" />
+              </h4>
               <ul className="mt-2 space-y-1 text-xs leading-5 text-base-content/60">
                 {view.overrideDecisions.map(decision => (
                   <li key={decision.recordId}>
-                    <span className="capitalize">{decision.outcome}</span>
-                    {decision.current ? "" : " (superseded)"} · {new Date(decision.decidedAt).toLocaleString()} —{" "}
+                    <span>{copy(`override.${decision.outcome}`)}</span>
+                    {decision.current ? "" : ` (${copy("superseded")})`} ·{" "}
+                    {format.dateTime(new Date(decision.decidedAt), { dateStyle: "medium", timeStyle: "short" })} —{" "}
                     {decision.reasons}
                   </li>
                 ))}
@@ -551,24 +639,27 @@ function RunCard({
   trend?: DeciderDecisionTrend;
   evidenceHref: string | null;
 }) {
+  const copy = useAgentTranslations("evidencePanels.evaluation");
+  const format = useAgentFormatter();
+  const locale = useAgentLocale();
   const share = run.candidateSelectionShareBps;
   const [clientDecision, setClientDecision] = useState(run.clientDecision);
   const [overrideOpen, setOverrideOpen] = useState(false);
-  const decision = decisionLabel(clientDecision);
+  const decision = decisionLabel(clientDecision, copy);
   const decidable = runNeedsDecision({ ...run, clientDecision });
   const presentationStatus = decidable
-    ? { label: "Needs action", className: "bg-amber-300/10 text-amber-100" }
+    ? { label: copy("status.needsAction"), className: "bg-warning/10 text-warning" }
     : ["completed", "cancelled"].includes(run.status)
-      ? { label: "Completed", className: "bg-emerald-300/10 text-emerald-100" }
+      ? { label: copy("status.completed"), className: "bg-success/10 text-success" }
       : ["failed", "dead"].includes(run.status)
-        ? { label: "Failed", className: "bg-red-300/10 text-red-100" }
-        : { label: "Waiting", className: "bg-white/[0.06] text-base-content/65" };
+        ? { label: copy("status.failed"), className: "bg-error/10 text-error" }
+        : { label: copy("status.waiting"), className: "bg-base-content/[0.06] text-base-content/65" };
   const currentResult =
     share === null
       ? run.status === "completed"
-        ? "Insufficient responses"
-        : "Waiting for responses"
-      : `${percent(share)} chose the candidate`;
+        ? copy("insufficientResponses")
+        : copy("waitingForResponses")
+      : copy("candidateChoice", { percent: percent(share, copy, locale) });
   return (
     <Card as="article" className="rounded-2xl p-5" aria-labelledby={`evaluation-${run.runId}`}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -585,13 +676,17 @@ function RunCard({
 
       <div className="mt-5 grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(14rem,0.7fr)]">
         <div>
-          <p className="text-xs text-base-content/55">{decision ? "Decision" : "Current result"}</p>
+          <p className="text-xs text-base-content/55">
+            {decision ? <AgentText id="dynamic015" /> : <AgentText id="dynamic014" />}
+          </p>
           <p className="mt-1 text-2xl font-semibold">{decision ?? currentResult}</p>
           <SampleNote run={run} />
           {run.failureSummary ? (
-            <div className="mt-3 rounded-xl border border-red-300/20 bg-red-300/[0.06] p-3">
-              <h4 className="text-sm font-semibold text-red-100">Why this failed</h4>
-              <p className="mt-1 text-sm leading-6 text-red-100/80">{run.failureSummary.message}</p>
+            <div className="mt-3 rounded-xl border border-error/20 bg-error/[0.06] p-3">
+              <h4 className="text-sm font-semibold text-error">
+                <AgentText id="whyFailed" />
+              </h4>
+              <p className="mt-1 text-sm leading-6 text-error/80">{copy("failureSummaryFallback")}</p>
             </div>
           ) : null}
           {decidable ? (
@@ -602,12 +697,17 @@ function RunCard({
           ) : null}
         </div>
         {run.candidateSelectionIntervalBps ? (
-          <div className="rounded-xl border border-white/10 bg-white/[0.025] p-4 text-sm">
-            <p className="text-xs text-base-content/55">95% confidence interval</p>
-            <p className="mt-1 font-mono">
-              {percent(run.candidateSelectionIntervalBps.lower)}–{percent(run.candidateSelectionIntervalBps.upper)}
+          <div className="rounded-xl border border-base-content/10 bg-base-content/[0.025] p-4 text-sm">
+            <p className="text-xs text-base-content/55">
+              <AgentText id="confidenceInterval" />
             </p>
-            <p className="mt-3 text-xs text-base-content/55">{run.distinctReviewers} reviewers</p>
+            <p className="mt-1 font-mono">
+              {percent(run.candidateSelectionIntervalBps.lower, copy, locale)}–
+              {percent(run.candidateSelectionIntervalBps.upper, copy, locale)}
+            </p>
+            <p className="mt-3 text-xs text-base-content/55">
+              {run.distinctReviewers} <AgentText id="translated120" />
+            </p>
           </div>
         ) : null}
       </div>
@@ -615,52 +715,72 @@ function RunCard({
       {evidenceHref ? (
         <div className="mt-4">
           <Link className="btn btn-outline btn-sm" href={evidenceHref}>
-            Open evidence
+            <AgentText id="translated121" />
           </Link>
         </div>
       ) : null}
 
-      <details className="mt-4 border-t border-white/10 pt-4">
+      <details className="mt-4 border-t border-base-content/10 pt-4">
         <summary className="cursor-pointer text-sm font-semibold text-base-content/65">
-          Evidence and run details
+          <AgentText id="translated122" />
         </summary>
         <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
           <div>
-            <dt className="text-xs text-base-content/55">Cases</dt>
+            <dt className="text-xs text-base-content/55">
+              <AgentText id="cases" />
+            </dt>
             <dd className="mt-1 font-mono">{run.caseCount}</dd>
           </div>
           <div>
-            <dt className="text-xs text-base-content/55">Calibration items</dt>
+            <dt className="text-xs text-base-content/55">
+              <AgentText id="calibrationItems" />
+            </dt>
             <dd className="mt-1 font-mono">{run.calibrationCaseCount}</dd>
           </div>
           <div>
-            <dt className="text-xs text-base-content/55">Reviewers</dt>
+            <dt className="text-xs text-base-content/55">
+              <AgentText id="reviewers" />
+            </dt>
             <dd className="mt-1 font-mono">{run.distinctReviewers}</dd>
           </div>
           <div>
-            <dt className="text-xs text-base-content/55">Reviewer source</dt>
-            <dd className="mt-1 capitalize">{run.reviewerSource}</dd>
+            <dt className="text-xs text-base-content/55">
+              <AgentText id="reviewerSource" />
+            </dt>
+            <dd className="mt-1">{copy(`reviewerSource.${run.reviewerSource}`)}</dd>
           </div>
           <div>
-            <dt className="text-xs text-base-content/55">Compensation</dt>
-            <dd className="mt-1 capitalize">{run.compensation}</dd>
+            <dt className="text-xs text-base-content/55">
+              <AgentText id="compensation" />
+            </dt>
+            <dd className="mt-1">{copy(`compensation.${run.compensation}`)}</dd>
           </div>
           <div>
-            <dt className="text-xs text-base-content/55">Evidence packet</dt>
-            <dd className="mt-1">{run.evidencePacketAvailable ? "Available" : "Not generated"}</dd>
+            <dt className="text-xs text-base-content/55">
+              <AgentText id="evidencePacket" />
+            </dt>
+            <dd className="mt-1">{copy(run.evidencePacketAvailable ? "evidenceAvailable" : "evidenceNotGenerated")}</dd>
           </div>
           <div>
-            <dt className="text-xs text-base-content/55">Created</dt>
-            <dd className="mt-1">{new Date(run.createdAt).toLocaleString()}</dd>
+            <dt className="text-xs text-base-content/55">
+              <AgentText id="created" />
+            </dt>
+            <dd className="mt-1">
+              {format.dateTime(new Date(run.createdAt), { dateStyle: "medium", timeStyle: "short" })}
+            </dd>
           </div>
           {run.attribution.status === "attributed" ? (
             <>
               <div>
-                <dt className="text-xs text-base-content/55">Agent ID</dt>
+                <dt className="text-xs text-base-content/55">
+                  <AgentText id="agentId" />
+                </dt>
                 <dd className="mt-1 break-all font-mono">{run.attribution.agentId}</dd>
               </div>
               <div>
-                <dt className="text-xs text-base-content/55">Agent version</dt>
+                <dt className="text-xs text-base-content/55">
+                  <AgentText id="agentVersion" />
+                </dt>
                 <dd className="mt-1 break-all font-mono">{run.attribution.versionId}</dd>
               </div>
             </>
@@ -668,27 +788,37 @@ function RunCard({
           {run.mechanismHealth ? (
             <>
               <div>
-                <dt className="text-xs text-base-content/55">Quorum-case unanimity</dt>
-                <dd className="mt-1 font-mono">{percent(run.mechanismHealth.unanimityRateBps)}</dd>
+                <dt className="text-xs text-base-content/55">
+                  <AgentText id="quorumUnanimity" />
+                </dt>
+                <dd className="mt-1 font-mono">{percent(run.mechanismHealth.unanimityRateBps, copy, locale)}</dd>
               </div>
               <div>
-                <dt className="text-xs text-base-content/55">Calibration failure rate</dt>
-                <dd className="mt-1 font-mono">{percent(run.mechanismHealth.goldFailureRateBps)}</dd>
+                <dt className="text-xs text-base-content/55">
+                  <AgentText id="calibrationFailure" />
+                </dt>
+                <dd className="mt-1 font-mono">{percent(run.mechanismHealth.goldFailureRateBps, copy, locale)}</dd>
               </div>
               <div>
-                <dt className="text-xs text-base-content/55">Comparable-case drift</dt>
-                <dd className="mt-1 font-mono">{percent(run.mechanismHealth.comparableDriftBps)}</dd>
+                <dt className="text-xs text-base-content/55">
+                  <AgentText id="comparableDrift" />
+                </dt>
+                <dd className="mt-1 font-mono">{percent(run.mechanismHealth.comparableDriftBps, copy, locale)}</dd>
               </div>
               <div>
-                <dt className="text-xs text-base-content/55">Quality score variance (percentage points²)</dt>
-                <dd className="mt-1 font-mono">{percentagePointsSquared(run.mechanismHealth.rbtsScoreVarianceBps2)}</dd>
+                <dt className="text-xs text-base-content/55">
+                  <AgentText id="qualityVariance" />
+                </dt>
+                <dd className="mt-1 font-mono">
+                  {percentagePointsSquared(run.mechanismHealth.rbtsScoreVarianceBps2, copy, locale)}
+                </dd>
               </div>
             </>
           ) : null}
         </dl>
         {run.attribution.status === "unattributed" ? (
           <p className="mt-4 text-xs leading-5 text-base-content/55">
-            This run has no immutable agent-version reference, so it is excluded from per-agent comparisons.
+            <AgentText id="translated123" />
           </p>
         ) : null}
         <code className="mt-3 block break-all text-[11px] text-base-content/55">{run.runId}</code>
@@ -697,7 +827,7 @@ function RunCard({
         <OversightCaseDetail run={run} workspaceId={workspaceId} />
       ) : null}
       {run.status === "completed" ? (
-        <div className="mt-4 border-t border-white/10 pt-4">
+        <div className="mt-4 border-t border-base-content/10 pt-4">
           <button
             type="button"
             className="btn btn-outline btn-sm"
@@ -705,7 +835,7 @@ function RunCard({
             aria-expanded={overrideOpen}
             onClick={() => setOverrideOpen(current => !current)}
           >
-            {overrideOpen ? "Done" : "Record override or corrective action"}
+            {overrideOpen ? <AgentText id="dynamic054" /> : copy("recordOverride")}
           </button>
           {overrideOpen ? (
             <div id={`override-record-${run.runId}`}>
@@ -719,6 +849,10 @@ function RunCard({
 }
 
 export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialWorkspaceId?: string }) {
+  const copy = useAgentTranslations("evidencePanels.evaluation");
+  const ui = useAgentTranslations("ui");
+  const errors = useAgentTranslations("errors");
+  const locale = useAgentLocale();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [workspaceId, setWorkspaceId] = useState("");
   const [dashboard, setDashboard] = useState<EvaluationDashboard | null>(null);
@@ -774,15 +908,15 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
             : (next[0]?.workspaceId ?? ""),
         );
         if (next.length === 0) setLoading(false);
-      } catch (cause) {
+      } catch {
         if (!controller.signal.aborted) {
-          setError(cause instanceof Error ? cause.message : "Unable to load evaluations.");
+          setError(errors("loadEvaluations"));
           setLoading(false);
         }
       }
     })();
     return () => controller.abort();
-  }, [initialWorkspaceId]);
+  }, [errors, initialWorkspaceId]);
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -821,16 +955,16 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
         } else if (!controller.signal.aborted) {
           setAssuranceMetrics(null);
         }
-      } catch (cause) {
+      } catch {
         if (!controller.signal.aborted) {
-          setError(cause instanceof Error ? cause.message : "Unable to load evaluations.");
+          setError(errors("loadEvaluations"));
         }
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
     })();
     return () => controller.abort();
-  }, [urlState.projectId, urlState.runId, workspaceId]);
+  }, [errors, urlState.projectId, urlState.runId, workspaceId]);
 
   const agentOptions = useMemo(() => {
     if (!dashboard) return [];
@@ -913,26 +1047,32 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
   return (
     <div className="space-y-5">
       {error ? (
-        <div className="rounded-xl border border-red-300/20 bg-red-300/[0.06] p-4 text-sm text-red-100" role="alert">
+        <div className="rounded-xl border border-error/20 bg-error/[0.06] p-4 text-sm text-error" role="alert">
           {error}
         </div>
       ) : null}
-      <AsyncSection loading={loading} loadingLabel="Loading evaluations">
+      <AsyncSection loading={loading} loadingLabel={copy("loadingEvaluations")}>
         {null}
       </AsyncSection>
       {!loading && workspaces.length === 0 ? (
         <Card as="div" className="rounded-2xl p-6">
-          <h3 className="font-semibold">Create a workspace first</h3>
-          <p className="mt-2 text-sm text-base-content/55">Evaluations belong to a workspace.</p>
+          <h3 className="font-semibold">
+            <AgentText id="createWorkspaceFirst" />
+          </h3>
+          <p className="mt-2 text-sm text-base-content/55">
+            <AgentText id="evaluationsWorkspace" />
+          </p>
         </Card>
       ) : null}
 
       {!loading && dashboard?.runs.length === 0 ? (
         <Card as="section" className="rounded-2xl p-6" aria-labelledby="evaluations-empty-heading">
           <h3 id="evaluations-empty-heading" className="font-semibold">
-            No evaluations yet
+            <AgentText id="translated124" />
           </h3>
-          <p className="mt-2 text-sm text-base-content/55">Results appear after your agent requests human review.</p>
+          <p className="mt-2 text-sm text-base-content/55">
+            <AgentText id="resultsAfterReview" />
+          </p>
         </Card>
       ) : null}
 
@@ -940,22 +1080,24 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
         <>
           <section className="space-y-3" aria-labelledby="evaluation-runs-heading">
             <h2 id="evaluation-runs-heading" className="text-xl font-semibold">
-              Review runs
+              <AgentText id="translated125" />
             </h2>
             <Card as="div" className="rounded-2xl p-4">
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
                 <Field
-                  label="Search results"
+                  label={<AgentText id="attribute009" />}
                   value={urlState.query}
-                  placeholder="Project, suite, run, or packet"
+                  placeholder={ui("searchPlaceholder")}
                   onChange={event => updateUrlState({ query: event.target.value, runId: null })}
                 />
                 <SelectField
-                  label="Agent"
+                  label={<AgentText id="attribute010" />}
                   value={urlState.agentId}
                   onChange={event => updateUrlState({ agentId: event.target.value, runId: null })}
                 >
-                  <option value="">All agents</option>
+                  <option value="">
+                    <AgentText id="allAgents" />
+                  </option>
                   {agentOptions.map(([agentId, label]) => (
                     <option key={agentId} value={agentId}>
                       {label}
@@ -963,11 +1105,13 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
                   ))}
                 </SelectField>
                 <SelectField
-                  label="Workflow"
+                  label={<AgentText id="attribute002" />}
                   value={urlState.workflowKey}
                   onChange={event => updateUrlState({ workflowKey: event.target.value, runId: null })}
                 >
-                  <option value="">All workflows</option>
+                  <option value="">
+                    <AgentText id="allWorkflows" />
+                  </option>
                   {workflowOptions.map(workflowKey => (
                     <option key={workflowKey} value={workflowKey}>
                       {workflowKey}
@@ -975,37 +1119,54 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
                   ))}
                 </SelectField>
                 <SelectField
-                  label="Outcome"
+                  label={<AgentText id="attribute011" />}
                   value={urlState.status}
                   onChange={event =>
                     updateUrlState({ status: event.target.value as EvaluationUrlState["status"], runId: null })
                   }
                 >
-                  <option value="all">All outcomes</option>
-                  <option value="needs_action">Needs action</option>
-                  <option value="failed">Failed</option>
-                  <option value="completed">Completed</option>
-                  <option value="waiting">Waiting</option>
+                  <option value="all">
+                    <AgentText id="allOutcomes" />
+                  </option>
+                  <option value="needs_action">
+                    <AgentText id="needsAction" />
+                  </option>
+                  <option value="failed">
+                    <AgentText id="failed" />
+                  </option>
+                  <option value="completed">
+                    <AgentText id="completed" />
+                  </option>
+                  <option value="waiting">
+                    <AgentText id="waiting" />
+                  </option>
                 </SelectField>
                 <SelectField
-                  label="Date"
+                  label={<AgentText id="attribute012" />}
                   value={urlState.date}
                   onChange={event =>
                     updateUrlState({ date: event.target.value as EvaluationUrlState["date"], runId: null })
                   }
                 >
-                  <option value="all">Any time</option>
-                  <option value="7">Last 7 days</option>
-                  <option value="30">Last 30 days</option>
+                  <option value="all">
+                    <AgentText id="anyTime" />
+                  </option>
+                  <option value="7">
+                    <AgentText id="last7Days" />
+                  </option>
+                  <option value="30">
+                    <AgentText id="last30Days" />
+                  </option>
                 </SelectField>
               </div>
               <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-base-content/55">
                 <p>
-                  Showing {orderedRuns.length} of {dashboard.runs.length} results
+                  <AgentText id="translated085" /> {orderedRuns.length} <AgentText id="translated063" />{" "}
+                  {dashboard.runs.length} <AgentText id="translated126" />
                 </p>
                 {filtersActive ? (
                   <button type="button" className="link" onClick={() => updateUrlState(DEFAULT_EVALUATION_URL_STATE)}>
-                    Clear filters
+                    <AgentText id="translated089" />
                   </button>
                 ) : null}
               </div>
@@ -1024,33 +1185,39 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
               ))
             ) : (
               <Card as="div" className="rounded-2xl p-6">
-                <h3 className="font-semibold">No results match these filters</h3>
-                <p className="mt-2 text-sm text-base-content/55">Clear one or more filters to see other runs.</p>
+                <h3 className="font-semibold">
+                  <AgentText id="noResults" />
+                </h3>
+                <p className="mt-2 text-sm text-base-content/55">
+                  <AgentText id="clearFilters" />
+                </p>
               </Card>
             )}
           </section>
 
           <Card as="details" className="rounded-2xl p-6">
-            <summary className="cursor-pointer text-sm font-semibold">Operations and policy details</summary>
+            <summary className="cursor-pointer text-sm font-semibold">
+              <AgentText id="operations" />
+            </summary>
             <div className="mt-5 space-y-6">
               {assuranceMetrics ? <AssuranceMetricsSummary snapshot={assuranceMetrics} /> : null}
               {metricsError ? (
-                <p className="text-xs text-amber-100/80" role="status">
-                  Assurance operations metrics are temporarily unavailable.
+                <p className="text-xs text-warning/80" role="status">
+                  <AgentText id="translated127" />
                 </p>
               ) : null}
               <ModelEvidencePanel profiles={dashboard.modelProfiles} />
               <AdaptiveCoverageSummary agents={dashboard.agents} />
               <section aria-labelledby="evaluation-summary-heading">
                 <h2 id="evaluation-summary-heading" className="text-base font-semibold">
-                  Summary
+                  <AgentText id="translated128" />
                 </h2>
                 <dl className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   {[
-                    ["Runs", dashboard.summary.totalRuns],
-                    ["Completed", dashboard.summary.completedRuns],
-                    ["Evidence-backed", dashboard.summary.evidenceBackedRuns],
-                    ["Valid responses", dashboard.summary.validResponses],
+                    [copy("runs"), dashboard.summary.totalRuns],
+                    [copy("completedRuns"), dashboard.summary.completedRuns],
+                    [copy("evidenceBacked"), dashboard.summary.evidenceBackedRuns],
+                    [copy("validResponses"), dashboard.summary.validResponses],
                   ].map(([label, value]) => (
                     <Card as="div" variant="nested" key={label} className="rounded-xl p-4">
                       <dt className="text-xs text-base-content/55">{label}</dt>
@@ -1061,12 +1228,16 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
               </section>
               <section aria-labelledby="publishing-limits-heading">
                 <h2 id="publishing-limits-heading" className="text-base font-semibold">
-                  Publishing limits
+                  <AgentText id="translated129" />
                 </h2>
                 {!dashboard.canViewPublishingPolicies ? (
-                  <p className="mt-3 text-sm text-base-content/55">Visible to workspace owners and admins.</p>
+                  <p className="mt-3 text-sm text-base-content/55">
+                    <AgentText id="ownersOnly" />
+                  </p>
                 ) : dashboard.publishingPolicies?.length === 0 ? (
-                  <p className="mt-3 text-sm text-base-content/55">No publishing policy configured.</p>
+                  <p className="mt-3 text-sm text-base-content/55">
+                    <AgentText id="noPublishingPolicy" />
+                  </p>
                 ) : (
                   <div className="mt-3 space-y-3">
                     {dashboard.publishingPolicies?.map(policy => (
@@ -1075,25 +1246,33 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
                           <h3 className="font-medium">
                             {policy.name} · v{policy.version}
                           </h3>
-                          <span className="rounded-md bg-white/[0.06] px-2 py-1 text-xs">
-                            {policy.enabled && !policy.revokedAt ? "active" : "inactive"}
+                          <span className="rounded-md bg-base-content/[0.06] px-2 py-1 text-xs">
+                            {copy(policy.enabled && !policy.revokedAt ? "active" : "inactive")}
                           </span>
                         </div>
                         <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
                           <div>
-                            <dt className="text-xs text-base-content/55">Per panel</dt>
-                            <dd className="mt-1 font-mono">{usdc(policy.maxPanelAtomic)}</dd>
+                            <dt className="text-xs text-base-content/55">
+                              <AgentText id="perPanel" />
+                            </dt>
+                            <dd className="mt-1 font-mono">{usdc(policy.maxPanelAtomic, locale, copy)}</dd>
                           </div>
                           <div>
-                            <dt className="text-xs text-base-content/55">Daily</dt>
-                            <dd className="mt-1 font-mono">{usdc(policy.maxDailyAtomic)}</dd>
+                            <dt className="text-xs text-base-content/55">
+                              <AgentText id="daily" />
+                            </dt>
+                            <dd className="mt-1 font-mono">{usdc(policy.maxDailyAtomic, locale, copy)}</dd>
                           </div>
                           <div>
-                            <dt className="text-xs text-base-content/55">Monthly</dt>
-                            <dd className="mt-1 font-mono">{usdc(policy.maxMonthlyAtomic)}</dd>
+                            <dt className="text-xs text-base-content/55">
+                              <AgentText id="monthly" />
+                            </dt>
+                            <dd className="mt-1 font-mono">{usdc(policy.maxMonthlyAtomic, locale, copy)}</dd>
                           </div>
                           <div>
-                            <dt className="text-xs text-base-content/55">Maximum humans</dt>
+                            <dt className="text-xs text-base-content/55">
+                              <AgentText id="maximumHumans" />
+                            </dt>
                             <dd className="mt-1 font-mono">{policy.maxPanelSize}</dd>
                           </div>
                         </dl>

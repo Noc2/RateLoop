@@ -4,7 +4,10 @@ import test from "node:test";
 
 test("question images stack on mobile and private text always has an expansion path", () => {
   const media = readFileSync(new URL("./QuestionMedia.tsx", import.meta.url), "utf8");
-  const privatePreview = readFileSync(new URL("../review/PrivateArtifactPreview.tsx", import.meta.url), "utf8");
+  const privatePreview = [
+    readFileSync(new URL("../review/PrivateArtifactPreview.tsx", import.meta.url), "utf8"),
+    readFileSync(new URL("../../../messages/en/review.json", import.meta.url), "utf8"),
+  ].join("\n");
   const playwright = readFileSync(new URL("../../../playwright.config.ts", import.meta.url), "utf8");
   assert.match(media, /grid-cols-1 sm:grid-cols-2/u);
   assert.match(media, /sm:col-span-2/u);

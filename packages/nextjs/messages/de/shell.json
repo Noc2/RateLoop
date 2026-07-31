@@ -1,0 +1,57 @@
+{
+  "brandTagline": "Menschliche Absicherung",
+  "navigation": {
+    "primary": "Hauptnavigation",
+    "humans": "Menschen",
+    "agents": "Agenten",
+    "docs": "Dokumentation",
+    "open": "Navigation öffnen",
+    "close": "Navigation schließen"
+  },
+  "docs": {
+    "startHere": "Erste Schritte",
+    "introduction": "Einführung",
+    "howItWorks": "Funktionsweise",
+    "useCases": "Anwendungsfälle",
+    "platform": "Plattform",
+    "humanOversight": "Menschliche Aufsicht",
+    "evidence": "Nachweise",
+    "verifyEvidence": "Nachweise prüfen",
+    "connectHost": "Host verbinden",
+    "agentsMcp": "Agenten & MCP",
+    "techStack": "Technik",
+    "smartContracts": "Smart Contracts",
+    "build": "Entwicklung",
+    "sdk": "SDK",
+    "apiErrors": "API-Fehler"
+  },
+  "workspace": {
+    "back": "Zurück zum Workspace"
+  },
+  "footer": {
+    "label": "Fußzeile",
+    "pricing": "Preise",
+    "terms": "Nutzungsbedingungen",
+    "privacy": "Datenschutz",
+    "imprint": "Impressum",
+    "legal": "Rechtliches"
+  },
+  "search": {
+    "label": "RateLoop durchsuchen",
+    "placeholder": "Suchen",
+    "submit": "Suchen",
+    "clear": "Suche löschen"
+  },
+  "preferences": {
+    "language": "Sprache",
+    "english": "Englisch",
+    "german": "Deutsch",
+    "switchToLight": "Helles Design verwenden",
+    "switchToDark": "Dunkles Design verwenden",
+    "lightActive": "Helles Design aktiv",
+    "darkActive": "Dunkles Design aktiv"
+  },
+  "accessibility": {
+    "skipToContent": "Zum Hauptinhalt springen"
+  }
+}

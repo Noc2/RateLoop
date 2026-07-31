@@ -1,11 +1,13 @@
 import React from "react";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 test("workspace invitation errors land beside the exact field and clear when edited", async () => {
   const restoreDom = installTestDom();
-  const { act, cleanup, render, screen } = await import("@testing-library/react");
+  const { act, cleanup, render: baseRender, screen } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { WorkspaceMembersPanel } = await import("./WorkspaceMembersPanel");
   const previousFetch = globalThis.fetch;
@@ -45,7 +47,8 @@ test("workspace invitation errors land beside the exact field and clear when edi
 
 test("member removal and invitation revocation mutate only after explicit dialog confirmation", async () => {
   const restoreDom = installTestDom();
-  const { act, cleanup, render, waitFor, within } = await import("@testing-library/react");
+  const { act, cleanup, render: baseRender, waitFor, within } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { WorkspaceMembersPanel } = await import("./WorkspaceMembersPanel");
   const previousFetch = globalThis.fetch;

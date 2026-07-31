@@ -1,11 +1,13 @@
 import React from "react";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 test("image preview focuses its close action and returns focus to the trigger", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, screen, waitFor } = await import("@testing-library/react");
+  const { cleanup, render: baseRender, screen, waitFor } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { QuestionMedia } = await import("./QuestionMedia");
 
@@ -34,7 +36,8 @@ test("image preview focuses its close action and returns focus to the trigger", 
 
 test("image preview keeps Tab and Shift+Tab inside the modal", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, waitFor } = await import("@testing-library/react");
+  const { cleanup, render: baseRender, waitFor } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { QuestionMedia } = await import("./QuestionMedia");
 
@@ -75,7 +78,8 @@ test("image preview keeps Tab and Shift+Tab inside the modal", async () => {
 
 test("approval state stays blocked until every image is visible and fails closed on preview errors", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, fireEvent, render } = await import("@testing-library/react");
+  const { cleanup, fireEvent, render: baseRender } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const { QuestionMedia } = await import("./QuestionMedia");
   const states: string[] = [];
 
@@ -109,7 +113,8 @@ test("approval state stays blocked until every image is visible and fails closed
 
 test("loaded media survives a re-render with an equal media object and resets for different media", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, fireEvent, render } = await import("@testing-library/react");
+  const { cleanup, fireEvent, render: baseRender } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { QuestionMedia } = await import("./QuestionMedia");
   const states: string[] = [];
@@ -173,7 +178,8 @@ test("loaded media survives a re-render with an equal media object and resets fo
 
 test("YouTube approval stays blocked until the owner loads the exact video", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, fireEvent, render } = await import("@testing-library/react");
+  const { cleanup, fireEvent, render: baseRender } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { QuestionMedia } = await import("./QuestionMedia");
   const states: string[] = [];

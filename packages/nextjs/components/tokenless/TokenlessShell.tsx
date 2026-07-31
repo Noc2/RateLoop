@@ -2,8 +2,8 @@
 
 import { Suspense, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { RateLoopLogo } from "~~/components/RateLoopLogo";
 import { SiteSearch } from "~~/components/tokenless/navigation/SiteSearch";
 import {
@@ -11,7 +11,11 @@ import {
   workspacePublicContentHref,
   workspaceReturnPathForLocation,
 } from "~~/components/tokenless/navigation/workspaceReturnPath";
+import { AccountPreferenceHydrator } from "~~/components/tokenless/preferences/AccountPreferenceHydrator";
+import { LocaleToggle } from "~~/components/tokenless/preferences/LocaleToggle";
+import { ThemeToggle } from "~~/components/tokenless/preferences/ThemeToggle";
 import { DOCS_NAV, resolveActiveDocsHref } from "~~/constants/docsNav";
+import { Link, usePathname } from "~~/i18n/navigation";
 
 const ThirdwebSessionButton = dynamic(
   () => import("~~/components/thirdweb/ThirdwebSessionButton").then(module => module.ThirdwebSessionButton),
@@ -74,19 +78,20 @@ function BookOpenIcon({ className }: IconProps) {
 }
 
 const links = [
-  { href: "/human/review", label: "Humans", icon: GlobeAltIcon },
-  { href: "/agents/overview", label: "Agents", icon: PlusCircleIcon },
-  { href: "/docs", label: "Docs", icon: BookOpenIcon },
+  { href: "/human/review", labelKey: "humans", icon: GlobeAltIcon },
+  { href: "/agents/overview", labelKey: "agents", icon: PlusCircleIcon },
+  { href: "/docs", labelKey: "docs", icon: BookOpenIcon },
 ] as const;
 
 const footerLinks = [
-  ["Pricing", "/pricing"],
-  ["Terms", "/legal/terms"],
-  ["Privacy", "/legal/privacy"],
-  ["Imprint", "/legal/imprint"],
+  ["pricing", "/pricing"],
+  ["terms", "/legal/terms"],
+  ["privacy", "/legal/privacy"],
+  ["imprint", "/legal/imprint"],
 ] as const;
 
 function Brand({ compact = false }: { compact?: boolean }) {
+  const t = useTranslations("shell");
   return (
     <Link href="/" className="flex min-w-0 items-center gap-2">
       <RateLoopLogo className={compact ? "h-8 w-8 shrink-0" : "h-9 w-9 shrink-0"} idPrefix="tokenless-brand" />
@@ -96,7 +101,7 @@ function Brand({ compact = false }: { compact?: boolean }) {
         >
           RateLoop
         </span>
-        <span className="truncate text-xs text-base-content/75">Human Assurance</span>
+        <span className="truncate text-xs text-base-content/75">{t("brandTagline")}</span>
       </div>
     </Link>
   );
@@ -110,6 +115,7 @@ function ShellSessionButton({ compact = false }: { compact?: boolean }) {
 }
 
 function WorkspaceReturnLink() {
+  const t = useTranslations("shell.workspace");
   const pathname = usePathname() ?? "/";
   const searchParams = useSearchParams();
   if (!isPublicContentPath(pathname)) return null;
@@ -121,12 +127,13 @@ function WorkspaceReturnLink() {
       prefetch={false}
       className="mt-2 inline-flex text-xs font-medium text-base-content/60 transition-colors hover:text-base-content"
     >
-      <span aria-hidden="true">←</span>&nbsp; Back to workspace
+      <span aria-hidden="true">←</span>&nbsp; {t("back")}
     </Link>
   );
 }
 
 function NavLinks({ mobile = false, onNavigate }: { mobile?: boolean; onNavigate?: () => void }) {
+  const t = useTranslations("shell");
   const pathname = usePathname() ?? "";
   const searchParams = useSearchParams();
   const activeDocsHref = resolveActiveDocsHref(pathname);
@@ -135,7 +142,7 @@ function NavLinks({ mobile = false, onNavigate }: { mobile?: boolean; onNavigate
 
   return (
     <>
-      {links.map(({ href, label, icon: Icon }) => {
+      {links.map(({ href, labelKey, icon: Icon }) => {
         const sectionRoot = href.split("/").slice(0, 2).join("/");
         const active = pathname === sectionRoot || pathname.startsWith(`${sectionRoot}/`);
         const showDocsNavigation = href === "/docs" && active;
@@ -154,7 +161,9 @@ function NavLinks({ mobile = false, onNavigate }: { mobile?: boolean; onNavigate
               }`}
             >
               <Icon className="relative z-10 h-6 w-6 shrink-0 transition-colors duration-200" />
-              <span className="relative z-10 text-base font-medium transition-colors duration-200">{label}</span>
+              <span className="relative z-10 text-base font-medium transition-colors duration-200">
+                {t(`navigation.${labelKey}`)}
+              </span>
               {active ? (
                 <span className="absolute bottom-2 right-2 top-2 w-1 rounded-full bg-gradient-to-b from-[var(--rateloop-blue)] via-[var(--rateloop-green)] to-[var(--rateloop-pink)]" />
               ) : null}
@@ -164,7 +173,15 @@ function NavLinks({ mobile = false, onNavigate }: { mobile?: boolean; onNavigate
                 {DOCS_NAV.map(group => (
                   <section key={group.section}>
                     <h2 className="mb-1.5 px-3 text-xs font-semibold uppercase tracking-wider text-base-content/55">
-                      {group.section}
+                      {t(
+                        `docs.${
+                          group.section === "Start Here"
+                            ? "startHere"
+                            : group.section === "Platform"
+                              ? "platform"
+                              : "build"
+                        }`,
+                      )}
                     </h2>
                     <div className="flex flex-col gap-0.5">
                       {group.links.map(link => {
@@ -182,7 +199,24 @@ function NavLinks({ mobile = false, onNavigate }: { mobile?: boolean; onNavigate
                                 : "text-base-content/70 hover:bg-base-content/[0.05] hover:text-base-content"
                             }`}
                           >
-                            {link.label}
+                            {t(
+                              `docs.${
+                                {
+                                  Introduction: "introduction",
+                                  "How It Works": "howItWorks",
+                                  "Use Cases": "useCases",
+                                  "Human Oversight": "humanOversight",
+                                  Evidence: "evidence",
+                                  "Verify Evidence": "verifyEvidence",
+                                  "Connect a Host": "connectHost",
+                                  "Agents & MCP": "agentsMcp",
+                                  "Tech Stack": "techStack",
+                                  "Smart Contracts": "smartContracts",
+                                  SDK: "sdk",
+                                  "API Errors": "apiErrors",
+                                }[link.label]
+                              }`,
+                            )}
                           </Link>
                         );
                       })}
@@ -195,7 +229,7 @@ function NavLinks({ mobile = false, onNavigate }: { mobile?: boolean; onNavigate
         );
       })}
       {mobile ? (
-        <div className="mt-2 border-t border-white/10 px-2 pt-4">
+        <div className="mt-2 border-t border-base-content/10 px-2 pt-4">
           <Suspense fallback={<div aria-hidden="true" className="h-11" />}>
             <ShellSessionButton />
           </Suspense>
@@ -205,7 +239,7 @@ function NavLinks({ mobile = false, onNavigate }: { mobile?: boolean; onNavigate
               className="transition-colors hover:text-base-content"
               onClick={onNavigate}
             >
-              Pricing
+              {t("footer.pricing")}
             </Link>
             <span aria-hidden="true" className="text-base-content/55">
               ·
@@ -215,7 +249,7 @@ function NavLinks({ mobile = false, onNavigate }: { mobile?: boolean; onNavigate
               className="transition-colors hover:text-base-content"
               onClick={onNavigate}
             >
-              Legal
+              {t("footer.legal")}
             </Link>
           </div>
         </div>
@@ -225,18 +259,19 @@ function NavLinks({ mobile = false, onNavigate }: { mobile?: boolean; onNavigate
 }
 
 function Footer() {
+  const t = useTranslations("shell.footer");
   const pathname = usePathname() ?? "/";
   const searchParams = useSearchParams();
   const returnPath = workspaceReturnPathForLocation(pathname, searchParams);
   const publicHref = (href: string) => (returnPath ? workspacePublicContentHref(href, returnPath) : href);
   return (
-    <footer className="shrink-0 border-t border-white/10 px-4 py-9 xl:pl-52">
-      <nav aria-label="Footer">
+    <footer className="shrink-0 border-t border-base-content/10 px-4 py-9 xl:pl-52">
+      <nav aria-label={t("label")}>
         <ul className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm text-base-content/70 lg:text-base">
-          {footerLinks.map(([label, href], index) => (
+          {footerLinks.map(([labelKey, href], index) => (
             <li key={href} className="flex items-center gap-2">
               <Link href={publicHref(href)} className="transition-colors hover:text-base-content">
-                {label}
+                {t(labelKey)}
               </Link>
               {index < footerLinks.length - 1 ? <span className="text-base-content/55">·</span> : null}
             </li>
@@ -270,20 +305,32 @@ function Footer() {
 }
 
 export function TokenlessShell({ children }: { children: React.ReactNode }) {
+  const t = useTranslations("shell");
   const pathname = usePathname();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const themeToggle = (
+    <ThemeToggle
+      darkActiveLabel={t("preferences.darkActive")}
+      lightActiveLabel={t("preferences.lightActive")}
+      switchToDarkLabel={t("preferences.switchToDark")}
+      switchToLightLabel={t("preferences.switchToLight")}
+    />
+  );
 
   useEffect(() => setMobileNavOpen(false), [pathname]);
 
   return (
     <div className="flex min-h-screen flex-col bg-base-100 text-base-content">
+      <Suspense fallback={null}>
+        <AccountPreferenceHydrator />
+      </Suspense>
       <a
         href="#main-content"
         className="sr-only fixed left-4 top-4 z-[60] rounded-lg bg-base-content px-4 py-3 font-semibold text-base-100 shadow-xl focus:not-sr-only focus:outline-none focus:ring-2 focus:ring-[var(--rateloop-blue)] focus:ring-offset-2 focus:ring-offset-base-100"
       >
-        Skip to main content
+        {t("accessibility.skipToContent")}
       </a>
-      <header className="sticky top-0 z-30 border-b border-white/10 bg-base-100 px-4 py-3 backdrop-blur-xl xl:hidden">
+      <header className="sticky top-0 z-30 border-b border-base-content/10 bg-base-100 px-4 py-3 backdrop-blur-xl xl:hidden">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
           <div className="flex min-w-0 flex-col items-start">
             <Brand compact />
@@ -292,6 +339,10 @@ export function TokenlessShell({ children }: { children: React.ReactNode }) {
             </Suspense>
           </div>
           <div className="flex min-w-0 flex-1 items-center justify-end gap-1">
+            {themeToggle}
+            <Suspense fallback={null}>
+              <LocaleToggle />
+            </Suspense>
             <Suspense fallback={<div aria-hidden="true" className="h-9 w-[min(10rem,38vw)] sm:w-52" />}>
               <SiteSearch mobile />
             </Suspense>
@@ -302,7 +353,7 @@ export function TokenlessShell({ children }: { children: React.ReactNode }) {
             >
               <summary
                 className="btn btn-ghost btn-sm list-none px-2"
-                aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"}
+                aria-label={mobileNavOpen ? t("navigation.close") : t("navigation.open")}
               >
                 <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                   <path d="M4 7h16M4 12h16M4 17h16" />
@@ -318,7 +369,10 @@ export function TokenlessShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <aside className="fixed left-0 top-0 z-40 hidden h-screen w-52 shrink-0 flex-col items-stretch border-r border-[color:var(--rateloop-shell-border-strong)] bg-base-100 py-4 shadow-[18px_0_48px_rgba(9,10,12,0.24)] xl:flex">
+      <aside
+        data-rateloop-rail
+        className="fixed left-0 top-0 z-40 hidden h-screen w-52 shrink-0 flex-col items-stretch border-r border-[color:var(--rateloop-shell-border-strong)] bg-base-100 py-4 shadow-[18px_0_48px_rgba(9,10,12,0.24)] xl:flex"
+      >
         <div className="mb-4 flex flex-col items-start px-4">
           <Brand />
           <Suspense fallback={null}>
@@ -328,12 +382,18 @@ export function TokenlessShell({ children }: { children: React.ReactNode }) {
         <Suspense fallback={<div aria-hidden="true" className="mx-2.5 mb-4 h-9" />}>
           <SiteSearch />
         </Suspense>
-        <nav aria-label="Primary" className="flex flex-1 flex-col gap-1 overflow-y-auto px-2.5 pb-4">
+        <nav aria-label={t("navigation.primary")} className="flex flex-1 flex-col gap-1 overflow-y-auto px-2.5 pb-4">
           <Suspense fallback={null}>
             <NavLinks />
           </Suspense>
         </nav>
         <div className="mt-auto flex w-full shrink-0 flex-col items-stretch gap-2 border-t border-[color:var(--rateloop-shell-border-strong)] px-2.5 pt-4">
+          <div className="flex items-center justify-end gap-1 px-1">
+            {themeToggle}
+            <Suspense fallback={null}>
+              <LocaleToggle />
+            </Suspense>
+          </div>
           <Suspense fallback={<div aria-hidden="true" className="h-11" />}>
             <ShellSessionButton compact />
           </Suspense>

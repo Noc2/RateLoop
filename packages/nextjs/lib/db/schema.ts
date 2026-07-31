@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   foreignKey,
   index,
   integer,
@@ -580,10 +581,22 @@ export const tokenlessAccountProfiles = pgTable(
       .primaryKey()
       .references(() => tokenlessBrowserIdentities.principalAddress, { onDelete: "cascade" }),
     displayName: text("display_name"),
+    preferredLocale: text("preferred_locale"),
+    preferredTheme: text("preferred_theme"),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
     updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull(),
   },
-  table => ({ updatedAtIdx: index("tokenless_account_profiles_updated_at_idx").on(table.updatedAt) }),
+  table => ({
+    updatedAtIdx: index("tokenless_account_profiles_updated_at_idx").on(table.updatedAt),
+    preferredLocaleCheck: check(
+      "tokenless_account_profiles_preferred_locale_check",
+      sql`${table.preferredLocale} IS NULL OR ${table.preferredLocale} IN ('en', 'de')`,
+    ),
+    preferredThemeCheck: check(
+      "tokenless_account_profiles_preferred_theme_check",
+      sql`${table.preferredTheme} IS NULL OR ${table.preferredTheme} IN ('light', 'dark')`,
+    ),
+  }),
 );
 
 export type TokenlessAccountProfile = typeof tokenlessAccountProfiles.$inferSelect;

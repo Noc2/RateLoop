@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const source = readFileSync(new URL("./RaterSettlementRecoveryClient.tsx", import.meta.url), "utf8");
+const source = [
+  readFileSync(new URL("./RaterSettlementRecoveryClient.tsx", import.meta.url), "utf8"),
+  readFileSync(new URL("../../../messages/en/human.json", import.meta.url), "utf8"),
+].join("\n");
 
 test("paid settlement recovery keeps all private material in the browser", () => {
   assert.match(source, /Reveal and claim paid reviews/u);

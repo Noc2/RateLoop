@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const source = readFileSync(new URL("./EvidenceWorkspacePanel.tsx", import.meta.url), "utf8");
+const source = `${readFileSync(new URL("./EvidenceWorkspacePanel.tsx", import.meta.url), "utf8")}\n${readFileSync(
+  new URL("../../../messages/en/agents.json", import.meta.url),
+  "utf8",
+)}`;
 
 test("the evidence workspace keeps verification and export state explicit", () => {
   assert.match(source, /Decision records and exports/);
@@ -56,7 +59,7 @@ test("the evidence workspace keeps verification and export state explicit", () =
   assert.match(source, /Download attestation witness/);
   assert.match(source, /Anchor details restricted/);
   assert.match(source, /Receipt details restricted/);
-  assert.match(source, /anchorLabel\(attestation, canManage\)/);
+  assert.match(source, /anchorLabel\(attestation, canManage, copy\)/);
   assert.match(source, /Settlement evidence/);
   assert.match(source, /Reviewer provenance/);
   assert.match(source, /paidReviewerCount/);
@@ -74,7 +77,7 @@ test("the evidence workspace keeps verification and export state explicit", () =
   assert.match(source, /window\.history\.pushState/);
   assert.match(source, /patch: \{ runId: packet\.payload\.runId, packetId: packet\.payload\.packetId \}/);
   assert.match(source, /aria-current=\{selected \? "page" : undefined\}/);
-  assert.match(source, /\{selected \? "Link to packet" : "Open packet"\}/);
+  assert.match(source, /selected \? copy\("linkToPacket"\) : <AgentText id="dynamic027" \/>/);
   assert.match(source, /!loading && packets\.length > 0/);
   assert.match(source, /!loading && selectedPacket \? \(\s*<VerificationInstructions/s);
   assert.doesNotMatch(source, /Export a packet to show its pinned-key verification command/);
@@ -94,7 +97,7 @@ test("workspace compliance controls expose only browser-safe endpoints", () => {
   assert.doesNotMatch(source, /TOKENLESS_|PRIVATE_KEY|secretRef|credentialRef/);
   assert.match(source, /Evidence integrations/);
   assert.match(source, /Add or update one delivery destination at a time/);
-  assert.match(source, /Configure \{label\.toLocaleLowerCase\(\)\}/);
+  assert.match(source, /copy\("configureDelivery", \{ label \}\)/);
   assert.match(source, /deliveryKind === "worm" \? <WormEvidenceDelivery/);
   assert.match(source, /deliveryKind === "siem" \? <SiemEvidenceDelivery/);
   assert.match(source, /deliveryKind === "grc" \? <GrcEvidenceDelivery/);

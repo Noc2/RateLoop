@@ -1,11 +1,13 @@
 import React from "react";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 test("runtime error actions retry the boundary or return through browser history", async () => {
   const restoreDom = installTestDom();
-  const { act, cleanup, render } = await import("@testing-library/react");
+  const { act, cleanup, render: baseRender } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { RuntimeErrorActions } = await import("./RuntimeErrorActions");
   const previousBack = window.history.back;

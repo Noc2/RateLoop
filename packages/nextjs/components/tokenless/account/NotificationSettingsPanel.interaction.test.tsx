@@ -1,6 +1,7 @@
 import React from "react";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 const preferences = {
@@ -42,7 +43,8 @@ function installNotificationFetch({ paid = false, workspace = false }: { paid?: 
 
 test("reviewer settings omit workspace and payment notifications when they do not apply", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, waitFor, within } = await import("@testing-library/react");
+  const { cleanup, render: baseRender, waitFor, within } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const { NotificationSettingsPanel } = await import("./NotificationSettingsPanel");
   const restoreFetch = installNotificationFetch({});
 
@@ -65,7 +67,8 @@ test("reviewer settings omit workspace and payment notifications when they do no
 
 test("workspace and payment notifications appear when the account has those capabilities", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, waitFor, within } = await import("@testing-library/react");
+  const { cleanup, render: baseRender, waitFor, within } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const { NotificationSettingsPanel } = await import("./NotificationSettingsPanel");
   const restoreFetch = installNotificationFetch({ paid: true, workspace: true });
 

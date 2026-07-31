@@ -1,6 +1,7 @@
 import React from "react";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { EnglishAgentTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 function dashboard(runs: Record<string, unknown>[] = []) {
@@ -162,7 +163,9 @@ function installFetch(runs: Record<string, unknown>[]) {
 async function mount(canManage: boolean) {
   const { render } = await import("@testing-library/react");
   const { EvidenceWorkspacePanel } = await import("./EvidenceWorkspacePanel");
-  return render(<EvidenceWorkspacePanel workspaceId="workspace-evidence" canManage={canManage} />);
+  return render(<EvidenceWorkspacePanel workspaceId="workspace-evidence" canManage={canManage} />, {
+    wrapper: EnglishAgentTestProviders,
+  });
 }
 
 test("managers see compliance exports before opening advanced evidence controls", async () => {

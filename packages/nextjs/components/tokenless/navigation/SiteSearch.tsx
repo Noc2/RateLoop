@@ -1,11 +1,13 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import {
   workspacePublicContentHref,
   workspaceReturnPathForLocation,
 } from "~~/components/tokenless/navigation/workspaceReturnPath";
+import { usePathname, useRouter } from "~~/i18n/navigation";
 
 const SEARCH_ROUTE = "/search";
 
@@ -51,6 +53,7 @@ function searchTarget(value: string, returnPath: string | null) {
 }
 
 export function SiteSearch({ mobile = false }: { mobile?: boolean }) {
+  const t = useTranslations("shell.search");
   const router = useRouter();
   const pathname = usePathname() ?? "";
   const searchParams = useSearchParams();
@@ -81,7 +84,7 @@ export function SiteSearch({ mobile = false }: { mobile?: boolean }) {
   return (
     <form onSubmit={submit} className={mobile ? "w-[min(10rem,38vw)] sm:w-52" : "mx-2.5 mb-4"} role="search">
       <label className="sr-only" htmlFor={mobile ? "mobile-site-search" : "desktop-site-search"}>
-        Search RateLoop
+        {t("label")}
       </label>
       <div className="relative">
         <input
@@ -97,15 +100,15 @@ export function SiteSearch({ mobile = false }: { mobile?: boolean }) {
             }
           }}
           className="input input-sm h-9 w-full rounded-lg border-0 bg-base-content/[0.12] pl-3 pr-16 text-base text-base-content !shadow-none placeholder:text-base-content/60 focus:bg-base-content/[0.15] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--rateloop-blue)] [&::-webkit-search-cancel-button]:appearance-none"
-          placeholder="Search"
-          aria-label="Search RateLoop"
+          placeholder={t("placeholder")}
+          aria-label={t("label")}
           autoComplete="off"
           maxLength={120}
         />
         {query ? (
           <button
             type="button"
-            aria-label="Clear site search"
+            aria-label={t("clear")}
             onClick={clear}
             className="absolute right-9 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-full bg-base-content/10 text-base-content/65 transition-colors hover:bg-base-content/20 hover:text-base-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--rateloop-blue)]"
           >
@@ -114,7 +117,7 @@ export function SiteSearch({ mobile = false }: { mobile?: boolean }) {
         ) : null}
         <button
           type="submit"
-          aria-label="Search"
+          aria-label={t("submit")}
           className="absolute right-1.5 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-full text-base-content/65 transition-colors hover:bg-base-content/15 hover:text-base-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--rateloop-blue)]"
         >
           <MagnifyingGlassIcon className="h-4 w-4" />

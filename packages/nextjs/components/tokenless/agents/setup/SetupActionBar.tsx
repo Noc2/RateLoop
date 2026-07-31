@@ -5,7 +5,7 @@ export function SetupActionBar({ children, className }: { children: ReactNode; c
   return (
     <div
       className={classNames(
-        "mt-8 flex flex-col gap-3 border-t border-white/10 pt-5 sm:flex-row sm:items-center sm:justify-end",
+        "mt-8 flex flex-col gap-3 border-t border-base-content/10 pt-5 sm:flex-row sm:items-center sm:justify-end",
         className,
       )}
     >

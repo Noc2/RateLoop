@@ -46,14 +46,14 @@ function AgentIcon({ name }: { name: string }) {
   }
 }
 
-export function SupportedAgentsSection() {
+export function SupportedAgentsSection({ label = "Works with the agents your team already uses" }: { label?: string }) {
   return (
     <section className="relative z-20 mt-10 w-full sm:mt-12 lg:mt-32 xl:mt-40" aria-labelledby="supported-agents-title">
       <p
         id="supported-agents-title"
         className="mb-4 text-center text-base leading-7 text-base-content/70 sm:mb-5 sm:text-lg"
       >
-        Works with the agents your team already uses
+        {label}
       </p>
       <div className="mx-auto flex max-w-full flex-wrap items-center justify-center gap-2 px-4 pb-1 sm:flex-nowrap sm:gap-2.5 sm:px-0 lg:gap-3">
         {agents.map(agent => (

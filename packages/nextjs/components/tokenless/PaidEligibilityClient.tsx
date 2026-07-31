@@ -1,10 +1,11 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
-import Link from "next/link";
+import { FormEvent, useCallback, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { ChoiceInput, Field, SelectField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { Card } from "~~/components/tokenless/ui/Card";
+import { Link } from "~~/i18n/navigation";
 import { readBrowserSession } from "~~/lib/auth/client";
 import {
   type Dac7FormPolicy,
@@ -50,29 +51,15 @@ class EligibilityRequestError extends Error {
   }
 }
 
-async function readJson(response: Response) {
+async function readJson(response: Response, fallbackMessage: string) {
   const body = (await response.json()) as Record<string, unknown>;
   if (!response.ok) {
     throw new EligibilityRequestError(
-      typeof body.message === "string"
-        ? body.message
-        : typeof body.error === "string"
-          ? body.error
-          : "Eligibility request failed.",
+      typeof body.message === "string" ? body.message : typeof body.error === "string" ? body.error : fallbackMessage,
       typeof body.field === "string" ? body.field : null,
     );
   }
   return body;
-}
-
-function statusLabel(state: EligibilityState | null) {
-  if (!state) return "Checking…";
-  if (state.status === "eligible") return "Paid tasks unlocked";
-  if (state.status === "declined") return "Advisory-only selected";
-  if (state.status === "review") return "Eligibility review";
-  if (state.status === "blocked") return "Paid tasks unavailable";
-  if (state.status === "expired") return "Verification expired";
-  return "Not started";
 }
 
 function formatCapability(value: string) {
@@ -80,6 +67,7 @@ function formatCapability(value: string) {
 }
 
 export function PaidEligibilityClient() {
+  const t = useTranslations("human.eligibility");
   const [state, setState] = useState<EligibilityState | null>(null);
   const [accountAddress, setAccountAddress] = useState<string | null>(null);
   const [providerState, setProviderState] = useState<string | null>(null);
@@ -90,7 +78,7 @@ export function PaidEligibilityClient() {
   const [error, setError] = useState<string | null>(null);
   const { capture, clear, fieldErrors, formError } = useFormErrors();
 
-  async function refresh() {
+  const refresh = useCallback(async () => {
     const session = await readBrowserSession();
     const payoutAddress = session?.wallets.payout ?? null;
     setAccountAddress(payoutAddress);
@@ -100,15 +88,16 @@ export function PaidEligibilityClient() {
     }
     const eligibility = await readJson(
       await fetch("/api/rater/eligibility", { cache: "no-store", credentials: "same-origin" }),
+      t("requestFailed"),
     );
     setState(eligibility as EligibilityState);
-  }
+  }, [t]);
 
   useEffect(() => {
     const returned = new URL(window.location.href).searchParams.get("eligibility") === "provider-return";
     if (returned) setProviderState(sessionStorage.getItem("rateloop:eligibility-provider-state"));
-    void refresh().catch(cause => setError(cause instanceof Error ? cause.message : "Unable to load eligibility."));
-  }, []);
+    void refresh().catch(() => setError(t("loadFailed")));
+  }, [refresh, t]);
 
   async function startProvider() {
     setBusy(true);
@@ -120,14 +109,15 @@ export function PaidEligibilityClient() {
           credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
         }),
+        t("requestFailed"),
       );
       if (typeof body.state !== "string" || typeof body.startUrl !== "string") {
-        throw new Error("Identity provider handoff was incomplete.");
+        throw new Error(t("handoffIncomplete"));
       }
       sessionStorage.setItem("rateloop:eligibility-provider-state", body.state);
       window.location.assign(body.startUrl);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to open identity provider.");
+    } catch {
+      setError(t("providerFailed"));
       setBusy(false);
     }
   }
@@ -160,13 +150,14 @@ export function PaidEligibilityClient() {
             }),
           ),
         }),
+        t("requestFailed"),
       );
       sessionStorage.removeItem("rateloop:eligibility-provider-state");
       setProviderState(null);
-      window.history.replaceState({}, "", "/human/profile?section=paid-work");
+      window.history.replaceState({}, "", `${window.location.pathname}?section=paid-work`);
       await refresh();
     } catch (cause) {
-      capture(cause, "Unable to complete paid-task eligibility.");
+      capture(cause, t("completeFailed"));
     } finally {
       setBusy(false);
     }
@@ -174,10 +165,7 @@ export function PaidEligibilityClient() {
 
   async function keepAdvisoryOnly() {
     if (reviewerSource === "customer_invited" && !workspaceId.trim()) {
-      capture(
-        new EligibilityRequestError("Enter the inviting workspace before selecting advisory-only.", "workspaceId"),
-        "Unable to record the advisory-only choice.",
-      );
+      capture(new EligibilityRequestError(t("workspaceRequired"), "workspaceId"), t("advisoryFailed"));
       return;
     }
     setBusy(true);
@@ -195,12 +183,13 @@ export function PaidEligibilityClient() {
             ...(reviewerSource === "customer_invited" ? { workspaceId: workspaceId.trim() } : {}),
           }),
         }),
+        t("requestFailed"),
       );
       sessionStorage.removeItem("rateloop:eligibility-provider-state");
       setProviderState(null);
       await refresh();
     } catch (cause) {
-      capture(cause, "Unable to record the advisory-only choice.");
+      capture(cause, t("advisoryFailed"));
     } finally {
       setBusy(false);
     }
@@ -213,65 +202,70 @@ export function PaidEligibilityClient() {
   return (
     <div className="space-y-5">
       <Card as="section" className="rounded-2xl p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-base-content/10 pb-4">
           <div>
-            <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-green)]">Paid-task access</p>
-            <h2 className="mt-2 text-xl font-semibold">{statusLabel(state)}</h2>
+            <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-green)]">{t("eyebrow")}</p>
+            <h2 className="mt-2 text-xl font-semibold">
+              {!state
+                ? t("status.checking")
+                : state.status === "eligible" ||
+                    state.status === "declined" ||
+                    state.status === "review" ||
+                    state.status === "blocked" ||
+                    state.status === "expired"
+                  ? t(`status.${state.status}`)
+                  : t("status.notStarted")}
+            </h2>
           </div>
           <span
-            className={`rounded-md px-3 py-1.5 text-xs font-medium ${eligible ? "bg-emerald-300/10 text-emerald-100" : "bg-white/[0.05] text-base-content/55"}`}
+            className={`rounded-md px-3 py-1.5 text-xs font-medium ${eligible ? "bg-success/10 text-success" : "bg-base-content/[0.05] text-base-content/55"}`}
           >
-            {eligible ? "Capability checked" : (state?.status ?? "checking")}
+            {eligible ? t("capabilityChecked") : (state?.status ?? t("status.checking"))}
           </span>
         </div>
 
         {eligible ? (
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
             <div className="border-l-2 border-[var(--rateloop-blue)] pl-4">
-              <span className="text-xs text-base-content/55">Identity & age</span>
-              <strong className="mt-1 block">Verified</strong>
+              <span className="text-xs text-base-content/55">{t("identityAge")}</span>
+              <strong className="mt-1 block">{t("verified")}</strong>
             </div>
             <div className="border-l-2 border-[var(--rateloop-green)] pl-4">
-              <span className="text-xs text-base-content/55">Tax / DAC7</span>
-              <strong className="mt-1 block">{state.dac7Status === "complete" ? "Complete" : "Not required"}</strong>
+              <span className="text-xs text-base-content/55">{t("taxDac7")}</span>
+              <strong className="mt-1 block">
+                {state.dac7Status === "complete" ? t("complete") : t("notRequired")}
+              </strong>
             </div>
             <div className="border-l-2 border-[var(--rateloop-yellow)] pl-4">
-              <span className="text-xs text-base-content/55">Sanctions screening</span>
-              <strong className="mt-1 block">Current</strong>
+              <span className="text-xs text-base-content/55">{t("sanctions")}</span>
+              <strong className="mt-1 block">{t("current")}</strong>
             </div>
             <div className="border-l-2 border-[var(--rateloop-pink)] pl-4">
-              <span className="text-xs text-base-content/55">Payout wallet</span>
+              <span className="text-xs text-base-content/55">{t("payoutWallet")}</span>
               <strong className="mt-1 block break-all text-sm">{state.payoutAccount}</strong>
             </div>
-            <div className="border-l-2 border-white/20 pl-4 sm:col-span-2">
-              <span className="text-xs text-base-content/55">Current assurance capabilities</span>
+            <div className="border-l-2 border-base-content/20 pl-4 sm:col-span-2">
+              <span className="text-xs text-base-content/55">{t("capabilities")}</span>
               <strong className="mt-1 block text-sm font-medium capitalize">
-                {state.capabilities?.length
-                  ? state.capabilities.map(formatCapability).join(" · ")
-                  : "No provider claim exposed"}
+                {state.capabilities?.length ? state.capabilities.map(formatCapability).join(" · ") : t("noCapability")}
               </strong>
             </div>
           </div>
         ) : state?.status === "declined" ? (
           <div className="mt-6 space-y-4">
-            <p className="text-sm leading-6 text-base-content/65">
-              Your decision to keep this account advisory-only was recorded. You can still browse, calibrate, and do
-              unpaid reviews without providing paid-work tax data.
-            </p>
+            <p className="text-sm leading-6 text-base-content/65">{t("declinedDescription")}</p>
             <button
               type="button"
-              className="rounded-lg border border-white/15 px-4 py-2 text-sm"
+              className="rounded-lg border border-base-content/15 px-4 py-2 text-sm"
               onClick={() => setState({ status: "not_started" })}
             >
-              Reconsider paid work
+              {t("reconsider")}
             </button>
           </div>
         ) : accountAddress && (providerState || reviewerSource === "customer_invited") ? (
           <form className="mt-6 space-y-5" onSubmit={submitUnlock}>
             <p className="text-sm leading-6 text-base-content/60">
-              {reviewerSource === "customer_invited"
-                ? "Use a paid-enabled workspace invitation. The workspace attests adulthood; RateLoop does not verify age with documents or biometrics."
-                : "Identity assurance returned successfully. Complete the legal and payout fields before any paid voucher can be issued."}
+              {reviewerSource === "customer_invited" ? t("invitedIntro") : t("networkIntro")}
             </p>
             {reviewerSource === "customer_invited" ? (
               <button
@@ -279,14 +273,14 @@ export function PaidEligibilityClient() {
                 className="text-sm text-sky-200 underline underline-offset-4"
                 onClick={() => setReviewerSource("rateloop_network")}
               >
-                Use the RateLoop network path instead
+                {t("useNetwork")}
               </button>
             ) : null}
             <div className="grid gap-4 sm:grid-cols-2">
               {reviewerSource === "customer_invited" ? (
                 <div className="sm:col-span-2">
                   <Field
-                    label="Inviting workspace ID"
+                    label={t("workspaceId")}
                     value={workspaceId}
                     onChange={event => {
                       setWorkspaceId(event.target.value);
@@ -299,7 +293,7 @@ export function PaidEligibilityClient() {
                 </div>
               ) : null}
               <Field
-                label="Residence country"
+                label={t("residence")}
                 className="uppercase"
                 format="countryCode"
                 value={form.declaredResidenceCountry}
@@ -308,13 +302,11 @@ export function PaidEligibilityClient() {
                 error={fieldErrors.declaredResidenceCountry}
               />
               {!residenceComplete ? (
-                <p className="self-end pb-3 text-xs leading-5 text-base-content/55">
-                  Enter the two-letter residence country first. Only EU residents are asked for the DAC7 dataset.
-                </p>
+                <p className="self-end pb-3 text-xs leading-5 text-base-content/55">{t("residenceHelp")}</p>
               ) : (
                 <>
                   <Field
-                    label="Legal name"
+                    label={t("legalName")}
                     value={form.fullName}
                     onChange={event => update("fullName", event.target.value)}
                     maxLength={300}
@@ -323,7 +315,7 @@ export function PaidEligibilityClient() {
                     error={fieldErrors.fullName}
                   />
                   <Field
-                    label="Birth date"
+                    label={t("birthDate")}
                     type="date"
                     value={form.birthDate}
                     onChange={event => update("birthDate", event.target.value)}
@@ -334,7 +326,7 @@ export function PaidEligibilityClient() {
                   {collectDac7 ? (
                     <>
                       <Field
-                        label="Tax residence country"
+                        label={t("taxResidence")}
                         className="uppercase"
                         format="countryCode"
                         value={form.taxResidenceCountry}
@@ -343,7 +335,7 @@ export function PaidEligibilityClient() {
                         error={fieldErrors.taxResidenceCountry}
                       />
                       <Field
-                        label="Street address"
+                        label={t("street")}
                         value={form.streetAddress}
                         onChange={event => update("streetAddress", event.target.value)}
                         maxLength={300}
@@ -352,7 +344,7 @@ export function PaidEligibilityClient() {
                         error={fieldErrors.streetAddress}
                       />
                       <Field
-                        label="City"
+                        label={t("city")}
                         value={form.city}
                         onChange={event => update("city", event.target.value)}
                         maxLength={300}
@@ -361,7 +353,7 @@ export function PaidEligibilityClient() {
                         error={fieldErrors.city}
                       />
                       <Field
-                        label="Postal code"
+                        label={t("postalCode")}
                         value={form.postalCode}
                         onChange={event => update("postalCode", event.target.value)}
                         maxLength={40}
@@ -370,18 +362,18 @@ export function PaidEligibilityClient() {
                         error={fieldErrors.postalCode}
                       />
                       <SelectField
-                        label="Tax identifier type"
+                        label={t("taxIdType")}
                         value={form.taxIdentificationKind}
                         onChange={event =>
                           update("taxIdentificationKind", event.target.value as "tin" | "place_of_birth")
                         }
                       >
-                        <option value="tin">Tax identification number</option>
-                        <option value="place_of_birth">Place of birth (when no TIN is issued)</option>
+                        <option value="tin">{t("tinOption")}</option>
+                        <option value="place_of_birth">{t("birthOption")}</option>
                       </SelectField>
                       {form.taxIdentificationKind === "tin" ? (
                         <Field
-                          label="Tax identification number"
+                          label={t("tin")}
                           value={form.tin}
                           onChange={event => update("tin", event.target.value)}
                           maxLength={120}
@@ -392,7 +384,7 @@ export function PaidEligibilityClient() {
                       ) : (
                         <>
                           <Field
-                            label="Place of birth city"
+                            label={t("birthCity")}
                             value={form.placeOfBirthCity}
                             onChange={event => update("placeOfBirthCity", event.target.value)}
                             maxLength={300}
@@ -400,7 +392,7 @@ export function PaidEligibilityClient() {
                             error={fieldErrors.placeOfBirthCity}
                           />
                           <Field
-                            label="Place of birth country"
+                            label={t("birthCountry")}
                             className="uppercase"
                             format="countryCode"
                             value={form.placeOfBirthCountry}
@@ -429,10 +421,7 @@ export function PaidEligibilityClient() {
                   aria-invalid={fieldErrors.sanctionsConsent ? true : undefined}
                   required
                 />
-                <span>
-                  I consent to eligibility and sanctions screening for paid work. Screening affects future vouchers only
-                  and never an already accepted payment.
-                </span>
+                <span>{t("consent")}</span>
               </label>
             ) : null}
             {fieldErrors.sanctionsConsent ? (
@@ -441,18 +430,18 @@ export function PaidEligibilityClient() {
               </p>
             ) : null}
             <button className="rateloop-gradient-action w-full px-6" disabled={busy || !residenceComplete}>
-              {busy ? "Completing…" : "Unlock paid tasks"}
+              {busy ? t("completing") : t("unlock")}
             </button>
             <button
               type="button"
-              className="w-full rounded-lg border border-white/15 px-6 py-3 text-sm"
+              className="w-full rounded-lg border border-base-content/15 px-6 py-3 text-sm"
               disabled={busy}
               onClick={() => void keepAdvisoryOnly()}
             >
-              Keep advisory-only
+              {t("keepAdvisory")}
             </button>
             {formError ? (
-              <p className="rounded-lg bg-red-400/10 p-3 text-sm text-red-100" role="alert">
+              <p className="rounded-lg bg-error/10 p-3 text-sm text-error" role="alert">
                 {formError}
               </p>
             ) : null}
@@ -460,45 +449,39 @@ export function PaidEligibilityClient() {
         ) : (
           <div className="mt-6">
             <p className="text-sm leading-6 text-base-content/60">
-              {state && !accountAddress
-                ? "Add a payout wallet before starting paid-work verification. Private assignments remain available without one."
-                : "Choose invited paid work without an identity vendor, or network paid work with proof-of-human assurance. Residence is asked first; only EU residents provide the full DAC7 dataset."}
+              {state && !accountAddress ? t("walletRequired") : t("choosePath")}
             </p>
             <div className="mt-5 grid gap-2 sm:grid-cols-2">
               <button
                 type="button"
-                className={`rounded-lg border px-4 py-3 text-left text-sm ${reviewerSource === "customer_invited" ? "border-[var(--rateloop-green)] bg-emerald-300/10" : "border-white/10 bg-white/[0.03]"}`}
+                className={`rounded-lg border px-4 py-3 text-left text-sm ${reviewerSource === "customer_invited" ? "border-[var(--rateloop-green)] bg-success/10" : "border-base-content/10 bg-base-content/[0.03]"}`}
                 onClick={() => setReviewerSource("customer_invited")}
               >
-                <strong className="block">Workspace invited</strong>
-                <span className="mt-1 block text-xs text-base-content/55">
-                  Customer-attested age · no identity vendor
-                </span>
+                <strong className="block">{t("workspaceInvited")}</strong>
+                <span className="mt-1 block text-xs text-base-content/55">{t("workspacePath")}</span>
               </button>
               <button
                 type="button"
-                className={`rounded-lg border px-4 py-3 text-left text-sm ${reviewerSource === "rateloop_network" ? "border-[var(--rateloop-blue)] bg-sky-300/10" : "border-white/10 bg-white/[0.03]"}`}
+                className={`rounded-lg border px-4 py-3 text-left text-sm ${reviewerSource === "rateloop_network" ? "border-[var(--rateloop-blue)] bg-sky-300/10" : "border-base-content/10 bg-base-content/[0.03]"}`}
                 onClick={() => setReviewerSource("rateloop_network")}
               >
-                <strong className="block">RateLoop network</strong>
-                <span className="mt-1 block text-xs text-base-content/55">
-                  Proof-of-human and age assurance required
-                </span>
+                <strong className="block">{t("network")}</strong>
+                <span className="mt-1 block text-xs text-base-content/55">{t("networkPath")}</span>
               </button>
             </div>
             {state && !accountAddress ? (
               <div className="mt-5 flex flex-wrap gap-3">
                 <Link href="/settings/wallets?use=payout" className="rateloop-gradient-action inline-flex px-6">
-                  Add payout wallet
+                  {t("addWallet")}
                 </Link>
                 {reviewerSource === "rateloop_network" ? (
                   <button
                     type="button"
-                    className="rounded-lg border border-white/15 px-6 py-3 text-sm"
+                    className="rounded-lg border border-base-content/15 px-6 py-3 text-sm"
                     disabled={busy}
                     onClick={() => void keepAdvisoryOnly()}
                   >
-                    Keep advisory-only
+                    {t("keepAdvisory")}
                   </button>
                 ) : null}
               </div>
@@ -510,41 +493,35 @@ export function PaidEligibilityClient() {
                   disabled={busy || !accountAddress}
                   onClick={() => void startProvider()}
                 >
-                  {busy ? "Opening provider…" : accountAddress ? "Verify identity" : "Checking account…"}
+                  {busy ? t("opening") : accountAddress ? t("verifyIdentity") : t("checkingAccount")}
                 </button>
                 <button
                   type="button"
-                  className="rounded-lg border border-white/15 px-6 py-3 text-sm"
+                  className="rounded-lg border border-base-content/15 px-6 py-3 text-sm"
                   disabled={busy || !accountAddress}
                   onClick={() => void keepAdvisoryOnly()}
                 >
-                  Keep advisory-only
+                  {t("keepAdvisory")}
                 </button>
               </div>
             ) : null}
           </div>
         )}
         {state?.blockedReason ? (
-          <p className="mt-5 rounded-lg bg-amber-300/10 p-3 text-sm text-amber-100">
-            {state.blockedReason === "legal_eligibility_review"
-              ? "Paid eligibility needs neutral legal review. You can continue advisory calibration while the review is open."
-              : "Paid eligibility could not be completed with the current evidence."}
+          <p className="mt-5 rounded-lg bg-warning/10 p-3 text-sm text-warning">
+            {state.blockedReason === "legal_eligibility_review" ? t("legalReview") : t("evidenceFailed")}
           </p>
         ) : null}
-        {error ? <p className="mt-5 rounded-lg bg-red-400/10 p-3 text-sm text-red-100">{error}</p> : null}
+        {error ? <p className="mt-5 rounded-lg bg-error/10 p-3 text-sm text-error">{error}</p> : null}
       </Card>
 
       {state?.status !== "declined" ? (
         <Card as="aside" className="rounded-2xl p-6">
-          <p className="font-mono text-xs uppercase tracking-widest text-base-content/55">Why this happens now</p>
-          <h2 className="mt-2 text-xl font-semibold">No blocked earnings later</h2>
-          <p className="mt-4 text-sm leading-6 text-base-content/60">
-            Every paid-work gate is complete before the first voucher. Browsing and advisory calibration remain
-            available without this step.
-          </p>
-          <p className="mt-4 border-l-2 border-[var(--rateloop-yellow)] bg-amber-300/[0.07] py-2 pl-3 text-xs leading-5 text-base-content/60">
-            Normal claims publicly link a one-time vote key to its per-round payout destination. Recovery stays
-            client-controlled.
+          <p className="font-mono text-xs uppercase tracking-widest text-base-content/55">{t("whyNow")}</p>
+          <h2 className="mt-2 text-xl font-semibold">{t("noBlockedEarnings")}</h2>
+          <p className="mt-4 text-sm leading-6 text-base-content/60">{t("timing")}</p>
+          <p className="mt-4 border-l-2 border-[var(--rateloop-yellow)] bg-warning/[0.07] py-2 pl-3 text-xs leading-5 text-base-content/60">
+            {t("claimPrivacy")}
           </p>
         </Card>
       ) : null}

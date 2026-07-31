@@ -1,6 +1,8 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { useLocale } from "next-intl";
+import { LocalizedSharedContent } from "~~/components/tokenless/LocalizedSharedContent";
 import { OneTimeSecretNotice } from "~~/components/tokenless/agents/OneTimeSecretNotice";
 import { ChoiceInput, Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
@@ -43,9 +45,9 @@ async function readJson(response: Response) {
   return body;
 }
 
-function dateLabel(value: string | null) {
+function dateLabel(value: string | null, locale: string) {
   if (!value) return "Never";
-  return new Intl.DateTimeFormat("en", { day: "numeric", month: "short", year: "numeric" }).format(new Date(value));
+  return new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", year: "numeric" }).format(new Date(value));
 }
 
 function expiresInNinetyDays() {
@@ -55,6 +57,7 @@ function expiresInNinetyDays() {
 }
 
 export function WorkspaceApiKeysPanel({ workspaceId }: { workspaceId: string }) {
+  const locale = useLocale();
   const [apiKeys, setApiKeys] = useState<ApiKeySummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -77,9 +80,9 @@ export function WorkspaceApiKeysPanel({ workspaceId }: { workspaceId: string }) 
     })
       .then(readJson)
       .then(body => setApiKeys(body.apiKeys as ApiKeySummary[]))
-      .catch(error => {
+      .catch(() => {
         if (!controller.signal.aborted) {
-          setLoadError(error instanceof Error ? error.message : "Unable to load API keys.");
+          setLoadError("Unable to load API keys.");
         }
       })
       .finally(() => {
@@ -141,139 +144,144 @@ export function WorkspaceApiKeysPanel({ workspaceId }: { workspaceId: string }) 
   }
 
   return (
-    <section className="mt-5 rounded-xl border border-white/10 bg-base-content/[0.025] p-5" aria-labelledby="api-keys">
-      <div>
-        <h2 id="api-keys" className="text-2xl font-semibold">
-          API keys
-        </h2>
-        <p className="mt-2 text-sm leading-6 text-base-content/60">
-          Create scoped credentials for an agent or server integration. New keys expire after 90 days and secrets are
-          stored only as hashes.
-        </p>
-      </div>
+    <LocalizedSharedContent>
+      <section
+        className="mt-5 rounded-xl border border-base-content/10 bg-base-content/[0.025] p-5"
+        aria-labelledby="api-keys"
+      >
+        <div>
+          <h2 id="api-keys" className="text-2xl font-semibold">
+            API keys
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-base-content/60">
+            Create scoped credentials for an agent or server integration. New keys expire after 90 days and secrets are
+            stored only as hashes.
+          </p>
+        </div>
 
-      <form className="mt-5 space-y-4" onSubmit={createApiKey}>
-        <Field
-          id="workspace-api-key-name"
-          label="Key name"
-          value={name}
-          maxLength={120}
-          required
-          autoComplete="off"
-          placeholder="Production agent"
-          error={fieldErrors.name}
-          onChange={event => {
-            setName(event.target.value);
-            clear("name");
-          }}
-        />
-        <fieldset>
-          <legend className="text-sm font-medium text-base-content/80">Permissions</legend>
-          <div className="mt-2 grid gap-2 sm:grid-cols-2">
-            {WORKSPACE_API_KEY_SCOPES.map(scope => {
-              const details = WORKSPACE_API_KEY_SCOPE_DETAILS[scope];
-              return (
-                <label
-                  key={scope}
-                  htmlFor={`workspace-api-key-scope-${scope}`}
-                  className="flex min-h-11 items-start gap-3 rounded-lg border border-white/10 px-3 py-3"
-                >
-                  <ChoiceInput
-                    id={`workspace-api-key-scope-${scope}`}
-                    className="checkbox-sm mt-0.5"
-                    type="checkbox"
-                    checked={scopes.includes(scope)}
-                    onChange={event => {
-                      setScopes(current =>
-                        event.target.checked ? [...current, scope] : current.filter(candidate => candidate !== scope),
-                      );
-                      clear("scopes");
-                    }}
-                  />
-                  <span>
-                    <span className="block text-sm font-medium">{details.label}</span>
-                    <span className="mt-1 block text-xs leading-5 text-base-content/55">{details.description}</span>
-                  </span>
-                </label>
-              );
-            })}
-          </div>
-          {fieldErrors.scopes ? (
-            <p className="mt-2 text-sm text-error" role="alert">
-              {fieldErrors.scopes}
+        <form className="mt-5 space-y-4" onSubmit={createApiKey}>
+          <Field
+            id="workspace-api-key-name"
+            label="Key name"
+            value={name}
+            maxLength={120}
+            required
+            autoComplete="off"
+            placeholder="Production agent"
+            error={fieldErrors.name}
+            onChange={event => {
+              setName(event.target.value);
+              clear("name");
+            }}
+          />
+          <fieldset>
+            <legend className="text-sm font-medium text-base-content/80">Permissions</legend>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              {WORKSPACE_API_KEY_SCOPES.map(scope => {
+                const details = WORKSPACE_API_KEY_SCOPE_DETAILS[scope];
+                return (
+                  <label
+                    key={scope}
+                    htmlFor={`workspace-api-key-scope-${scope}`}
+                    className="flex min-h-11 items-start gap-3 rounded-lg border border-base-content/10 px-3 py-3"
+                  >
+                    <ChoiceInput
+                      id={`workspace-api-key-scope-${scope}`}
+                      className="checkbox-sm mt-0.5"
+                      type="checkbox"
+                      checked={scopes.includes(scope)}
+                      onChange={event => {
+                        setScopes(current =>
+                          event.target.checked ? [...current, scope] : current.filter(candidate => candidate !== scope),
+                        );
+                        clear("scopes");
+                      }}
+                    />
+                    <span>
+                      <span className="block text-sm font-medium">{details.label}</span>
+                      <span className="mt-1 block text-xs leading-5 text-base-content/55">{details.description}</span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+            {fieldErrors.scopes ? (
+              <p className="mt-2 text-sm text-error" role="alert">
+                {fieldErrors.scopes}
+              </p>
+            ) : null}
+          </fieldset>
+          <button className="btn rateloop-secondary-action" type="submit" disabled={busy || scopes.length === 0}>
+            {busy ? "Creating…" : "Create API key"}
+          </button>
+          {formError ? (
+            <p className="rounded-lg bg-error/10 p-3 text-sm text-error" role="alert">
+              {formError}
             </p>
           ) : null}
-        </fieldset>
-        <button className="btn rateloop-secondary-action" type="submit" disabled={busy || scopes.length === 0}>
-          {busy ? "Creating…" : "Create API key"}
-        </button>
-        {formError ? (
-          <p className="rounded-lg bg-red-400/10 p-3 text-sm text-red-100" role="alert">
-            {formError}
-          </p>
+        </form>
+
+        {revealedToken ? (
+          <OneTimeSecretNotice label="this API key" value={revealedToken} onDismiss={() => setRevealedToken(null)} />
         ) : null}
-      </form>
 
-      {revealedToken ? (
-        <OneTimeSecretNotice label="this API key" value={revealedToken} onDismiss={() => setRevealedToken(null)} />
-      ) : null}
-
-      <AsyncSection
-        className="mt-6"
-        loading={loading}
-        loadingLabel="Loading API keys"
-        error={loadError}
-        empty={apiKeys.length === 0}
-        emptyTitle="No API keys yet."
-      >
-        <div className="mt-6 space-y-3" aria-live="polite">
-          {apiKeys.map(apiKey => (
-            <article key={apiKey.apiKeyId} className="rounded-lg border border-white/10 p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h3 className="font-medium">{apiKey.name}</h3>
-                  <p className="mt-1 font-mono text-xs text-base-content/55">{apiKey.keyPrefix}…</p>
-                  <p className="mt-2 text-xs text-base-content/55">
-                    Expires {dateLabel(apiKey.expiresAt)} · Last used {dateLabel(apiKey.lastUsedAt)}
-                  </p>
+        <AsyncSection
+          className="mt-6"
+          loading={loading}
+          loadingLabel="Loading API keys"
+          error={loadError}
+          empty={apiKeys.length === 0}
+          emptyTitle="No API keys yet."
+        >
+          <div className="mt-6 space-y-3" aria-live="polite">
+            {apiKeys.map(apiKey => (
+              <article key={apiKey.apiKeyId} className="rounded-lg border border-base-content/10 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-medium">{apiKey.name}</h3>
+                    <p className="mt-1 font-mono text-xs text-base-content/55">{apiKey.keyPrefix}…</p>
+                    <p className="mt-2 text-xs text-base-content/55">
+                      Expires {dateLabel(apiKey.expiresAt, locale)} · Last used {dateLabel(apiKey.lastUsedAt, locale)}
+                    </p>
+                  </div>
+                  {apiKey.revokedAt ? (
+                    <span className="rounded-full bg-base-content/[0.08] px-3 py-1 text-xs">Revoked</span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-sm border-error/20 bg-error/[0.06] text-error"
+                      disabled={busy}
+                      onClick={() => setRevokeConfirmation(apiKey)}
+                    >
+                      Revoke
+                    </button>
+                  )}
                 </div>
-                {apiKey.revokedAt ? (
-                  <span className="rounded-full bg-base-content/[0.08] px-3 py-1 text-xs">Revoked</span>
-                ) : (
-                  <button
-                    type="button"
-                    className="btn btn-sm border-red-300/20 bg-red-300/[0.06] text-red-100"
-                    disabled={busy}
-                    onClick={() => setRevokeConfirmation(apiKey)}
-                  >
-                    Revoke
-                  </button>
-                )}
-              </div>
-              <ul className="mt-3 flex flex-wrap gap-2" aria-label={`Permissions for ${apiKey.name}`}>
-                {apiKey.scopes.map(scope => (
-                  <li
-                    key={scope}
-                    className="inline-flex flex-wrap items-baseline gap-x-2 rounded-md bg-base-content/[0.05] px-2.5 py-1.5 text-xs"
-                  >
-                    <span>{WORKSPACE_API_KEY_SCOPE_DETAILS[scope].label}</span>
-                    <code className="text-base-content/55">{scope}</code>
-                  </li>
-                ))}
-              </ul>
-            </article>
-          ))}
-        </div>
-      </AsyncSection>
-      <ConfirmDialog
-        open={revokeConfirmation !== null}
-        title={revokeConfirmation ? `Revoke “${revokeConfirmation.name}”?` : "Revoke this API key?"}
-        description="Existing integrations using it will stop working."
-        confirmLabel="Revoke API key"
-        busy={busy}
-        onCancel={() => setRevokeConfirmation(null)}
-        onConfirm={() => void confirmApiKeyRevocation()}
-      />
-    </section>
+                <ul className="mt-3 flex flex-wrap gap-2" aria-label={`Permissions for ${apiKey.name}`}>
+                  {apiKey.scopes.map(scope => (
+                    <li
+                      key={scope}
+                      className="inline-flex flex-wrap items-baseline gap-x-2 rounded-md bg-base-content/[0.05] px-2.5 py-1.5 text-xs"
+                    >
+                      <span>{WORKSPACE_API_KEY_SCOPE_DETAILS[scope].label}</span>
+                      <code className="text-base-content/55">{scope}</code>
+                    </li>
+                  ))}
+                </ul>
+              </article>
+            ))}
+          </div>
+        </AsyncSection>
+        <ConfirmDialog
+          open={revokeConfirmation !== null}
+          title={revokeConfirmation ? `Revoke “${revokeConfirmation.name}”?` : "Revoke this API key?"}
+          description="Existing integrations using it will stop working."
+          confirmLabel="Revoke API key"
+          busy={busy}
+          onCancel={() => setRevokeConfirmation(null)}
+          onConfirm={() => void confirmApiKeyRevocation()}
+        />
+      </section>
+    </LocalizedSharedContent>
   );
 }

@@ -7,11 +7,28 @@ type HumanReviewConfirmationInput = {
   panelSize: number | null;
 };
 
+type HumanReviewConfirmationCopy = {
+  automatic: string;
+  payment: (amount: string) => string;
+  save: string;
+};
+
+const defaultCopy: HumanReviewConfirmationCopy = {
+  automatic:
+    "The agent will be able to send review requests automatically, without another approval. Material already sent cannot be recalled.",
+  payment: amount =>
+    `Reviewer payments can total up to ${amount} per request, plus the base-review fee and attempt reserve.`,
+  save: "Save this configuration?",
+};
+
 function nonNegativeAtomic(value: string | null) {
   return value && /^\d+$/u.test(value) ? BigInt(value) : 0n;
 }
 
-export function humanReviewConfirmationMessage(input: HumanReviewConfirmationInput) {
+export function humanReviewConfirmationMessage(
+  input: HumanReviewConfirmationInput,
+  copy: HumanReviewConfirmationCopy = defaultCopy,
+) {
   const panelSize =
     Number.isSafeInteger(input.panelSize) && Number(input.panelSize) > 0 ? BigInt(input.panelSize!) : 0n;
   const maximumReviewerPayment =
@@ -19,15 +36,11 @@ export function humanReviewConfirmationMessage(input: HumanReviewConfirmationInp
   const consequences: string[] = [];
 
   if (input.authority === "ask_automatically") {
-    consequences.push(
-      "The agent will be able to send review requests automatically, without another approval. Material already sent cannot be recalled.",
-    );
+    consequences.push(copy.automatic);
   }
   if (maximumReviewerPayment > 0n) {
-    consequences.push(
-      `Reviewer payments can total up to ${formatUsdcAtomic(maximumReviewerPayment)} per request, plus the base-review fee and attempt reserve.`,
-    );
+    consequences.push(copy.payment(formatUsdcAtomic(maximumReviewerPayment)));
   }
 
-  return consequences.length ? `${consequences.join("\n\n")}\n\nSave this configuration?` : null;
+  return consequences.length ? `${consequences.join("\n\n")}\n\n${copy.save}` : null;
 }

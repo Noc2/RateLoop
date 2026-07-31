@@ -65,7 +65,13 @@ function NotificationIcon({ kind }: { kind: NotificationKind }) {
   );
 }
 
-export function RateLoopNotificationProvider({ children }: { children: ReactNode }) {
+export function RateLoopNotificationProvider({
+  children,
+  dismissLabel = "Dismiss notification",
+}: {
+  children: ReactNode;
+  dismissLabel?: string;
+}) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const nextId = useRef(0);
   const timers = useRef(new Map<number, number>());
@@ -129,8 +135,8 @@ export function RateLoopNotificationProvider({ children }: { children: ReactNode
             <p className="min-w-0 flex-1 break-words leading-6 whitespace-pre-line">{notification.message}</p>
             <button
               type="button"
-              className="-m-1 shrink-0 rounded-md p-1 text-base-content/65 transition hover:text-base-content focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-              aria-label="Dismiss notification"
+              className="-m-1 shrink-0 rounded-md p-1 text-base-content/65 transition hover:text-base-content focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-base-content"
+              aria-label={dismissLabel}
               onClick={() => dismiss(notification.id)}
             >
               <svg aria-hidden="true" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">

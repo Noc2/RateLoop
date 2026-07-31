@@ -1,8 +1,7 @@
 "use client";
 
 import { type ReactNode, useCallback, useReducer, useState } from "react";
-import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { WorkspaceSettingsClient } from "../WorkspaceSettingsClient";
 import { WorkspaceStopBanner } from "../WorkspaceStopControl";
 import { Button } from "../ui/Button";
@@ -11,6 +10,7 @@ import { AgentOverviewMonitor } from "./AgentOverviewMonitor";
 import { AgentRegistryPanel } from "./AgentRegistryPanel";
 import { AgentReviewsPanel } from "./AgentReviewsPanel";
 import { type AgentTab, AgentTabs } from "./AgentTabs";
+import { useAgentTranslations } from "./AgentsLocaleProvider";
 import { EvaluationDashboardPanel } from "./EvaluationDashboardPanel";
 import { EvidenceWorkspacePanel } from "./EvidenceWorkspacePanel";
 import { FeedbackBonusAwardInbox } from "./FeedbackBonusAwardInbox";
@@ -27,6 +27,7 @@ import {
 import { AgentSetupFlow } from "./setup/AgentSetupFlow";
 import { WorkspaceSetupStart } from "./setup/WorkspaceSetupStart";
 import { Card } from "~~/components/tokenless/ui/Card";
+import { Link, useRouter } from "~~/i18n/navigation";
 import type { WorkspaceAgentSetupView } from "~~/lib/tokenless/workspaceAgentSetup";
 
 type Workspace = { workspaceId: string; name: string; role: string };
@@ -54,6 +55,7 @@ export function AgentWorkspacePanels({
   initialWorkspaceId: string;
   workspaces: Workspace[];
 }) {
+  const t = useAgentTranslations("workspace");
   const router = useRouter();
   const searchParams = useSearchParams();
   const workspaceId = initialWorkspaceId;
@@ -85,11 +87,9 @@ export function AgentWorkspacePanels({
     return (
       <Card as="section" className="rounded-2xl p-6 sm:p-8" aria-labelledby="choose-workspace-heading">
         <h1 id="choose-workspace-heading" className="text-3xl font-semibold">
-          Choose a workspace
+          {t("chooseTitle")}
         </h1>
-        <p className="mt-3 max-w-2xl text-sm leading-6 text-base-content/65">
-          The workspace in this link is unavailable. Choose one you can access.
-        </p>
+        <p className="mt-3 max-w-2xl text-sm leading-6 text-base-content/65">{t("chooseDescription")}</p>
         <div className="mt-6 flex flex-wrap gap-3">
           {workspaces.map(option => (
             <Link
@@ -152,11 +152,9 @@ export function AgentWorkspacePanels({
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 id="agent-version-management-heading" className="font-semibold">
-                  Agent versions
+                  {t("versionsTitle")}
                 </h2>
-                <p className="mt-1 text-sm text-base-content/60">
-                  Update workflow versions or view archived agents when needed.
-                </p>
+                <p className="mt-1 text-sm text-base-content/60">{t("versionsDescription")}</p>
               </div>
               <Button
                 type="button"
@@ -166,11 +164,11 @@ export function AgentWorkspacePanels({
                 aria-expanded={showAgentManagement}
                 onClick={() => setAgentManagementWorkspaceId(current => (current === workspaceId ? null : workspaceId))}
               >
-                {showAgentManagement ? "Done" : "Update agent version"}
+                {showAgentManagement ? t("done") : t("updateVersion")}
               </Button>
             </div>
             {showAgentManagement ? (
-              <div id="agent-version-management" className="mt-5 border-t border-white/10 pt-5">
+              <div id="agent-version-management" className="mt-5 border-t border-base-content/10 pt-5">
                 <AgentRegistryPanel
                   workspaceId={workspaceId}
                   agentRevision={agentRevision}

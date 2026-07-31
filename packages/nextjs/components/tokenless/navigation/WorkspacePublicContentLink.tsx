@@ -1,12 +1,12 @@
 "use client";
 
 import { type ReactNode, Suspense } from "react";
-import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import {
   workspacePublicContentHref,
   workspaceReturnPathForLocation,
 } from "~~/components/tokenless/navigation/workspaceReturnPath";
+import { Link, usePathname } from "~~/i18n/navigation";
 
 function ResolvedWorkspacePublicContentLink({
   children,

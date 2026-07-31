@@ -9,6 +9,7 @@ test("approval inbox formats exact atomic USDC values", () => {
 
 test("approval inbox shows frozen terms and submits optimistic approve or reject decisions", () => {
   const source = readFileSync(new URL("./HumanReviewApprovalInbox.tsx", import.meta.url), "utf8");
+  const catalogSource = readFileSync(new URL("../../../messages/en/agents.json", import.meta.url), "utf8");
   for (const label of [
     "Reviewers",
     "Answer window",
@@ -24,7 +25,7 @@ test("approval inbox shows frozen terms and submits optimistic approve or reject
     "Source commitment",
     "Suggestion commitment",
   ]) {
-    assert.match(source, new RegExp(label));
+    assert.match(catalogSource, new RegExp(label));
   }
   assert.match(source, /preparedRequestHash: approval\.preparedRequestHash/);
   assert.match(source, /derivedEconomicsHash: approval\.derivedEconomicsHash/);
@@ -35,8 +36,10 @@ test("approval inbox shows frozen terms and submits optimistic approve or reject
   assert.match(source, /confirmApprovalDecision/);
   assert.match(source, /rollbackApprovalDecision/);
   assert.doesNotMatch(source, /await load\(undefined, false\)/);
-  assert.match(source, /Could not \$\{action\} the request/);
-  assert.match(source, /approvals\.length > 0 \? \([\s\S]*Keys: J\/K move · A approve · D decline/);
+  assert.match(source, /setError\(copy\("decisionFailed", \{ action \}\)\)/);
+  assert.match(catalogSource, /Could not \{action\} the request/);
+  assert.match(source, /approvals\.length > 0 \? \([\s\S]*<AgentText id="keyboardShortcuts" \/>/);
+  assert.match(catalogSource, /Keys: J\/K move · A approve · D decline/);
   assert.match(source, /aria-keyshortcuts=\{approvals\.length > 0 \? "J K A D" : undefined\}/);
   assert.match(source, /key === "j" \|\| key === "k"/);
 });

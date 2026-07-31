@@ -1,8 +1,9 @@
 "use client";
 
 import { type FormEvent, Fragment, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { AgentConnectionTroubleshooting } from "../AgentConnectionTroubleshooting";
+import { AgentText } from "../AgentText";
+import { useAgentTranslations } from "../AgentsLocaleProvider";
 import {
   ReviewAuthorityFields,
   ReviewFrequencyFields,
@@ -48,7 +49,6 @@ import {
   type ReviewFrequencyFormValues,
   buildReviewFrequencySelection,
   reviewFrequencyFormValues,
-  reviewFrequencySummary,
 } from "./reviewFrequency";
 import {
   MAX_REVIEW_PANEL_SIZE,
@@ -62,7 +62,7 @@ import {
 import { InfoPopover } from "~~/components/tokenless/InfoPopover";
 import { useRateLoopNotifications } from "~~/components/tokenless/RateLoopNotificationProvider";
 import { humanReviewConfirmationMessage } from "~~/components/tokenless/agents/humanReviewConfirmation";
-import { reviewPolicyCopy } from "~~/components/tokenless/agents/reviewPolicyCopy";
+import { useLocalizedReviewPolicyCopy } from "~~/components/tokenless/agents/reviewPolicyCopy";
 import { ChoiceInput, Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { WorkspacePublicContentLink } from "~~/components/tokenless/navigation/WorkspacePublicContentLink";
@@ -71,6 +71,7 @@ import { Card } from "~~/components/tokenless/ui/Card";
 import { SegmentedChoice } from "~~/components/tokenless/ui/SegmentedChoice";
 import { useConfirmDialog } from "~~/components/tokenless/ui/useConfirmDialog";
 import { DurationInput } from "~~/components/ui/DurationInput";
+import { useRouter } from "~~/i18n/navigation";
 import { ADAPTIVE_MONITORING_FLOOR_BPS } from "~~/lib/tokenless/adaptiveReviewPolicy";
 import { type AgentSetupScreenStep, agentSetupUrl } from "~~/lib/tokenless/agentSetupNavigation";
 import { configuredHumanReviewLaneForSelection, configuredHumanReviewLanes } from "~~/lib/tokenless/reviewCapabilities";
@@ -103,15 +104,6 @@ const ACTIVE_CONNECTION_STATES = new Set([
   "action_required",
 ]);
 
-const REVIEW_AUDIENCE_OPTIONS = [
-  ["public_network", reviewPolicyCopy.audience.rateLoopNetwork, "RateLoop network reviewers."],
-  [
-    "private_invited",
-    reviewPolicyCopy.audience.invited,
-    "Only people you invite can review private workspace material.",
-  ],
-] as const;
-
 const CONFIGURED_HUMAN_REVIEW_LANES = configuredHumanReviewLanes();
 
 function configuredAudienceOption(audience: ReviewAudienceFormValues["audience"]) {
@@ -136,42 +128,6 @@ type PrivateExpertiseCoverage = {
     }
   >;
 };
-
-function reviewAuthoritySummary(authority: AgentSetupReviewDraft["authority"], requiresFundingPermission: boolean) {
-  if (authority === "prepare_for_approval") return "Prepare each required request and wait for owner approval";
-  if (authority === "ask_automatically") {
-    return requiresFundingPermission
-      ? "Send within the owner-approved publishing and funding grant"
-      : "Send within the owner-approved publishing grant; no funding permission is needed";
-  }
-  return "Check whether review is required; do not prepare, send, or spend";
-}
-
-function finalizationMessage(postcondition: SetupFinalizationPostcondition | null) {
-  if (!postcondition) return null;
-  if (postcondition.canSend) return "Ready. This agent can send eligible review requests to the saved reviewers.";
-  if (postcondition.deliveryAuthority !== "ask_automatically") {
-    return "Setup is complete. The agent will stop at the authority level you selected.";
-  }
-  const routing = postcondition.privateRouting;
-  if (routing?.reason === "reviewer_seats_insufficient") {
-    const missing = Math.max(0, Number(routing.panelSize ?? 0) - Number(routing.syncedReviewerCount ?? 0));
-    return `Setup is complete. Automatic requests will unlock after ${missing || "enough"} more reviewer${missing === 1 ? "" : "s"} join.`;
-  }
-  if (routing?.reason === "expertise_coverage_insufficient") {
-    return "Setup is complete. Automatic requests will unlock when the required specialist coverage is confirmed.";
-  }
-  if (routing?.reason === "cohort_capacity_insufficient" || routing?.reason === "prior_managed_cohort_busy") {
-    return "Setup is complete. Automatic requests will resume when the current reviewer assignments finish.";
-  }
-  return "Setup is complete, but automatic requests need reviewer routing to be checked again.";
-}
-
-const HYBRID_SPECIALIST_UNAVAILABLE =
-  "Specialist areas can’t be added while both invited and network reviewers are used. Choose one reviewer source above to add areas, or select “No specialist needed” to continue without them.";
-
-const SAVED_AUTOMATIC_AUTHORITY_NOTICE =
-  "Setup can’t preserve automatic sending with these choices. Saving will change it to Prepare for approval.";
 
 function automaticGrantReady(offer: WorkspaceAgentSetupView["capabilities"]["automaticGrantOffer"]) {
   return Boolean(offer?.available && offer.integrationId && offer.allowedWorkflowKeys.length > 0);
@@ -242,7 +198,42 @@ function stepBefore(step: AgentSetupScreenStep): AgentSetupScreenStep | null {
 }
 
 export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentSetupView }) {
+  const t = useAgentTranslations("setupFlow");
+  const completion = useAgentTranslations("setupCompletion");
+  const errors = useAgentTranslations("errors");
+  const statusCopy = useAgentTranslations("status");
+  const confirmationCopy = useAgentTranslations("reviewConfirmation");
+  const policyCopy = useLocalizedReviewPolicyCopy();
   const router = useRouter();
+  const reviewAudienceOptions = [
+    ["public_network", policyCopy.audience.rateLoopNetwork, t("audienceNetworkDescription")],
+    ["private_invited", policyCopy.audience.invited, t("audienceInvitedDescription")],
+  ] as const;
+  const reviewAuthoritySummary = (
+    authority: AgentSetupReviewDraft["authority"],
+    requiresFundingPermission: boolean,
+  ) => {
+    if (authority === "prepare_for_approval") return t("authorityPrepare");
+    if (authority === "ask_automatically") {
+      return requiresFundingPermission ? t("authorityAutomaticFunded") : t("authorityAutomatic");
+    }
+    return t("authorityCheck");
+  };
+  const finalizationMessage = (postcondition: SetupFinalizationPostcondition | null) => {
+    if (!postcondition) return null;
+    if (postcondition.canSend) return t("finalReady");
+    if (postcondition.deliveryAuthority !== "ask_automatically") return t("finalSelected");
+    const routing = postcondition.privateRouting;
+    if (routing?.reason === "reviewer_seats_insufficient") {
+      const missing = Math.max(0, Number(routing.panelSize ?? 0) - Number(routing.syncedReviewerCount ?? 0));
+      return t("finalReviewers", { count: missing });
+    }
+    if (routing?.reason === "expertise_coverage_insufficient") return t("finalExpertise");
+    if (routing?.reason === "cohort_capacity_insufficient" || routing?.reason === "prior_managed_cohort_busy") {
+      return t("finalCapacity");
+    }
+    return t("finalCheck");
+  };
   const notifications = useRateLoopNotifications();
   const [setup, setSetup] = useState(initialSetup);
   const [busy, setBusy] = useState(false);
@@ -262,9 +253,17 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   const [reviewAudience, setReviewAudience] = useState<ReviewAudienceFormValues>(() =>
     reviewAudienceFormValues(initialSetup.reviewDraft?.requestProfile),
   );
-  const [reviewCriterion, setReviewCriterion] = useState<ReviewCriterionFormValues>(() =>
-    reviewCriterionFormValues(initialSetup.reviewDraft?.requestProfile),
-  );
+  const [reviewCriterion, setReviewCriterion] = useState<ReviewCriterionFormValues>(() => {
+    const values = reviewCriterionFormValues(initialSetup.reviewDraft?.requestProfile);
+    return initialSetup.reviewDraft
+      ? values
+      : {
+          ...values,
+          criterion: completion("defaultCriterion"),
+          positiveLabel: completion("defaultApprove"),
+          negativeLabel: completion("defaultReject"),
+        };
+  });
   const [reviewExpertise, setReviewExpertise] = useState<ReviewExpertiseFormValues>(() =>
     reviewExpertiseFormValues(initialSetup.reviewDraft?.requestProfile),
   );
@@ -290,7 +289,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
       initialSetup.reviewDraft,
       automaticGrantReady(initialSetup.capabilities.automaticGrantOffer),
     )
-      ? SAVED_AUTOMATIC_AUTHORITY_NOTICE
+      ? t("automaticFallback")
       : null,
   );
   const [peopleDecision, setPeopleDecision] = useState<"invited" | "later">("invited");
@@ -358,9 +357,13 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   const confirmedReviewerPoolReady =
     confirmedReviewerSeatsReady && (privateExpertiseRequirements.length === 0 || expertiseCoverage?.ready === true);
   const reviewerDetailsSummary = `${
-    reviewAudience.audience === "private_invited" ? "Invited reviewers · private material" : "Public-safe material"
-  } · ${reviewerCount} reviewer${reviewerCount === "1" ? "" : "s"} · ${
-    reviewCompensation.compensationMode === "usdc" ? `${reviewCompensation.usdcPerReviewer || "—"} USDC each` : "Unpaid"
+    reviewAudience.audience === "private_invited"
+      ? completion("reviewerSummaryInvited")
+      : completion("reviewerSummaryPublic")
+  } · ${completion("reviewerCount", { count: reviewerCount })} · ${
+    reviewCompensation.compensationMode === "usdc"
+      ? completion("paidEach", { amount: reviewCompensation.usdcPerReviewer || "—" })
+      : completion("unpaid")
   }`;
   const automaticGrantOffer = setup.capabilities.automaticGrantOffer;
   const automaticEligibility = setupAutomaticSendingEligibility({
@@ -370,7 +373,28 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     grantAvailable: automaticGrantReady(automaticGrantOffer),
   });
   const automaticAvailable = automaticEligibility.available;
-  const automaticUnavailableReason = automaticEligibility.reason ?? "";
+  const automaticUnavailableReason = automaticEligibility.available
+    ? ""
+    : reviewAudience.audience !== "private_invited"
+      ? completion("automaticInvitedOnly")
+      : reviewCompensation.compensationMode !== "unpaid"
+        ? completion("automaticNoBounty")
+        : reviewCompensation.feedbackBonusEnabled
+          ? completion("automaticNoBonus")
+          : completion("automaticUnavailable");
+
+  const localizedReviewSummary = (selection: AgentSetupReviewDraft["selection"] | null | undefined) => {
+    if (!selection) return completion("summaryAdaptive");
+    if (selection.mode === "always") return completion("summaryEvery");
+    if (selection.mode === "manual") return completion("summaryManual");
+    if (selection.mode === "fixed") {
+      return completion("summaryFixed", { percent: String((selection.fixedRateBps ?? 0) / 100) });
+    }
+    if (selection.mode === "rules") return completion("summaryRules");
+    return completion("summaryAdaptiveMinimum", {
+      percent: String((selection.productionFloorBps || ADAPTIVE_MONITORING_FLOOR_BPS) / 100),
+    });
+  };
   const displayedReviewAuthority = reconcileSetupAutomaticAuthority(
     reviewCompensation.authority,
     automaticEligibility,
@@ -424,13 +448,13 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
       setError(null);
       try {
         await loadStep(step);
-      } catch (cause) {
-        setError(cause instanceof Error ? cause.message : "That setup step could not be opened. Try again.");
+      } catch {
+        setError(errors("openSetupStep"));
       } finally {
         setBusy(false);
       }
     },
-    [loadStep],
+    [errors, loadStep],
   );
 
   useEffect(() => {
@@ -491,11 +515,9 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
             }),
           );
         })
-        .catch(cause => {
+        .catch(() => {
           if (!controller.signal.aborted) {
-            setExpertiseDefinitionsError(
-              cause instanceof Error ? cause.message : "Specialist areas could not be loaded.",
-            );
+            setExpertiseDefinitionsError(errors("loadExpertise"));
           }
         })
         .finally(() => {
@@ -506,7 +528,14 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [currentStep, expertiseSuggestionContext, reviewAudience.audience, reviewTiming.panelSize, setup.workspaceId]);
+  }, [
+    currentStep,
+    errors,
+    expertiseSuggestionContext,
+    reviewAudience.audience,
+    reviewTiming.panelSize,
+    setup.workspaceId,
+  ]);
 
   useEffect(() => {
     if (currentStep !== "people") return;
@@ -542,20 +571,19 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
         const group = groups.find(candidate => candidate.groupId === groupId);
         setConfirmedReviewerCount(typeof group?.memberCount === "number" ? group.memberCount : 0);
       })
-      .catch(cause => {
+      .catch(() => {
         // A failure must not look like "still loading": null is the loading value, so record the
         // failure separately and stop treating an unknown group size as zero confirmed reviewers.
         if (!controller.signal.aborted) {
           setConfirmedReviewerCount(null);
-          setConfirmedReviewerCountError(
-            cause instanceof Error ? cause.message : "The saved reviewer group could not be checked.",
-          );
+          setConfirmedReviewerCountError(errors("checkGroup"));
         }
       });
     return () => controller.abort();
   }, [
     confirmedReviewerCountRevision,
     currentStep,
+    errors,
     setup.privateGroupId,
     setup.reviewDraft?.requestProfile.privateGroupId,
     setup.workspaceId,
@@ -592,12 +620,10 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
           setExpertiseCoverage((body as { coverage?: PrivateExpertiseCoverage }).coverage ?? null);
         }
       })
-      .catch(cause => {
+      .catch(() => {
         if (!controller.signal.aborted) {
           setExpertiseCoverage(null);
-          setExpertiseCoverageError(
-            cause instanceof Error ? cause.message : "Specialist coverage could not be checked.",
-          );
+          setExpertiseCoverageError(errors("checkCoverage"));
         }
       })
       .finally(() => {
@@ -606,6 +632,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     return () => controller.abort();
   }, [
     currentStep,
+    errors,
     privateExpertiseCoverageKey,
     privateExpertiseRequirements,
     setup.privateGroupId,
@@ -638,9 +665,9 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     const grantAvailable = automaticGrantReady(setup.capabilities.automaticGrantOffer);
     setReviewCompensation(reviewCompensationValues(setup.reviewDraft, grantAvailable));
     setAuthorityAdjustmentNotice(
-      savedAutomaticAuthorityNeedsFallback(setup.reviewDraft, grantAvailable) ? SAVED_AUTOMATIC_AUTHORITY_NOTICE : null,
+      savedAutomaticAuthorityNeedsFallback(setup.reviewDraft, grantAvailable) ? t("automaticFallback") : null,
     );
-  }, [setup.capabilities.automaticGrantOffer, setup.reviewDraft]);
+  }, [setup.capabilities.automaticGrantOffer, setup.reviewDraft, t]);
 
   useEffect(() => {
     if (currentStep !== "connect" || !ACTIVE_CONNECTION_STATES.has(setup.connection.status ?? "")) return;
@@ -657,13 +684,12 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
         if (stopped) return;
         setSetup(next);
         if (next.resumeStep === "agent") {
-          setAnnouncement("Agent connected. Check its details next.");
+          setAnnouncement(statusCopy("agentConnected"));
           await loadStep("agent", { replace: true, focus: false });
           return;
         }
       } catch {
-        if (!stopped)
-          setError("Connection status could not refresh. RateLoop will keep trying while this page is open.");
+        if (!stopped) setError(errors("refreshConnection"));
       }
       if (!stopped && document.visibilityState === "visible") timer = window.setTimeout(refresh, 2_500);
     };
@@ -677,7 +703,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
       if (timer !== null) window.clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [currentStep, loadStep, setup.connection.status, setup.workspaceId]);
+  }, [currentStep, errors, loadStep, setup.connection.status, setup.workspaceId, statusCopy]);
 
   if (!setup.canManage) {
     return (
@@ -691,8 +717,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
         <div className="mt-8 w-full">
           <SetupStageHeader
             headingRef={headingRef}
-            title="Workspace setup is not finished"
-            description="Ask a workspace owner to finish this step."
+            title={t("workspaceSetupIncomplete")}
+            description={t("workspaceSetupOwner")}
           />
         </div>
       </Card>
@@ -718,15 +744,15 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
       setConnectionMessage(message);
       try {
         await navigator.clipboard.writeText(message);
-        setAnnouncement("Connection message copied to clipboard.");
-        notifications.success("Connection message copied to clipboard.");
+        setAnnouncement(statusCopy("setupConnectionCopied"));
+        notifications.success(t("connectionMessageCopied"));
       } catch {
-        setError("Clipboard access was denied. Copy the visible message below once.");
-        notifications.error("Clipboard access was blocked. Copy the visible message manually.");
+        setError(errors("clipboardMessage"));
+        notifications.error(t("connectionMessageCopyBlocked"));
       }
       await loadStep("connect", { replace: true, focus: false });
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to create the connection message.");
+    } catch {
+      setError(errors("createConnection"));
     } finally {
       setBusy(false);
     }
@@ -736,13 +762,13 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     if (!connectionMessage) return;
     try {
       await navigator.clipboard.writeText(connectionMessage);
-      setAnnouncement("Connection message copied to clipboard.");
-      notifications.success("Connection message copied to clipboard.");
+      setAnnouncement(statusCopy("setupConnectionCopied"));
+      notifications.success(t("connectionMessageCopied"));
     } catch {
       connectionMessageRef.current?.focus();
       connectionMessageRef.current?.select();
-      setError("Clipboard access was denied. The visible message is selected for manual copying.");
-      notifications.error("Clipboard access was blocked. The message is selected for manual copying.");
+      setError(errors("clipboardMessage"));
+      notifications.error(t("connectionMessageSelected"));
     }
   }
 
@@ -750,11 +776,11 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     if (!inviteToken) return;
     try {
       await navigator.clipboard.writeText(inviteToken);
-      setAnnouncement("Invitation link copied to clipboard.");
-      notifications.success("Invitation link copied to clipboard.");
+      setAnnouncement(statusCopy("invitationCopied"));
+      notifications.success(t("invitationCopied"));
     } catch {
-      setError("Clipboard access was denied. Select and copy the visible invitation link manually.");
-      notifications.error("Clipboard access was blocked. Copy the invitation link manually.");
+      setError(errors("clipboardInvitation"));
+      notifications.error(t("invitationCopyBlocked"));
     }
   }
 
@@ -772,10 +798,10 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     } catch (cause) {
       const message =
         reviewAudience.audience === "hybrid"
-          ? HYBRID_SPECIALIST_UNAVAILABLE
+          ? t("hybridSpecialistUnavailable")
           : cause instanceof Error
             ? cause.message
-            : "That specialist area could not be added.";
+            : completion("specialistAddFailed");
       setError(message);
       setAnnouncement(message);
       return;
@@ -810,7 +836,9 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   function reconcileAutomaticAuthorityForChoice(eligibility: ReturnType<typeof setupAutomaticSendingEligibility>) {
     const reconciliation = reconcileSetupAutomaticAuthority(reviewCompensation.authority, eligibility);
     if (reconciliation.changed) {
-      const notice = `Automatic sending changed to Prepare for approval. ${eligibility.reason ?? "Review the automatic sending requirements."}`;
+      const notice = completion("automaticChanged", {
+        reason: automaticUnavailableReason || completion("automaticRequirements"),
+      });
       setAuthorityAdjustmentNotice(notice);
       setAnnouncement(notice);
     }
@@ -828,13 +856,11 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     if (audience === "hybrid" && reviewExpertise.needsSpecialists) {
       setAnnouncement(
         reviewExpertise.legacyRequiredExpertiseKeys.length
-          ? "The saved legacy all-seat specialist requirement remains active for the hybrid panel."
-          : "Hybrid specialist seats need separate invited and network policies and are not available yet.",
+          ? completion("hybridLegacyActive")
+          : completion("hybridUnavailable"),
       );
     } else if (requirements.length < reviewExpertise.requirements.length) {
-      setAnnouncement(
-        "Workspace-only specialist areas were removed because network review requires RateLoop-verified areas.",
-      );
+      setAnnouncement(completion("workspaceAreasRemoved"));
     }
     setReviewExpertise(current => {
       const next = {
@@ -912,7 +938,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     if (questionAuthority === "agent_per_request") {
       setReviewFrequency(current => (current.mode === "adaptive" ? { ...current, mode: "always" } : current));
       changeReviewAudience("public_network");
-      setAnnouncement("Agent-written questions use public-network feedback and cannot change adaptive coverage.");
+      setAnnouncement(statusCopy("agentQuestion"));
     }
   }
 
@@ -920,7 +946,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     const label = customExpertiseLabel.trim();
     const description = customExpertiseDescription.trim();
     if (!label || !description) {
-      setError("Name the specialist area and explain what qualifies someone.");
+      setError(errors("specialistRequired"));
       return;
     }
     setCreatingCustomExpertise(true);
@@ -935,15 +961,15 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
         }),
       );
       const definition = body.definition as ReviewerExpertiseDefinition | undefined;
-      if (!definition?.definitionId) throw new Error("The specialist area could not be confirmed.");
+      if (!definition?.definitionId) throw new Error(completion("specialistAddFailed"));
       setExpertiseDefinitions(current => [...current, definition]);
       addExpertiseDefinition(definition);
       setCustomExpertiseLabel("");
       setCustomExpertiseDescription("");
       setShowCustomExpertise(false);
-      setAnnouncement(`${definition.label} was added to this workspace and selected.`);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to create the specialist area.");
+      setAnnouncement(completion("specialistAdded", { label: definition.label }));
+    } catch {
+      setError(errors("createSpecialist"));
     } finally {
       setCreatingCustomExpertise(false);
     }
@@ -968,7 +994,12 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
       }
       await loadStep("connect");
     } catch (cause) {
-      captureFormError(cause, "Unable to save the workspace name.");
+      captureFormError(
+        cause instanceof SetupRequestError && cause.field
+          ? new SetupRequestError(completion("saveWorkspace"), cause.field)
+          : completion("saveWorkspace"),
+        completion("saveWorkspace"),
+      );
     } finally {
       setBusy(false);
     }
@@ -978,7 +1009,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     event.preventDefault();
     const connectedAgent = setup.agent;
     if (!connectedAgent) {
-      setError("The connected agent details are unavailable. Reconnect the agent and try again.");
+      setError(errors("agentDetails"));
       return;
     }
     const form = new FormData(event.currentTarget);
@@ -1006,7 +1037,12 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
       );
       await loadStep("reviews");
     } catch (cause) {
-      captureFormError(cause, "Unable to confirm the agent.");
+      captureFormError(
+        cause instanceof SetupRequestError && cause.field
+          ? new SetupRequestError(completion("confirmAgent"), cause.field)
+          : completion("confirmAgent"),
+        completion("confirmAgent"),
+      );
     } finally {
       setBusy(false);
     }
@@ -1025,14 +1061,14 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     event.preventDefault();
     const connectedAgent = setup.agent;
     if (!connectedAgent) {
-      setError("The connected agent details are unavailable. Reconnect the agent and try again.");
+      setError(errors("agentDetails"));
       return;
     }
     setError(null);
     clearFormErrors();
     try {
       const draft = setup.reviewDraft;
-      if (!draft) throw new Error("Review behavior is unavailable. Reload setup and try again.");
+      if (!draft) throw new Error(completion("setupUnavailable"));
       const selection = buildReviewFrequencySelection(draft.selection, reviewFrequency);
       const audienceProfile = buildReviewAudienceRequestProfile(draft.requestProfile, reviewAudience);
       const criterionProfile = buildReviewCriterionRequestProfile(audienceProfile, reviewCriterion);
@@ -1066,8 +1102,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
         ) {
           throw new Error(
             requestProfile.contentBoundary !== "private_workspace"
-              ? "Choose Invited reviewers to enable automatic sending during setup."
-              : (finalAutomaticEligibility.reason ?? "Automatic sending isn’t available for this connection."),
+              ? completion("automaticInvitedOnly")
+              : automaticUnavailableReason || completion("automaticUnavailable"),
           );
         }
         publishingGrant = {
@@ -1076,20 +1112,27 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
           allowedWorkflowKeys: automaticGrantOffer.allowedWorkflowKeys,
         };
       }
-      const confirmation = humanReviewConfirmationMessage({
-        authority,
-        bountyPerSeatAtomic: requestProfile.compensationMode === "usdc" ? requestProfile.bountyPerSeatAtomic : null,
-        feedbackBonusPoolAtomic: requestProfile.feedbackBonusEnabled
-          ? (requestProfile.feedbackBonusPoolAtomic ?? null)
-          : null,
-        panelSize: requestProfile.panelSize,
-      });
+      const confirmation = humanReviewConfirmationMessage(
+        {
+          authority,
+          bountyPerSeatAtomic: requestProfile.compensationMode === "usdc" ? requestProfile.bountyPerSeatAtomic : null,
+          feedbackBonusPoolAtomic: requestProfile.feedbackBonusEnabled
+            ? (requestProfile.feedbackBonusPoolAtomic ?? null)
+            : null,
+          panelSize: requestProfile.panelSize,
+        },
+        {
+          automatic: confirmationCopy("automatic"),
+          payment: amount => confirmationCopy("payment", { amount }),
+          save: confirmationCopy("save"),
+        },
+      );
       if (
         confirmation &&
         !(await confirm({
-          title: reviewPolicyCopy.confirmation.title,
+          title: policyCopy.confirmation.title,
           description: confirmation,
-          confirmLabel: reviewPolicyCopy.confirmation.action,
+          confirmLabel: policyCopy.confirmation.action,
           destructive: false,
         }))
       )
@@ -1125,7 +1168,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
             }),
           );
           const group = created.group as Record<string, unknown> | undefined;
-          if (typeof group?.groupId !== "string") throw new Error("The reviewer group could not be prepared.");
+          if (typeof group?.groupId !== "string") throw new Error(completion("reviewerGroupUnavailable"));
           privateGroupId = group.groupId;
         }
       }
@@ -1186,8 +1229,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
         },
       });
       await loadStep("people");
-    } catch (cause) {
-      captureFormError(cause, "Unable to save review behavior.");
+    } catch {
+      captureFormError(completion("saveReviews"), completion("saveReviews"));
     } finally {
       setBusy(false);
     }
@@ -1244,7 +1287,12 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
         openCompletedWorkspace();
       }
     } catch (cause) {
-      captureFormError(cause, "Unable to save the people step.");
+      captureFormError(
+        cause instanceof SetupRequestError && cause.field
+          ? new SetupRequestError(completion("savePeople"), cause.field)
+          : completion("savePeople"),
+        completion("savePeople"),
+      );
     } finally {
       setBusy(false);
     }
@@ -1267,8 +1315,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
         }),
       );
       openCompletedWorkspace();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to finish setup.");
+    } catch {
+      setError(errors("finishSetup"));
       setBusy(false);
     }
   }
@@ -1283,7 +1331,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
       disabled={busy}
       onClick={() => void navigateToStep(back)}
     >
-      Back
+      {t("back")}
     </Button>
   ) : null;
   return (
@@ -1301,12 +1349,12 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
       <div className="mt-8 w-full">
         {currentStep === "workspace" ? (
           <form onSubmit={saveWorkspace} aria-busy={busy}>
-            <SetupStageHeader headingRef={headingRef} title="Name your workspace" />
+            <SetupStageHeader headingRef={headingRef} title={t("nameWorkspace")} />
             <div className="mt-8">
               <Field
                 id="agent-setup-workspace-name"
-                label="Workspace name"
-                className="border-white/10 bg-[var(--rateloop-field)]"
+                label={t("workspaceName")}
+                className="border-base-content/10 bg-[var(--rateloop-field)]"
                 value={workspaceName}
                 onChange={event => {
                   setWorkspaceName(event.target.value);
@@ -1321,7 +1369,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
             <SetupActionBar>
               {backButton}
               <Button className="min-h-11 w-full sm:w-auto" type="submit" disabled={busy || !workspaceName.trim()}>
-                {busy ? "Saving…" : workspaceName.trim() === setup.workspaceName ? "Continue" : "Save and continue"}
+                {busy ? t("saving") : workspaceName.trim() === setup.workspaceName ? t("continue") : t("saveContinue")}
               </Button>
             </SetupActionBar>
           </form>
@@ -1329,12 +1377,12 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
 
         {currentStep === "connect" ? (
           <>
-            <SetupStageHeader headingRef={headingRef} title="Connect your agent" />
+            <SetupStageHeader headingRef={headingRef} title={t("connectAgent")} />
             <WorkspacePublicContentLink
               className="mt-3 inline-flex min-h-11 items-center gap-1 text-sm font-medium text-[var(--rateloop-blue)] underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rateloop-blue)]"
               href="/docs/connect"
             >
-              Connection guide
+              {t("docs")}
             </WorkspacePublicContentLink>
             <SetupActionBar>
               {backButton}
@@ -1345,7 +1393,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   disabled={busy}
                   onClick={() => void navigateToStep("agent")}
                 >
-                  Check agent
+                  {t("checkAgent")}
                 </Button>
               ) : (
                 <Button
@@ -1354,11 +1402,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   disabled={busy}
                   onClick={() => void createConnectionMessage()}
                 >
-                  {busy
-                    ? "Creating…"
-                    : setup.connection.intentId
-                      ? "Create a new connection message"
-                      : "Create connection message"}
+                  {busy ? t("creating") : setup.connection.intentId ? t("createNewConnection") : t("createConnection")}
                 </Button>
               )}
             </SetupActionBar>
@@ -1367,8 +1411,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 <TextareaField
                   ref={connectionMessageRef}
                   id="agent-setup-connection-message"
-                  className="min-h-40 border-white/10 bg-[var(--rateloop-field)] font-mono text-xs leading-5"
-                  label="Connection message"
+                  className="min-h-40 border-base-content/10 bg-[var(--rateloop-field)] font-mono text-xs leading-5"
+                  label={t("connectionMessage")}
                   labelClassName="text-sm font-medium"
                   value={connectionMessage}
                   readOnly
@@ -1379,7 +1423,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   type="button"
                   onClick={() => void copyVisibleConnectionMessage()}
                 >
-                  Copy message
+                  {t("copyMessage")}
                 </button>
                 <AgentConnectionTroubleshooting />
               </div>
@@ -1389,11 +1433,11 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
 
         {currentStep === "agent" && setup.agent ? (
           <form onSubmit={confirmAgent} aria-busy={busy}>
-            <SetupStageHeader headingRef={headingRef} title="Name this workflow" />
+            <SetupStageHeader headingRef={headingRef} title={t("nameWorkflow")} />
             <div className="mt-8 grid gap-4">
               <Field
-                label="Workflow name"
-                className="border-white/10 bg-[var(--rateloop-field)]"
+                label={t("workflowName")}
+                className="border-base-content/10 bg-[var(--rateloop-field)]"
                 name="displayName"
                 defaultValue={setup.agent.displayName}
                 onChange={() => clearFormErrors("displayName")}
@@ -1402,10 +1446,10 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 error={fieldErrors.displayName}
               />
               <TextareaField
-                className="border-white/10 bg-[var(--rateloop-field)]"
+                className="border-base-content/10 bg-[var(--rateloop-field)]"
                 label={
                   <>
-                    Description <span className="text-base-content/55">(optional)</span>
+                    {t("description")} <span className="text-base-content/55">{t("optional")}</span>
                   </>
                 }
                 labelClassName="text-sm"
@@ -1416,21 +1460,18 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 error={fieldErrors.description}
               />
             </div>
-            <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-4 text-sm">
-              <p className="font-medium">Observed connection</p>
+            <div className="mt-4 rounded-xl border border-base-content/10 bg-base-content/[0.02] p-4 text-sm">
+              <p className="font-medium">{t("observedConnection")}</p>
               <p className="mt-1 text-base-content/60">
-                {setup.agent.observedClientName ?? "Unknown client"}
+                {setup.agent.observedClientName ?? t("unknownClient")}
                 {setup.agent.observedClientVersion ? ` · ${setup.agent.observedClientVersion}` : ""}
               </p>
-              <p className="mt-2 text-base-content/60">
-                Safe access only: check review requirements and read aggregate results. No publishing, spending, private
-                artifacts, or workspace administration.
-              </p>
+              <p className="mt-2 text-base-content/60">{t("safeAccess")}</p>
             </div>
             <SetupActionBar>
               {backButton}
               <Button className="min-h-11 w-full sm:w-auto" type="submit" disabled={busy}>
-                {busy ? "Confirming…" : "Confirm workflow"}
+                {busy ? t("confirming") : t("confirmWorkflow")}
               </Button>
             </SetupActionBar>
           </form>
@@ -1438,9 +1479,9 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
 
         {currentStep === "reviews" ? (
           <form onSubmit={configureReviews} aria-busy={busy}>
-            <SetupStageHeader headingRef={headingRef} title="Set review behavior" />
+            <SetupStageHeader headingRef={headingRef} title={t("setReview")} />
             <fieldset className="mt-8">
-              <legend className="text-xl font-semibold">{reviewPolicyCopy.question.authority}</legend>
+              <legend className="text-xl font-semibold">{policyCopy.question.authority}</legend>
               <SetupChoiceGroup>
                 <SetupRadioChoice
                   id="agent-setup-question-owner-fixed"
@@ -1448,8 +1489,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   value="owner_fixed"
                   checked={reviewCriterion.questionAuthority === "owner_fixed"}
                   onChange={() => changeQuestionAuthority("owner_fixed")}
-                  label={reviewPolicyCopy.question.ownerFixed}
-                  description="Set one question and answer format for every review."
+                  label={policyCopy.question.ownerFixed}
+                  description={t("fixedQuestionDescription")}
                 />
                 <SetupRadioChoice
                   id="agent-setup-question-agent-per-request"
@@ -1457,8 +1498,10 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   value="agent_per_request"
                   checked={reviewCriterion.questionAuthority === "agent_per_request"}
                   onChange={() => changeQuestionAuthority("agent_per_request")}
-                  label={reviewPolicyCopy.question.agentPerRequest}
-                  description={`The agent supplies a question and two answers for each review. ${CONFIGURED_HUMAN_REVIEW_LANES.publicPaidNetwork.message}`}
+                  label={policyCopy.question.agentPerRequest}
+                  description={`${completion("agentQuestionDescription")} ${
+                    CONFIGURED_HUMAN_REVIEW_LANES.publicPaidNetwork.available ? "" : completion("reviewPathUnavailable")
+                  }`}
                   disabled={!CONFIGURED_HUMAN_REVIEW_LANES.publicPaidNetwork.available}
                 />
               </SetupChoiceGroup>
@@ -1466,8 +1509,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
             {reviewCriterion.questionAuthority === "owner_fixed" ? (
               <TextareaField
                 containerClassName="mt-6"
-                className="border-white/10 bg-[var(--rateloop-field)]"
-                label={reviewPolicyCopy.question.criterion}
+                className="border-base-content/10 bg-[var(--rateloop-field)]"
+                label={policyCopy.question.criterion}
                 labelClassName="text-sm font-medium"
                 rows={3}
                 value={reviewCriterion.criterion}
@@ -1477,19 +1520,19 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
               />
             ) : (
               <p className="mt-5 border-l-2 border-l-[var(--rateloop-yellow)] pl-4 text-sm leading-6 text-base-content/65">
-                {reviewPolicyCopy.question.agentWrittenNote}
+                {policyCopy.question.agentWrittenNote}
               </p>
             )}
             <Card as="fieldset" variant="nested" className="mt-5 p-4">
               <legend className="px-1 text-sm font-medium">
-                {reviewCriterion.questionAuthority === "owner_fixed" ? "Answer format" : "Written feedback"}
+                {reviewCriterion.questionAuthority === "owner_fixed" ? t("answerFormat") : t("writtenFeedback")}
               </legend>
               <div className="grid gap-4 sm:grid-cols-3">
                 {reviewCriterion.questionAuthority === "owner_fixed" ? (
                   <>
                     <Field
-                      label={reviewPolicyCopy.question.positiveAnswer}
-                      className="border-white/10 bg-[var(--rateloop-field)]"
+                      label={policyCopy.question.positiveAnswer}
+                      className="border-base-content/10 bg-[var(--rateloop-field)]"
                       value={reviewCriterion.positiveLabel}
                       onChange={event =>
                         setReviewCriterion(current => ({ ...current, positiveLabel: event.target.value }))
@@ -1498,8 +1541,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                       required
                     />
                     <Field
-                      label={reviewPolicyCopy.question.negativeAnswer}
-                      className="border-white/10 bg-[var(--rateloop-field)]"
+                      label={policyCopy.question.negativeAnswer}
+                      className="border-base-content/10 bg-[var(--rateloop-field)]"
                       value={reviewCriterion.negativeLabel}
                       onChange={event =>
                         setReviewCriterion(current => ({ ...current, negativeLabel: event.target.value }))
@@ -1510,8 +1553,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   </>
                 ) : null}
                 <SelectField
-                  className="border-white/10 bg-[var(--rateloop-field)]"
-                  label={reviewPolicyCopy.question.rationale}
+                  className="border-base-content/10 bg-[var(--rateloop-field)]"
+                  label={policyCopy.question.rationale}
                   labelClassName="text-sm"
                   value={reviewCriterion.rationaleMode}
                   onChange={event =>
@@ -1521,14 +1564,14 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     }))
                   }
                 >
-                  <option value="off">{reviewPolicyCopy.question.rationaleOff}</option>
-                  <option value="optional">{reviewPolicyCopy.question.rationaleOptional}</option>
-                  <option value="required">{reviewPolicyCopy.question.rationaleRequired}</option>
+                  <option value="off">{policyCopy.question.rationaleOff}</option>
+                  <option value="optional">{policyCopy.question.rationaleOptional}</option>
+                  <option value="required">{policyCopy.question.rationaleRequired}</option>
                 </SelectField>
               </div>
             </Card>
             <Card as="fieldset" variant="nested" className="mt-7 p-4 sm:p-5">
-              <legend className="px-1 text-xl font-semibold">Review frequency</legend>
+              <legend className="px-1 text-xl font-semibold">{t("reviewFrequency")}</legend>
               <ReviewFrequencyFields
                 mode={reviewFrequency.mode}
                 adaptiveAvailable={reviewCriterion.questionAuthority !== "agent_per_request"}
@@ -1536,15 +1579,13 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
               />
             </Card>
             {reviewFrequency.mode === "adaptive" || reviewFrequency.mode === "fixed" ? (
-              <div className="mt-4 border-l-2 border-l-[var(--rateloop-pink)] bg-black/10 px-4 py-4">
+              <div className="mt-4 border-l-2 border-l-[var(--rateloop-pink)] bg-base-content/[0.03] px-4 py-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field
                     label={
-                      reviewFrequency.mode === "adaptive"
-                        ? reviewPolicyCopy.limits.adaptiveRate
-                        : reviewPolicyCopy.limits.fixedRate
+                      reviewFrequency.mode === "adaptive" ? policyCopy.limits.adaptiveRate : policyCopy.limits.fixedRate
                     }
-                    className="border-white/10 bg-[var(--rateloop-field)]"
+                    className="border-base-content/10 bg-[var(--rateloop-field)]"
                     type="number"
                     min={reviewFrequency.mode === "adaptive" ? ADAPTIVE_MONITORING_FLOOR_BPS / 100 : 0.01}
                     max={100}
@@ -1566,8 +1607,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     disabled={reviewFrequency.mode === "adaptive"}
                   />
                   <Field
-                    label={reviewPolicyCopy.limits.maximumGap}
-                    className="border-white/10 bg-[var(--rateloop-field)]"
+                    label={policyCopy.limits.maximumGap}
+                    className="border-base-content/10 bg-[var(--rateloop-field)]"
                     type="number"
                     min={1}
                     max={10_000}
@@ -1584,19 +1625,16 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   />
                 </div>
                 <p className="mt-3 text-xs leading-5 text-base-content/55">
-                  {reviewFrequency.mode === "adaptive"
-                    ? "Starts at 100% while calibrating and never drops below 10%. "
-                    : ""}
-                  Critical, incomplete, or low-confidence outputs can still require review.
+                  {reviewFrequency.mode === "adaptive" ? t("adaptiveFrequencyNote") : t("fixedFrequencyNote")}
                 </p>
               </div>
             ) : null}
             {reviewFrequency.mode === "rules" ? (
-              <div className="mt-4 border-l-2 border-l-[var(--rateloop-pink)] bg-black/10 px-4 py-4">
+              <div className="mt-4 border-l-2 border-l-[var(--rateloop-pink)] bg-base-content/[0.03] px-4 py-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field
-                    label={reviewPolicyCopy.limits.riskTiers}
-                    className="border-white/10 bg-[var(--rateloop-field)]"
+                    label={policyCopy.limits.riskTiers}
+                    className="border-base-content/10 bg-[var(--rateloop-field)]"
                     value={reviewFrequency.requiredRiskTiers}
                     onChange={event =>
                       setReviewFrequency(current => ({
@@ -1604,16 +1642,16 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                         requiredRiskTiers: event.target.value,
                       }))
                     }
-                    placeholder="high, legal"
+                    placeholder={t("riskTagsPlaceholder")}
                     maxLength={320}
                   />
                   <Field
                     label={
                       <>
-                        {reviewPolicyCopy.limits.confidence} <span className="text-base-content/55">(optional)</span>
+                        {policyCopy.limits.confidence} <span className="text-base-content/55">{t("optional")}</span>
                       </>
                     }
-                    className="border-white/10 bg-[var(--rateloop-field)]"
+                    className="border-base-content/10 bg-[var(--rateloop-field)]"
                     type="number"
                     min={0}
                     max={100}
@@ -1628,24 +1666,22 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     }
                   />
                 </div>
-                <p className="mt-3 text-xs leading-5 text-base-content/55">
-                  Separate risk levels with commas. Critical or incomplete outputs always require review.
-                </p>
+                <p className="mt-3 text-xs leading-5 text-base-content/55">{t("rulesNote")}</p>
               </div>
             ) : null}
             <section
-              className="mt-7 border-y border-white/10 py-5"
+              className="mt-7 border-y border-base-content/10 py-5"
               aria-labelledby="agent-setup-reviewer-details-heading"
             >
               <h2 id="agent-setup-reviewer-details-heading" className="text-lg font-semibold">
-                Reviewers, timing and payment
+                {t("reviewerDetails")}
               </h2>
               <p className="mt-1 text-sm leading-6 text-base-content/55">{reviewerDetailsSummary}</p>
               <div className="pb-1 pt-6">
                 <fieldset>
-                  <legend className="text-lg font-semibold">{reviewPolicyCopy.audience.label}</legend>
+                  <legend className="text-lg font-semibold">{policyCopy.audience.label}</legend>
                   <SetupChoiceGroup>
-                    {REVIEW_AUDIENCE_OPTIONS.map(([value, label, description]) => {
+                    {reviewAudienceOptions.map(([value, label, description]) => {
                       const configuredLane = configuredAudienceOption(value);
                       return (
                         <SetupRadioChoice
@@ -1656,7 +1692,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                           checked={reviewAudience.audience === value}
                           onChange={() => changeReviewAudience(value)}
                           label={label}
-                          description={`${description} ${configuredLane.available ? "" : configuredLane.message}`}
+                          description={`${description} ${configuredLane.available ? "" : completion("reviewPathUnavailable")}`}
                           disabled={
                             !configuredLane.available ||
                             (reviewCriterion.questionAuthority === "agent_per_request" && value !== "public_network")
@@ -1668,11 +1704,11 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 </fieldset>
                 {reviewAudience.audience !== "private_invited" ? (
                   <p className="mt-4 border-l-2 border-l-[var(--rateloop-yellow)] pl-4 text-sm leading-6 text-base-content/65">
-                    Public, synthetic, or safely redacted material only.
+                    {t("publicMaterialOnly")}
                   </p>
                 ) : null}
-                <fieldset className="mt-6 border-t border-white/10 pt-5">
-                  <legend className="text-lg font-semibold">Does this review need specialist knowledge?</legend>
+                <fieldset className="mt-6 border-t border-base-content/10 pt-5">
+                  <legend className="text-lg font-semibold">{t("specialistQuestion")}</legend>
                   <SetupChoiceGroup>
                     <SetupRadioChoice
                       id="agent-setup-specialists-no"
@@ -1687,8 +1723,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                           legacyRequiredExpertiseKeys: [],
                         }))
                       }
-                      label="No specialist needed"
-                      description="Any otherwise eligible reviewer may take a seat."
+                      label={t("noSpecialist")}
+                      description={t("noSpecialistDescription")}
                     />
                     <SetupRadioChoice
                       id="agent-setup-specialists-yes"
@@ -1696,16 +1732,16 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                       value="yes"
                       checked={reviewExpertise.needsSpecialists}
                       onChange={() => setReviewExpertise(current => ({ ...current, needsSpecialists: true }))}
-                      label="Require specialist knowledge"
-                      description="Choose one or more areas and the seats each area must cover."
+                      label={t("requireSpecialist")}
+                      description={t("requireSpecialistDescription")}
                       disabled={reviewAudience.audience === "hybrid"}
                     />
                   </SetupChoiceGroup>
                   {reviewAudience.audience === "hybrid" ? (
                     <p className="mt-3 text-sm leading-6 text-base-content/60">
                       {reviewExpertise.legacyRequiredExpertiseKeys.length
-                        ? "This saved all-seat requirement remains active. New hybrid specialist rules need separately frozen invited and network seats."
-                        : "Hybrid specialist panels need separately frozen invited and network seats. Choose one reviewer source to require specialist knowledge today."}
+                        ? t("legacyAllSeat")
+                        : completion("hybridUnavailable")}
                     </p>
                   ) : null}
                 </fieldset>
@@ -1715,10 +1751,10 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     aria-labelledby="agent-setup-specialist-areas-heading"
                   >
                     <h3 id="agent-setup-specialist-areas-heading" className="font-semibold">
-                      Specialist areas
+                      <AgentText id="translated240" />
                     </h3>
                     {!canAddExpertiseDefinitions ? (
-                      <p className="mt-2 text-sm leading-6 text-base-content/60">{HYBRID_SPECIALIST_UNAVAILABLE}</p>
+                      <p className="mt-2 text-sm leading-6 text-base-content/60">{t("hybridSpecialistUnavailable")}</p>
                     ) : null}
                     {reviewExpertise.requirements.length ? (
                       <ul className="mt-3 space-y-3">
@@ -1744,14 +1780,14 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                                   type="button"
                                   onClick={() => removeExpertiseRequirement(requirement.definitionId)}
                                 >
-                                  Remove
+                                  <AgentText id="translated232" />
                                 </button>
                               </div>
                               {reviewAudience.audience === "private_invited" ? (
                                 <Field
                                   containerClassName="mt-3 max-w-48"
-                                  className="border-white/10 bg-[var(--rateloop-field)]"
-                                  label="Reviewers needed"
+                                  className="border-base-content/10 bg-[var(--rateloop-field)]"
+                                  label={t("reviewersNeeded")}
                                   labelClassName="text-sm"
                                   type="number"
                                   min={1}
@@ -1773,7 +1809,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                                 />
                               ) : (
                                 <p className="mt-3 text-sm text-base-content/60">
-                                  Required for all {reviewTiming.panelSize || "—"} network reviewers.
+                                  <AgentText id="translated241" /> {reviewTiming.panelSize || "—"}{" "}
+                                  <AgentText id="translated242" />
                                 </p>
                               )}
                             </Card>
@@ -1781,13 +1818,13 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                         })}
                       </ul>
                     ) : canAddExpertiseDefinitions ? (
-                      <p className="mt-2 text-sm text-base-content/60">Choose at least one specialist area.</p>
+                      <p className="mt-2 text-sm text-base-content/60">{t("chooseSpecialist")}</p>
                     ) : null}
 
                     {exampleExpertiseDefinitions.length ? (
                       <div className="mt-5">
                         <p className="text-sm font-medium">
-                          {suggestedExpertiseDefinitions.length ? "Suggested for this workflow" : "Examples"}
+                          {suggestedExpertiseDefinitions.length ? t("suggested") : t("examples")}
                         </p>
                         <div className="mt-2 flex flex-wrap gap-2">
                           {exampleExpertiseDefinitions.map(definition => (
@@ -1806,7 +1843,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
 
                     {expertiseDefinitionsLoading ? (
                       <p className="mt-4 text-sm text-base-content/55" role="status">
-                        Loading specialist areas…
+                        <AgentText id="translated243" />
                       </p>
                     ) : null}
                     {expertiseDefinitionsError ? (
@@ -1816,15 +1853,15 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     ) : null}
 
                     {selectableExpertiseDefinitions.length ? (
-                      <details className="mt-4 rounded-xl border border-white/10 p-4">
+                      <details className="mt-4 rounded-xl border border-base-content/10 p-4">
                         <summary className="cursor-pointer text-sm font-semibold text-base-content/75">
-                          Browse specialist areas
+                          <AgentText id="translated244" />
                         </summary>
                         <div className="mt-3 grid gap-2 sm:grid-cols-2">
                           {selectableExpertiseDefinitions.map(definition => (
                             <button
                               key={definition.definitionId}
-                              className="min-h-11 rounded-lg border border-white/10 px-3 py-2 text-left text-sm hover:border-white/20"
+                              className="min-h-11 rounded-lg border border-base-content/10 px-3 py-2 text-left text-sm hover:border-base-content/20"
                               type="button"
                               onClick={() => addExpertiseDefinition(definition)}
                             >
@@ -1847,30 +1884,30 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                             onClick={() => setShowCustomExpertise(true)}
                             disabled={reviewExpertise.requirements.length >= 8}
                           >
-                            Define another specialist area
+                            <AgentText id="translated245" />
                           </button>
                         ) : (
                           <Card as="div" variant="nested" className="rounded-xl p-4">
-                            <p className="font-medium">New workspace specialist area</p>
+                            <p className="font-medium">{t("newSpecialist")}</p>
                             <div className="mt-3 grid gap-3">
                               <Field
-                                className="border-white/10 bg-[var(--rateloop-field)]"
-                                label="Name"
+                                className="border-base-content/10 bg-[var(--rateloop-field)]"
+                                label={t("name")}
                                 labelClassName="text-sm"
                                 value={customExpertiseLabel}
                                 onChange={event => setCustomExpertiseLabel(event.target.value)}
                                 maxLength={80}
-                                placeholder="German employment law"
+                                placeholder={t("specialistPlaceholder")}
                               />
                               <TextareaField
-                                className="border-white/10 bg-[var(--rateloop-field)]"
-                                label="What qualifies someone?"
+                                className="border-base-content/10 bg-[var(--rateloop-field)]"
+                                label={t("qualification")}
                                 labelClassName="text-sm"
                                 rows={2}
                                 value={customExpertiseDescription}
                                 onChange={event => setCustomExpertiseDescription(event.target.value)}
                                 maxLength={320}
-                                placeholder="Experience reviewing German employment contracts"
+                                placeholder={t("qualificationPlaceholder")}
                               />
                             </div>
                             <div className="mt-3 flex flex-wrap gap-2">
@@ -1880,7 +1917,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                                 disabled={creatingCustomExpertise}
                                 onClick={() => void createCustomExpertiseDefinition()}
                               >
-                                {creatingCustomExpertise ? "Adding…" : "Add area"}
+                                {creatingCustomExpertise ? t("adding") : t("addArea")}
                               </button>
                               <button
                                 className="btn btn-sm border-transparent bg-transparent"
@@ -1888,7 +1925,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                                 disabled={creatingCustomExpertise}
                                 onClick={() => setShowCustomExpertise(false)}
                               >
-                                Cancel
+                                <AgentText id="translated183" />
                               </button>
                             </div>
                           </Card>
@@ -1896,32 +1933,32 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                       </div>
                     ) : (
                       <p className="mt-4 text-xs leading-5 text-base-content/55">
-                        Network review uses RateLoop-verified areas and requires every reviewer to qualify.
+                        <AgentText id="translated246" />
                       </p>
                     )}
                   </section>
                 ) : null}
-                <fieldset className="mt-6 border-t border-white/10 pt-5">
-                  <legend className="text-lg font-semibold">Review round</legend>
+                <fieldset className="mt-6 border-t border-base-content/10 pt-5">
+                  <legend className="text-lg font-semibold">{t("reviewRound")}</legend>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="text-sm">
-                      <p>{reviewPolicyCopy.timing.responseWindow}</p>
+                      <p>{policyCopy.timing.responseWindow}</p>
                       <DurationInput
                         id="agent-setup-review-response-window"
                         className="mt-2"
-                        ariaLabel={reviewPolicyCopy.timing.responseWindow}
+                        ariaLabel={policyCopy.timing.responseWindow}
                         valueSeconds={reviewTiming.responseWindowSeconds}
                         minSeconds={MIN_REVIEW_RESPONSE_WINDOW_SECONDS}
                         maxSeconds={MAX_REVIEW_RESPONSE_WINDOW_SECONDS}
-                        summarySuffix="Frozen when a request opens"
+                        summarySuffix={t("frozenWhenOpen")}
                         onChangeSeconds={responseWindowSeconds =>
                           setReviewTiming(current => ({ ...current, responseWindowSeconds }))
                         }
                       />
                     </div>
                     <Field
-                      label={reviewPolicyCopy.timing.panelSize}
-                      className="border-white/10 bg-[var(--rateloop-field)]"
+                      label={policyCopy.timing.panelSize}
+                      className="border-base-content/10 bg-[var(--rateloop-field)]"
                       type="number"
                       inputMode="numeric"
                       min={reviewAudience.audience === "private_invited" ? MIN_REVIEW_PANEL_SIZE : 3}
@@ -1945,8 +1982,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     />
                   </div>
                 </fieldset>
-                <fieldset className="mt-6 border-t border-white/10 pt-5">
-                  <legend className="text-lg font-semibold">{reviewPolicyCopy.payment.bounty}</legend>
+                <fieldset className="mt-6 border-t border-base-content/10 pt-5">
+                  <legend className="text-lg font-semibold">{policyCopy.payment.bounty}</legend>
                   <SetupChoiceGroup>
                     <SetupRadioChoice
                       id="agent-setup-compensation-unpaid"
@@ -1958,8 +1995,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                       }
                       disabled={reviewAudience.audience !== "private_invited"}
                       onChange={() => changeReviewCompensationMode("unpaid")}
-                      label={reviewPolicyCopy.payment.noBounty}
-                      description="No guaranteed payment."
+                      label={policyCopy.payment.noBounty}
+                      description={t("noGuaranteedPayment")}
                     />
                     <SetupRadioChoice
                       id="agent-setup-compensation-usdc"
@@ -1970,21 +2007,24 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                       }
                       disabled={!configuredHumanReviewLaneForSelection(reviewAudience.audience, "usdc").available}
                       onChange={() => changeReviewCompensationMode("usdc")}
-                      label={reviewPolicyCopy.payment.addBounty}
-                      description={`Pay each accepted reviewer. ${configuredHumanReviewLaneForSelection(reviewAudience.audience, "usdc").message}`}
+                      label={policyCopy.payment.addBounty}
+                      description={`${completion("payDescription")} ${
+                        configuredHumanReviewLaneForSelection(reviewAudience.audience, "usdc").available
+                          ? ""
+                          : completion("reviewPathUnavailable")
+                      }`}
                     />
                   </SetupChoiceGroup>
                   {reviewAudience.audience !== "private_invited" ? (
                     <p className="mt-3 text-xs text-base-content/55">
-                      Public and hybrid network assignments currently require a guaranteed bounty. Bonus-only network
-                      review will appear after its dedicated assignment adapter is available.
+                      <AgentText id="translated247" />
                     </p>
                   ) : null}
                   {reviewCompensation.compensationMode === "usdc" ? (
                     <div className="mt-4">
                       <Field
-                        label={reviewPolicyCopy.payment.bountyPerReviewer}
-                        className="border-white/10 bg-[var(--rateloop-field)]"
+                        label={policyCopy.payment.bountyPerReviewer}
+                        className="border-base-content/10 bg-[var(--rateloop-field)]"
                         type="text"
                         inputMode="decimal"
                         format="usdcAmount"
@@ -1998,14 +2038,12 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     </div>
                   ) : null}
                 </fieldset>
-                <fieldset className="mt-6 border-t border-white/10 pt-5">
+                <fieldset className="mt-6 border-t border-base-content/10 pt-5">
                   <legend className="text-lg font-semibold">
                     <span className="inline-flex items-center gap-2">
-                      {reviewPolicyCopy.payment.feedbackBonus}
-                      <InfoPopover label="About Feedback Bonus">
-                        {reviewCompensation.compensationMode === "usdc"
-                          ? "Optional and separate from the guaranteed bounty. A human later chooses useful written feedback to pay."
-                          : "A human later chooses useful written feedback to pay."}
+                      {policyCopy.payment.feedbackBonus}
+                      <InfoPopover label={t("aboutBonus")}>
+                        {reviewCompensation.compensationMode === "usdc" ? t("bonusOptional") : t("bonusHumanChoice")}
                       </InfoPopover>
                     </span>
                   </legend>
@@ -2013,16 +2051,16 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     className="mt-3 sm:max-w-md"
                     value={reviewCompensation.feedbackBonusEnabled ? "enabled" : "disabled"}
                     options={[
-                      { value: "disabled", label: reviewPolicyCopy.payment.noBonus },
-                      { value: "enabled", label: reviewPolicyCopy.payment.addBonus },
+                      { value: "disabled", label: policyCopy.payment.noBonus },
+                      { value: "enabled", label: policyCopy.payment.addBonus },
                     ]}
                     onChange={value => changeFeedbackBonus(value === "enabled")}
                   />
                   {reviewCompensation.feedbackBonusEnabled ? (
                     <div className="mt-4 grid gap-4 sm:grid-cols-2">
                       <Field
-                        label={reviewPolicyCopy.payment.bonusPool}
-                        className="border-white/10 bg-[var(--rateloop-field)]"
+                        label={policyCopy.payment.bonusPool}
+                        className="border-base-content/10 bg-[var(--rateloop-field)]"
                         type="text"
                         inputMode="decimal"
                         format="usdcAmount"
@@ -2034,8 +2072,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                         required
                       />
                       <SelectField
-                        className="border-white/10 bg-[var(--rateloop-field)]"
-                        label={reviewPolicyCopy.payment.awarder}
+                        className="border-base-content/10 bg-[var(--rateloop-field)]"
+                        label={policyCopy.payment.awarder}
                         labelClassName="text-sm"
                         value={reviewCompensation.feedbackBonusAwarderKind}
                         onChange={event =>
@@ -2045,14 +2083,14 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                           }))
                         }
                       >
-                        <option value="requester">{reviewPolicyCopy.payment.requester}</option>
-                        <option value="designated">{reviewPolicyCopy.payment.designated}</option>
+                        <option value="requester">{policyCopy.payment.requester}</option>
+                        <option value="designated">{policyCopy.payment.designated}</option>
                       </SelectField>
                       {reviewCompensation.feedbackBonusAwarderKind === "designated" ? (
                         <div className="sm:col-span-2">
                           <Field
-                            label={reviewPolicyCopy.payment.awarderAccount}
-                            className="border-white/10 bg-[var(--rateloop-field)]"
+                            label={policyCopy.payment.awarderAccount}
+                            className="border-base-content/10 bg-[var(--rateloop-field)]"
                             value={reviewCompensation.feedbackBonusAwarderAccount}
                             onChange={event =>
                               setReviewCompensation(current => ({
@@ -2060,17 +2098,13 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                                 feedbackBonusAwarderAccount: event.target.value,
                               }))
                             }
-                            placeholder="Authenticated RateLoop account"
+                            placeholder={t("authenticatedAccount")}
                             maxLength={320}
                             required
                           />
                         </div>
                       ) : null}
-                      <p className="text-xs text-base-content/55 sm:col-span-2">
-                        {
-                          "The agent may prepare or fund this exact pool within its grant, but it can never select or execute an award."
-                        }
-                      </p>
+                      <p className="text-xs text-base-content/55 sm:col-span-2">{t("bonusAgentBoundary")}</p>
                     </div>
                   ) : null}
                 </fieldset>
@@ -2098,7 +2132,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
             <SetupActionBar>
               {backButton}
               <Button className="min-h-11 w-full sm:w-auto" type="submit" disabled={busy}>
-                {busy ? "Saving…" : "Save and continue"}
+                {busy ? t("saving") : t("saveContinue")}
               </Button>
             </SetupActionBar>
           </form>
@@ -2106,7 +2140,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
 
         {currentStep === "people" ? (
           <>
-            <SetupStageHeader headingRef={headingRef} title="People" />
+            <SetupStageHeader headingRef={headingRef} title={t("people")} />
             {setup.reviewDraft?.requestProfile.audience !== "public_network" ? (
               <Card
                 as="section"
@@ -2114,7 +2148,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 className="mt-5 flex flex-wrap items-center justify-between gap-3 p-4"
               >
                 <div>
-                  <h3 className="font-semibold">Confirmed reviewers</h3>
+                  <h3 className="font-semibold">{t("confirmedReviewers")}</h3>
                   {confirmedReviewerCountError ? (
                     <>
                       <p className="mt-1 text-sm text-error" role="alert">
@@ -2125,26 +2159,27 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                         type="button"
                         onClick={() => retryConfirmedReviewerCount()}
                       >
-                        Check again
+                        <AgentText id="translated248" />
                       </button>
                     </>
                   ) : (
                     <p className="mt-1 text-sm text-base-content/60">
                       {confirmedReviewerCount === null
-                        ? "Checking the saved reviewer group…"
-                        : `${confirmedReviewerCount}/${requiredReviewerCount} seats ready`}
+                        ? t("checkingGroup")
+                        : completion("seatsReady", {
+                            confirmed: confirmedReviewerCount,
+                            required: requiredReviewerCount,
+                          })}
                     </p>
                   )}
                 </div>
                 {confirmedReviewerCount !== null ? (
                   <span
                     className={`rounded-md px-2 py-1 text-xs font-medium ${
-                      confirmedReviewerSeatsReady
-                        ? "bg-emerald-300/10 text-emerald-100"
-                        : "bg-amber-200/10 text-amber-100"
+                      confirmedReviewerSeatsReady ? "bg-success/10 text-success" : "bg-warning/10 text-warning"
                     }`}
                   >
-                    {confirmedReviewerSeatsReady ? "Ready" : "Action required"}
+                    {confirmedReviewerSeatsReady ? t("ready") : t("actionRequired")}
                   </span>
                 ) : null}
               </Card>
@@ -2159,28 +2194,23 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <h3 id="setup-specialist-coverage-heading" className="font-semibold">
-                      Specialist coverage
+                      {t("specialistCoverage")}
                     </h3>
-                    <p className="mt-1 text-sm text-base-content/60">
-                      Pending invitations do not make a request ready. Confirm each person&apos;s knowledge after they
-                      join.
-                    </p>
+                    <p className="mt-1 text-sm text-base-content/60">{t("specialistCoverageDescription")}</p>
                   </div>
                   {expertiseCoverage ? (
                     <span
                       className={`rounded-md px-2 py-1 text-xs font-medium ${
-                        expertiseCoverage.ready
-                          ? "bg-emerald-300/10 text-emerald-100"
-                          : "bg-amber-200/10 text-amber-100"
+                        expertiseCoverage.ready ? "bg-success/10 text-success" : "bg-warning/10 text-warning"
                       }`}
                     >
-                      {expertiseCoverage.ready ? "Ready" : "Action required"}
+                      {expertiseCoverage.ready ? t("ready") : t("actionRequired")}
                     </span>
                   ) : null}
                 </div>
                 {expertiseCoverageLoading ? (
                   <p className="mt-4 text-sm text-base-content/55" aria-live="polite">
-                    Checking coverage…
+                    {t("checkingCoverage")}
                   </p>
                 ) : expertiseCoverageError ? (
                   <p className="mt-4 text-sm text-error" role="alert">
@@ -2195,15 +2225,20 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                       return (
                         <li
                           key={`${requirement.definitionId}:${requirement.definitionVersion}:${requirement.definitionHash}`}
-                          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm"
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-base-content/10 px-3 py-2 text-sm"
                         >
                           <span>{coverage?.label ?? expertiseRequirementLabel(requirement, expertiseDefinitions)}</span>
                           <span className="text-base-content/55">
                             {coverage
-                              ? `${coverage.confirmedSeats}/${requirement.minimumSeats} confirmed${
-                                  coverage.pendingInvitationSeats ? ` · ${coverage.pendingInvitationSeats} pending` : ""
+                              ? `${completion("coverageConfirmed", {
+                                  confirmed: coverage.confirmedSeats,
+                                  required: requirement.minimumSeats,
+                                })}${
+                                  coverage.pendingInvitationSeats
+                                    ? completion("coveragePending", { count: coverage.pendingInvitationSeats })
+                                    : ""
                                 }`
-                              : `${requirement.minimumSeats} needed`}
+                              : completion("coverageNeeded", { count: requirement.minimumSeats })}
                           </span>
                         </li>
                       );
@@ -2218,18 +2253,15 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   <>
                     <input type="hidden" name="decision" value="not_required" />
                     <Card as="div" variant="nested" className="p-4 text-sm">
-                      <p className="font-medium">RateLoop network</p>
-                      <p className="mt-1 text-base-content/60">
-                        No invitation is needed. Eligible network reviewers can receive public, synthetic, or safely
-                        redacted requests.
-                      </p>
+                      <p className="font-medium">{t("network")}</p>
+                      <p className="mt-1 text-base-content/60">{t("networkDescription")}</p>
                     </Card>
                   </>
                 ) : (
                   <>
                     <input type="hidden" name="decision" value={peopleDecision} />
                     <fieldset>
-                      <legend className="font-medium">Invite reviewers now?</legend>
+                      <legend className="font-medium">{t("inviteNow")}</legend>
                       <SetupChoiceGroup>
                         <SetupRadioChoice
                           id="agent-setup-people-invited"
@@ -2241,8 +2273,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                             setPeopleDecision("invited");
                             setSharedInvitation(false);
                           }}
-                          label="Invite one person"
-                          description="Create a one-use code that expires in seven days."
+                          label={t("inviteOne")}
+                          description={t("inviteOneDescription")}
                         />
                         {canCreateSharedInvitation ? (
                           <SetupRadioChoice
@@ -2255,8 +2287,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                               setPeopleDecision("invited");
                               setSharedInvitation(true);
                             }}
-                            label="Invite several people"
-                            description="Create one code for the currently missing reviewer seats."
+                            label={t("inviteSeveral")}
+                            description={t("inviteSeveralDescription")}
                           />
                         ) : null}
                         <SetupRadioChoice
@@ -2271,12 +2303,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                           // expertiseCoverage is hard-set to null when no specialist requirement
                           // exists — the same value as "loading" — so keying off it alone told a
                           // full reviewer group that automatic requests were still unavailable.
-                          label={confirmedReviewerPoolReady ? "Use confirmed reviewers" : "Invite later"}
-                          description={
-                            confirmedReviewerPoolReady
-                              ? "No new code is needed."
-                              : "Automatic requests stay unavailable until enough reviewers join."
-                          }
+                          label={confirmedReviewerPoolReady ? t("useConfirmed") : t("inviteLater")}
+                          description={confirmedReviewerPoolReady ? t("noNewCode") : t("automaticWait")}
                         />
                       </SetupChoiceGroup>
                     </fieldset>
@@ -2286,8 +2314,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                           <>
                             <div className="grid gap-4 sm:grid-cols-2">
                               <Field
-                                label="Number of people"
-                                className="border-white/10 bg-[var(--rateloop-field)]"
+                                label={t("numberPeople")}
+                                className="border-base-content/10 bg-[var(--rateloop-field)]"
                                 type="number"
                                 name="maximumRedemptions"
                                 min={2}
@@ -2302,10 +2330,10 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                               <Field
                                 label={
                                   <>
-                                    Verified email domain <span className="text-base-content/55">(optional)</span>
+                                    {t("verifiedDomain")} <span className="text-base-content/55">{t("optional")}</span>
                                   </>
                                 }
-                                className="border-white/10 bg-[var(--rateloop-field)]"
+                                className="border-base-content/10 bg-[var(--rateloop-field)]"
                                 type="text"
                                 name="intendedEmailDomain"
                                 maxLength={253}
@@ -2316,17 +2344,15 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                             </div>
                             <Card as="div" variant="nested" className="p-4 text-sm">
                               <p>
-                                Anyone with this code can claim one place until {sharedInvitationCapacity} people join
-                                or it expires in seven days. Restrict it to a verified company domain for sensitive
-                                work.
+                                <AgentText id="translated249" /> {sharedInvitationCapacity}{" "}
+                                <AgentText id="translated250" />
                               </p>
                               <p className="mt-2 text-base-content/60">
-                                Revoking the code stops future joins but does not remove existing members.
+                                <AgentText id="translated251" />
                               </p>
                               {privateExpertiseRequirements.length > 0 ? (
                                 <p className="mt-2 text-base-content/60">
-                                  This code creates reviewer memberships only. Confirm each person&apos;s specialist
-                                  knowledge after they join.
+                                  <AgentText id="translated252" />
                                 </p>
                               ) : null}
                             </Card>
@@ -2336,33 +2362,32 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                             <Field
                               label={
                                 <>
-                                  Bind code to recipient email{" "}
+                                  {t("recipientEmail")}{" "}
                                   {invitationExpertiseIds.length === 0 ? (
-                                    <span className="text-base-content/55">(optional)</span>
+                                    <span className="text-base-content/55">{t("optional")}</span>
                                   ) : null}
                                 </>
                               }
-                              className="border-white/10 bg-[var(--rateloop-field)]"
+                              className="border-base-content/10 bg-[var(--rateloop-field)]"
                               type="email"
                               name="intendedEmail"
                               maxLength={320}
                               required={invitationExpertiseIds.length > 0}
                               onChange={() => clearFormErrors("intendedEmail")}
                               error={fieldErrors.intendedEmail}
-                              hint="RateLoop sends the personal invitation link to this address. The recipient must sign in with that verified address."
+                              hint={t("recipientEmailHint")}
                             />
                             {privateExpertiseRequirements.length > 0 ? (
-                              <fieldset className="rounded-lg border border-white/10 p-4">
-                                <legend className="px-1 text-sm font-medium">Intended specialist areas</legend>
+                              <fieldset className="rounded-lg border border-base-content/10 p-4">
+                                <legend className="px-1 text-sm font-medium">{t("intendedAreas")}</legend>
                                 <p className="mt-1 text-xs leading-5 text-base-content/55">
-                                  Choose what you expect this person to cover. These remain pending until you confirm
-                                  them after redemption.
+                                  {t("intendedAreasDescription")}
                                 </p>
                                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                                   {privateExpertiseRequirements.map(requirement => (
                                     <label
                                       key={`${requirement.definitionId}:${requirement.definitionVersion}:${requirement.definitionHash}`}
-                                      className="flex cursor-pointer items-start gap-2 rounded-lg border border-white/10 p-3 text-sm"
+                                      className="flex cursor-pointer items-start gap-2 rounded-lg border border-base-content/10 p-3 text-sm"
                                     >
                                       <ChoiceInput
                                         type="checkbox"
@@ -2392,24 +2417,28 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 )}
                 {setup.reviewDraft?.requestProfile.compensationMode === "usdc" ? (
                   <Card as="div" variant="nested" className="mt-4 p-4 text-sm">
-                    <p className="font-medium">{reviewCompensation.usdcPerReviewer} USDC per accepted reviewer</p>
+                    <p className="font-medium">
+                      {reviewCompensation.usdcPerReviewer} <AgentText id="translated253" />
+                    </p>
                     <p className="mt-1 text-base-content/60">
-                      Available workspace funding is checked and reserved only when a request is prepared.
+                      <AgentText id="translated254" />
                     </p>
                   </Card>
                 ) : null}
                 {setup.reviewDraft?.requestProfile.feedbackBonusEnabled ? (
                   <Card as="div" variant="nested" className="mt-4 p-4 text-sm">
-                    <p className="font-medium">{reviewCompensation.feedbackBonusUsdc} USDC Feedback Bonus pool</p>
+                    <p className="font-medium">
+                      {reviewCompensation.feedbackBonusUsdc} <AgentText id="translated255" />
+                    </p>
                     <p className="mt-1 text-base-content/60">
-                      Funded separately before assignment. Only the saved human awarder can choose feedback to pay.
+                      <AgentText id="translated256" />
                     </p>
                   </Card>
                 ) : null}
                 <SetupActionBar>
                   {backButton}
                   <Button className="min-h-11 w-full sm:w-auto" type="submit" disabled={busy}>
-                    {busy ? "Finishing…" : "Finish setup"}
+                    {busy ? t("finishing") : t("finish")}
                   </Button>
                 </SetupActionBar>
               </form>
@@ -2417,11 +2446,9 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
               <div className="mt-5 space-y-4">
                 {inviteToken ? (
                   <div className="rounded-xl border border-primary/30 bg-primary/10 p-4">
-                    <p className="font-medium">Copy this invitation link now</p>
+                    <p className="font-medium">{t("copyInvitation")}</p>
                     <p className="mt-1 text-sm text-base-content/60">
-                      {issuedInvitationCapacity > 1
-                        ? `Up to ${issuedInvitationCapacity} people can use it before it expires.`
-                        : "It can be used once before it expires."}
+                      {issuedInvitationCapacity > 1 ? t("multiUse", { count: issuedInvitationCapacity }) : t("oneUse")}
                     </p>
                     <code className="mt-2 block break-all text-sm">{inviteToken}</code>
                     <button
@@ -2429,41 +2456,42 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                       type="button"
                       onClick={() => void copyInvitationLink()}
                     >
-                      Copy link
+                      {t("copyLink")}
                     </button>
                   </div>
                 ) : null}
                 <Card as="div" variant="nested" className="p-4 text-sm">
                   <p>
-                    <span className="text-base-content/55">Agent:</span> {setup.agent?.displayName ?? "Connected agent"}
+                    <span className="text-base-content/55">{t("summaryAgent")}</span>{" "}
+                    {setup.agent?.displayName ?? t("connectedAgent")}
                   </p>
                   <p className="mt-2">
-                    <span className="text-base-content/55">Review:</span>{" "}
-                    {reviewFrequencySummary(setup.reviewDraft?.selection)}
+                    <span className="text-base-content/55">{t("summaryReview")}</span>{" "}
+                    {localizedReviewSummary(setup.reviewDraft?.selection)}
                   </p>
                   <p className="mt-2">
-                    <span className="text-base-content/55">People:</span>{" "}
+                    <span className="text-base-content/55">{t("summaryPeople")}</span>{" "}
                     {setup.peopleDecision === "invited"
-                      ? "Invitation link created"
+                      ? t("invitationCreated")
                       : setup.peopleDecision === "not_required"
-                        ? "RateLoop network; no invitation needed"
-                        : "Invite later"}
+                        ? t("networkNoInvitation")
+                        : t("inviteLater")}
                   </p>
                   {setup.reviewDraft?.requestProfile.compensationMode === "usdc" ? (
                     <p className="mt-2">
-                      <span className="text-base-content/55">Base bounty:</span> {reviewCompensation.usdcPerReviewer}{" "}
-                      USDC per accepted reviewer
+                      <span className="text-base-content/55">{t("baseBounty")}</span>{" "}
+                      {reviewCompensation.usdcPerReviewer} <AgentText id="translated253" />
                     </p>
                   ) : null}
                   {setup.reviewDraft?.requestProfile.feedbackBonusEnabled ? (
                     <p className="mt-2">
-                      <span className="text-base-content/55">Feedback Bonus:</span>{" "}
-                      {reviewCompensation.feedbackBonusUsdc} USDC · human-awarded
+                      <span className="text-base-content/55">{policyCopy.payment.feedbackBonus}:</span>{" "}
+                      {reviewCompensation.feedbackBonusUsdc} <AgentText id="translated257" />
                     </p>
                   ) : null}
                   {setup.reviewDraft?.selection.mode !== "manual" ? (
                     <p className="mt-2">
-                      <span className="text-base-content/55">Authority:</span>{" "}
+                      <span className="text-base-content/55">{t("authority")}</span>{" "}
                       {reviewAuthoritySummary(
                         setup.reviewDraft?.authority ?? "check_only",
                         setup.reviewDraft?.requestProfile.compensationMode === "usdc" ||
@@ -2492,7 +2520,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     disabled={busy}
                     onClick={() => void finishSetup()}
                   >
-                    {busy ? "Finishing…" : setup.complete ? "Go to agents" : "Finish setup"}
+                    {busy ? t("finishing") : setup.complete ? t("goToAgents") : t("finish")}
                   </Button>
                 </SetupActionBar>
               </div>

@@ -1,0 +1,22 @@
+{
+  "localeName": "Deutsch",
+  "recovery": {
+    "usefulDestinations": "Nützliche Ziele",
+    "search": "Suchen",
+    "reviewWork": "Aufgaben prüfen",
+    "manageAgents": "Agenten verwalten",
+    "readDocs": "Dokumentation lesen",
+    "notFound": {
+      "title": "Seite nicht gefunden",
+      "description": "Die Adresse ist möglicherweise falsch oder die Seite wurde verschoben.",
+      "home": "Startseite"
+    },
+    "error": {
+      "eyebrow": "Fehler",
+      "title": "Etwas ist schiefgegangen",
+      "description": "Laden Sie die Seite erneut. Falls der Fehler bleibt, gehen Sie zurück oder wählen Sie eine andere Aufgabe.",
+      "tryAgain": "Erneut versuchen",
+      "goBack": "Zurück"
+    }
+  }
+}

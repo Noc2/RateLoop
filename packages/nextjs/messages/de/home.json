@@ -1,0 +1,50 @@
+{
+  "supportedAgents": "Funktioniert mit den Agenten, die Ihr Team bereits nutzt",
+  "sections": {
+    "useCases": {
+      "lead": "Wo Menschen",
+      "accent": "entscheiden"
+    },
+    "howItWorks": {
+      "lead": "So",
+      "accent": "funktioniert es"
+    },
+    "whyItWorks": {
+      "lead": "Warum es",
+      "accent": "funktioniert"
+    },
+    "pricing": {
+      "lead": "Preise, bewusst",
+      "accent": "einfach"
+    },
+    "questions": {
+      "lead": "Häufige",
+      "accent": "Fragen"
+    }
+  },
+  "loop": {
+    "titleLine1": "Menschliche",
+    "titleLine2": "Absicherungs-",
+    "titleLine3": "schleife",
+    "stages": {
+      "policy": {
+        "title": "Verantwortliche legen Regeln fest",
+        "body": "Legt Prüfregeln, Risikoschwellen, den Kreis der Prüfenden, Datengrenzen und Antwortfristen fest."
+      },
+      "submit": {
+        "title": "Agent reicht Arbeit ein",
+        "body": "Reicht die Arbeit, ihren Kontext, das angegebene Risiko und Belege innerhalb der freigegebenen Regeln ein.",
+        "concise": "Reicht Arbeit, Kontext und Belege innerhalb der freigegebenen Regeln ein."
+      },
+      "judge": {
+        "title": "Menschen urteilen",
+        "body": "Berechtigte Personen antworten unabhängig. Urteil, Gründe und Belege zur Übereinstimmung gehen an den Agenten zurück.",
+        "concise": "Unabhängige Menschen liefern Urteile, Gründe und Belege."
+      },
+      "evaluate": {
+        "title": "Auswertung",
+        "body": "Liefert Feedback und nutzbare Kennzahlen zur menschlichen Bewertung von KI-Abläufen."
+      }
+    }
+  }
+}

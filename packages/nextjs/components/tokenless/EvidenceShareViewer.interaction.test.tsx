@@ -1,6 +1,7 @@
 import React from "react";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 const GRANT_ID = "esh_1234567890123456789012";
@@ -26,7 +27,8 @@ test("the viewer removes the fragment before same-origin POST redemption and pre
     });
     return Response.json(PACKET);
   };
-  const { act, cleanup, render } = await import("@testing-library/react");
+  const { act, cleanup, render: baseRender } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const { EvidenceShareViewer } = await import("./EvidenceShareViewer");
 
   try {
@@ -61,7 +63,8 @@ test("a link without its fragment fails without making a redemption request", as
     called = true;
     return Response.json(PACKET);
   };
-  const { act, cleanup, render } = await import("@testing-library/react");
+  const { act, cleanup, render: baseRender } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const { EvidenceShareViewer } = await import("./EvidenceShareViewer");
 
   try {

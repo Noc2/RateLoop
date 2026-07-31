@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { useFormatter, useTranslations } from "next-intl";
 import { Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
@@ -18,9 +19,9 @@ type PasskeySummary = {
 
 type PendingAction = { kind: "add" } | { id: string; kind: "remove" };
 
-async function jsonRequest<T>(url: string, init?: RequestInit): Promise<T> {
+async function jsonRequest<T>(url: string, fallbackMessage: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, { cache: "no-store", credentials: "same-origin", ...init });
-  return readJson<T>(response, { fallbackMessage: "Unable to update passkeys." });
+  return readJson<T>(response, { fallbackMessage });
 }
 
 class PasskeyFieldError extends Error {
@@ -33,12 +34,9 @@ class PasskeyFieldError extends Error {
   }
 }
 
-function addedLabel(createdAt: string | null) {
-  if (!createdAt) return "Added date unavailable";
-  return `Added ${new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(createdAt))}`;
-}
-
 export function PasskeyManagementPanel() {
+  const t = useTranslations("account.passkeys");
+  const format = useFormatter();
   const [passkeys, setPasskeys] = useState<PasskeySummary[]>([]);
   const [canRemoveLast, setCanRemoveLast] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -56,17 +54,20 @@ export function PasskeyManagementPanel() {
   const { capture, clear, fieldErrors, formError } = useFormErrors();
 
   const refresh = useCallback(async () => {
-    const result = await jsonRequest<{ canRemoveLast: boolean; passkeys: PasskeySummary[] }>("/api/account/passkeys");
+    const result = await jsonRequest<{ canRemoveLast: boolean; passkeys: PasskeySummary[] }>(
+      "/api/account/passkeys",
+      t("updateFailed"),
+    );
     setPasskeys(result.passkeys);
     setCanRemoveLast(result.canRemoveLast);
     setLoadError(null);
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void refresh()
-      .catch(cause => setLoadError(cause instanceof Error ? cause.message : "Unable to load passkeys."))
+      .catch(() => setLoadError(t("loadFailed")))
       .finally(() => setLoading(false));
-  }, [refresh]);
+  }, [refresh, t]);
 
   function resetVerification() {
     setPending(null);
@@ -95,31 +96,37 @@ export function PasskeyManagementPanel() {
     await run(async () => {
       await betterAuthClient.signOut().catch(() => undefined);
       setConfiguration(await readBrowserAuthConfiguration());
-    }, "Unable to load verification options.");
+    }, t("verificationOptionsFailed"));
   }
 
   async function finish() {
     if (!pending) return;
     if (pending.kind === "add") {
-      const authorized = await jsonRequest<{ expiresAt: string; proof: string }>("/api/account/passkeys", {
-        body: JSON.stringify({ action: "passkey_add" }),
-        headers: { "Content-Type": "application/json" },
-        method: "POST",
-      });
+      const authorized = await jsonRequest<{ expiresAt: string; proof: string }>(
+        "/api/account/passkeys",
+        t("updateFailed"),
+        {
+          body: JSON.stringify({ action: "passkey_add" }),
+          headers: { "Content-Type": "application/json" },
+          method: "POST",
+        },
+      );
       const result = await betterAuthClient.passkey.addPasskey({
         fetchOptions: { headers: { "x-rateloop-passkey-action-proof": authorized.proof } },
-        name: name.trim() || "Passkey",
+        name: name.trim() || t("defaultName"),
       });
       if (result.error) {
-        throw new PasskeyFieldError(result.error.message || "Unable to add this passkey.", "name");
+        throw new PasskeyFieldError(result.error.message || t("addFailed"), "name");
       }
       setName("");
-      setNotice("Passkey added.");
+      setNotice(t("addedNotice"));
     } else {
-      await jsonRequest<{ removed: true }>(`/api/account/passkeys/${encodeURIComponent(pending.id)}`, {
-        method: "DELETE",
-      });
-      setNotice("Passkey removed.");
+      await jsonRequest<{ removed: true }>(
+        `/api/account/passkeys/${encodeURIComponent(pending.id)}`,
+        t("updateFailed"),
+        { method: "DELETE" },
+      );
+      setNotice(t("removedNotice"));
     }
     await betterAuthClient.signOut().catch(() => undefined);
     resetVerification();
@@ -129,9 +136,9 @@ export function PasskeyManagementPanel() {
   async function verifyWithPasskey() {
     await run(async () => {
       const result = await betterAuthClient.signIn.passkey();
-      if (result.error) throw new Error(result.error.message || "Passkey verification failed.");
+      if (result.error) throw new Error(result.error.message || t("verificationFailed"));
       await finish();
-    }, "Passkey verification failed.");
+    }, t("verificationFailed"));
     await betterAuthClient.signOut().catch(() => undefined);
   }
 
@@ -140,10 +147,10 @@ export function PasskeyManagementPanel() {
     await run(async () => {
       const result = await betterAuthClient.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
       if (result.error) {
-        throw new PasskeyFieldError(result.error.message || "Unable to send the sign-in code.", "email");
+        throw new PasskeyFieldError(result.error.message || t("sendFailed"), "email");
       }
       setOtpSent(true);
-    }, "Unable to send the sign-in code.");
+    }, t("sendFailed"));
   }
 
   async function verifyCode(event: FormEvent) {
@@ -151,10 +158,10 @@ export function PasskeyManagementPanel() {
     await run(async () => {
       const result = await betterAuthClient.signIn.emailOtp({ email, otp });
       if (result.error) {
-        throw new PasskeyFieldError(result.error.message || "The sign-in code is invalid or expired.", "otp");
+        throw new PasskeyFieldError(result.error.message || t("invalidCode"), "otp");
       }
       await finish();
-    }, "Unable to verify the sign-in code.");
+    }, t("verifyCodeFailed"));
     await betterAuthClient.signOut().catch(() => undefined);
   }
 
@@ -165,9 +172,9 @@ export function PasskeyManagementPanel() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h2 id="passkeys-heading" className="text-lg font-semibold">
-            Passkeys
+            {t("title")}
           </h2>
-          <p className="mt-2 text-sm leading-6 text-base-content/60">Sign in with your device instead of a code.</p>
+          <p className="mt-2 text-sm leading-6 text-base-content/60">{t("description")}</p>
         </div>
         <button
           className="btn rateloop-secondary-action btn-sm"
@@ -175,19 +182,19 @@ export function PasskeyManagementPanel() {
           type="button"
           onClick={() => void start({ kind: "add" })}
         >
-          Add passkey
+          {t("add")}
         </button>
       </div>
 
       <AsyncSection
         className="mt-5"
         loading={loading}
-        loadingLabel="Loading passkeys"
+        loadingLabel={t("loading")}
         error={loadError}
         empty={passkeys.length === 0}
-        emptyTitle="No passkey added yet."
+        emptyTitle={t("empty")}
       >
-        <ul className="mt-5 space-y-3" aria-label="Your passkeys">
+        <ul className="mt-5 space-y-3" aria-label={t("listLabel")}>
           {passkeys.map(passkey => {
             const isOnly = passkeys.length === 1;
             const removalBlocked = isOnly && !canRemoveLast;
@@ -199,12 +206,12 @@ export function PasskeyManagementPanel() {
                 <div>
                   <p className="font-medium">{passkey.name}</p>
                   <p className="mt-1 text-xs text-base-content/55">
-                    {addedLabel(passkey.createdAt)}
-                    {passkey.backedUp ? " · Synced" : ""}
+                    {passkey.createdAt
+                      ? t("added", { date: format.dateTime(new Date(passkey.createdAt), { dateStyle: "medium" }) })
+                      : t("addedUnavailable")}
+                    {passkey.backedUp ? ` · ${t("synced")}` : ""}
                   </p>
-                  {removalBlocked ? (
-                    <p className="mt-1 text-xs text-base-content/60">Add another passkey before removing this one.</p>
-                  ) : null}
+                  {removalBlocked ? <p className="mt-1 text-xs text-base-content/60">{t("lastBlocked")}</p> : null}
                 </div>
                 <button
                   className="btn btn-ghost btn-sm text-error"
@@ -212,7 +219,7 @@ export function PasskeyManagementPanel() {
                   type="button"
                   onClick={() => void start({ id: passkey.id, kind: "remove" })}
                 >
-                  Remove {passkey.name}
+                  {t("remove", { name: passkey.name })}
                 </button>
               </li>
             );
@@ -226,16 +233,16 @@ export function PasskeyManagementPanel() {
           aria-labelledby="passkey-verify-heading"
         >
           <h3 id="passkey-verify-heading" className="font-semibold">
-            Verify before {pending.kind === "add" ? "adding" : "removing"}
+            {t("verifyBefore", { action: pending.kind === "add" ? t("adding") : t("removing") })}
           </h3>
           {pending.kind === "add" ? (
             <div className="mt-4 max-w-md">
               <Field
                 id="new-passkey-name"
                 className="input mt-2 w-full"
-                label="Passkey name"
+                label={t("name")}
                 maxLength={80}
-                placeholder="This device"
+                placeholder={t("devicePlaceholder")}
                 value={name}
                 error={fieldErrors.name}
                 onChange={event => {
@@ -246,9 +253,7 @@ export function PasskeyManagementPanel() {
             </div>
           ) : null}
           {removingOnlyPasskey ? (
-            <p className="mt-2 text-sm leading-6 text-base-content/60">
-              Your verified email or another linked sign-in will remain available.
-            </p>
+            <p className="mt-2 text-sm leading-6 text-base-content/60">{t("onlyDescription")}</p>
           ) : null}
           <div className="mt-4 flex flex-wrap gap-3">
             {configuration.methods.passkey && passkeys.length > 0 ? (
@@ -258,11 +263,11 @@ export function PasskeyManagementPanel() {
                 type="button"
                 onClick={() => void verifyWithPasskey()}
               >
-                Verify with passkey
+                {t("verifyPasskey")}
               </button>
             ) : null}
             <button className="btn btn-ghost btn-sm" disabled={busy} type="button" onClick={resetVerification}>
-              Cancel
+              {t("cancel")}
             </button>
           </div>
           {configuration.methods.emailOtp ? (
@@ -272,7 +277,7 @@ export function PasskeyManagementPanel() {
                   <Field
                     id="passkey-verification-code"
                     className="input mt-2 w-full"
-                    label="Sign-in code"
+                    label={t("code")}
                     format="oneTimeCode"
                     inputMode="numeric"
                     autoComplete="one-time-code"
@@ -286,7 +291,7 @@ export function PasskeyManagementPanel() {
                   />
                 </div>
                 <button className="btn btn-primary btn-sm" disabled={busy} type="submit">
-                  Verify
+                  {t("verify")}
                 </button>
               </form>
             ) : (
@@ -295,7 +300,7 @@ export function PasskeyManagementPanel() {
                   <Field
                     id="passkey-verification-email"
                     className="input mt-2 w-full"
-                    label="Account email"
+                    label={t("email")}
                     type="email"
                     autoComplete="email"
                     value={email}
@@ -308,7 +313,7 @@ export function PasskeyManagementPanel() {
                   />
                 </div>
                 <button className="btn btn-outline btn-sm" disabled={busy} type="submit">
-                  Send code
+                  {t("sendCode")}
                 </button>
               </form>
             )

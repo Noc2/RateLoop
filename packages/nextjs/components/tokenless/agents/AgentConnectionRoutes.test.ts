@@ -21,9 +21,12 @@ const publicApi = readFileSync(
   new URL("../../../app/api/agent/v1/connection-intents/[intentId]/route.ts", import.meta.url),
   "utf8",
 );
-const publicPage = readFileSync(new URL("../../../app/(public)/connect/[intentId]/page.tsx", import.meta.url), "utf8");
+const publicPage = readFileSync(
+  new URL("../../../app/[locale]/(public)/connect/[intentId]/page.tsx", import.meta.url),
+  "utf8",
+);
 const publicNotFound = readFileSync(
-  new URL("../../../app/(public)/connect/[intentId]/not-found.tsx", import.meta.url),
+  new URL("../../../app/[locale]/(public)/connect/[intentId]/not-found.tsx", import.meta.url),
   "utf8",
 );
 const publicClient = readFileSync(new URL("./PublicAgentConnectionStatus.tsx", import.meta.url), "utf8");
@@ -89,10 +92,12 @@ test("public connection page exposes safe human and machine handoff state", () =
 });
 
 test("missing connection intents explain recovery instead of falling through to the generic 404", () => {
-  assert.match(publicNotFound, /This connection link is no longer available/);
-  assert.match(publicNotFound, /invalid, expired, or replaced/);
+  assert.match(publicNotFound, /getTranslations\("agents\.connectNotFound"\)/);
+  assert.match(publicNotFound, /from "~~\/i18n\/navigation"/);
   assert.match(publicNotFound, /href="\/agents\/connections"/);
-  assert.match(publicNotFound, /Open Connection/);
+  assert.match(publicNotFound, /t\("title"\)/);
+  assert.match(publicNotFound, /t\("description"\)/);
+  assert.match(publicNotFound, /t\("action"\)/);
 });
 
 test("claim fragment is inspected only in the browser and never stored or sent", () => {
@@ -101,6 +106,7 @@ test("claim fragment is inspected only in the browser and never stored or sent",
   assert.doesNotMatch(publicPage, /location\.hash|searchParams/);
   assert.doesNotMatch(publicClient, /fetch\(|sendBeacon|localStorage|sessionStorage/);
   assert.doesNotMatch(publicClient, /setFragmentState\(claim/);
-  assert.match(publicClient, /Connection link found\. Return to your agent to continue\./);
+  assert.match(publicClient, /useAgentTranslations\("publicStatus"\)/);
+  assert.match(publicClient, /t\("present"\)/);
   assert.doesNotMatch(publicClient, /activation claim is present|reconstruct or add a claim/);
 });

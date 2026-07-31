@@ -1,11 +1,13 @@
 import React, { createRef } from "react";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 test("reviewer shell supports 1, 2, R, and Enter without a pointer", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, screen } = await import("@testing-library/react");
+  const { cleanup, render: baseRender, screen } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { ReviewerShell } = await import("./ReviewerShell");
   const actions: string[] = [];
@@ -45,7 +47,8 @@ test("reviewer shell supports 1, 2, R, and Enter without a pointer", async () =>
 
 test("only the explicitly active shell handles shortcuts and links keep Enter activation", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render } = await import("@testing-library/react");
+  const { cleanup, render: baseRender } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { ReviewerShell } = await import("./ReviewerShell");
   const actions: string[] = [];
@@ -100,7 +103,8 @@ test("only the explicitly active shell handles shortcuts and links keep Enter ac
 
 test("a shell outside the active focus scope ignores window shortcuts", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render } = await import("@testing-library/react");
+  const { cleanup, render: baseRender } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { ReviewerShell } = await import("./ReviewerShell");
   const actions: string[] = [];

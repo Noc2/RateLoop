@@ -1,6 +1,7 @@
 import React from "react";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 function workspacesResponse() {
@@ -48,7 +49,8 @@ function billingProfileResponse() {
 
 test("arriving from pricing with billing=upgrade acknowledges the intent and lands on the upgrade action", async () => {
   const restoreDom = installTestDom();
-  const { act, cleanup, render } = await import("@testing-library/react");
+  const { act, cleanup, render: baseRender } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const { WorkspaceSettingsClient } = await import("./WorkspaceSettingsClient");
   const previousFetch = globalThis.fetch;
   const scrollCalls: ScrollIntoViewOptions[] = [];
@@ -84,7 +86,8 @@ test("arriving from pricing with billing=upgrade acknowledges the intent and lan
 
 test("plan comparison stays in the active workspace and exposes the material Early Access terms", async () => {
   const restoreDom = installTestDom();
-  const { act, cleanup, render, within } = await import("@testing-library/react");
+  const { act, cleanup, render: baseRender, within } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { WorkspaceSettingsClient } = await import("./WorkspaceSettingsClient");
   const previousFetch = globalThis.fetch;
@@ -120,7 +123,8 @@ test("plan comparison stays in the active workspace and exposes the material Ear
 
 test("a subscription needing attention offers payment recovery instead of a false disabled upgrade", async () => {
   const restoreDom = installTestDom();
-  const { act, cleanup, render } = await import("@testing-library/react");
+  const { act, cleanup, render: baseRender } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const { WorkspaceSettingsClient } = await import("./WorkspaceSettingsClient");
   const previousFetch = globalThis.fetch;
   window.history.replaceState(null, "", "/agents?tab=overview");
@@ -158,7 +162,8 @@ test("a subscription needing attention offers payment recovery instead of a fals
 
 test("an existing non-attention subscription offers management without payment-warning copy", async () => {
   const restoreDom = installTestDom();
-  const { act, cleanup, render } = await import("@testing-library/react");
+  const { act, cleanup, render: baseRender } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const { WorkspaceSettingsClient } = await import("./WorkspaceSettingsClient");
   const previousFetch = globalThis.fetch;
   window.history.replaceState(null, "", "/agents?tab=overview");
@@ -195,7 +200,8 @@ test("an existing non-attention subscription offers management without payment-w
 
 test("a zero panel-funding balance is visible and receives deep-link focus before billing loads", async () => {
   const restoreDom = installTestDom();
-  const { act, cleanup, render } = await import("@testing-library/react");
+  const { act, cleanup, render: baseRender } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const { WorkspaceSettingsClient } = await import("./WorkspaceSettingsClient");
   const previousFetch = globalThis.fetch;
   const previousScrollIntoView = HTMLElement.prototype.scrollIntoView;
@@ -241,7 +247,8 @@ test("a zero panel-funding balance is visible and receives deep-link focus befor
 
 test("a failed billing status refresh is surfaced instead of rejecting silently", async () => {
   const restoreDom = installTestDom();
-  const { act, cleanup, render } = await import("@testing-library/react");
+  const { act, cleanup, render: baseRender } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { WorkspaceSettingsClient } = await import("./WorkspaceSettingsClient");
   const previousFetch = globalThis.fetch;
@@ -277,7 +284,8 @@ test("a failed billing status refresh is surfaced instead of rejecting silently"
 
 test("a rejected billing detail lands focus on the exact field the server named", async () => {
   const restoreDom = installTestDom();
-  const { act, cleanup, render } = await import("@testing-library/react");
+  const { act, cleanup, render: baseRender } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { WorkspaceSettingsClient } = await import("./WorkspaceSettingsClient");
   const previousFetch = globalThis.fetch;
@@ -325,7 +333,8 @@ test("a rejected billing detail lands focus on the exact field the server named"
 
 test("identity provider deletion and SCIM revocation wait for explicit dialog confirmation", async () => {
   const restoreDom = installTestDom();
-  const { act, cleanup, render, waitFor, within } = await import("@testing-library/react");
+  const { act, cleanup, render: baseRender, waitFor, within } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { WorkspaceSettingsClient } = await import("./WorkspaceSettingsClient");
   const previousFetch = globalThis.fetch;

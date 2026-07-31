@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
+import { useFormatter, useTranslations } from "next-intl";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { ConfirmDialog } from "~~/components/tokenless/ui/ConfirmDialog";
+import { Link } from "~~/i18n/navigation";
 
 type ReviewerAccess = {
   workspaceId: string;
@@ -18,23 +19,19 @@ type ReviewerAccess = {
   }>;
 };
 
-async function readJson(response: Response) {
+async function readJson(response: Response, fallbackMessage: string) {
   const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
   if (!response.ok) {
     throw new Error(
-      typeof body.message === "string" ? body.message : typeof body.error === "string" ? body.error : "Request failed.",
+      typeof body.message === "string" ? body.message : typeof body.error === "string" ? body.error : fallbackMessage,
     );
   }
   return body;
 }
 
-function expiryLabel(value: string | null) {
-  if (!value) return "No expiry";
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? "No expiry" : parsed.toLocaleDateString();
-}
-
 export function ReviewerAccessPanel() {
+  const t = useTranslations("human.reviewerAccess");
+  const format = useFormatter();
   const [access, setAccess] = useState<ReviewerAccess[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyWorkspaceId, setBusyWorkspaceId] = useState<string | null>(null);
@@ -43,16 +40,20 @@ export function ReviewerAccessPanel() {
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    const body = await readJson(
-      await fetch("/api/account/reviewer-access", {
-        cache: "no-store",
-        credentials: "same-origin",
-        signal,
-      }),
-    );
-    setAccess((body.reviewerAccess ?? []) as ReviewerAccess[]);
-  }, []);
+  const load = useCallback(
+    async (signal?: AbortSignal) => {
+      const body = await readJson(
+        await fetch("/api/account/reviewer-access", {
+          cache: "no-store",
+          credentials: "same-origin",
+          signal,
+        }),
+        t("requestFailed"),
+      );
+      setAccess((body.reviewerAccess ?? []) as ReviewerAccess[]);
+    },
+    [t],
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -61,13 +62,13 @@ export function ReviewerAccessPanel() {
       .then(() => setLoadError(null))
       .catch(cause => {
         if (cause instanceof DOMException && cause.name === "AbortError") return;
-        setLoadError(cause instanceof Error ? cause.message : "Unable to load reviewer access.");
+        setLoadError(t("loadFailed"));
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [load]);
+  }, [load, t]);
 
   async function leave(item: ReviewerAccess) {
     setBusyWorkspaceId(item.workspaceId);
@@ -79,12 +80,13 @@ export function ReviewerAccessPanel() {
           method: "DELETE",
           credentials: "same-origin",
         }),
+        t("requestFailed"),
       );
       await load();
       setPendingLeave(null);
-      setStatus(`You will not receive new private work from ${item.workspaceName}.`);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to leave the reviewer roster.");
+      setStatus(t("left", { workspace: item.workspaceName }));
+    } catch {
+      setError(t("leaveFailed"));
     } finally {
       setBusyWorkspaceId(null);
     }
@@ -93,19 +95,19 @@ export function ReviewerAccessPanel() {
   const activeAccess = access.filter(item => item.status === "active");
   return (
     <Card as="section" className="scroll-mt-24 rounded-2xl p-6" aria-labelledby="reviewer-access-heading">
-      <div className="border-b border-white/10 pb-4">
-        <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-pink)]">Reviewer access</p>
+      <div className="border-b border-base-content/10 pb-4">
+        <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-pink)]">{t("eyebrow")}</p>
         <h2 id="reviewer-access-heading" className="mt-2 text-xl font-semibold">
-          Workspaces you review
+          {t("title")}
         </h2>
       </div>
       <div className="mt-5">
         <AsyncSection
           loading={loading}
-          loadingLabel="Loading reviewer access"
+          loadingLabel={t("loading")}
           error={loadError}
           empty={activeAccess.length === 0}
-          emptyTitle="You do not review for a workspace yet."
+          emptyTitle={t("empty")}
         >
           <ul className="space-y-3">
             {activeAccess.map(item => (
@@ -117,17 +119,22 @@ export function ReviewerAccessPanel() {
                       .filter(grant => grant.status === "active")
                       .map(grant => (
                         <p className="mt-2 text-xs text-base-content/55" key={grant.grantId}>
-                          Up to {grant.maxPrivateSensitivity} material · access expires {expiryLabel(grant.validUntil)}
+                          {t("grant", {
+                            sensitivity: grant.maxPrivateSensitivity,
+                            expiry: grant.validUntil
+                              ? format.dateTime(new Date(grant.validUntil), { dateStyle: "medium" })
+                              : t("noExpiry"),
+                          })}
                         </p>
                       ))}
                   </div>
                   <button
                     type="button"
-                    className="btn btn-sm border border-red-300/20 bg-red-300/[0.06] text-red-100"
+                    className="btn btn-sm border border-error/20 bg-error/[0.06] text-error"
                     disabled={busyWorkspaceId === item.workspaceId}
                     onClick={() => setPendingLeave(item)}
                   >
-                    {busyWorkspaceId === item.workspaceId ? "Leaving…" : "Stop reviewing"}
+                    {busyWorkspaceId === item.workspaceId ? t("leaving") : t("stop")}
                   </button>
                 </div>
               </Card>
@@ -136,25 +143,25 @@ export function ReviewerAccessPanel() {
         </AsyncSection>
         {!loading && !loadError && activeAccess.length === 0 ? (
           <Link className="btn btn-sm rateloop-secondary-action mt-3" href="/human/review?invite=1">
-            Use an invitation
+            {t("useInvitation")}
           </Link>
         ) : null}
       </div>
       {status ? (
-        <p role="status" className="mt-5 rounded-lg bg-emerald-300/10 p-3 text-sm text-emerald-100">
+        <p role="status" className="mt-5 rounded-lg bg-success/10 p-3 text-sm text-success">
           {status}
         </p>
       ) : null}
       {error ? (
-        <p role="alert" className="mt-5 rounded-lg bg-red-400/10 p-3 text-sm text-red-100">
+        <p role="alert" className="mt-5 rounded-lg bg-error/10 p-3 text-sm text-error">
           {error}
         </p>
       ) : null}
       <ConfirmDialog
         open={pendingLeave !== null}
-        title={`Stop reviewing for ${pendingLeave?.workspaceName ?? "this workspace"}?`}
-        description="You will stop receiving new private work from this workspace."
-        confirmLabel="Stop reviewing"
+        title={t("confirmTitle", { workspace: pendingLeave?.workspaceName ?? t("confirmFallback") })}
+        description={t("confirmDescription")}
+        confirmLabel={t("stop")}
         busy={busyWorkspaceId !== null}
         onCancel={() => setPendingLeave(null)}
         onConfirm={() => {

@@ -1,8 +1,9 @@
 "use client";
 
 import { type FormEvent, useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import { useAgentTranslations } from "./AgentsLocaleProvider";
 import { RateLoopLogo } from "~~/components/RateLoopLogo";
+import { Link, useRouter } from "~~/i18n/navigation";
 
 type Props = {
   autoAuthorize: boolean;
@@ -35,6 +36,8 @@ function isLoopbackRedirect(value: string | undefined) {
 }
 
 export function AgentOAuthConsentForm({ autoAuthorize, values }: Props) {
+  const router = useRouter();
+  const t = useAgentTranslations("oauth");
   const formRef = useRef<HTMLFormElement>(null);
   const callbackDeliveredRef = useRef(false);
   const redirectTimerRef = useRef<number | null>(null);
@@ -73,7 +76,7 @@ export function AgentOAuthConsentForm({ autoAuthorize, values }: Props) {
       });
       const result = (await response.json()) as RelayResponse;
       if (!response.ok || !result.redirectTo || !result.delivery) {
-        throw new Error(result.error_description || "The connection could not be completed.");
+        throw new Error(t("callbackFailed"));
       }
       if (result.delivery === "navigate") {
         window.location.assign(result.redirectTo);
@@ -82,12 +85,12 @@ export function AgentOAuthConsentForm({ autoAuthorize, values }: Props) {
       const callback = new URL(result.redirectTo);
       const expected = new URL(values.redirect_uri);
       if (callback.origin !== expected.origin || callback.pathname !== expected.pathname) {
-        throw new Error("The connection callback did not match the approved destination.");
+        throw new Error(t("callbackMismatch"));
       }
       setCallbackOutcome(result.outcome === "denied" ? "denied" : "approved");
       setCallbackUrl(callback.href);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "The connection could not be completed.");
+    } catch {
+      setError(t("callbackFailed"));
     } finally {
       setSubmitting(false);
     }
@@ -99,29 +102,29 @@ export function AgentOAuthConsentForm({ autoAuthorize, values }: Props) {
     setCallbackDelivered(true);
     if (window.opener && !window.opener.closed) window.close();
     redirectTimerRef.current = window.setTimeout(() => {
-      window.location.replace(OAUTH_WORKSPACE_RETURN);
+      router.replace(OAUTH_WORKSPACE_RETURN);
     }, 1_600);
   }
 
   if (callbackUrl) {
     return (
-      <div className="mt-8 border-t border-white/10 pt-8 text-center" role="status" aria-live="polite">
+      <div className="mt-8 border-t border-base-content/10 pt-8 text-center" role="status" aria-live="polite">
         <RateLoopLogo className="mx-auto h-16 w-16" idPrefix="agent-oauth-complete" />
         <p className="mt-5 font-mono text-xs uppercase tracking-[0.22em] text-[var(--rateloop-green)]">
-          {callbackOutcome === "approved" ? "Authorization approved" : "Connection canceled"}
+          {callbackOutcome === "approved" ? t("approved") : t("canceled")}
         </p>
         <h2 className="mt-3 text-3xl font-semibold tracking-tight">
-          {callbackOutcome === "approved" ? "Authentication complete" : "Authorization canceled"}
+          {callbackOutcome === "approved" ? t("complete") : t("authorizationCanceled")}
         </h2>
         <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-base-content/65">
           {callbackDelivered && callbackOutcome === "approved"
-            ? "Return to the same agent task and use Continue if the host offers it."
+            ? t("returnTask")
             : callbackDelivered
-              ? "Returning to RateLoop…"
-              : "Finishing the secure callback…"}
+              ? t("returning")
+              : t("finishing")}
         </p>
         <Link href={OAUTH_WORKSPACE_RETURN} className="rateloop-gradient-action mt-6 min-h-11 px-5">
-          Back to Agents
+          {t("back")}
         </Link>
         <iframe
           aria-hidden="true"
@@ -130,7 +133,7 @@ export function AgentOAuthConsentForm({ autoAuthorize, values }: Props) {
           referrerPolicy="no-referrer"
           sandbox=""
           src={callbackUrl}
-          title="Complete agent authentication"
+          title={t("frameTitle")}
         />
       </div>
     );
@@ -152,10 +155,10 @@ export function AgentOAuthConsentForm({ autoAuthorize, values }: Props) {
         <>
           <input type="hidden" name="decision" value="approve" />
           <p className="text-sm text-base-content/65" role="status">
-            Completing the secure connection…
+            {t("completing")}
           </p>
           <button className="rateloop-gradient-action min-h-11 w-full px-4" type="submit">
-            {submitting ? "Connecting…" : "Continue"}
+            {submitting ? t("connecting") : t("continue")}
           </button>
         </>
       ) : (
@@ -167,10 +170,10 @@ export function AgentOAuthConsentForm({ autoAuthorize, values }: Props) {
             value="approve"
             disabled={submitting}
           >
-            {submitting ? "Connecting…" : "Allow connection"}
+            {submitting ? t("connecting") : t("allow")}
           </button>
           <button className="btn btn-outline min-h-11" type="submit" name="decision" value="deny" disabled={submitting}>
-            Cancel
+            {t("cancel")}
           </button>
         </div>
       )}

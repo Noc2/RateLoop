@@ -26,9 +26,9 @@ export function AsyncSection({
       <Card className={classNames("space-y-3 rounded-2xl p-5", className)} role="status" aria-live="polite">
         <span className="sr-only">{loadingLabel}</span>
         <div aria-hidden="true" className="space-y-3">
-          <div className="h-4 w-2/5 animate-pulse rounded bg-white/10 motion-reduce:animate-none" />
-          <div className="h-3 w-full animate-pulse rounded bg-white/[0.06] motion-reduce:animate-none" />
-          <div className="h-3 w-4/5 animate-pulse rounded bg-white/[0.06] motion-reduce:animate-none" />
+          <div className="h-4 w-2/5 animate-pulse rounded bg-base-content/10 motion-reduce:animate-none" />
+          <div className="h-3 w-full animate-pulse rounded bg-base-content/[0.06] motion-reduce:animate-none" />
+          <div className="h-3 w-4/5 animate-pulse rounded bg-base-content/[0.06] motion-reduce:animate-none" />
         </div>
       </Card>
     );

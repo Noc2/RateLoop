@@ -4,11 +4,11 @@ import { classNames } from "./classNames";
 export type BadgeVariant = "neutral" | "success" | "warning" | "danger" | "info";
 
 const VARIANT_CLASSES: Record<BadgeVariant, string> = {
-  neutral: "border-white/10 bg-white/[0.04] text-base-content/65",
-  success: "border-0 bg-emerald-300/10 text-emerald-100",
-  warning: "border-0 bg-amber-300/10 text-amber-100",
-  danger: "border-0 bg-red-300/[0.06] text-red-100",
-  info: "border-0 bg-blue-300/10 text-blue-100",
+  neutral: "border-base-content/10 bg-base-content/[0.04] text-base-content/65",
+  success: "border-0 bg-success/10 text-success",
+  warning: "border-0 bg-warning/10 text-warning",
+  danger: "border-0 bg-error/[0.06] text-error",
+  info: "border-0 bg-info/10 text-info",
 };
 
 export function Badge({

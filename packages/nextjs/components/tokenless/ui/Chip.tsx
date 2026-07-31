@@ -24,7 +24,7 @@ export function Chip({
         "rounded-full border px-3 py-2 text-xs transition-colors has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[var(--rateloop-blue)]",
         checked
           ? "border-[var(--rateloop-pink)] bg-pink-300/10 text-pink-100"
-          : "border-white/10 text-base-content/55 hover:border-white/25",
+          : "border-base-content/10 text-base-content/55 hover:border-base-content/25",
         disabled && "cursor-not-allowed opacity-50",
         className,
       )}

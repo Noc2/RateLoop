@@ -1,5 +1,6 @@
 import React from "react";
 import { WorkspaceDangerZone } from "./WorkspaceDangerZone";
+import { EnglishAgentTestProviders } from "./testing/AgentTestProviders";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -16,15 +17,17 @@ const settingsSource = readFileSync(new URL("./WorkspaceSettingsClient.tsx", imp
 test("the workspace card exposes one restrained danger zone with both destructive actions", () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
   const html = renderToStaticMarkup(
-    <WorkspaceDangerZone canDelete workspaceId="workspace-one" workspaceName="Example workspace" />,
+    <EnglishAgentTestProviders>
+      <WorkspaceDangerZone canDelete workspaceId="workspace-one" workspaceName="Example workspace" />
+    </EnglishAgentTestProviders>,
   ).replace(/\s+/g, " ");
 
   assert.match(html, />Danger zone</);
   assert.match(html, /<button[^>]*>Stop all agent activity<\/button>/);
   assert.match(html, /<button[^>]*>Delete workspace<\/button>/);
-  assert.match(dangerSource, /mt-8 border-t border-white\/10 pt-6/);
-  assert.match(dangerSource, /font-mono text-xs uppercase tracking-widest text-red-300\/80/);
-  assert.match(dangerSource, /rounded-xl border border-red-400\/30/);
+  assert.match(dangerSource, /mt-8 border-t border-base-content\/10 pt-6/);
+  assert.match(dangerSource, /font-mono text-xs uppercase tracking-widest text-error\/80/);
+  assert.match(dangerSource, /rounded-xl border border-error\/30/);
   assert.ok(dangerSource.indexOf("<WorkspaceStopPanel") < dangerSource.indexOf("<WorkspaceDeletionPanel"));
 });
 

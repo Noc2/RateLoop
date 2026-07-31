@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useAgentFormatter, useAgentTranslations } from "./AgentsLocaleProvider";
 import { Card } from "~~/components/tokenless/ui/Card";
 
 type Health = {
@@ -12,36 +13,35 @@ type Health = {
 
 type PanelState = { status: "loading" } | { status: "ready"; health: Health } | { status: "error" };
 
-const CONTENT: Record<Health["state"], { label: string; description: string; tone: string }> = {
+const TONES: Record<Health["state"], string> = {
+  healthy: "text-success",
+  degraded: "text-warning",
+  stale: "text-error",
+  unavailable: "text-warning",
+};
+
+const CONTENT_KEYS: Record<Health["state"], { label: string; description: string }> = {
   healthy: {
-    label: "Maintenance healthy",
-    description: "Scheduled review, delivery, privacy, and settlement work is running normally.",
-    tone: "text-emerald-200",
+    label: "healthy",
+    description: "healthyDescription",
   },
   degraded: {
-    label: "Maintenance needs attention",
-    description: "Some scheduled work is retrying, parked, or awaiting operator action.",
-    tone: "text-amber-200",
+    label: "degraded",
+    description: "degradedDescription",
   },
   stale: {
-    label: "Maintenance delayed",
-    description: "Scheduled maintenance has not completed within the expected window.",
-    tone: "text-red-200",
+    label: "stale",
+    description: "staleDescription",
   },
   unavailable: {
-    label: "Maintenance not observed",
-    description: "No scheduled maintenance run has been recorded yet.",
-    tone: "text-amber-200",
+    label: "unavailable",
+    description: "unavailableDescription",
   },
 };
 
-function completedLabel(value: string | null) {
-  if (!value) return "No completed run";
-  const timestamp = new Date(value);
-  return Number.isFinite(timestamp.getTime()) ? `Last completed ${timestamp.toLocaleString()}` : "No completed run";
-}
-
 export function ScheduledWorkerHealthPanel({ workspaceId }: { workspaceId: string }) {
+  const format = useAgentFormatter();
+  const t = useAgentTranslations("maintenance");
   const [panelState, setPanelState] = useState<PanelState>({ status: "loading" });
   useEffect(() => {
     const controller = new AbortController();
@@ -68,30 +68,38 @@ export function ScheduledWorkerHealthPanel({ workspaceId }: { workspaceId: strin
   if (panelState.status === "error") {
     return (
       <Card as="section" aria-live="polite" className="p-5">
-        <h2 className="text-base font-semibold text-amber-200">Maintenance status unavailable</h2>
-        <p className="mt-1 text-sm text-base-content/65">Health telemetry could not be loaded. Try again later.</p>
+        <h2 className="text-base font-semibold text-warning">{t("statusUnavailable")}</h2>
+        <p className="mt-1 text-sm text-base-content/65">{t("loadError")}</p>
       </Card>
     );
   }
   const { health } = panelState;
-  const content = CONTENT[health.state];
+  const content = CONTENT_KEYS[health.state];
+  const lastCompleted = health.lastCompletedAt
+    ? t("lastCompleted", {
+        date: format.dateTime(new Date(health.lastCompletedAt), { dateStyle: "medium", timeStyle: "short" }),
+      })
+    : t("noCompleted");
   return (
     <Card as="section" aria-live="polite" className="p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className={`text-base font-semibold ${content.tone}`}>{content.label}</h2>
-          <p className="mt-1 text-sm text-base-content/65">{content.description}</p>
+          <h2 className={`text-base font-semibold ${TONES[health.state]}`}>{t(content.label)}</h2>
+          <p className="mt-1 text-sm text-base-content/65">{t(content.description)}</p>
         </div>
         <p className="text-xs text-base-content/60">
-          {health.currentRun === "running" ? "Run in progress · " : ""}
-          {completedLabel(health.lastCompletedAt)}
+          {health.currentRun === "running" ? `${t("running")} · ` : ""}
+          {lastCompleted}
         </p>
       </div>
       {health.signals.length > 0 ? (
-        <ul className="mt-3 flex flex-wrap gap-2" aria-label="Maintenance issues">
+        <ul className="mt-3 flex flex-wrap gap-2" aria-label={t("issues")}>
           {health.signals.map(signal => (
-            <li key={signal.key} className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs">
-              {signal.label}
+            <li
+              key={signal.key}
+              className="rounded-full border border-base-content/10 bg-base-content/[0.04] px-3 py-1 text-xs"
+            >
+              {t("issueReference", { key: signal.key })}
             </li>
           ))}
         </ul>

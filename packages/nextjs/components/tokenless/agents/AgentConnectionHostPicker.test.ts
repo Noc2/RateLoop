@@ -30,22 +30,23 @@ function memoryStorage(): Storage {
 
 test("the picker is one optional disclosure with registry-driven, keyboard-reachable chips", () => {
   assert.match(source, /<details/);
-  assert.match(source, /<summary[^>]*>\s*Connecting to a specific tool\?/);
+  assert.match(source, /<summary[^>]*>\{t\("specificTool"\)\}<\/summary>/);
   assert.match(source, /TOKENLESS_HOST_CAPABILITIES\.map\(host =>/);
   assert.match(source, /aria-pressed=\{selected\}/);
-  assert.match(source, /role="group" aria-label="Agent host"/);
+  assert.match(source, /role="group" aria-label=\{t\("hostGroup"\)\}/);
   assert.match(source, /onSelectHost\(selected \? null : host\.id\)/);
   // No chip is required and no host is invented outside the registry.
   assert.doesNotMatch(source, /required/i);
 });
 
 test("selected hosts show the tier badge, expected prompts, and only factual affordances", () => {
-  assert.match(source, /tokenlessSupportTierMeaning\(host\.supportTier\)/);
-  assert.match(source, /aria-label="Host prompts to expect"/);
+  assert.match(source, /const tierMeaning = \{/);
+  assert.match(source, /"release-tested": t\("releaseTestedMeaning"\)/);
+  assert.match(source, /aria-label=\{t\("prompts"\)\}/);
   assert.match(source, /host\.humanActions\.map/);
   assert.match(source, /host\.installAffordances\.map/);
   // cli-command and config-snippet render as copyable code; settings and plugin refs stay text.
-  assert.match(source, /\{copied \? "Copied" : "Copy"\}/);
+  assert.match(source, /\{copied \? t\("copied"\) : t\("copy"\)\}/);
   assert.match(source, /affordance\.kind === "settings-instructions"/);
   assert.match(source, /affordance\.kind === "plugin-marketplace"/);
   // Unverified install deep links are never rendered.

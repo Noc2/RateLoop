@@ -48,8 +48,10 @@ const sharedCopyPaths = [
 ] as const;
 
 test("setup and review setup render the same canonical policy copy", () => {
+  assert.match(setupSource, /const policyCopy = useLocalizedReviewPolicyCopy\(\)/u);
+  assert.match(editorSource, /const policyCopy = useLocalizedReviewPolicyCopy\(\)/u);
   for (const path of sharedCopyPaths) {
-    const reference = `reviewPolicyCopy.${path}`;
+    const reference = `policyCopy.${path}`;
     assert.ok(setupSource.includes(reference), `setup must use ${reference}`);
     assert.ok(editorSource.includes(reference), `review setup must use ${reference}`);
   }
@@ -93,6 +95,6 @@ test("adaptive policy detail is concise at connection time and complete in revie
   assert.match(reviewPolicyCopy.limits.adaptiveDetail, /70% minimum declared confidence/u);
   assert.match(reviewPolicyCopy.limits.adaptiveDetail, /at most 20 outputs/u);
   assert.match(reviewPolicyCopy.limits.adaptiveDetail, /100 comparable cases/u);
-  assert.match(connectionSource, /reviewPolicyCopy\.limits\.adaptiveConnectionHelp/u);
-  assert.match(editorSource, /reviewPolicyCopy\.limits\.adaptiveDetail/u);
+  assert.match(connectionSource, /policyCopy\.limits\.adaptiveConnectionHelp/u);
+  assert.match(editorSource, /policyCopy\.limits\.adaptiveDetail/u);
 });

@@ -1,5 +1,7 @@
 import React, { type ReactNode } from "react";
+import { LocalizedPublicContent } from "~~/components/docs/LocalizedPublicContent";
 import { Card } from "~~/components/tokenless/ui/Card";
+import type { Locale } from "~~/i18n/config";
 
 export type UseCaseIconKind = "reply" | "research" | "hiring";
 
@@ -57,38 +59,43 @@ export type UseCaseExample = {
   outcome: string;
 };
 
-export function UseCaseExampleCard({ example }: { example: UseCaseExample }) {
+export function UseCaseExampleCard({ example, locale = "en" }: { example: UseCaseExample; locale?: Locale }) {
   return (
-    <Card as="section" variant="nested" className="rounded-xl p-4 text-left">
-      <p className="font-mono text-xs uppercase tracking-widest" style={{ color: example.color }}>
-        Illustrative example
-      </p>
-      <dl className="mt-3 grid gap-3">
-        <div>
-          <dt className="font-mono text-xs uppercase tracking-wider text-base-content/55">{example.artifactLabel}</dt>
-          <dd className="mt-1 rounded-lg border border-white/10 px-3 py-2 text-sm italic leading-6 text-base-content/80">
-            {example.artifact}
-          </dd>
-        </div>
-        <div>
-          <dt className="font-mono text-xs uppercase tracking-wider text-base-content/55">Human check</dt>
-          <dd className="mt-1 text-sm font-semibold leading-6 text-base-content">{example.question}</dd>
-        </div>
-        <div>
-          <dt className="font-mono text-xs uppercase tracking-wider text-base-content/55">Panel result</dt>
-          <dd className="mt-1 text-sm leading-6">
-            <span className="font-semibold text-base-content">{example.verdict}</span>
-            <span className="mt-2 flex flex-wrap gap-2">
-              {example.reasons.map(reason => (
-                <span key={reason} className="rounded-md bg-white/[0.06] px-2 py-1 text-xs text-base-content/70">
-                  {reason}
-                </span>
-              ))}
-            </span>
-          </dd>
-        </div>
-      </dl>
-      <p className="mt-3 border-t border-white/10 pt-3 text-sm text-base-content/70">{example.outcome}</p>
-    </Card>
+    <LocalizedPublicContent locale={locale} section="docs">
+      <Card as="section" variant="nested" className="rounded-xl p-4 text-left">
+        <p className="font-mono text-xs uppercase tracking-widest" style={{ color: example.color }}>
+          Illustrative example
+        </p>
+        <dl className="mt-3 grid gap-3">
+          <div>
+            <dt className="font-mono text-xs uppercase tracking-wider text-base-content/55">{example.artifactLabel}</dt>
+            <dd className="mt-1 rounded-lg border border-base-content/10 px-3 py-2 text-sm italic leading-6 text-base-content/80">
+              {example.artifact}
+            </dd>
+          </div>
+          <div>
+            <dt className="font-mono text-xs uppercase tracking-wider text-base-content/55">Human check</dt>
+            <dd className="mt-1 text-sm font-semibold leading-6 text-base-content">{example.question}</dd>
+          </div>
+          <div>
+            <dt className="font-mono text-xs uppercase tracking-wider text-base-content/55">Panel result</dt>
+            <dd className="mt-1 text-sm leading-6">
+              <span className="font-semibold text-base-content">{example.verdict}</span>
+              <span className="mt-2 flex flex-wrap gap-2">
+                {example.reasons.map(reason => (
+                  <span
+                    key={reason}
+                    className="rounded-md bg-base-content/[0.06] px-2 py-1 text-xs text-base-content/70"
+                  >
+                    {reason}
+                  </span>
+                ))}
+              </span>
+            </dd>
+          </div>
+        </dl>
+        <p className="mt-3 border-t border-base-content/10 pt-3 text-sm text-base-content/70">{example.outcome}</p>
+      </Card>
+    </LocalizedPublicContent>
   );
 }

@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { AgentHumanReviewEditor } from "./AgentHumanReviewEditor";
+import { useAgentTranslations } from "./AgentsLocaleProvider";
 import { WorkspaceReviewersPanel } from "./WorkspaceReviewersPanel";
 import { agentTabHref } from "./agentWorkspaceState";
 import { SelectField } from "~~/components/tokenless/forms/Field";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import { Card } from "~~/components/tokenless/ui/Card";
+import { Link } from "~~/i18n/navigation";
 import type { AgentRegistry, WorkspaceAgent } from "~~/lib/tokenless/agentRegistry";
 import { readJson } from "~~/lib/tokenless/http";
 
@@ -24,6 +25,8 @@ type AgentSelection = {
 };
 
 export function AgentReviewsPanel({ canManage, workspaceId }: { canManage: boolean; workspaceId: string }) {
+  const t = useAgentTranslations("reviews");
+  const errors = useAgentTranslations("errors");
   const [registry, setRegistry] = useState<RegistryState>(() => ({
     workspaceId,
     loading: canManage,
@@ -55,19 +58,19 @@ export function AgentReviewsPanel({ canManage, workspaceId }: { canManage: boole
           agents: body.agents.filter(agent => agent.status === "active"),
           error: null,
         });
-      } catch (cause) {
+      } catch {
         if (controller.signal.aborted) return;
         setRegistry({
           workspaceId,
           loading: false,
           agents: [],
-          error: cause instanceof Error ? cause.message : "Unable to load the connected agents.",
+          error: errors("loadAgents"),
         });
       }
     })();
 
     return () => controller.abort();
-  }, [canManage, workspaceId]);
+  }, [canManage, errors, workspaceId]);
 
   if (!canManage) return null;
 
@@ -79,19 +82,15 @@ export function AgentReviewsPanel({ canManage, workspaceId }: { canManage: boole
       : (currentRegistry.agents[0]?.agentId ?? null);
 
   return (
-    <AsyncSection
-      loading={currentRegistry.loading}
-      loadingLabel="Loading review settings"
-      error={currentRegistry.error}
-    >
+    <AsyncSection loading={currentRegistry.loading} loadingLabel={t("loading")} error={currentRegistry.error}>
       {!currentRegistry.loading && !currentRegistry.error && selectedAgentId ? (
         <div className="space-y-5">
           {currentRegistry.agents.length > 1 ? (
             <div className="flex justify-end">
               <SelectField
                 containerClassName="w-56 max-w-full"
-                className="rounded-xl border-white/10 bg-[var(--rateloop-field)]"
-                label="Agent"
+                className="rounded-xl border-base-content/10 bg-[var(--rateloop-field)]"
+                label={t("agent")}
                 labelClassName="text-sm text-base-content/60"
                 value={selectedAgentId}
                 onChange={event => setSelection({ workspaceId, agentId: event.target.value })}
@@ -114,16 +113,14 @@ export function AgentReviewsPanel({ canManage, workspaceId }: { canManage: boole
       ) : !currentRegistry.loading && !currentRegistry.error ? (
         <Card as="section" className="rounded-2xl p-6" aria-labelledby="reviews-connection-required">
           <h2 id="reviews-connection-required" className="text-xl font-semibold">
-            Connect an agent first
+            {t("connectTitle")}
           </h2>
-          <p className="mt-2 max-w-2xl text-sm text-base-content/60">
-            Human-review settings become available after this workspace has an active agent.
-          </p>
+          <p className="mt-2 max-w-2xl text-sm text-base-content/60">{t("connectDescription")}</p>
           <Link
             className="rateloop-gradient-action mt-5 inline-flex min-h-11 items-center px-5"
             href={agentTabHref("connect", workspaceId)}
           >
-            Go to Connection
+            {t("goConnection")}
           </Link>
         </Card>
       ) : null}

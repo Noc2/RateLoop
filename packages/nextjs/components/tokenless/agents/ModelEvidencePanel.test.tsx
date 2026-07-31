@@ -1,4 +1,5 @@
 import React from "react";
+import { AgentsLocaleProvider } from "./AgentsLocaleProvider";
 import { ModelEvidencePanel, modelVolumeCalendarPoints } from "./ModelEvidencePanel";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -126,6 +127,22 @@ test("model evidence renders a profile selector, charts, coverage, and request-l
 
 test("model evidence stays absent until an eligible output reports execution metadata", () => {
   assert.equal(renderToStaticMarkup(<ModelEvidencePanel profiles={[]} />), "");
+});
+
+test("model evidence renders its display labels and values in German", () => {
+  const html = renderToStaticMarkup(
+    <AgentsLocaleProvider locale="de">
+      <ModelEvidencePanel profiles={profiles} />
+    </AgentsLocaleProvider>,
+  );
+
+  assert.match(html, /Ausführungsevidenz/);
+  assert.match(html, /Geeignete Ausgaben/);
+  assert.match(html, /Zur menschlichen Prüfung gesendet/);
+  assert.match(html, /Hohe Abdeckung/);
+  assert.match(html, /2 Modellaufrufe/);
+  assert.match(html, /1,5 Sek\./);
+  assert.doesNotMatch(html, /Eligible outputs|Sent to human review|High coverage|model calls|Not reported/);
 });
 
 test("model volume fills exactly fourteen calendar days instead of slicing dates with data", () => {

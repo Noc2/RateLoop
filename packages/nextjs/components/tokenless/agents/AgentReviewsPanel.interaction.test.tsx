@@ -1,6 +1,7 @@
 import React from "react";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { EnglishAgentTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 type TestAgent = {
@@ -54,7 +55,7 @@ test("one active agent opens the editor directly with reviewer access below it",
   };
 
   try {
-    render(<AgentReviewsPanel canManage workspaceId="workspace-1" />);
+    render(<AgentReviewsPanel canManage workspaceId="workspace-1" />, { wrapper: EnglishAgentTestProviders });
     const screen = within(document.body);
     const editorHeading = await screen.findByRole("heading", { name: "Finish human-review setup" });
     const reviewersHeading = await screen.findByRole("heading", { name: "Reviewers" });
@@ -99,7 +100,7 @@ test("multiple active agents use one compact selector and switch the direct edit
   };
 
   try {
-    render(<AgentReviewsPanel canManage workspaceId="workspace-1" />);
+    render(<AgentReviewsPanel canManage workspaceId="workspace-1" />, { wrapper: EnglishAgentTestProviders });
     const screen = within(document.body);
     const selector = (await screen.findByRole("combobox", { name: "Agent" })) as HTMLSelectElement;
     assert.equal(selector.value, "agent-a");
@@ -138,7 +139,7 @@ test("no active agent gives a direct route back to Connection", async () => {
   };
 
   try {
-    render(<AgentReviewsPanel canManage workspaceId="workspace-1" />);
+    render(<AgentReviewsPanel canManage workspaceId="workspace-1" />, { wrapper: EnglishAgentTestProviders });
     const screen = within(document.body);
     assert.ok(await screen.findByRole("heading", { name: "Connect an agent first" }));
     assert.equal(
@@ -166,7 +167,9 @@ test("non-managers do not load or render review management", async () => {
   };
 
   try {
-    const rendered = render(<AgentReviewsPanel canManage={false} workspaceId="workspace-1" />);
+    const rendered = render(<AgentReviewsPanel canManage={false} workspaceId="workspace-1" />, {
+      wrapper: EnglishAgentTestProviders,
+    });
     await act(async () => undefined);
     assert.equal(rendered.container.innerHTML, "");
     assert.equal(requestCount, 0);
@@ -201,7 +204,9 @@ test("changing workspaces aborts the old request and never shows the old editor"
   };
 
   try {
-    const rendered = render(<AgentReviewsPanel canManage workspaceId="workspace-old" />);
+    const rendered = render(<AgentReviewsPanel canManage workspaceId="workspace-old" />, {
+      wrapper: EnglishAgentTestProviders,
+    });
     const screen = within(document.body);
     assert.ok(await screen.findByRole("heading", { name: "Finish human-review setup" }));
 

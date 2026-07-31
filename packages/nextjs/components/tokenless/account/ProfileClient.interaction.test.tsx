@@ -1,6 +1,7 @@
 import React from "react";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 const PRINCIPAL_ID = `rlp_${"a".repeat(48)}`;
@@ -17,7 +18,8 @@ function profile(displayName: string | null) {
 
 test("saving a profile name updates the navbar account label without a reload", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, waitFor, within } = await import("@testing-library/react");
+  const { cleanup, render: baseRender, waitFor, within } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { ThirdwebSessionButton } = await import("../../thirdweb/ThirdwebSessionButton");
   const { ProfileClient } = await import("./ProfileClient");
@@ -74,7 +76,8 @@ test("saving a profile name updates the navbar account label without a reload", 
 
 test("profile validation errors are attached to the display-name field", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, waitFor, within } = await import("@testing-library/react");
+  const { cleanup, render: baseRender, waitFor, within } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { ProfileClient } = await import("./ProfileClient");
   const previousFetch = globalThis.fetch;

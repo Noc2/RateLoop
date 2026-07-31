@@ -78,7 +78,7 @@ test("workspace billing profile collects self-declared business invoice details"
   assert.match(source, /VAT country/);
   assert.match(source, /VAT ID/);
   assert.match(source, /Provide both VAT country and VAT ID/);
-  assert.match(source, /not an external\s+identity or company verification/);
+  assert.match(source, /not an\s+external\s+identity or company verification/);
   assert.match(source, /Save billing details/);
   assert.match(source, /Invoice funding address/);
   assert.match(source, /billingAddressLine1/);
@@ -92,7 +92,7 @@ test("workspace prepaid funding shows the balance, invoice link, and signed ledg
   assert.match(source, /Top-up invoices/);
   assert.match(source, /Open invoice/);
   assert.match(source, /Balance ledger/);
-  assert.match(source, /signedUsdc\(entry\.amountAtomic\)/);
+  assert.match(source, /signedUsdc\(entry\.amountAtomic, locale\)/);
   assert.match(source, /initialWorkspaceId/);
   assert.match(source, /<Field[\s\S]*id="workspace-prepaid-topup-amount"[\s\S]*format="usdInvoiceAmount"/);
   assert.match(source, /Workspace owners and billing members can add prepaid balance/);

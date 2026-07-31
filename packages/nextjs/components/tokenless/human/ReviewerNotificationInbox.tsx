@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useFormatter, useTranslations } from "next-intl";
 import { Badge } from "~~/components/tokenless/ui/Badge";
 import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
+import { Link } from "~~/i18n/navigation";
 import {
   type ReviewerInboxNotification,
   isReviewerDeadlineOrMoneyNotification,
@@ -17,28 +18,6 @@ type InboxResponse = {
   notifications: ReviewerInboxNotification[];
 };
 
-function dateLabel(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Date unavailable";
-  return new Intl.DateTimeFormat("en", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
-}
-
-function notificationLabel(notification: ReviewerInboxNotification) {
-  switch (notification.sourceType) {
-    case "settlement.reveal_required":
-      return "Reveal deadline";
-    case "settlement.claim_expiring":
-      return "Payment deadline";
-    case "assignment.available":
-      return "To review";
-    case "assignment.completed":
-      return "Recorded";
-  }
-}
-
 function NotificationList({
   notifications,
   markingIds,
@@ -48,6 +27,8 @@ function NotificationList({
   markingIds: Set<string>;
   onMarkRead: (notificationId: string) => Promise<void>;
 }) {
+  const t = useTranslations("human.notifications");
+  const format = useFormatter();
   return (
     <ol className="mt-3 space-y-2">
       {notifications.map(notification => {
@@ -57,10 +38,10 @@ function NotificationList({
             key={notification.notificationId}
             className={`rounded-xl border px-4 py-3 ${
               urgent
-                ? "border-amber-300/25 bg-amber-300/[0.06]"
+                ? "border-warning/25 bg-warning/[0.06]"
                 : notification.readAt
-                  ? "border-white/10 bg-black/10"
-                  : "border-white/10 bg-white/[0.04]"
+                  ? "border-base-content/10 bg-base-content/[0.02]"
+                  : "border-base-content/10 bg-base-content/[0.04]"
             }`}
           >
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -68,17 +49,17 @@ function NotificationList({
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="text-sm font-semibold">{notification.title}</p>
                   <Badge variant={urgent ? "warning" : "neutral"} className="text-[0.65rem]">
-                    {notificationLabel(notification)}
+                    {t(`labels.${notification.sourceType}`)}
                   </Badge>
                   {!notification.readAt ? (
                     <Badge variant="info" className="text-[0.65rem]">
-                      Unread
+                      {t("unread")}
                     </Badge>
                   ) : null}
                 </div>
                 <p className="mt-1 text-sm leading-6 text-base-content/65">{notification.body}</p>
                 <time dateTime={notification.createdAt} className="mt-1 block text-xs text-base-content/55">
-                  {dateLabel(notification.createdAt)}
+                  {format.dateTime(new Date(notification.createdAt), { dateStyle: "medium", timeStyle: "short" })}
                 </time>
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
@@ -86,9 +67,9 @@ function NotificationList({
                   <Link
                     href={notification.href}
                     className="btn btn-sm rateloop-secondary-action px-3"
-                    aria-label={`Open: ${notification.title}`}
+                    aria-label={t("openLabel", { title: notification.title })}
                   >
-                    Open
+                    {t("open")}
                   </Link>
                 ) : null}
                 {!notification.readAt ? (
@@ -96,11 +77,11 @@ function NotificationList({
                     type="button"
                     size="sm"
                     variant="ghost"
-                    aria-label={`Mark read: ${notification.title}`}
+                    aria-label={t("markReadLabel", { title: notification.title })}
                     disabled={markingIds.has(notification.notificationId)}
                     onClick={() => void onMarkRead(notification.notificationId)}
                   >
-                    Mark read
+                    {t("markRead")}
                   </Button>
                 ) : null}
               </div>
@@ -113,6 +94,7 @@ function NotificationList({
 }
 
 export function ReviewerNotificationInbox() {
+  const t = useTranslations("human.notifications");
   const [inbox, setInbox] = useState<InboxResponse | null>(null);
   const [markingIds, setMarkingIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
@@ -136,13 +118,13 @@ export function ReviewerNotificationInbox() {
 
   useEffect(() => {
     const controller = new AbortController();
-    void loadInbox(controller.signal).catch(cause => {
+    void loadInbox(controller.signal).catch(() => {
       if (!controller.signal.aborted) {
-        setError(cause instanceof Error ? cause.message : "Unable to load reviewer notifications.");
+        setError(t("loadFailed"));
       }
     });
     return () => controller.abort();
-  }, [loadInbox]);
+  }, [loadInbox, t]);
 
   const actionItems = useMemo(() => inbox?.notifications.filter(isReviewerDeadlineOrMoneyNotification) ?? [], [inbox]);
   const updates = useMemo(
@@ -175,8 +157,8 @@ export function ReviewerNotificationInbox() {
           unreadCount: notifications.filter(notification => !notification.readAt).length,
         };
       });
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to mark the notification as read.");
+    } catch {
+      setError(t("markFailed"));
     } finally {
       setMarkingIds(current => {
         const next = new Set(current);
@@ -195,7 +177,7 @@ export function ReviewerNotificationInbox() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 id="reviewer-notifications-heading" className="text-2xl font-semibold">
-            Assignments, outcomes, and deadlines
+            {t("title")}
           </h2>
         </div>
         {unreadIds?.length ? (
@@ -206,31 +188,31 @@ export function ReviewerNotificationInbox() {
             disabled={markingIds.size > 0}
             onClick={() => void markRead(unreadIds)}
           >
-            Mark all read
+            {t("markAllRead")}
           </Button>
         ) : null}
       </div>
 
       {error ? (
-        <p className="mt-4 rounded-lg bg-red-400/10 p-3 text-sm text-red-100" role="alert">
+        <p className="mt-4 rounded-lg bg-error/10 p-3 text-sm text-error" role="alert">
           {error}
         </p>
       ) : null}
 
       {!inbox ? (
         <p className="mt-5 text-sm text-base-content/55" role="status">
-          Loading notifications…
+          {t("loading")}
         </p>
       ) : null}
 
       {inbox && inbox.notifications.length === 0 ? (
-        <p className="mt-5 text-sm text-base-content/55">No reviewer notifications yet.</p>
+        <p className="mt-5 text-sm text-base-content/55">{t("empty")}</p>
       ) : null}
 
       {actionItems.length > 0 ? (
         <section className="mt-6" aria-labelledby="reviewer-action-notifications">
-          <h3 id="reviewer-action-notifications" className="text-sm font-semibold text-amber-100">
-            Deadline and payment actions
+          <h3 id="reviewer-action-notifications" className="text-sm font-semibold text-warning">
+            {t("actions")}
           </h3>
           <NotificationList notifications={actionItems} markingIds={markingIds} onMarkRead={id => markRead([id])} />
         </section>
@@ -239,7 +221,7 @@ export function ReviewerNotificationInbox() {
       {updates.length > 0 ? (
         <section className="mt-6" aria-labelledby="reviewer-update-notifications">
           <h3 id="reviewer-update-notifications" className="text-sm font-semibold">
-            Review updates
+            {t("updates")}
           </h3>
           <NotificationList notifications={updates} markingIds={markingIds} onMarkRead={id => markRead([id])} />
         </section>

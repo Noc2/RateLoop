@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Card } from "~~/components/tokenless/ui/Card";
 
 type PreviewValue =
@@ -29,6 +30,7 @@ export function PrivateArtifactPreview({
   label: string;
   onRefreshAccess: () => Promise<void> | void;
 }) {
+  const t = useTranslations("review.artifact");
   const titleId = useId();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -54,7 +56,7 @@ export function PrivateArtifactPreview({
           credentials: "same-origin",
           signal: controller.signal,
         });
-        if (!response.ok) throw new Error(response.status === 410 ? "Private access expired." : "Preview unavailable.");
+        if (!response.ok) throw new Error(response.status === 410 ? t("accessExpired") : t("unavailable"));
         const contentType =
           response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase() || "application/octet-stream";
         if (INLINE_IMAGE_TYPES.has(contentType)) {
@@ -69,9 +71,9 @@ export function PrivateArtifactPreview({
         } else {
           setPreview({ kind: "unsupported", contentType });
         }
-      } catch (cause) {
+      } catch {
         if (!controller.signal.aborted) {
-          setError(cause instanceof Error ? cause.message : "Preview unavailable.");
+          setError(t("unavailable"));
         }
       } finally {
         if (!controller.signal.aborted) setLoading(false);
@@ -81,7 +83,7 @@ export function PrivateArtifactPreview({
       controller.abort();
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [artifactUrl, reloadGeneration]);
+  }, [artifactUrl, reloadGeneration, t]);
 
   useEffect(() => {
     if (!expanded) return;
@@ -139,25 +141,25 @@ export function PrivateArtifactPreview({
   }, [preview, visibleText]);
 
   return (
-    <section className="rounded-xl border border-white/10 bg-black/25 p-4" aria-labelledby={titleId}>
+    <section className="rounded-xl border border-base-content/10 bg-base-content/[0.03] p-4" aria-labelledby={titleId}>
       <div className="flex items-center justify-between gap-3">
         <h3 id={titleId} className="text-sm font-semibold">
           {label}
         </h3>
         {preview?.kind === "unsupported" ? (
           <a className="text-xs font-semibold underline underline-offset-4" href={artifactUrl} download>
-            Download
+            {t("download")}
           </a>
         ) : null}
       </div>
       {loading ? (
         <p role="status" className="mt-4 text-sm text-base-content/55">
-          Loading private content…
+          {t("loading")}
         </p>
       ) : null}
       {error ? (
-        <div className="mt-4 rounded-lg border border-white/10 p-3 text-sm">
-          <p role="alert" className="text-red-100">
+        <div className="mt-4 rounded-lg border border-base-content/10 p-3 text-sm">
+          <p role="alert" className="text-error">
             {error}
           </p>
           <button
@@ -165,7 +167,7 @@ export function PrivateArtifactPreview({
             className="mt-2 text-xs font-semibold underline underline-offset-4"
             onClick={() => void Promise.resolve(onRefreshAccess()).then(() => setReloadGeneration(value => value + 1))}
           >
-            Refresh access
+            {t("refresh")}
           </button>
         </div>
       ) : null}
@@ -175,7 +177,7 @@ export function PrivateArtifactPreview({
             ref={textPreviewRef}
             className="max-h-72 overflow-hidden whitespace-pre-wrap break-words font-sans text-sm leading-6 text-base-content/80"
           >
-            {visibleText || "No text was provided."}
+            {visibleText || t("empty")}
           </pre>
           {textCanExpand ? (
             <button
@@ -184,7 +186,7 @@ export function PrivateArtifactPreview({
               className="mt-3 text-sm font-semibold underline underline-offset-4"
               onClick={() => setExpanded(true)}
             >
-              Show more
+              {t("showMore")}
             </button>
           ) : null}
         </div>
@@ -192,14 +194,16 @@ export function PrivateArtifactPreview({
       {preview?.kind === "image" ? (
         <button ref={openerRef} type="button" className="mt-4 block w-full" onClick={() => setExpanded(true)}>
           {/* Private blob URLs cannot be passed through next/image. */}
-          <img src={preview.objectUrl} alt={`${label} preview`} className="max-h-80 w-full rounded-lg object-contain" />
-          <span className="mt-2 block text-xs font-semibold underline underline-offset-4">Open image</span>
+          <img
+            src={preview.objectUrl}
+            alt={t("imagePreview", { label })}
+            className="max-h-80 w-full rounded-lg object-contain"
+          />
+          <span className="mt-2 block text-xs font-semibold underline underline-offset-4">{t("openImage")}</span>
         </button>
       ) : null}
       {preview?.kind === "unsupported" ? (
-        <p className="mt-4 text-sm leading-6 text-base-content/60">
-          This file type cannot be shown safely in the page. Download it only if you recognize the format.
-        </p>
+        <p className="mt-4 text-sm leading-6 text-base-content/60">{t("unsupported")}</p>
       ) : null}
 
       {expanded && preview && preview.kind !== "unsupported" ? (
@@ -210,7 +214,7 @@ export function PrivateArtifactPreview({
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-4"
         >
           <Card as="div" ref={dialogRef} className="flex max-h-[90vh] w-full max-w-4xl flex-col rounded-2xl p-5 sm:p-6">
-            <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-4">
+            <div className="flex items-center justify-between gap-4 border-b border-base-content/10 pb-4">
               <h2 id={`${titleId}-dialog`} className="text-xl font-semibold">
                 {label}
               </h2>
@@ -223,7 +227,7 @@ export function PrivateArtifactPreview({
                   openerRef.current?.focus();
                 }}
               >
-                Close
+                {t("close")}
               </button>
             </div>
             <div className="mt-4 min-h-0 overflow-auto">
@@ -234,7 +238,7 @@ export function PrivateArtifactPreview({
               ) : (
                 <img
                   src={preview.objectUrl}
-                  alt={`${label} full preview`}
+                  alt={t("fullPreview", { label })}
                   className="mx-auto max-h-[72vh] max-w-full object-contain"
                 />
               )}

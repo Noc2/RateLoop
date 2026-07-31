@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { CredentialRequest, IDKitRequestWidget, type IDKitResult, type RpContext } from "@worldcoin/idkit";
+import { useTranslations } from "next-intl";
 
 type WorldIdContext = {
   requestId: string;
@@ -19,21 +20,18 @@ type Props = {
   onVerified: () => Promise<void>;
 };
 
-async function readJson(response: Response) {
+async function readJson(response: Response, fallbackMessage: string) {
   const body = (await response.json()) as Record<string, unknown>;
   if (!response.ok) {
     throw new Error(
-      typeof body.message === "string"
-        ? body.message
-        : typeof body.error === "string"
-          ? body.error
-          : "World ID assurance failed.",
+      typeof body.message === "string" ? body.message : typeof body.error === "string" ? body.error : fallbackMessage,
     );
   }
   return body;
 }
 
 export function WorldIdAssuranceClient({ verified, onVerified }: Props) {
+  const t = useTranslations("human.worldId");
   const [context, setContext] = useState<WorldIdContext | null>(null);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -49,11 +47,12 @@ export function WorldIdAssuranceClient({ verified, onVerified }: Props) {
           credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
         }),
+        t("failed"),
       )) as WorldIdContext;
       setContext(body);
       setOpen(true);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to start World ID assurance.");
+    } catch {
+      setError(t("startFailed"));
     } finally {
       setBusy(false);
     }
@@ -67,6 +66,7 @@ export function WorldIdAssuranceClient({ verified, onVerified }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(result),
       }),
+      t("failed"),
     );
   }
 
@@ -79,23 +79,20 @@ export function WorldIdAssuranceClient({ verified, onVerified }: Props) {
 
   return (
     <div className="border-l-2 border-sky-300 pl-4 sm:col-span-2">
-      <span className="text-xs text-base-content/55">RateLoop-network assurance</span>
-      <strong className="mt-1 block">{verified ? "Unique human verified" : "World ID Proof of Human required"}</strong>
-      <p className="mt-2 text-xs leading-5 text-base-content/55">
-        World ID adds a one-time, provider-scoped uniqueness assertion bound to this RateLoop account. It does not
-        replace age, legal, tax, sanctions, or payout checks, and it is not ongoing liveness or credential monitoring.
-      </p>
+      <span className="text-xs text-base-content/55">{t("eyebrow")}</span>
+      <strong className="mt-1 block">{verified ? t("verified") : t("required")}</strong>
+      <p className="mt-2 text-xs leading-5 text-base-content/55">{t("description")}</p>
       {!verified ? (
         <button
           type="button"
-          className="mt-3 rounded-md border border-white/15 px-3 py-2 text-xs font-medium text-base-content/80 transition hover:border-white/30 disabled:opacity-50"
+          className="mt-3 rounded-md border border-base-content/15 px-3 py-2 text-xs font-medium text-base-content/80 transition hover:border-base-content/30 disabled:opacity-50"
           disabled={busy}
           onClick={() => void begin()}
         >
-          {busy ? "Preparing World ID…" : "Verify with World ID"}
+          {busy ? t("preparing") : t("verify")}
         </button>
       ) : null}
-      {error ? <p className="mt-3 text-xs leading-5 text-red-200">{error}</p> : null}
+      {error ? <p className="mt-3 text-xs leading-5 text-error">{error}</p> : null}
       {context?.mode === "initial_unique" && context.action ? (
         <IDKitRequestWidget
           open={open}
@@ -111,7 +108,7 @@ export function WorldIdAssuranceClient({ verified, onVerified }: Props) {
           })}
           handleVerify={verify}
           onSuccess={completed}
-          onError={code => setError(`World ID could not complete this request (${code}).`)}
+          onError={code => setError(t("requestFailed", { code }))}
         />
       ) : null}
     </div>

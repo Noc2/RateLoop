@@ -1,6 +1,7 @@
 "use client";
 
 import { useId } from "react";
+import { useTranslations } from "next-intl";
 
 export type ReviewPrivacyContext = "public_paid" | "private_unpaid";
 
@@ -35,14 +36,15 @@ export function CrowdForecastField({
   value: number | null;
   onChange: (value: number | null) => void;
 }) {
+  const t = useTranslations("review.forecast");
   const inputId = useId();
   const helpId = `${inputId}-help`;
   const valid = isCrowdForecastPercent(value);
   return (
-    <fieldset className="mt-5 border-t border-white/10 pt-4">
-      <legend className="text-xs font-semibold">Crowd forecast</legend>
+    <fieldset className="mt-5 border-t border-base-content/10 pt-4">
+      <legend className="text-xs font-semibold">{t("title")}</legend>
       <label htmlFor={inputId} className="mt-2 block text-xs leading-5 text-base-content/60">
-        What percentage of reviewers do you expect to choose “{positiveLabel}”?
+        {t("question", { label: positiveLabel })}
       </label>
       <div className="mt-3 flex items-center gap-2">
         <input
@@ -56,7 +58,7 @@ export function CrowdForecastField({
           step={1}
           required
           disabled={disabled}
-          className="input input-sm w-24 border-white/10 bg-[var(--rateloop-field)] text-right tabular-nums"
+          className="input input-sm w-24 border-base-content/10 bg-[var(--rateloop-field)] text-right tabular-nums"
           value={value ?? ""}
           onChange={event => {
             const next = event.currentTarget.value;
@@ -70,7 +72,7 @@ export function CrowdForecastField({
       {valid ? (
         <input
           type="range"
-          aria-label="Crowd forecast slider"
+          aria-label={t("slider")}
           aria-describedby={helpId}
           min={1}
           max={99}
@@ -84,13 +86,17 @@ export function CrowdForecastField({
       <p
         id={helpId}
         role={value !== null && !valid ? "alert" : undefined}
-        className={`mt-2 text-[11px] leading-4 ${value !== null && !valid ? "text-red-100" : "text-base-content/55"}`}
+        className={`mt-2 text-[11px] leading-4 ${value !== null && !valid ? "text-error" : "text-base-content/55"}`}
       >
         {value !== null && !valid
-          ? "Enter a whole number from 1 to 99."
+          ? t("invalid")
           : valid
-            ? `Fine-tune with the slider. ${reviewForecastPrivacyMessage(privacyContext)}`
-            : `Enter a whole number from 1 to 99. No forecast is preselected. ${reviewForecastPrivacyMessage(privacyContext)}`}
+            ? t("selectedHelp", {
+                privacy: privacyContext === "public_paid" ? t("publicPrivacy") : t("privatePrivacy"),
+              })
+            : t("emptyHelp", {
+                privacy: privacyContext === "public_paid" ? t("publicPrivacy") : t("privatePrivacy"),
+              })}
       </p>
     </fieldset>
   );

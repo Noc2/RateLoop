@@ -1,6 +1,8 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import { AgentText } from "./AgentText";
+import { useAgentLocale, useAgentTranslations } from "./AgentsLocaleProvider";
 import { OneTimeSecretNotice } from "~~/components/tokenless/agents/OneTimeSecretNotice";
 import { ChoiceInput, Field, SelectField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
@@ -103,10 +105,10 @@ function reviewerLabel(reviewer: WorkspaceReviewer) {
   return reviewer.displayName || reviewer.email || shortPrincipal(reviewer.principalAddress);
 }
 
-function dateLabel(value: string | null) {
-  if (!value) return "No expiry";
+function dateLabel(value: string | null, locale: string, noExpiry: string) {
+  if (!value) return noExpiry;
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "No expiry" : date.toLocaleDateString();
+  return Number.isNaN(date.getTime()) ? noExpiry : date.toLocaleDateString(locale);
 }
 
 function invitationStatus(invitation: ReviewerInvitation) {
@@ -125,6 +127,10 @@ export function WorkspaceReviewersPanel({
   canManage?: boolean;
   workspaceId: string;
 }) {
+  const locale = useAgentLocale();
+  const ui = useAgentTranslations("ui");
+  const errors = useAgentTranslations("errors");
+  const copy = useAgentTranslations("reviewersPanel");
   const [reviewers, setReviewers] = useState<WorkspaceReviewer[]>([]);
   const [invitations, setInvitations] = useState<ReviewerInvitation[]>([]);
   const [email, setEmail] = useState("");
@@ -210,12 +216,12 @@ export function WorkspaceReviewersPanel({
       setLoading(false);
       return;
     }
-    void load().catch(cause => {
+    void load().catch(() => {
       if (!workspaceRequests.isWorkspaceCurrent(workspaceId)) return;
       setLoading(false);
-      setLoadError(cause instanceof Error ? cause.message : "Unable to load reviewers.");
+      setLoadError(errors("loadReviewers"));
     });
-  }, [canManage, load, workspaceId, workspaceRequests]);
+  }, [canManage, errors, load, workspaceId, workspaceRequests]);
 
   async function inviteReviewer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -244,8 +250,8 @@ export function WorkspaceReviewersPanel({
       setIssuedUrl(invitation.destinationUrl);
       setEmail("");
       await load();
-    } catch (cause) {
-      if (request.isCurrent()) capture(cause, "Unable to invite the reviewer.");
+    } catch {
+      if (request.isCurrent()) capture(errors("inviteReviewer"), errors("inviteReviewer"));
     } finally {
       if (request.isCurrent()) setBusyTarget(null);
       request.finish();
@@ -264,8 +270,8 @@ export function WorkspaceReviewersPanel({
         ),
       );
       if (request.isCurrent()) await load();
-    } catch (cause) {
-      if (request.isCurrent()) setError(cause instanceof Error ? cause.message : "Unable to remove the reviewer.");
+    } catch {
+      if (request.isCurrent()) setError(errors("removeReviewer"));
     } finally {
       if (request.isCurrent()) setBusyTarget(null);
       request.finish();
@@ -308,12 +314,11 @@ export function WorkspaceReviewersPanel({
         ),
       );
       if (request.isCurrent()) {
-        setNotice(`Specialist areas confirmed for ${reviewerLabel(reviewer)}.`);
+        setNotice(copy("confirmed", { reviewer: reviewerLabel(reviewer) }));
         await load();
       }
-    } catch (cause) {
-      if (request.isCurrent())
-        setError(cause instanceof Error ? cause.message : "Unable to confirm this reviewer's specialist areas.");
+    } catch {
+      if (request.isCurrent()) setError(errors("confirmExpertise"));
     } finally {
       if (request.isCurrent()) setBusyTarget(null);
       request.finish();
@@ -332,8 +337,8 @@ export function WorkspaceReviewersPanel({
         ),
       );
       if (request.isCurrent()) await load();
-    } catch (cause) {
-      if (request.isCurrent()) setError(cause instanceof Error ? cause.message : "Unable to revoke the invitation.");
+    } catch {
+      if (request.isCurrent()) setError(errors("revokeInvitation"));
     } finally {
       if (request.isCurrent()) setBusyTarget(null);
       request.finish();
@@ -353,13 +358,13 @@ export function WorkspaceReviewersPanel({
   const pendingInvitations = invitations.filter(invitation => invitationStatus(invitation) === "pending");
 
   return (
-    <section className="rounded-xl border border-white/10 p-5" aria-labelledby="workspace-reviewers-heading">
+    <section className="rounded-xl border border-base-content/10 p-5" aria-labelledby="workspace-reviewers-heading">
       <div>
         <h2 id="workspace-reviewers-heading" className="text-xl font-semibold">
-          Reviewers
+          <AgentText id="reviewers" />
         </h2>
         <p className="mt-2 max-w-2xl text-sm text-base-content/55">
-          Reviewers can receive assigned private work. They do not get workspace access.
+          <AgentText id="translated224" />
         </p>
       </div>
 
@@ -367,8 +372,8 @@ export function WorkspaceReviewersPanel({
         <div className="min-w-0 flex-1">
           <Field
             id="workspace-reviewer-email"
-            label="Email (optional)"
-            className="input mt-1.5 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+            label={<AgentText id="attribute034" />}
+            className="input mt-1.5 w-full rounded-lg border-base-content/10 bg-[var(--rateloop-field)]"
             type="email"
             autoComplete="email"
             value={email}
@@ -381,8 +386,8 @@ export function WorkspaceReviewersPanel({
           />
         </div>
         <SelectField
-          className="rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-          label="Private material limit"
+          className="rounded-lg border-base-content/10 bg-[var(--rateloop-field)]"
+          label={<AgentText id="attribute035" />}
           labelClassName="text-xs text-base-content/55"
           error={fieldErrors.maxPrivateSensitivity}
           value={maxPrivateSensitivity}
@@ -391,13 +396,21 @@ export function WorkspaceReviewersPanel({
             clear("maxPrivateSensitivity");
           }}
         >
-          <option value="internal">Internal</option>
-          <option value="confidential">Confidential</option>
-          <option value="restricted">Restricted</option>
-          <option value="regulated">Regulated</option>
+          <option value="internal">
+            <AgentText id="translated225" />
+          </option>
+          <option value="confidential">
+            <AgentText id="translated226" />
+          </option>
+          <option value="restricted">
+            <AgentText id="translated227" />
+          </option>
+          <option value="regulated">
+            <AgentText id="translated228" />
+          </option>
         </SelectField>
         <button className="rateloop-gradient-action min-h-12 px-5" disabled={busyTarget === "invite"}>
-          {busyTarget === "invite" ? "Creating…" : "Invite reviewer"}
+          {busyTarget === "invite" ? copy("inviting") : copy("invite")}
         </button>
         <label
           className="flex items-start gap-2 text-xs leading-5 text-base-content/65 sm:col-span-3"
@@ -411,27 +424,30 @@ export function WorkspaceReviewersPanel({
             onChange={event => setPaidAdulthoodAttested(event.target.checked)}
           />
           <span>
-            Permit paid assignments: our workspace warrants this invitee is at least 18. This is a customer attestation,
-            not verified age, and sanctions screening still adds a manual review delay.
+            <AgentText id="translated229" />
           </span>
         </label>
       </form>
 
       {issuedUrl ? (
-        <OneTimeSecretNotice label="reviewer invitation link" value={issuedUrl} onDismiss={() => setIssuedUrl(null)} />
+        <OneTimeSecretNotice
+          label={ui("reviewerInvitationLink")}
+          value={issuedUrl}
+          onDismiss={() => setIssuedUrl(null)}
+        />
       ) : null}
       {error ? (
-        <p className="mt-4 rounded-lg bg-red-400/10 p-3 text-sm text-red-100" role="alert">
+        <p className="mt-4 rounded-lg bg-error/10 p-3 text-sm text-error" role="alert">
           {error}
         </p>
       ) : null}
       {formError ? (
-        <p className="mt-4 rounded-lg bg-red-400/10 p-3 text-sm text-red-100" role="alert">
+        <p className="mt-4 rounded-lg bg-error/10 p-3 text-sm text-error" role="alert">
           {formError}
         </p>
       ) : null}
       {notice ? (
-        <p className="mt-4 rounded-lg bg-emerald-400/10 p-3 text-sm text-emerald-100" role="status">
+        <p className="mt-4 rounded-lg bg-success/10 p-3 text-sm text-success" role="status">
           {notice}
         </p>
       ) : null}
@@ -439,13 +455,15 @@ export function WorkspaceReviewersPanel({
       <AsyncSection
         className="mt-6"
         loading={loading}
-        loadingLabel="Loading reviewers"
+        loadingLabel={copy("loading")}
         error={loadError}
         empty={activeReviewers.length === 0 && pendingInvitations.length === 0}
-        emptyTitle="No reviewers yet."
+        emptyTitle={copy("empty")}
       >
-        <div className="mt-6 border-t border-white/10 pt-5">
-          <h3 className="text-sm font-semibold">Active reviewers</h3>
+        <div className="mt-6 border-t border-base-content/10 pt-5">
+          <h3 className="text-sm font-semibold">
+            <AgentText id="activeReviewers" />
+          </h3>
           {activeReviewers.length ? (
             <ul className="mt-3 space-y-2">
               {activeReviewers.map(reviewer => (
@@ -467,24 +485,34 @@ export function WorkspaceReviewersPanel({
                       .filter(grant => grant.status === "active")
                       .map(grant => (
                         <p className="mt-1 text-xs text-base-content/55" key={grant.grantId}>
-                          Up to {grant.maxPrivateSensitivity} material · access expires {dateLabel(grant.validUntil)}
+                          <AgentText id="translated230" />{" "}
+                          {copy(
+                            `sensitivity${grant.maxPrivateSensitivity[0]?.toUpperCase()}${grant.maxPrivateSensitivity.slice(1)}`,
+                          )}{" "}
+                          <AgentText id="translated231" /> {dateLabel(grant.validUntil, locale, copy("noExpiry"))}
                         </p>
                       ))}
                   </div>
                   <div className="flex flex-wrap justify-end gap-2">
                     {expertiseContext?.definitions.length ? (
                       <button
-                        className="btn btn-sm border-white/10 bg-white/[0.04]"
+                        className="btn btn-sm border-base-content/10 bg-base-content/[0.04]"
                         type="button"
                         disabled={busyTarget === reviewer.principalAddress}
                         onClick={() => void confirmReviewerExpertise(reviewer)}
-                        title={`Attest: ${expertiseContext.definitions.map(definition => definition.label).join(", ")}`}
+                        title={copy("attest", {
+                          areas: expertiseContext.definitions.map(definition => definition.label).join(", "),
+                        })}
                       >
-                        {busyTarget === reviewer.principalAddress ? "Confirming…" : "Confirm specialist areas"}
+                        {busyTarget === reviewer.principalAddress ? (
+                          <AgentText id="dynamic036" />
+                        ) : (
+                          <AgentText id="dynamic061" />
+                        )}
                       </button>
                     ) : null}
                     <button
-                      className="btn btn-sm border-red-300/20 bg-red-300/[0.06] text-red-100"
+                      className="btn btn-sm border-error/20 bg-error/[0.06] text-error"
                       type="button"
                       disabled={busyTarget === reviewer.principalAddress}
                       onClick={() =>
@@ -495,20 +523,24 @@ export function WorkspaceReviewersPanel({
                         })
                       }
                     >
-                      Remove
+                      <AgentText id="translated232" />
                     </button>
                   </div>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="mt-3 text-sm text-base-content/55">No active reviewers yet.</p>
+            <p className="mt-3 text-sm text-base-content/55">
+              <AgentText id="noActiveReviewers" />
+            </p>
           )}
         </div>
 
         {pendingInvitations.length ? (
-          <div className="mt-6 border-t border-white/10 pt-5">
-            <h3 className="text-sm font-semibold">Pending invitations</h3>
+          <div className="mt-6 border-t border-base-content/10 pt-5">
+            <h3 className="text-sm font-semibold">
+              <AgentText id="pendingInvitations" />
+            </h3>
             <ul className="mt-3 space-y-2">
               {pendingInvitations.map(invitation => (
                 <li
@@ -516,16 +548,16 @@ export function WorkspaceReviewersPanel({
                   key={invitation.invitationId}
                 >
                   <span>
-                    {invitation.hasEmailBinding ? "Email-bound" : "Invitation code"} · expires{" "}
-                    {dateLabel(invitation.expiresAt)}
+                    {invitation.hasEmailBinding ? <AgentText id="dynamic063" /> : <AgentText id="dynamic064" />}{" "}
+                    <AgentText id="translated233" /> {dateLabel(invitation.expiresAt, locale, copy("noExpiry"))}
                   </span>
                   <button
-                    className="text-xs text-red-200 underline underline-offset-4"
+                    className="text-xs text-error underline underline-offset-4"
                     type="button"
                     disabled={busyTarget === invitation.invitationId}
                     onClick={() => setConfirmation({ kind: "revoke-invitation", invitation })}
                   >
-                    Revoke
+                    <AgentText id="translated132" />
                   </button>
                 </li>
               ))}
@@ -537,15 +569,11 @@ export function WorkspaceReviewersPanel({
         open={confirmation !== null}
         title={
           confirmation?.kind === "remove-reviewer"
-            ? `Remove ${confirmation.label} from this workspace's reviewers?`
-            : "Revoke this reviewer invitation?"
+            ? copy("removeTitle", { reviewer: confirmation.label })
+            : copy("revokeTitle")
         }
-        description={
-          confirmation?.kind === "remove-reviewer"
-            ? "They will stop receiving assigned private review work from this workspace."
-            : "The reviewer invitation will stop working."
-        }
-        confirmLabel={confirmation?.kind === "remove-reviewer" ? "Remove reviewer" : "Revoke invitation"}
+        description={confirmation?.kind === "remove-reviewer" ? copy("removeDescription") : copy("revokeDescription")}
+        confirmLabel={confirmation?.kind === "remove-reviewer" ? copy("removeReviewer") : copy("revokeInvitation")}
         busy={
           confirmation?.kind === "remove-reviewer"
             ? busyTarget === confirmation.reviewer.principalAddress

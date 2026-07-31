@@ -2,11 +2,15 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-const source = readFileSync(new URL("./PublicQuestionCard.tsx", import.meta.url), "utf8");
-const crowdForecastSource = readFileSync(new URL("../review/CrowdForecastField.tsx", import.meta.url), "utf8");
+const reviewMessages = readFileSync(new URL("../../../messages/en/review.json", import.meta.url), "utf8");
+const source = [readFileSync(new URL("./PublicQuestionCard.tsx", import.meta.url), "utf8"), reviewMessages].join("\n");
+const crowdForecastSource = [
+  readFileSync(new URL("../review/CrowdForecastField.tsx", import.meta.url), "utf8"),
+  reviewMessages,
+].join("\n");
 
 test("public rating progressively collects feedback without LREP and explains the exact privacy timing", () => {
-  assert.match(source, /reviewRatingPrivacyMessage\(PUBLIC_PAID_REVIEW_PRIVACY_CONTEXT\)/);
+  assert.match(source, /t\("ratingPrivacy"\)/);
   assert.match(source, /Add feedback/);
   assert.match(source, /Optional feedback/);
   assert.match(source, /Feedback required/);
@@ -32,7 +36,7 @@ test("an already reserved voucher retries the prepared device queue and waits fo
   assert.match(source, /Public blockchain\s+records generally cannot be erased/);
   assert.match(source, /href="\/legal\/privacy#on-chain-data"/);
   assert.match(source, /\{answer \? \(\s*<section[\s\S]*What becomes public/);
-  assert.ok(source.indexOf("What becomes public") < source.indexOf("{recoveryUrl && activePreparedSubmission"));
+  assert.ok(source.indexOf('t("publicTitle")') < source.indexOf("{recoveryUrl && activePreparedSubmission"));
   assert.match(source, /dueTokenlessCommits\(queue, principalId\)/);
   assert.match(source, /queue\.list\(principalId\)/);
   assert.match(source, /recordTokenlessCommitRelayFailure/);
@@ -79,7 +83,8 @@ test("the blind crowd forecast accepts the full one-percent RBTS grid without a 
   assert.match(source, /<CrowdForecastField/);
   assert.match(source, /positiveLabel=\{options\[0\]\}/);
   assert.match(crowdForecastSource, /Crowd forecast/);
-  assert.match(crowdForecastSource, /What percentage of reviewers do you expect to choose “\{positiveLabel\}”\?/);
+  assert.match(crowdForecastSource, /t\("question", \{ label: positiveLabel \}\)/);
+  assert.match(crowdForecastSource, /What percentage of reviewers do you expect to choose “\{label\}”\?/);
   assert.match(crowdForecastSource, /min=\{1\}/);
   assert.match(crowdForecastSource, /max=\{99\}/);
   assert.match(crowdForecastSource, /step=\{1\}/);

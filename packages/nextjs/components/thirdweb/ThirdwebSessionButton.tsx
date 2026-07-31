@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
+import { DEFAULT_LOCALE, isLocale } from "~~/i18n/config";
+import { Link } from "~~/i18n/navigation";
 import {
   type BrowserSessionResponse,
   logoutBrowserSession,
@@ -14,19 +16,36 @@ export const RATELOOP_THIRDWEB_AUTO_CONNECT = false;
 export const RATELOOP_SIGN_IN_ACTION_CLASS =
   "rateloop-gradient-action rateloop-sign-in-action px-[0.9rem] text-base font-bold leading-none whitespace-nowrap";
 
+export function localizedSignInReturnTo(returnTo: string | undefined, requestedLocale: string) {
+  if (!returnTo || !returnTo.startsWith("/") || returnTo.startsWith("//") || !isLocale(requestedLocale)) {
+    return returnTo;
+  }
+  if (
+    requestedLocale === DEFAULT_LOCALE ||
+    returnTo === `/${requestedLocale}` ||
+    returnTo.startsWith(`/${requestedLocale}/`)
+  ) {
+    return returnTo;
+  }
+  return `/${requestedLocale}${returnTo}`;
+}
+
 export function RateLoopSignInAction({ fill = false, returnTo }: { fill?: boolean; returnTo?: string }) {
-  const href = returnTo ? `/sign-in?returnTo=${encodeURIComponent(returnTo)}` : "/sign-in";
+  const locale = useLocale();
+  const t = useTranslations("auth.session");
+  const localizedReturnTo = localizedSignInReturnTo(returnTo, locale);
+  const href = localizedReturnTo ? `/sign-in?returnTo=${encodeURIComponent(localizedReturnTo)}` : "/sign-in";
   return (
     <Link href={href} className={`${RATELOOP_SIGN_IN_ACTION_CLASS} ${fill ? "w-full" : "w-auto min-w-max"}`}>
-      {RATELOOP_SIGN_IN_LABEL}
+      {t("signIn")}
     </Link>
   );
 }
 
-export function sessionLabel(session: BrowserSessionResponse | null) {
+export function sessionLabel(session: BrowserSessionResponse | null, fallback = "Your account") {
   if (!session) return null;
   if (session.displayName) return session.displayName;
-  return "Your account";
+  return fallback;
 }
 
 export function AuthenticatedSessionControl({
@@ -38,7 +57,8 @@ export function AuthenticatedSessionControl({
   onSignOut: () => Promise<void> | void;
   session: BrowserSessionResponse;
 }) {
-  const label = sessionLabel(session) ?? "RateLoop account";
+  const t = useTranslations("auth.session");
+  const label = sessionLabel(session, t("yourAccount")) ?? t("rateLoopAccount");
   return (
     <div
       className={`flex w-full items-center gap-2 rounded-lg border border-base-content/15 bg-base-content/[0.06] ${
@@ -48,7 +68,7 @@ export function AuthenticatedSessionControl({
       <Link
         href="/human/profile"
         className="group flex min-w-0 flex-1 items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rateloop-blue)]"
-        aria-label={`Open profile for ${label}`}
+        aria-label={t("openProfile", { account: label })}
       >
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-base-content/15 bg-base-content/[0.07] text-base-content/70 transition-colors group-hover:text-base-content">
           <svg
@@ -68,16 +88,16 @@ export function AuthenticatedSessionControl({
             {label}
           </span>
           <span className="flex items-center gap-1.5 text-[11px] text-base-content/55">
-            <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-            Signed in
+            <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-success" />
+            {t("signedIn")}
           </span>
         </span>
       </Link>
       <button
         type="button"
         className="btn btn-ghost btn-sm h-8 min-h-8 w-8 shrink-0 px-0 text-base-content/55 hover:text-base-content"
-        aria-label={`Sign out ${label}`}
-        title="Sign out"
+        aria-label={t("signOutAccount", { account: label })}
+        title={t("signOut")}
         onClick={() => void onSignOut()}
       >
         <svg
@@ -106,6 +126,7 @@ export function ThirdwebSessionButton({
   onSessionChange?: (authenticated: boolean) => void;
   returnTo?: string;
 }) {
+  const locale = useLocale();
   const [session, setSession] = useState<BrowserSessionResponse | null>(null);
   const sessionGenerationRef = useRef(0);
 
@@ -133,7 +154,7 @@ export function ThirdwebSessionButton({
     await logoutBrowserSession();
     setSession(null);
     onSessionChange?.(false);
-    window.location.assign("/");
+    window.location.assign(locale === DEFAULT_LOCALE ? "/" : `/${locale}`);
   }
 
   if (session) {

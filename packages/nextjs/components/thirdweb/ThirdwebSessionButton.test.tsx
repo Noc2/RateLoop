@@ -6,11 +6,14 @@ import {
   RATELOOP_THIRDWEB_AUTO_CONNECT,
   RateLoopSignInAction,
   ThirdwebSessionButton,
+  localizedSignInReturnTo,
   sessionLabel,
 } from "./ThirdwebSessionButton";
+import { NextIntlClientProvider } from "next-intl";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import test from "node:test";
+import enAuth from "~~/messages/en/auth.json";
 
 const require = createRequire(import.meta.url);
 const { renderToStaticMarkup } = require("react-dom/server") as {
@@ -26,6 +29,14 @@ const SESSION = {
   wallets: { funding: null, payout: null, recovery: null },
 };
 
+function withIntl(element: React.ReactElement, locale = "en") {
+  return (
+    <NextIntlClientProvider locale={locale} messages={{ auth: enAuth }} timeZone="UTC">
+      {element}
+    </NextIntlClientProvider>
+  );
+}
+
 test("enterprise session labels prefer a name without exposing the opaque principal", () => {
   assert.equal(sessionLabel(SESSION), "Buyer Example");
   assert.equal(sessionLabel({ ...SESSION, displayName: null }), "Your account");
@@ -34,7 +45,7 @@ test("enterprise session labels prefer a name without exposing the opaque princi
 test("a verified RateLoop session renders independently of optional wallet state", () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
   const html = renderToStaticMarkup(
-    <AuthenticatedSessionControl compact session={SESSION} onSignOut={() => undefined} />,
+    withIntl(<AuthenticatedSessionControl compact session={SESSION} onSignOut={() => undefined} />),
   ).replace(/\s+/g, " ");
 
   assert.match(html, />Signed in</);
@@ -48,7 +59,9 @@ test("a verified RateLoop session renders independently of optional wallet state
 test("the signed-in fallback is understandable and does not leak the internal principal id", () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
   const html = renderToStaticMarkup(
-    <AuthenticatedSessionControl compact session={{ ...SESSION, displayName: null }} onSignOut={() => undefined} />,
+    withIntl(
+      <AuthenticatedSessionControl compact session={{ ...SESSION, displayName: null }} onSignOut={() => undefined} />,
+    ),
   ).replace(/\s+/g, " ");
 
   assert.match(html, />Your account</);
@@ -57,14 +70,23 @@ test("the signed-in fallback is understandable and does not leak the internal pr
 
 test("the signed-out control links to provider-neutral sign-in", () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
-  const html = renderToStaticMarkup(<ThirdwebSessionButton compact />).replace(/\s+/g, " ");
+  const html = renderToStaticMarkup(withIntl(<ThirdwebSessionButton compact />)).replace(/\s+/g, " ");
   assert.match(html, />Sign In</);
   assert.doesNotMatch(html, /Google|Apple|email OTP/);
 });
 
 test("signed-out review controls preserve a normalized local destination", () => {
-  const html = renderToStaticMarkup(<RateLoopSignInAction returnTo="/human?q=safety&scope=public" />);
+  const html = renderToStaticMarkup(withIntl(<RateLoopSignInAction returnTo="/human?q=safety&scope=public" />));
   assert.match(html, /href="\/sign-in\?returnTo=%2Fhuman%3Fq%3Dsafety%26scope%3Dpublic"/);
+});
+
+test("German sign-in keeps the locale in both the sign-in page and its return destination", () => {
+  assert.equal(localizedSignInReturnTo("/human/review?assignment=1", "de"), "/de/human/review?assignment=1");
+  assert.equal(localizedSignInReturnTo("/de/human/review", "de"), "/de/human/review");
+  assert.equal(localizedSignInReturnTo("//outside.example/review", "de"), "//outside.example/review");
+
+  const html = renderToStaticMarkup(withIntl(<RateLoopSignInAction returnTo="/human/review?assignment=1" />, "de"));
+  assert.match(html, /href="\/de\/sign-in\?returnTo=%2Fde%2Fhuman%2Freview%3Fassignment%3D1"/);
 });
 
 test("the compatibility entry point keeps the original compact RateLoop sign-in treatment", () => {
@@ -73,8 +95,8 @@ test("the compatibility entry point keeps the original compact RateLoop sign-in 
   assert.match(RATELOOP_SIGN_IN_ACTION_CLASS, /text-base font-bold/);
   assert.doesNotMatch(RATELOOP_SIGN_IN_ACTION_CLASS, /text-sm|min-h-11|h-12|min-h-12/);
 
-  const compact = renderToStaticMarkup(<RateLoopSignInAction />).replace(/\s+/g, " ");
-  const filled = renderToStaticMarkup(<RateLoopSignInAction fill />).replace(/\s+/g, " ");
+  const compact = renderToStaticMarkup(withIntl(<RateLoopSignInAction />)).replace(/\s+/g, " ");
+  const filled = renderToStaticMarkup(withIntl(<RateLoopSignInAction fill />)).replace(/\s+/g, " ");
   assert.match(compact, /w-auto min-w-max/);
   assert.match(filled, /w-full/);
 });

@@ -1,6 +1,7 @@
 "use client";
 
 import { useId } from "react";
+import { useAgentTranslations } from "./AgentsLocaleProvider";
 import { InfoPopover } from "~~/components/tokenless/InfoPopover";
 import { ChoiceInput, SelectField } from "~~/components/tokenless/forms/Field";
 import { Card } from "~~/components/tokenless/ui/Card";
@@ -8,19 +9,9 @@ import { Card } from "~~/components/tokenless/ui/Card";
 export type ReviewRoutingMode = "adaptive" | "always" | "manual" | "rules" | "fixed";
 export type ReviewRoutingAuthority = "check_only" | "prepare_for_approval" | "ask_automatically";
 
-const REVIEW_MODES = [
-  ["always", "Every output — Recommended"],
-  ["adaptive", "Adaptive"],
-  ["fixed", "Fixed percentage"],
-  ["rules", "Rules and conditions"],
-  ["manual", "Manual handoff only"],
-] as const;
+const REVIEW_MODES: ReviewRoutingMode[] = ["always", "adaptive", "fixed", "rules", "manual"];
 
-const REVIEW_AUTHORITIES = [
-  ["check_only", "Check only"],
-  ["prepare_for_approval", "Prepare for approval"],
-  ["ask_automatically", "Send automatically"],
-] as const;
+const REVIEW_AUTHORITIES: ReviewRoutingAuthority[] = ["check_only", "prepare_for_approval", "ask_automatically"];
 
 export function reviewRoutingModeDescription(mode: ReviewRoutingMode) {
   if (mode === "always") return "Reviews every eligible output.";
@@ -65,6 +56,21 @@ export function ReviewFrequencyFields({
   className,
   onModeChange,
 }: ReviewFrequencyFieldsProps) {
+  const t = useAgentTranslations("routing");
+  const labels: Record<ReviewRoutingMode, string> = {
+    always: t("modeAlways"),
+    adaptive: t("modeAdaptive"),
+    fixed: t("modeFixed"),
+    rules: t("modeRules"),
+    manual: t("modeManual"),
+  };
+  const descriptions: Record<ReviewRoutingMode, string> = {
+    always: t("modeAlwaysDescription"),
+    adaptive: t("modeAdaptiveDescription"),
+    fixed: t("modeFixedDescription"),
+    rules: t("modeRulesDescription"),
+    manual: t("modeManualDescription"),
+  };
   const id = useId();
   const frequencyLabelId = `${id}-frequency-label`;
   const frequencyDescriptionId = `${id}-frequency-description`;
@@ -72,28 +78,26 @@ export function ReviewFrequencyFields({
   return (
     <div className={className}>
       <div className="flex min-h-9 items-center gap-2 text-sm font-medium">
-        <span id={frequencyLabelId}>When should RateLoop require human review?</span>
-        <InfoPopover label="About when human review is required">
-          Decides when an eligible output requires human review. It does not authorize sending or funding a request.
-        </InfoPopover>
+        <span id={frequencyLabelId}>{t("when")}</span>
+        <InfoPopover label={t("whenInfo")}>{t("whenInfoBody")}</InfoPopover>
       </div>
       <SelectField
-        className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-        label="When should RateLoop require human review?"
+        className="select mt-2 w-full border-base-content/10 bg-[var(--rateloop-field)]"
+        label={t("when")}
         labelClassName="sr-only"
         value={mode}
         aria-labelledby={frequencyLabelId}
         aria-describedby={frequencyDescriptionId}
         onChange={event => onModeChange(event.target.value as ReviewRoutingMode)}
       >
-        {REVIEW_MODES.map(([value, label]) => (
+        {REVIEW_MODES.map(value => (
           <option key={value} value={value} disabled={value === "adaptive" && !adaptiveAvailable}>
-            {label}
+            {labels[value]}
           </option>
         ))}
       </SelectField>
       <p id={frequencyDescriptionId} className="mt-2 text-sm leading-6 text-base-content/65">
-        {reviewRoutingModeDescription(mode)}
+        {descriptions[mode]}
       </p>
     </div>
   );
@@ -118,22 +122,26 @@ export function ReviewAuthorityFields({
   prominent = false,
   onAuthorityChange,
 }: ReviewAuthorityFieldsProps) {
+  const t = useAgentTranslations("routing");
+  const labels: Record<ReviewRoutingAuthority, string> = {
+    check_only: t("authorityCheck"),
+    prepare_for_approval: t("authorityPrepare"),
+    ask_automatically: t("authoritySend"),
+  };
   const id = useId();
   const authorityUnavailableId = `${id}-authority-automatic-unavailable`;
 
   return (
     <fieldset className={className} aria-describedby={automaticAvailable ? undefined : authorityUnavailableId}>
       <legend className={prominent ? "px-1 text-xl font-semibold" : "text-sm font-medium"}>
-        If review is required, what may the agent do?
+        {t("authorityQuestion")}
       </legend>
       <div className="mt-1 flex items-center gap-2 text-sm text-base-content/65">
-        <span>Choose the furthest step the agent may take.</span>
-        <InfoPopover label="About agent authority after review is required">
-          Applies only after review is required. It controls whether the agent checks, prepares, or sends a request.
-        </InfoPopover>
+        <span>{t("authorityHint")}</span>
+        <InfoPopover label={t("authorityInfo")}>{t("authorityInfoBody")}</InfoPopover>
       </div>
       <div className="mt-3 grid gap-2">
-        {REVIEW_AUTHORITIES.map(([value, label]) => {
+        {REVIEW_AUTHORITIES.map(value => {
           const inputId = `${id}-authority-${value}`;
           const descriptionId = `${id}-authority-${value}-description`;
           const automaticUnavailable = value === "ask_automatically" && !automaticAvailable;
@@ -143,7 +151,9 @@ export function ReviewAuthorityFields({
             <div
               key={value}
               className={`flex gap-3 rounded-box border px-3 py-3 ${
-                authority === value ? "border-primary/40 bg-primary/10" : "border-white/10 bg-[var(--rateloop-field)]"
+                authority === value
+                  ? "border-primary/40 bg-primary/10"
+                  : "border-base-content/10 bg-[var(--rateloop-field)]"
               } ${automaticUnavailable ? "cursor-not-allowed opacity-65" : "cursor-pointer"}`}
             >
               <ChoiceInput
@@ -159,10 +169,16 @@ export function ReviewAuthorityFields({
               />
               <span className="min-w-0">
                 <label className={automaticUnavailable ? "cursor-not-allowed" : "cursor-pointer"} htmlFor={inputId}>
-                  <span className="block text-sm font-medium text-base-content">{label}</span>
+                  <span className="block text-sm font-medium text-base-content">{labels[value]}</span>
                 </label>
                 <span id={descriptionId} className="mt-1 block text-sm leading-5 text-base-content/65">
-                  {reviewRoutingAuthorityDescription(value, requiresFundingPermission)}
+                  {value === "prepare_for_approval"
+                    ? t("authorityPrepareDescription")
+                    : value === "ask_automatically"
+                      ? requiresFundingPermission
+                        ? t("authoritySendFundedDescription")
+                        : t("authoritySendDescription")
+                      : t("authorityCheckDescription")}
                 </span>
                 {automaticUnavailable ? (
                   <span id={authorityUnavailableId} className="mt-1 block text-sm leading-5 text-warning/90">
@@ -199,9 +215,10 @@ export function ReviewRoutingFields({
   onModeChange: (mode: ReviewRoutingMode) => void;
   onAuthorityChange: (authority: ReviewRoutingAuthority) => void;
 }) {
+  const t = useAgentTranslations("routing");
   return (
     <Card as="fieldset" variant="nested" className={`p-4 sm:p-5 ${className ?? ""}`}>
-      <legend className="px-1 text-xl font-semibold">Review routing</legend>
+      <legend className="px-1 text-xl font-semibold">{t("title")}</legend>
       <div className="grid gap-5 sm:grid-cols-2">
         <ReviewFrequencyFields
           mode={mode}

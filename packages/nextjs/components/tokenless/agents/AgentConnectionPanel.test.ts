@@ -4,9 +4,11 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const source = readFileSync(new URL("./AgentConnectionPanel.tsx", import.meta.url), "utf8");
+const messages = readFileSync(new URL("../../../messages/en/agents.json", import.meta.url), "utf8");
 
 test("default connection UI creates and copies one safe connection intent", () => {
-  assert.match(source, /"Copy connection message"/);
+  assert.match(source, /t\("copyMessage"\)/);
+  assert.match(messages, /"copyMessage": "Copy connection message"/);
   assert.match(source, /\/agent-connections`, \{/);
   assert.match(source, /method: "POST"/);
   assert.match(source, /buildAgentConnectionMessage\(\{ connectionUrl \}\)/);
@@ -14,11 +16,11 @@ test("default connection UI creates and copies one safe connection intent", () =
   assert.match(source, /agent-connections\/onboarding-events/);
   assert.match(source, /JSON\.stringify\(\{ event: "connection_message_copied" \}\)/);
   assert.doesNotMatch(source, /JSON\.stringify\(\{[^}]*connectionUrl/);
-  assert.match(source, /Connect your agent/);
-  assert.match(source, /Connect another agent/);
+  assert.match(messages, /Connect your agent/);
+  assert.match(messages, /Connect another agent/);
   assert.match(source, /canStartAgentConnection/);
-  assert.match(source, /Copy one message into the agent chat you want to connect/);
-  assert.match(source, /cannot spend, publish, read private workspace content, or change/);
+  assert.match(messages, /Copy one message into the agent chat you want to connect/);
+  assert.match(messages, /cannot spend, publish, read private workspace content, or change/);
   assert.doesNotMatch(source, /No connection is currently in progress/);
   assert.doesNotMatch(source, /No approved agent integration exists yet/);
   assert.doesNotMatch(source, /expiresInSeconds: 600/);
@@ -39,7 +41,7 @@ test("host chips are optional disclosure below the unchanged universal copy path
   // The choice is remembered per workspace and restored on load.
   assert.match(source, /setSelectedHostId\(loadAgentConnectionHostChoice\(workspaceId\)\)/);
   assert.match(source, /saveAgentConnectionHostChoice\(workspaceId, hostId\)/);
-  const copyAction = source.indexOf('"Copy connection message"');
+  const copyAction = source.indexOf('t("copyMessage")');
   const picker = source.indexOf("<AgentConnectionHostPicker");
   assert.ok(copyAction >= 0 && copyAction < picker, "the disclosure renders below the primary copy action");
 });
@@ -52,10 +54,10 @@ test("the complete connection message stays visible with accessible copy recover
   assert.match(source, /manualMessageRef\.current\?\.select\(\)/);
   assert.match(source, /aria-describedby="manual-agent-message-help"/);
   assert.match(source, /readOnly/);
-  assert.match(source, /Copy message/);
+  assert.match(source, /t\("copyMessage"\)/);
   assert.match(source, /copyVisibleConnectionMessage/);
-  assert.match(source, /complete message is selected below for one manual copy/);
-  assert.match(source, /setStatus\("Connection message copied\./);
+  assert.match(source, /errors\("clipboardSelected"\)/);
+  assert.match(source, /setStatus\(statusCopy\("connectionCopied"\)\)/);
   assert.doesNotMatch(source, /useRateLoopNotifications|notifications\.(success|error)/);
   assert.match(source, /<AgentConnectionTroubleshooting \/>/);
 });
@@ -86,20 +88,20 @@ test("intent deadlines end pending state client-side", () => {
 
 test("workspace conflicts present the saved recovery action as the primary next step", () => {
   assert.match(source, /const recoveryAction = intent\.recoveryAction/);
-  assert.match(source, /Resolve this connection/);
+  assert.match(source, /t\("resolve"\)/);
   assert.match(source, /role="alert"/);
-  assert.match(source, /\{recoveryAction\}/);
-  assert.match(source, /recoveryAction \? \([\s\S]*?\) : !move \? \([\s\S]*?You can close this page\./);
+  assert.match(source, /t\("recoveryAction"\)/);
+  assert.match(source, /recoveryAction \? \([\s\S]*?\) : !move \? \([\s\S]*?t\("closePage"\)/);
 });
 
 test("legacy pairings remain manageable but cannot be issued from the default path", () => {
-  assert.match(source, /Legacy connection needs attention/);
-  assert.match(source, /action needed/);
-  assert.match(source, /retired bearer-pairing flow/);
+  assert.match(messages, /Legacy connection needs attention/);
+  assert.match(messages, /action needed/);
+  assert.match(messages, /retired bearer-pairing flow/);
   assert.match(source, /PairingApprovalCard/);
-  assert.match(source, /Review legacy approval/);
-  assert.match(source, /Cancel review/);
-  assert.match(source, /Cancel legacy request/);
+  assert.match(messages, /Review legacy approval/);
+  assert.match(messages, /Cancel review/);
+  assert.match(messages, /Cancel legacy request/);
   assert.match(source, /expandedLegacyPairingId === pairing\.pairingId/);
   assert.match(source, /\/agent-pairings\//);
   assert.match(source, /\/approve/);
@@ -120,14 +122,20 @@ test("all five consequential connection actions use the shared confirmation dial
   assert.match(source, /kind: "reject-pairing"/);
   assert.match(source, /kind: "rotate-integration"/);
   assert.match(source, /kind: "revoke-integration"/);
-  assert.match(source, /Its original message will stop working\./);
-  assert.match(
-    source,
-    /Its current RateLoop workspace connection will stop, and this agent's previous credential will be replaced\./,
-  );
-  assert.match(source, /The pairing secret cannot be reused\./);
-  assert.match(source, /The previous credential will no longer be valid\. The replacement is shown once\./);
-  assert.match(source, /Its current RateLoop access will stop\./);
+  for (const key of [
+    "cancelDescription",
+    "reconnectDescription",
+    "rejectDescription",
+    "rotateDescription",
+    "disconnectDescription",
+  ]) {
+    assert.match(source, new RegExp(`t\\("${key}"\\)`));
+  }
+  assert.match(messages, /Its original message will stop working\./);
+  assert.match(messages, /Its current RateLoop workspace connection will stop/);
+  assert.match(messages, /The pairing secret cannot be reused\./);
+  assert.match(messages, /The previous credential will no longer be valid/);
+  assert.match(messages, /Its current RateLoop access will stop\./);
   assert.match(source, /busy=\{Boolean\(busyAction\)\}/);
   assert.match(source, /onCancel=\{\(\) => setPendingConfirmation\(null\)\}/);
   assert.match(source, /focusFeedbackAfterConfirmationRef\.current = true/);
@@ -139,49 +147,49 @@ test("safe OAuth integrations show no bearer rotation or publishing permission",
   assert.match(source, /allActiveIntegrationsUseSafeAccess = activeIntegrations\.every/);
   assert.match(source, /\{allActiveIntegrationsUseSafeAccess \? \(/);
   assert.match(source, /legacyCredential \? \(/);
-  assert.match(source, /OAuth-managed safe access/);
-  assert.match(source, /No publishing access/);
-  assert.match(source, /Connected with safe access/);
-  assert.match(source, /Rotate legacy credential/);
+  assert.match(messages, /OAuth-managed safe access/);
+  assert.match(messages, /No publishing access/);
+  assert.match(messages, /Connected with safe access/);
+  assert.match(messages, /Rotate legacy credential/);
 });
 
 test("replay-revoked OAuth integrations expose the owner recovery action", () => {
   assert.match(source, /oauthRecoveryAvailable/);
   assert.match(source, /recover-oauth/);
-  assert.match(source, /Restore connection/);
-  assert.match(source, /revokes its current access tokens and restores the existing safe OAuth credential/);
+  assert.match(messages, /Restore connection/);
+  assert.match(messages, /revokes its current access tokens and restores the existing safe OAuth credential/);
 });
 
 test("connection approval keeps adaptive policy detail beside the controls that govern it", () => {
   const editorSource = readFileSync(new URL("./AgentHumanReviewEditor.tsx", import.meta.url), "utf8");
-  assert.match(source, /reviewPolicyCopy\.limits\.adaptiveSummary/);
-  assert.match(source, /<InfoPopover label="About the adaptive preset">/);
-  assert.match(source, /reviewPolicyCopy\.limits\.adaptiveConnectionHelp/);
+  assert.match(source, /policyCopy\.limits\.adaptiveSummary/);
+  assert.match(source, /<InfoPopover label=\{t\("adaptivePreset"\)\}>/);
+  assert.match(source, /policyCopy\.limits\.adaptiveConnectionHelp/);
   assert.doesNotMatch(source, /Generic MCP is advisory/);
   assert.match(editorSource, /draft\.mode === "adaptive"/);
-  assert.match(editorSource, /reviewPolicyCopy\.limits\.adaptiveDetail/);
-  assert.match(editorSource, /<InfoPopover label="About adaptive coverage">/);
+  assert.match(editorSource, /policyCopy\.limits\.adaptiveDetail/);
+  assert.match(editorSource, /<InfoPopover label=\{ui\("aboutAdaptiveCoverage"\)\}>/);
 });
 
 test("connected agent management opens from a direct action while technical state stays optional", () => {
-  assert.match(source, /Manage connected agents/);
+  assert.match(source, /t\("manage"\)/);
   assert.match(source, /aria-controls="connected-agent-management"/);
   assert.match(source, /aria-expanded=\{showConnectionManagement\}/);
   assert.match(source, /showConnectionManagement \? \(/);
-  assert.match(source, /\? "Done" : "Manage connected agents"/);
-  assert.match(source, /Connection details/);
+  assert.match(source, /showConnectionManagement \? t\("done"\) : t\("manage"\)/);
+  assert.match(messages, /Connection details/);
   assert.doesNotMatch(source, /Connection history/);
   assert.match(source, /onConnectionHistoryChange\?\.\(connectionHistory\)/);
-  assert.match(source, />\s*Disconnect\s*</);
-  assert.match(source, /setStatus\("Agent disconnected\."\)/);
+  assert.match(source, /t\("disconnect"\)/);
+  assert.match(source, /setStatus\(statusCopy\("agentDisconnected"\)\)/);
 });
 
 test("a connected OAuth agent has a direct targeted reconnect path", () => {
-  assert.match(source, />\s*Reconnect\s*</);
+  assert.match(source, /t\("reconnect"\)/);
   assert.match(source, /copyConnectionMessage\(activeIntegrations\[0\]\.integrationId\)/);
   assert.match(source, /copyConnectionMessage\(integration\.integrationId\)/);
   assert.match(source, /JSON\.stringify\(reconnectIntegrationId \? \{ reconnectIntegrationId \} : \{\}\)/);
-  assert.match(source, /Reconnect message copied\. Paste it once into the same agent task\./);
+  assert.match(source, /t\("reconnectCopied"\)/);
   assert.match(source, /activeConnectionIntents\.length > 0/);
 });
 
@@ -191,23 +199,23 @@ test("a saved agent with only an unusable OAuth integration can reconnect withou
     source,
     /const reconnectableIntegrations = selectReconnectableOAuthConnections\(integrations, connectionClock\)/,
   );
-  assert.match(source, /Reconnect your agent/);
-  assert.match(source, /Reconnect a saved agent without changing its review settings\./);
+  assert.match(messages, /Reconnect your agent/);
+  assert.match(messages, /Reconnect a saved agent without changing its review settings\./);
   assert.match(source, /copyConnectionMessage\(integration\.integrationId\)/);
-  assert.match(source, /`Reconnect \$\{integration\.agentDisplayName \|\| "agent"\}`/);
+  assert.match(source, /t\("reconnectNamed", \{ name: integration\.agentDisplayName \|\| t\("agentFallback"\) \}\)/);
 });
 
 test("a workspace owner explicitly approves a source-confirmed reconnect on the website", () => {
   assert.match(source, /source_confirmation_required/);
-  assert.match(source, /Confirm the reconnect in your agent/);
+  assert.match(messages, /Confirm the reconnect in your agent/);
   assert.match(source, /owner_approval_required/);
-  assert.match(source, /Approve reconnecting this agent/);
-  assert.match(source, /Approve reconnect/);
+  assert.match(messages, /Approve reconnecting this agent/);
+  assert.match(messages, /Approve reconnect/);
   assert.match(source, /agent-connection-moves\/\$\{encodeURIComponent\(move\.transferId\)\}\/approve/);
   assert.match(source, /JSON\.stringify\(\{ decision: "approve" \}\)/);
-  assert.match(source, /This disconnects that Codex credential from its current RateLoop workspace/);
-  assert.match(source, /review and publishing settings stay/);
-  assert.match(source, /Reconnect approved\. Return to the same agent task; it can now finish automatically\./);
+  assert.match(messages, /This disconnects that Codex credential from its current RateLoop workspace/);
+  assert.match(messages, /review and publishing settings stay/);
+  assert.match(messages, /Reconnect approved\. Return to the same agent task; it can now finish automatically\./);
 });
 
 test("elapsed legacy attempts are never kept pending client-side", () => {

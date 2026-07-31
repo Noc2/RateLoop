@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useTranslations } from "next-intl";
 import { RateLoopLogo } from "~~/components/RateLoopLogo";
 import { Card } from "~~/components/tokenless/ui/Card";
 
@@ -21,6 +22,7 @@ export function SignInSurface({
   title: string;
   titleId: string;
 }) {
+  const t = useTranslations("auth");
   const Heading = headingLevel === 2 ? "h2" : "h1";
 
   return (
@@ -36,7 +38,7 @@ export function SignInSurface({
           <div className="mb-8">
             <RateLoopLogo className="mx-auto h-20 w-20" idPrefix="sign-in-brand" />
             <p className="mt-4 font-display text-2xl font-semibold leading-tight text-base-content">
-              The Human Assurance Loop
+              {t("brandTitle")}
             </p>
           </div>
         ) : null}

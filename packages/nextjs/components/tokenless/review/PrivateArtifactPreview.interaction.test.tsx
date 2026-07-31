@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 test("private text is fetched in-page and long content expands without opening a tab", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, waitFor } = await import("@testing-library/react");
+  const { cleanup, render: baseRender, waitFor } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { PrivateArtifactPreview } = await import("./PrivateArtifactPreview");
   const previousFetch = globalThis.fetch;
@@ -36,7 +38,8 @@ test("private text is fetched in-page and long content expands without opening a
 
 test("expired preview access renews and refetches without losing the review page", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, waitFor } = await import("@testing-library/react");
+  const { cleanup, render: baseRender, waitFor } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { PrivateArtifactPreview } = await import("./PrivateArtifactPreview");
   const previousFetch = globalThis.fetch;
@@ -73,7 +76,8 @@ test("expired preview access renews and refetches without losing the review page
 
 test("wrapped mobile text can expand even below the character threshold", async () => {
   const restoreDom = installTestDom();
-  const { act, cleanup, render, waitFor } = await import("@testing-library/react");
+  const { act, cleanup, render: baseRender, waitFor } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { PrivateArtifactPreview } = await import("./PrivateArtifactPreview");
   const previousFetch = globalThis.fetch;

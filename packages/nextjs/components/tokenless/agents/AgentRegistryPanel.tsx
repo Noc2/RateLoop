@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { AgentText } from "./AgentText";
+import { useAgentFormatter, useAgentTranslations } from "./AgentsLocaleProvider";
 import { type AgentConnectionHistoryEntry, mergeAgentAuditHistory } from "./agentAuditHistory";
 import { AgentVersionForm } from "~~/components/tokenless/agents/AgentVersionForm";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
@@ -30,6 +32,10 @@ export function AgentRegistryPanel({
   selectedAgentId?: string | null;
   selectedVersionId?: string | null;
 }) {
+  const format = useAgentFormatter();
+  const ui = useAgentTranslations("ui");
+  const errors = useAgentTranslations("errors");
+  const statusCopy = useAgentTranslations("status");
   const [registry, setRegistry] = useState<AgentRegistry | null>(null);
   const [editingAgent, setEditingAgent] = useState<WorkspaceAgent | null>(null);
   const [showArchived, setShowArchived] = useState(false);
@@ -61,16 +67,16 @@ export function AgentRegistryPanel({
       setError(null);
       try {
         await loadRegistry(workspaceId, controller.signal);
-      } catch (cause) {
+      } catch {
         if (!controller.signal.aborted) {
-          setError(cause instanceof Error ? cause.message : "Unable to load the connected agents.");
+          setError(errors("loadAgents"));
         }
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
     })();
     return () => controller.abort();
-  }, [agentRevision, loadRegistry, workspaceId]);
+  }, [agentRevision, errors, loadRegistry, workspaceId]);
 
   useEffect(() => {
     if (loading || !selectedAgentId || !registry?.agents.some(agent => agent.agentId === selectedAgentId)) return;
@@ -99,9 +105,9 @@ export function AgentRegistryPanel({
       await loadRegistry(workspaceId);
       onAgentsChanged?.();
       setEditingAgent(null);
-      setStatus("A new immutable workflow version was created.");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to create the workflow version.");
+      setStatus(statusCopy("versionCreated"));
+    } catch {
+      setError(errors("createVersion"));
     } finally {
       setBusy(false);
     }
@@ -122,9 +128,9 @@ export function AgentRegistryPanel({
       onAgentsChanged?.();
       setEditingAgent(null);
       setPendingDeactivation(null);
-      setStatus("Agent deactivated. Existing records remain available.");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to deactivate the agent.");
+      setStatus(statusCopy("agentDeactivated"));
+    } catch {
+      setError(errors("deactivateAgent"));
     } finally {
       setBusy(false);
     }
@@ -139,7 +145,7 @@ export function AgentRegistryPanel({
 
   return (
     <div className="space-y-5">
-      <AsyncSection loading={loading} loadingLabel="Loading agents">
+      <AsyncSection loading={loading} loadingLabel={ui("loadingAgents")}>
         {null}
       </AsyncSection>
 
@@ -167,7 +173,9 @@ export function AgentRegistryPanel({
               </div>
               {selectedVersion ? (
                 <div className="mt-3 rounded-xl bg-[var(--rateloop-blue)]/10 p-3 text-sm" role="status">
-                  <strong>Selected workflow version {selectedVersion.versionNumber}</strong>
+                  <strong>
+                    <AgentText id="translated094" /> {selectedVersion.versionNumber}
+                  </strong>
                   <p className="mt-1 text-base-content/65">
                     {selectedVersion.declaredProvider} {selectedVersion.declaredModel}
                     {selectedVersion.declaredModelVersion ? ` ${selectedVersion.declaredModelVersion}` : ""} ·{" "}
@@ -178,7 +186,7 @@ export function AgentRegistryPanel({
                   </code>
                 </div>
               ) : null}
-              <div className="mt-3 space-y-4 border-t border-white/10 pt-3">
+              <div className="mt-3 space-y-4 border-t border-base-content/10 pt-3">
                 {registry?.canManage && agent.status === "active" ? (
                   <div className="flex flex-wrap gap-2">
                     <Button
@@ -188,7 +196,7 @@ export function AgentRegistryPanel({
                       disabled={busy}
                       onClick={() => setEditingAgent(current => (current?.agentId === agent.agentId ? null : agent))}
                     >
-                      Change workflow version
+                      <AgentText id="translated095" />
                     </Button>
                     <Button
                       type="button"
@@ -198,7 +206,7 @@ export function AgentRegistryPanel({
                       disabled={busy}
                       onClick={() => setPendingDeactivation(agent)}
                     >
-                      Deactivate
+                      <AgentText id="translated096" />
                     </Button>
                   </div>
                 ) : null}
@@ -211,14 +219,14 @@ export function AgentRegistryPanel({
                     aria-labelledby={`new-version-${agent.agentId}`}
                   >
                     <h3 id={`new-version-${agent.agentId}`} className="font-semibold">
-                      Change workflow version
+                      <AgentText id="translated095" />
                     </h3>
                     <div className="mt-4">
                       <AgentVersionForm
                         key={editingAgent.currentVersion.versionId}
                         current={editingAgent.currentVersion}
                         busy={busy}
-                        submitLabel="Save workflow version"
+                        submitLabel={ui("saveWorkflowVersion")}
                         onSubmit={createVersion}
                       />
                     </div>
@@ -227,20 +235,26 @@ export function AgentRegistryPanel({
 
                 <details>
                   <summary className="cursor-pointer text-sm font-medium text-base-content/65">
-                    Technical details
+                    <AgentText id="translated097" />
                   </summary>
                   <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
                     <div>
-                      <dt className="text-xs text-base-content/55">External ID</dt>
+                      <dt className="text-xs text-base-content/55">
+                        <AgentText id="externalId" />
+                      </dt>
                       <dd className="mt-1 break-all font-mono text-xs">{agent.externalId}</dd>
                     </div>
                     <div>
-                      <dt className="text-xs text-base-content/55">Environment</dt>
+                      <dt className="text-xs text-base-content/55">
+                        <AgentText id="environment" />
+                      </dt>
                       <dd className="mt-1 capitalize">{agent.currentVersion.environment}</dd>
                     </div>
                     {agent.ownerAccountAddress ? (
                       <div>
-                        <dt className="text-xs text-base-content/55">Owner</dt>
+                        <dt className="text-xs text-base-content/55">
+                          <AgentText id="owner" />
+                        </dt>
                         <dd className="mt-1 font-mono text-xs" title={agent.ownerAccountAddress}>
                           {shortAddress(agent.ownerAccountAddress)}
                         </dd>
@@ -263,7 +277,7 @@ export function AgentRegistryPanel({
             aria-pressed={showArchived}
             onClick={() => setShowArchived(current => !current)}
           >
-            {showArchived ? "Hide archived" : `Show archived (${archivedAgentCount})`}
+            {showArchived ? ui("hideArchived") : ui("showArchived", { count: archivedAgentCount })}
           </Button>
         </div>
       ) : null}
@@ -272,7 +286,8 @@ export function AgentRegistryPanel({
         <Card as="section" className="rounded-2xl p-5">
           <details>
             <summary className="cursor-pointer text-sm font-medium text-base-content/65">
-              Audit history ({auditEntries.length})
+              <AgentText id="translated098" />
+              {auditEntries.length})
             </summary>
             <ol className="mt-4 space-y-3">
               {auditEntries.map(entry => (
@@ -285,7 +300,7 @@ export function AgentRegistryPanel({
                     </strong>
                     {entry.occurredAt ? (
                       <time dateTime={entry.occurredAt} className="text-xs text-base-content/55">
-                        {new Date(entry.occurredAt).toLocaleString()}
+                        {format.dateTime(new Date(entry.occurredAt), { dateStyle: "medium", timeStyle: "short" })}
                       </time>
                     ) : null}
                   </div>
@@ -311,20 +326,22 @@ export function AgentRegistryPanel({
       ) : null}
 
       {status ? (
-        <p role="status" className="rounded-lg bg-emerald-300/10 p-3 text-sm text-emerald-100">
+        <p role="status" className="rounded-lg bg-success/10 p-3 text-sm text-success">
           {status}
         </p>
       ) : null}
       {error ? (
-        <p role="alert" className="rounded-lg bg-red-400/10 p-3 text-sm text-red-100">
+        <p role="alert" className="rounded-lg bg-error/10 p-3 text-sm text-error">
           {error}
         </p>
       ) : null}
       <ConfirmDialog
         open={pendingDeactivation !== null}
-        title={`Deactivate ${pendingDeactivation?.currentVersion.displayName ?? "this agent"}?`}
-        description="The agent will stop receiving new work. Existing records will stay available."
-        confirmLabel="Deactivate agent"
+        title={ui("deactivateAgentTitle", {
+          name: pendingDeactivation?.currentVersion.displayName ?? ui("thisAgent"),
+        })}
+        description={<AgentText id="attribute006" />}
+        confirmLabel={ui("deactivateAgent")}
         busy={busy}
         onCancel={() => setPendingDeactivation(null)}
         onConfirm={() => {

@@ -6,7 +6,7 @@ test("Agents navigation stays visible while session-aware controls track the bro
   const shell = readFileSync(new URL("../TokenlessShell.tsx", import.meta.url), "utf8");
   const sessionButton = readFileSync(new URL("../../thirdweb/ThirdwebSessionButton.tsx", import.meta.url), "utf8");
 
-  assert.match(shell, /links\.map\(\(\{ href, label, icon: Icon \}\) =>/);
+  assert.match(shell, /links\.map\(\(\{ href, labelKey, icon: Icon \}\) =>/);
   assert.doesNotMatch(shell, /filter\(link => link\.href !== "\/agents"\)/);
   assert.match(sessionButton, /onSessionChange\?\.\(value !== null\)/);
   assert.match(sessionButton, /onSessionChange\?\.\(false\)/);

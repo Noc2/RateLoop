@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useAgentTranslations } from "./AgentsLocaleProvider";
 import { SignedOutGate } from "~~/components/auth/SignedOutGate";
 import { agentSignInReturnToWithHash } from "~~/components/tokenless/agents/agentWorkspaceState";
 import { Button } from "~~/components/tokenless/ui/Button";
+import { Link } from "~~/i18n/navigation";
 
 export function AgentsSignInPrompt({ returnTo }: { returnTo: string }) {
+  const t = useAgentTranslations("signIn");
   const [browserReturnTo, setBrowserReturnTo] = useState(returnTo);
 
   useEffect(() => {
@@ -15,7 +17,7 @@ export function AgentsSignInPrompt({ returnTo }: { returnTo: string }) {
 
   return (
     <SignedOutGate
-      description="Sign in to connect an agent, configure human review, manage reviewers, and evaluate performance."
+      description={t("description")}
       returnTo={browserReturnTo}
       secondaryAction={
         <Button
@@ -25,10 +27,10 @@ export function AgentsSignInPrompt({ returnTo }: { returnTo: string }) {
           variant="secondary"
           className="h-10 min-h-10 px-[0.9rem] text-base font-bold leading-none"
         >
-          Agent docs
+          {t("docs")}
         </Button>
       }
-      title="Agents"
+      title={t("title")}
       titleId="agents-sign-in-title"
     />
   );

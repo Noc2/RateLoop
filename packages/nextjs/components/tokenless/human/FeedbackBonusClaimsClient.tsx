@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useFormatter, useTranslations } from "next-intl";
 import { eth_getTransactionByHash, getRpcClient, prepareTransaction, sendTransaction, waitForReceipt } from "thirdweb";
 import { baseSepolia } from "thirdweb/chains";
 import { ConnectButton, ThirdwebProvider, useActiveAccount } from "thirdweb/react";
@@ -20,21 +21,14 @@ import type { TokenlessRaterRoundSecrets } from "~~/lib/tokenless/rater/types";
 
 type RecoverySource = { id: string; label: string; recoveryPackage: string; recoverySecret: string | null };
 
-async function readJson(response: Response) {
+async function readJson(response: Response, fallbackMessage: string) {
   const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
   if (!response.ok) {
     throw new Error(
-      typeof body.message === "string" ? body.message : typeof body.error === "string" ? body.error : "Request failed.",
+      typeof body.message === "string" ? body.message : typeof body.error === "string" ? body.error : fallbackMessage,
     );
   }
   return body;
-}
-
-function usdc(atomic: string) {
-  const value = BigInt(atomic);
-  const whole = value / 1_000_000n;
-  const fraction = (value % 1_000_000n).toString().padStart(6, "0").replace(/0+$/u, "");
-  return `${whole.toLocaleString()}${fraction ? `.${fraction}` : ""} USDC`;
 }
 
 function shortAddress(value: string) {
@@ -42,6 +36,10 @@ function shortAddress(value: string) {
 }
 
 function FeedbackBonusClaimsControls() {
+  const t = useTranslations("human.bonus");
+  const format = useFormatter();
+  const usdc = (atomic: string) =>
+    `${format.number(Number(BigInt(atomic)) / 1_000_000, { maximumFractionDigits: 6 })} USDC`;
   const account = useActiveAccount();
   const [sources, setSources] = useState<RecoverySource[]>([]);
   const [selectedSource, setSelectedSource] = useState("");
@@ -65,7 +63,7 @@ function FeedbackBonusClaimsControls() {
         const found: RecoverySource[] = nextPrincipalId
           ? listDeviceRecoveries(nextPrincipalId).map(record => ({
               id: `device:${record.voteKey.toLowerCase()}`,
-              label: `Round ${record.roundId} · this device`,
+              label: t("roundDevice", { round: record.roundId }),
               recoveryPackage: record.recoveryPackage,
               recoverySecret: null,
             }))
@@ -88,7 +86,7 @@ function FeedbackBonusClaimsControls() {
         setSecrets(null);
         setItems([]);
         setStatus(null);
-        setError("Sign in again to load recovery material for this account.");
+        setError(t("signIn"));
       }
     }
     void refreshPrincipalRecoveries();
@@ -97,7 +95,7 @@ function FeedbackBonusClaimsControls() {
       active = false;
       window.removeEventListener("focus", refreshPrincipalRecoveries);
     };
-  }, []);
+  }, [t]);
 
   function resetEvidence() {
     setSecrets(null);
@@ -112,12 +110,12 @@ function FeedbackBonusClaimsControls() {
     try {
       const session = await readBrowserSession();
       if (!session || session.principalId !== principalId) {
-        throw new Error("The active account changed. Reload recovery material for this account.");
+        throw new Error(t("accountChanged"));
       }
       const serialized = await file.text();
       const backup = parseDeviceRecoveryBackup(serialized);
       if (backup && backup.record.principalId !== session.principalId) {
-        throw new Error("This recovery backup belongs to another RateLoop account.");
+        throw new Error(t("wrongAccount"));
       }
       const source: RecoverySource = {
         id: "uploaded",
@@ -127,8 +125,8 @@ function FeedbackBonusClaimsControls() {
       };
       setUploadedSource(source);
       setSelectedSource(source.id);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "The recovery package could not be read.");
+    } catch {
+      setError(t("readFailed"));
     }
   }
 
@@ -136,21 +134,21 @@ function FeedbackBonusClaimsControls() {
     const source =
       selectedSource === uploadedSource?.id ? uploadedSource : sources.find(value => value.id === selectedSource);
     if (!source) {
-      setError("Choose a saved review or import a backup first.");
+      setError(t("choose"));
       return;
     }
     const secret = source.recoverySecret ?? recoverySecret;
     if (secret.length < 12) {
-      setError("Enter the recovery secret for this saved review.");
+      setError(t("secretRequired"));
       return;
     }
     setBusy(true);
     setError(null);
-    setStatus("Opening the saved review on this device…");
+    setStatus(t("opening"));
     try {
       const session = await readBrowserSession();
       if (!session || session.principalId !== principalId) {
-        throw new Error("The active account changed. Reload recovery material for this account.");
+        throw new Error(t("accountChanged"));
       }
       const recovered = await importTokenlessRecoveryPackage(source.recoveryPackage, secret);
       const response = await readJson(
@@ -160,21 +158,18 @@ function FeedbackBonusClaimsControls() {
           )}&voteKey=${encodeURIComponent(recovered.reveal.voteKey)}`,
           { cache: "no-store", credentials: "same-origin" },
         ),
+        t("requestFailed"),
       );
       const entitlements = (Array.isArray(response.items) ? response.items : []) as PublicFeedbackBonusEntitlement[];
       for (const entitlement of entitlements) assertFeedbackBonusEntitlementForRecovery(entitlement, recovered);
       setSecrets(recovered);
       setItems(entitlements);
-      setStatus(
-        entitlements.length
-          ? "Feedback Bonus evidence matches this saved review."
-          : "No Feedback Bonus is registered for this public response yet.",
-      );
-    } catch (cause) {
+      setStatus(entitlements.length ? t("matches") : t("notRegistered"));
+    } catch {
       setSecrets(null);
       setItems([]);
       setStatus(null);
-      setError(cause instanceof Error ? cause.message : "Unable to check Feedback Bonuses.");
+      setError(t("checkFailed"));
     } finally {
       setBusy(false);
     }
@@ -182,16 +177,16 @@ function FeedbackBonusClaimsControls() {
 
   async function claim(entitlement: PublicFeedbackBonusEntitlement) {
     if (!secrets || !account || !thirdwebBrowserClient) {
-      setError("Connect a wallet to relay this claim.");
+      setError(t("connectRequired"));
       return;
     }
     setClaimingPoolId(entitlement.poolId);
     setError(null);
-    setStatus("Waiting for the connected wallet to relay the claim…");
+    setStatus(t("waiting"));
     try {
       const session = await readBrowserSession();
       if (!session || session.principalId !== principalId) {
-        throw new Error("The active account changed. Reload recovery material for this account.");
+        throw new Error(t("accountChanged"));
       }
       const authorization = buildFeedbackBonusClaimAuthorization({
         entitlement,
@@ -207,7 +202,7 @@ function FeedbackBonusClaimsControls() {
           data: authorization.transactionData,
         }),
       });
-      setStatus("Claim submitted · checking the exact on-chain event…");
+      setStatus(t("submitted"));
       const [receipt, transaction] = await Promise.all([
         waitForReceipt({ client: thirdwebBrowserClient, chain: baseSepolia, transactionHash: result.transactionHash }),
         eth_getTransactionByHash(getRpcClient({ client: thirdwebBrowserClient, chain: baseSepolia }), {
@@ -228,10 +223,10 @@ function FeedbackBonusClaimsControls() {
       setItems(current =>
         current.map(item => (item.poolId === entitlement.poolId ? { ...item, claimed: true } : item)),
       );
-      setStatus(`${usdc(entitlement.awardAmountAtomic)} claimed to the saved payout address.`);
-    } catch (cause) {
+      setStatus(t("claimedTo", { amount: usdc(entitlement.awardAmountAtomic) }));
+    } catch {
       setStatus(null);
-      setError(cause instanceof Error ? cause.message : "Unable to claim this Feedback Bonus.");
+      setError(t("claimFailed"));
     } finally {
       setClaimingPoolId(null);
     }
@@ -245,12 +240,12 @@ function FeedbackBonusClaimsControls() {
   return (
     <Card as="section" className="rounded-2xl p-5" aria-labelledby="feedback-bonus-claims-title">
       <h2 id="feedback-bonus-claims-title" className="text-xl font-semibold">
-        Claim a Feedback Bonus
+        {t("title")}
       </h2>
       <SelectField
         containerClassName="mt-4"
-        className="border-white/10 bg-[var(--rateloop-field)]"
-        label="Saved review"
+        className="border-base-content/10 bg-[var(--rateloop-field)]"
+        label={t("savedReview")}
         labelClassName="text-sm"
         value={selectedSource}
         onChange={event => {
@@ -258,26 +253,19 @@ function FeedbackBonusClaimsControls() {
           setSelectedSource(event.target.value);
         }}
       >
-        <option value="">Choose a review</option>
+        <option value="">{t("chooseReview")}</option>
         {allSources.map(source => (
           <option key={source.id} value={source.id}>
             {source.label}
           </option>
         ))}
       </SelectField>
-      {activeSource ? (
-        <p className="mt-3 text-sm leading-6 text-base-content/60">
-          RateLoop checks this review on your device, sending only its public round and vote key. The paid commit&apos;s
-          public tlock ciphertext becomes decryptable after the commit deadline with no post-commit abort, exposing the
-          vote, prediction, response hash, payout address, and salt even without a reveal or claim. Claiming later
-          submits the payout address and salt on-chain; any wallet may relay, but funds still go to that address.
-        </p>
-      ) : null}
+      {activeSource ? <p className="mt-3 text-sm leading-6 text-base-content/60">{t("privacy")}</p> : null}
       {needsRecoverySecret ? (
-        <div className="mt-3 rounded-lg border border-white/10 p-3 text-sm text-base-content/60">
+        <div className="mt-3 rounded-lg border border-base-content/10 p-3 text-sm text-base-content/60">
           <Field
-            className="input-sm border-white/10 bg-[var(--rateloop-field)]"
-            label="Recovery secret"
+            className="input-sm border-base-content/10 bg-[var(--rateloop-field)]"
+            label={t("recoverySecret")}
             labelClassName="text-xs"
             type="password"
             value={recoverySecret}
@@ -295,7 +283,7 @@ function FeedbackBonusClaimsControls() {
         <Field
           containerClassName="rateloop-secondary-action cursor-pointer rounded-lg px-4 py-2 text-sm"
           className="sr-only"
-          label="Import backup"
+          label={t("import")}
           labelClassName="m-0 inline text-sm font-normal text-inherit"
           type="file"
           accept="application/json,.json"
@@ -307,7 +295,7 @@ function FeedbackBonusClaimsControls() {
           disabled={busy || !selectedSource || (needsRecoverySecret && recoverySecret.length < 12)}
           onClick={() => void checkEntitlements()}
         >
-          {busy ? "Checking…" : "Check bonus"}
+          {busy ? t("checking") : t("check")}
         </button>
       </div>
       {items.length ? (
@@ -316,15 +304,13 @@ function FeedbackBonusClaimsControls() {
             <Card as="article" variant="nested" key={`${item.poolId}:${item.feedbackId}`} className="rounded-xl p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm font-medium">
-                    {item.awarded ? usdc(item.awardAmountAtomic) : "Awaiting the human award decision"}
-                  </p>
+                  <p className="text-sm font-medium">{item.awarded ? usdc(item.awardAmountAtomic) : t("awaiting")}</p>
                   <p className="mt-1 font-mono text-xs text-base-content/55">
-                    Pool {item.poolId} · vote key {shortAddress(item.voteKey)}
+                    {t("poolVote", { pool: item.poolId, key: shortAddress(item.voteKey) })}
                   </p>
                 </div>
                 {item.claimed ? (
-                  <span className="rounded-md bg-emerald-400/10 px-3 py-1 text-xs text-emerald-100">Claimed</span>
+                  <span className="rounded-md bg-success/10 px-3 py-1 text-xs text-success">{t("claimed")}</span>
                 ) : item.awarded ? (
                   <button
                     type="button"
@@ -332,7 +318,7 @@ function FeedbackBonusClaimsControls() {
                     disabled={!account || claimingPoolId === item.poolId}
                     onClick={() => void claim(item)}
                   >
-                    {claimingPoolId === item.poolId ? "Claiming…" : "Claim bonus"}
+                    {claimingPoolId === item.poolId ? t("claiming") : t("claim")}
                   </button>
                 ) : null}
               </div>
@@ -341,22 +327,20 @@ function FeedbackBonusClaimsControls() {
         </div>
       ) : null}
       {claimable && !account && thirdwebBrowserClient ? (
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 p-4">
-          <p className="text-sm text-base-content/60">
-            Connect a wallet to claim. Funds go only to the saved payout address.
-          </p>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-base-content/10 p-4">
+          <p className="text-sm text-base-content/60">{t("connectDescription")}</p>
           <ConnectButton
             client={thirdwebBrowserClient}
             chain={baseSepolia}
             chains={[baseSepolia]}
             wallets={rateLoopThirdwebWallets}
-            connectButton={{ label: "Connect wallet" }}
-            connectModal={{ showThirdwebBranding: false, size: "compact", title: "Connect wallet" }}
+            connectButton={{ label: t("connect") }}
+            connectModal={{ showThirdwebBranding: false, size: "compact", title: t("connect") }}
           />
         </div>
       ) : null}
       {status ? (
-        <p className="mt-4 text-sm text-emerald-100" role="status">
+        <p className="mt-4 text-sm text-success" role="status">
           {status}
         </p>
       ) : null}

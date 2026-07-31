@@ -2,8 +2,8 @@
 
 import { type ReactNode } from "react";
 import dynamic from "next/dynamic";
-import { useRouter } from "next/navigation";
 import { SignInSurface, type SignInSurfaceLayout } from "./SignInSurface";
+import { useRouter } from "~~/i18n/navigation";
 
 const ThirdwebSessionButton = dynamic(
   () => import("~~/components/thirdweb/ThirdwebSessionButton").then(module => module.ThirdwebSessionButton),

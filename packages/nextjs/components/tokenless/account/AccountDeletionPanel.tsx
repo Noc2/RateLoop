@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { Card } from "~~/components/tokenless/ui/Card";
@@ -34,11 +35,9 @@ class DeletionFieldError extends Error {
   }
 }
 
-function itemCount(count: number, singular: string, plural = `${singular}s`) {
-  return `${count} ${count === 1 ? singular : plural}`;
-}
-
 export function AccountDeletionPanel() {
+  const locale = useLocale();
+  const t = useTranslations("account.deletion");
   const [reviewing, setReviewing] = useState(false);
   const [preview, setPreview] = useState<DeletionPreview | null>(null);
   const [confirmation, setConfirmation] = useState("");
@@ -63,8 +62,8 @@ export function AccountDeletionPanel() {
         await fetch("/api/account/deletion", { credentials: "same-origin", cache: "no-store" }),
       );
       setPreview(body);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to load account deletion details.");
+    } catch {
+      setError(t("loadFailed"));
     } finally {
       setLoading(false);
     }
@@ -96,7 +95,7 @@ export function AccountDeletionPanel() {
         body: JSON.stringify({ confirmation: "DELETE", recentAuthProof }),
       }),
     );
-    window.location.assign("/");
+    window.location.assign(locale === "en" ? "/" : `/${locale}`);
   }
 
   async function finishRecentAuthentication() {
@@ -126,7 +125,7 @@ export function AccountDeletionPanel() {
     await runRecentAuthentication(async () => {
       await betterAuthClient.signOut().catch(() => undefined);
       setReauthConfiguration(await readBrowserAuthConfiguration());
-    }, "Unable to load sign-in options.");
+    }, t("verificationOptionsFailed"));
   }
 
   async function sendReauthCode(event: FormEvent) {
@@ -134,10 +133,10 @@ export function AccountDeletionPanel() {
     await runRecentAuthentication(async () => {
       const response = await betterAuthClient.emailOtp.sendVerificationOtp({ email: reauthEmail, type: "sign-in" });
       if (response.error) {
-        throw new DeletionFieldError(response.error.message || "Unable to send the sign-in code.", "email");
+        throw new DeletionFieldError(response.error.message || t("sendFailed"), "email");
       }
       setReauthOtpSent(true);
-    }, "Unable to send the sign-in code.");
+    }, t("sendFailed"));
   }
 
   async function verifyReauthCode(event: FormEvent) {
@@ -145,18 +144,18 @@ export function AccountDeletionPanel() {
     await runRecentAuthentication(async () => {
       const response = await betterAuthClient.signIn.emailOtp({ email: reauthEmail, otp: reauthOtp });
       if (response.error) {
-        throw new DeletionFieldError(response.error.message || "The sign-in code is invalid or expired.", "otp");
+        throw new DeletionFieldError(response.error.message || t("invalidCode"), "otp");
       }
       await finishRecentAuthentication();
-    }, "Unable to verify the sign-in code.");
+    }, t("verifyCodeFailed"));
   }
 
   async function verifyWithPasskey() {
     await runRecentAuthentication(async () => {
       const response = await betterAuthClient.signIn.passkey();
-      if (response.error) throw new Error(response.error.message || "Passkey verification failed.");
+      if (response.error) throw new Error(response.error.message || t("passkeyFailed"));
       await finishRecentAuthentication();
-    }, "Passkey verification failed.");
+    }, t("passkeyFailed"));
   }
 
   const blocked = !preview || preview.blockers.length > 0;
@@ -166,11 +165,9 @@ export function AccountDeletionPanel() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h2 id="account-deletion-heading" className="text-lg font-semibold text-error">
-            Delete account
+            {t("title")}
           </h2>
-          <p className="mt-2 text-sm leading-6 text-base-content/60">
-            Review what will be deleted and which records must remain.
-          </p>
+          <p className="mt-2 text-sm leading-6 text-base-content/60">{t("description")}</p>
         </div>
         {!reviewing ? (
           <button
@@ -178,39 +175,33 @@ export function AccountDeletionPanel() {
             className="btn rateloop-secondary-action btn-sm text-error"
             onClick={startDeletionReview}
           >
-            Review account deletion
+            {t("review")}
           </button>
         ) : null}
       </div>
 
       {reviewing ? (
-        <div className="mt-5 border-t border-white/10 pt-5">
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-base-content/60">
-            This permanently ends the current account. Signing in again, even with the same email address, creates a new
-            account and a new RateLoop identity.
-          </p>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-base-content/60">
-            Eligible private data is erased. Public blockchain entries and records required for legal, tax, settlement,
-            or security purposes may be retained only as required.
-          </p>
+        <div className="mt-5 border-t border-base-content/10 pt-5">
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-base-content/60">{t("permanent")}</p>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-base-content/60">{t("retention")}</p>
 
-          {loading ? <p className="mt-5 text-sm text-base-content/55">Checking what will be deleted…</p> : null}
+          {loading ? <p className="mt-5 text-sm text-base-content/55">{t("checking")}</p> : null}
 
           {preview ? (
             <div className="mt-5 space-y-4">
               <div>
-                <h3 className="text-sm font-semibold">Account impact</h3>
+                <h3 className="text-sm font-semibold">{t("impact")}</h3>
                 <ul className="mt-2 space-y-1 text-sm leading-6 text-base-content/60">
-                  <li>{itemCount(preview.impact.ownedWorkspaces, "owned workspace")}</li>
-                  <li>{itemCount(preview.impact.sharedWorkspaces, "shared workspace")}</li>
-                  <li>{itemCount(preview.impact.acceptedAssignments, "accepted assignment")}</li>
-                  <li>{itemCount(preview.impact.managedWallets, "managed wallet")}</li>
+                  <li>{t("ownedWorkspaces", { count: preview.impact.ownedWorkspaces })}</li>
+                  <li>{t("sharedWorkspaces", { count: preview.impact.sharedWorkspaces })}</li>
+                  <li>{t("acceptedAssignments", { count: preview.impact.acceptedAssignments })}</li>
+                  <li>{t("managedWallets", { count: preview.impact.managedWallets })}</li>
                 </ul>
               </div>
 
               {preview.impact.retainedRecords.length > 0 ? (
                 <div>
-                  <h3 className="text-sm font-semibold">Records retained where required</h3>
+                  <h3 className="text-sm font-semibold">{t("retainedRecords")}</h3>
                   <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-base-content/60">
                     {preview.impact.retainedRecords.map(record => (
                       <li key={record}>{record}</li>
@@ -220,7 +211,7 @@ export function AccountDeletionPanel() {
               ) : null}
 
               {preview.warnings.length > 0 ? (
-                <ul className="rounded-lg border border-amber-300/20 bg-amber-300/5 px-4 py-3 text-sm leading-6 text-amber-100">
+                <ul className="rounded-lg border border-warning/20 bg-warning/5 px-4 py-3 text-sm leading-6 text-warning">
                   {preview.warnings.map(warning => (
                     <li key={warning}>{warning}</li>
                   ))}
@@ -229,7 +220,7 @@ export function AccountDeletionPanel() {
 
               {preview.blockers.length > 0 ? (
                 <div className="rounded-lg border border-error/30 bg-error/10 px-4 py-3" role="alert">
-                  <p className="text-sm font-semibold text-error">Resolve these items before deleting the account:</p>
+                  <p className="text-sm font-semibold text-error">{t("blockers")}</p>
                   <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-error">
                     {preview.blockers.map(blocker => (
                       <li key={blocker.code}>{blocker.message}</li>
@@ -240,7 +231,7 @@ export function AccountDeletionPanel() {
                 <div className="max-w-sm">
                   <Field
                     id="account-deletion-confirmation"
-                    label="Type DELETE to confirm"
+                    label={t("confirmation")}
                     type="text"
                     value={confirmation}
                     onChange={event => {
@@ -263,7 +254,7 @@ export function AccountDeletionPanel() {
                     disabled={blocked || confirmation !== "DELETE" || submitting || reauthenticating}
                     onClick={() => void beginRecentAuthentication()}
                   >
-                    Verify and delete
+                    {t("verifyDelete")}
                   </button>
                 ) : null}
                 <button
@@ -272,26 +263,24 @@ export function AccountDeletionPanel() {
                   disabled={submitting || reauthenticating}
                   onClick={cancelDeletionReview}
                 >
-                  Cancel
+                  {t("cancel")}
                 </button>
               </div>
 
               {reauthVisible ? (
                 <div className="max-w-sm rounded-xl border border-error/25 bg-error/5 p-4">
-                  <h3 className="text-sm font-semibold">Sign in again to delete</h3>
-                  <p className="mt-1 text-sm leading-6 text-base-content/60">
-                    This verification is valid only for this deletion.
-                  </p>
+                  <h3 className="text-sm font-semibold">{t("signInAgain")}</h3>
+                  <p className="mt-1 text-sm leading-6 text-base-content/60">{t("verificationPurpose")}</p>
                   {!reauthConfiguration ? (
                     <p className="mt-4 text-sm text-base-content/55" role="status">
-                      Loading sign-in options…
+                      {t("loadingMethods")}
                     </p>
                   ) : reauthOtpSent ? (
                     <form className="mt-4 space-y-3" onSubmit={verifyReauthCode}>
                       <Field
                         id="account-deletion-otp"
                         className="input input-bordered w-full font-mono tracking-[0.25em]"
-                        label="Six-digit code"
+                        label={t("code")}
                         format="oneTimeCode"
                         inputMode="numeric"
                         autoComplete="one-time-code"
@@ -307,7 +296,7 @@ export function AccountDeletionPanel() {
                         className="btn btn-error min-h-11 w-full"
                         disabled={reauthenticating || submitting || reauthOtp.length !== 6}
                       >
-                        {submitting ? "Deleting…" : "Verify code and delete"}
+                        {submitting ? t("deleting") : t("verifyCodeDelete")}
                       </button>
                     </form>
                   ) : (
@@ -316,7 +305,7 @@ export function AccountDeletionPanel() {
                         <Field
                           id="account-deletion-email"
                           className="input input-bordered w-full"
-                          label="Account email"
+                          label={t("email")}
                           type="email"
                           autoComplete="email"
                           required
@@ -331,7 +320,7 @@ export function AccountDeletionPanel() {
                           className="btn btn-error min-h-11 w-full"
                           disabled={reauthenticating || !reauthConfiguration.methods.emailOtp}
                         >
-                          Email a code
+                          {t("emailCode")}
                         </button>
                       </form>
                       {reauthConfiguration.methods.passkey ? (
@@ -341,7 +330,7 @@ export function AccountDeletionPanel() {
                           disabled={reauthenticating}
                           onClick={() => void verifyWithPasskey()}
                         >
-                          Verify with a passkey
+                          {t("verifyPasskey")}
                         </button>
                       ) : null}
                     </>

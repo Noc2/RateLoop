@@ -1,0 +1,50 @@
+{
+  "supportedAgents": "Works with the agents your team already uses",
+  "sections": {
+    "useCases": {
+      "lead": "Where Humans",
+      "accent": "Matter"
+    },
+    "howItWorks": {
+      "lead": "How It",
+      "accent": "Works"
+    },
+    "whyItWorks": {
+      "lead": "Why It",
+      "accent": "Works"
+    },
+    "pricing": {
+      "lead": "Pricing, Kept",
+      "accent": "Simple"
+    },
+    "questions": {
+      "lead": "Common",
+      "accent": "Questions"
+    }
+  },
+  "loop": {
+    "titleLine1": "Human",
+    "titleLine2": "Assurance",
+    "titleLine3": "Loop",
+    "stages": {
+      "policy": {
+        "title": "Owner sets policy",
+        "body": "Sets review rules, risk thresholds, reviewer audience, data boundaries, and response windows."
+      },
+      "submit": {
+        "title": "Agent submits work",
+        "body": "Submits the work, context, declared risk, and supporting evidence within the owner-approved policy.",
+        "concise": "Submits work, context, and evidence within the owner-approved policy."
+      },
+      "judge": {
+        "title": "Humans judge",
+        "body": "Eligible people answer independently. The verdict, reasons, and agreement evidence return to the agent.",
+        "concise": "Independent humans return verdicts, reasons, and evidence."
+      },
+      "evaluate": {
+        "title": "Evaluation",
+        "body": "Returns feedback and actionable human performance metrics for AI workflows."
+      }
+    }
+  }
+}

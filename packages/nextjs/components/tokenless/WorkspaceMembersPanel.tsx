@@ -1,6 +1,8 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import { useLocale } from "next-intl";
+import { LocalizedSharedContent } from "~~/components/tokenless/LocalizedSharedContent";
 import { OneTimeSecretNotice } from "~~/components/tokenless/agents/OneTimeSecretNotice";
 import { Field, SelectField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
@@ -48,13 +50,14 @@ function roleLabel(value: WorkspaceAccessRole) {
   return value[0]!.toUpperCase() + value.slice(1);
 }
 
-function dateLabel(value: string | null) {
+function dateLabel(value: string | null, locale: string) {
   if (!value) return "No expiry";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "No expiry" : date.toLocaleDateString();
+  return Number.isNaN(date.getTime()) ? "No expiry" : date.toLocaleDateString(locale);
 }
 
 export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: boolean; workspaceId: string }) {
+  const locale = useLocale();
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [invitations, setInvitations] = useState<WorkspaceInvitation[]>([]);
   const [viewerPrincipalId, setViewerPrincipalId] = useState("");
@@ -102,10 +105,10 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
     setLoadError(null);
     clear();
     if (!canManage) return;
-    void loadMembers().catch(cause => {
+    void loadMembers().catch(() => {
       if (!workspaceRequests.isWorkspaceCurrent(workspaceId)) return;
       setLoading(false);
-      setLoadError(cause instanceof Error ? cause.message : "Unable to load workspace members.");
+      setLoadError("Unable to load workspace members.");
     });
   }, [canManage, clear, loadMembers, workspaceId, workspaceRequests]);
 
@@ -216,196 +219,198 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
   const pendingInvitations = invitations.filter(invitation => invitation.status === "pending");
 
   return (
-    <section className="rounded-xl border border-white/10 p-5" aria-labelledby="workspace-members-heading">
-      <div>
-        <h2 id="workspace-members-heading" className="text-xl font-semibold">
-          Members
-        </h2>
-      </div>
-
-      <h3 className="mt-5 text-sm font-semibold">Invite member</h3>
-      <p className="mt-1 text-xs leading-5 text-base-content/55">
-        Create a one-time code bound to their verified email, then send it to them privately.
-      </p>
-      <form
-        className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem_auto] sm:items-end"
-        onSubmit={createInvitation}
-      >
-        <Field
-          label="Email"
-          className="rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-          type="email"
-          autoComplete="email"
-          value={email}
-          error={fieldErrors.intendedEmail}
-          onChange={event => {
-            clear("intendedEmail");
-            setEmail(event.target.value);
-          }}
-          placeholder="name@company.com"
-          required
-        />
-        <SelectField
-          label="Role"
-          className="rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-          value={accessRole}
-          error={fieldErrors.accessRole}
-          onChange={event => {
-            clear("accessRole");
-            setAccessRole(event.target.value as Exclude<WorkspaceAccessRole, "owner">);
-          }}
-        >
-          <option value="member">Member</option>
-          <option value="admin">Admin</option>
-          <option value="billing">Billing</option>
-        </SelectField>
-        <button className="rateloop-gradient-action min-h-12 px-5" disabled={busyTarget === "invite"}>
-          {busyTarget === "invite" ? "Creating…" : "Create invitation"}
-        </button>
-      </form>
-
-      {issuedToken ? (
-        <OneTimeSecretNotice
-          label="workspace invitation code"
-          value={issuedToken}
-          onDismiss={() => setIssuedToken(null)}
-        />
-      ) : null}
-      {formError ? (
-        <p className="mt-4 rounded-lg bg-red-400/10 p-3 text-sm text-red-100" role="alert">
-          {formError}
-        </p>
-      ) : null}
-
-      <AsyncSection
-        className="mt-6"
-        loading={loading}
-        loadingLabel="Loading workspace members"
-        error={loadError}
-        empty={members.length === 0 && pendingInvitations.length === 0}
-        emptyTitle="No workspace members found."
-      >
-        <div className="mt-6 border-t border-white/10 pt-5">
-          <h3 className="text-sm font-semibold">People with workspace access</h3>
-          {members.length ? (
-            <ul className="mt-3 space-y-2">
-              {members.map(member => {
-                const immutable =
-                  member.accessRole === "owner" ||
-                  member.managedBy !== null ||
-                  member.principalId === viewerPrincipalId;
-                return (
-                  <li
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-base-content/[0.035] p-3"
-                    key={member.principalId}
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold">
-                        {member.displayName ?? member.email ?? shortPrincipal(member.principalId)}
-                      </p>
-                      <p className="mt-1 text-xs text-base-content/55">
-                        {member.displayName && member.email ? `${member.email} · ` : ""}
-                        {member.managedBy
-                          ? `Managed by ${member.managedBy.toUpperCase()}`
-                          : shortPrincipal(member.principalId)}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {member.accessRole === "owner" ? (
-                        <span className="rounded-full bg-base-content/[0.08] px-3 py-1.5 text-xs font-semibold">
-                          Owner
-                        </span>
-                      ) : (
-                        <SelectField
-                          className="select-sm rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                          label={`Role for ${member.displayName ?? member.email ?? member.principalId}`}
-                          labelClassName="sr-only"
-                          value={member.accessRole}
-                          disabled={immutable || busyTarget === member.principalId}
-                          onChange={event =>
-                            void updateRole(member, event.target.value as Exclude<WorkspaceAccessRole, "owner">)
-                          }
-                        >
-                          <option value="member">Member</option>
-                          <option value="admin">Admin</option>
-                          <option value="billing">Billing</option>
-                        </SelectField>
-                      )}
-                      {!immutable ? (
-                        <button
-                          className="btn btn-sm border-red-300/20 bg-red-300/[0.06] text-red-100"
-                          type="button"
-                          disabled={busyTarget === member.principalId}
-                          onClick={() =>
-                            setConfirmation({
-                              kind: "remove-member",
-                              member,
-                              label: member.displayName ?? member.email ?? shortPrincipal(member.principalId),
-                            })
-                          }
-                        >
-                          Remove
-                        </button>
-                      ) : null}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <p className="mt-3 text-sm text-base-content/55">No one has workspace access yet.</p>
-          )}
+    <LocalizedSharedContent>
+      <section className="rounded-xl border border-base-content/10 p-5" aria-labelledby="workspace-members-heading">
+        <div>
+          <h2 id="workspace-members-heading" className="text-xl font-semibold">
+            Members
+          </h2>
         </div>
 
-        {pendingInvitations.length ? (
-          <div className="mt-6 border-t border-white/10 pt-5">
-            <h3 className="text-sm font-semibold">Pending invitations</h3>
-            <ul className="mt-3 space-y-2">
-              {pendingInvitations.map(invitation => (
-                <li
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-base-content/[0.035] p-3 text-sm"
-                  key={invitation.inviteId}
-                >
-                  <span>
-                    {roleLabel(invitation.accessRole)} · expires {dateLabel(invitation.expiresAt)}
-                  </span>
-                  <button
-                    className="text-xs text-red-200 underline underline-offset-4"
-                    type="button"
-                    disabled={busyTarget === invitation.inviteId}
-                    onClick={() => setConfirmation({ kind: "revoke-invitation", invitation })}
-                  >
-                    Revoke
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
+        <h3 className="mt-5 text-sm font-semibold">Invite member</h3>
+        <p className="mt-1 text-xs leading-5 text-base-content/55">
+          Create a one-time code bound to their verified email, then send it to them privately.
+        </p>
+        <form
+          className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem_auto] sm:items-end"
+          onSubmit={createInvitation}
+        >
+          <Field
+            label="Email"
+            className="rounded-lg border-base-content/10 bg-[var(--rateloop-field)]"
+            type="email"
+            autoComplete="email"
+            value={email}
+            error={fieldErrors.intendedEmail}
+            onChange={event => {
+              clear("intendedEmail");
+              setEmail(event.target.value);
+            }}
+            placeholder="name@company.com"
+            required
+          />
+          <SelectField
+            label="Role"
+            className="rounded-lg border-base-content/10 bg-[var(--rateloop-field)]"
+            value={accessRole}
+            error={fieldErrors.accessRole}
+            onChange={event => {
+              clear("accessRole");
+              setAccessRole(event.target.value as Exclude<WorkspaceAccessRole, "owner">);
+            }}
+          >
+            <option value="member">Member</option>
+            <option value="admin">Admin</option>
+            <option value="billing">Billing</option>
+          </SelectField>
+          <button className="rateloop-gradient-action min-h-12 px-5" disabled={busyTarget === "invite"}>
+            {busyTarget === "invite" ? "Creating…" : "Create invitation"}
+          </button>
+        </form>
+
+        {issuedToken ? (
+          <OneTimeSecretNotice
+            label="workspace invitation code"
+            value={issuedToken}
+            onDismiss={() => setIssuedToken(null)}
+          />
         ) : null}
-      </AsyncSection>
-      <ConfirmDialog
-        open={confirmation !== null}
-        title={
-          confirmation?.kind === "remove-member"
-            ? `Remove ${confirmation.label} from this workspace?`
-            : "Revoke this workspace invitation?"
-        }
-        description={
-          confirmation?.kind === "remove-member"
-            ? "They will lose workspace access immediately."
-            : "The invitation code will stop working."
-        }
-        confirmLabel={confirmation?.kind === "remove-member" ? "Remove member" : "Revoke invitation"}
-        busy={
-          confirmation?.kind === "remove-member"
-            ? busyTarget === confirmation.member.principalId
-            : confirmation?.kind === "revoke-invitation"
-              ? busyTarget === confirmation.invitation.inviteId
-              : false
-        }
-        onCancel={() => setConfirmation(null)}
-        onConfirm={() => void confirmDestructiveAction()}
-      />
-    </section>
+        {formError ? (
+          <p className="mt-4 rounded-lg bg-error/10 p-3 text-sm text-error" role="alert">
+            {formError}
+          </p>
+        ) : null}
+
+        <AsyncSection
+          className="mt-6"
+          loading={loading}
+          loadingLabel="Loading workspace members"
+          error={loadError}
+          empty={members.length === 0 && pendingInvitations.length === 0}
+          emptyTitle="No workspace members found."
+        >
+          <div className="mt-6 border-t border-base-content/10 pt-5">
+            <h3 className="text-sm font-semibold">People with workspace access</h3>
+            {members.length ? (
+              <ul className="mt-3 space-y-2">
+                {members.map(member => {
+                  const immutable =
+                    member.accessRole === "owner" ||
+                    member.managedBy !== null ||
+                    member.principalId === viewerPrincipalId;
+                  return (
+                    <li
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-base-content/[0.035] p-3"
+                      key={member.principalId}
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold">
+                          {member.displayName ?? member.email ?? shortPrincipal(member.principalId)}
+                        </p>
+                        <p className="mt-1 text-xs text-base-content/55">
+                          {member.displayName && member.email ? `${member.email} · ` : ""}
+                          {member.managedBy
+                            ? `Managed by ${member.managedBy.toUpperCase()}`
+                            : shortPrincipal(member.principalId)}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {member.accessRole === "owner" ? (
+                          <span className="rounded-full bg-base-content/[0.08] px-3 py-1.5 text-xs font-semibold">
+                            Owner
+                          </span>
+                        ) : (
+                          <SelectField
+                            className="select-sm rounded-lg border-base-content/10 bg-[var(--rateloop-field)]"
+                            label={`Role for ${member.displayName ?? member.email ?? member.principalId}`}
+                            labelClassName="sr-only"
+                            value={member.accessRole}
+                            disabled={immutable || busyTarget === member.principalId}
+                            onChange={event =>
+                              void updateRole(member, event.target.value as Exclude<WorkspaceAccessRole, "owner">)
+                            }
+                          >
+                            <option value="member">Member</option>
+                            <option value="admin">Admin</option>
+                            <option value="billing">Billing</option>
+                          </SelectField>
+                        )}
+                        {!immutable ? (
+                          <button
+                            className="btn btn-sm border-error/20 bg-error/[0.06] text-error"
+                            type="button"
+                            disabled={busyTarget === member.principalId}
+                            onClick={() =>
+                              setConfirmation({
+                                kind: "remove-member",
+                                member,
+                                label: member.displayName ?? member.email ?? shortPrincipal(member.principalId),
+                              })
+                            }
+                          >
+                            Remove
+                          </button>
+                        ) : null}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="mt-3 text-sm text-base-content/55">No one has workspace access yet.</p>
+            )}
+          </div>
+
+          {pendingInvitations.length ? (
+            <div className="mt-6 border-t border-base-content/10 pt-5">
+              <h3 className="text-sm font-semibold">Pending invitations</h3>
+              <ul className="mt-3 space-y-2">
+                {pendingInvitations.map(invitation => (
+                  <li
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-base-content/[0.035] p-3 text-sm"
+                    key={invitation.inviteId}
+                  >
+                    <span>
+                      {roleLabel(invitation.accessRole)} · expires {dateLabel(invitation.expiresAt, locale)}
+                    </span>
+                    <button
+                      className="text-xs text-error underline underline-offset-4"
+                      type="button"
+                      disabled={busyTarget === invitation.inviteId}
+                      onClick={() => setConfirmation({ kind: "revoke-invitation", invitation })}
+                    >
+                      Revoke
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </AsyncSection>
+        <ConfirmDialog
+          open={confirmation !== null}
+          title={
+            confirmation?.kind === "remove-member"
+              ? `Remove ${confirmation.label} from this workspace?`
+              : "Revoke this workspace invitation?"
+          }
+          description={
+            confirmation?.kind === "remove-member"
+              ? "They will lose workspace access immediately."
+              : "The invitation code will stop working."
+          }
+          confirmLabel={confirmation?.kind === "remove-member" ? "Remove member" : "Revoke invitation"}
+          busy={
+            confirmation?.kind === "remove-member"
+              ? busyTarget === confirmation.member.principalId
+              : confirmation?.kind === "revoke-invitation"
+                ? busyTarget === confirmation.invitation.inviteId
+                : false
+          }
+          onCancel={() => setConfirmation(null)}
+          onConfirm={() => void confirmDestructiveAction()}
+        />
+      </section>
+    </LocalizedSharedContent>
   );
 }

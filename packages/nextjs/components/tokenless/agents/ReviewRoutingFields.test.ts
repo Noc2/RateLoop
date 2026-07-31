@@ -8,29 +8,30 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const source = readFileSync(new URL("./ReviewRoutingFields.tsx", import.meta.url), "utf8");
+const catalogSource = readFileSync(new URL("../../../messages/en/agents.json", import.meta.url), "utf8");
 
 test("review routing keeps selection and authority together with accessible explanations", () => {
-  assert.match(source, /Review routing/);
+  assert.match(catalogSource, /Review routing/);
   assert.match(source, /export function ReviewFrequencyFields/);
   assert.match(source, /export function ReviewAuthorityFields/);
   assert.match(source, /<ReviewFrequencyFields/);
   assert.match(source, /<ReviewAuthorityFields/);
-  assert.match(source, /When should RateLoop require human review\?/);
-  assert.match(source, /If review is required, what may the agent do\?/);
-  assert.match(source, /Every output — Recommended/);
+  assert.match(catalogSource, /When should RateLoop require human review\?/);
+  assert.match(catalogSource, /If review is required, what may the agent do\?/);
+  assert.match(catalogSource, /Every output — Recommended/);
   assert.match(source, /aria-describedby=\{frequencyDescriptionId\}/);
   assert.match(source, /type="radio"/);
   assert.match(source, /aria-describedby=\{describedBy\}/);
-  assert.match(source, /Decides when an eligible output requires human review/);
-  assert.match(source, /does not authorize sending or funding a\s+request/);
-  assert.match(source, /Applies only after review is required/);
-  assert.match(source, /controls whether the agent checks, prepares, or sends a\s+request/);
+  assert.match(catalogSource, /Decides when an eligible output requires human review/);
+  assert.match(catalogSource, /does not authorize sending or funding a request/);
+  assert.match(catalogSource, /Applies only after review is required/);
+  assert.match(catalogSource, /controls whether the agent checks, prepares, or sends a request/);
 });
 
 test("manual handoff has exact copy and hides the authority field", () => {
   assert.equal(reviewRoutingModeDescription("manual"), "Never requires review automatically. You start each handoff.");
   assert.match(source, /mode !== "manual"/);
-  assert.match(source, /Manual handoff only/);
+  assert.match(catalogSource, /Manual handoff only/);
   assert.deepEqual(reviewRoutingStateForMode("manual", "ask_automatically"), {
     mode: "manual",
     authority: "check_only",
@@ -62,5 +63,5 @@ test("automatic request consequences distinguish unpaid private review from fund
   assert.match(source, /aria-describedby=\{automaticAvailable \? undefined : authorityUnavailableId\}/);
   assert.match(source, /\{automaticUnavailableReason\}/);
   assert.doesNotMatch(source, /Unavailable: \{automaticUnavailableReason\}/);
-  assert.match(source, /Send automatically/);
+  assert.match(catalogSource, /Send automatically/);
 });

@@ -1,19 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { shouldInspectReservedVoucher } from "./publicSubmissionReceipt";
+import { useFormatter, useTranslations } from "next-intl";
 import type { Hex } from "viem";
 import { type PublicQuestionMedia, QuestionMedia } from "~~/components/tokenless/answer/QuestionMedia";
 import { ChoiceInput, Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
-import {
-  CrowdForecastField,
-  isCrowdForecastPercent,
-  reviewRatingPrivacyMessage,
-} from "~~/components/tokenless/review/CrowdForecastField";
+import { CrowdForecastField, isCrowdForecastPercent } from "~~/components/tokenless/review/CrowdForecastField";
 import { DeadlineChip } from "~~/components/tokenless/review/DeadlineChip";
 import { ReviewerShell } from "~~/components/tokenless/review/ReviewerShell";
 import { Card } from "~~/components/tokenless/ui/Card";
+import { Link } from "~~/i18n/navigation";
 import { readBrowserSession } from "~~/lib/auth/client";
 import { readJson } from "~~/lib/tokenless/http";
 import {
@@ -95,8 +92,8 @@ export type PaidTaskAccess =
   | { state: "payout_wallet_required" }
   | { state: "eligibility_required"; eligibilityStatus: string };
 
-function readAnswerJson(response: Response) {
-  return readJson(response, { errorFields: ["message"], fallbackMessage: "Answer request failed." });
+function readAnswerJson(response: Response, fallbackMessage: string) {
+  return readJson(response, { errorFields: ["message"], fallbackMessage });
 }
 
 function randomNonce(): Hex {
@@ -208,6 +205,9 @@ export function PublicQuestionCard({
   principalId: string;
   shortcutsEnabled?: boolean;
 }) {
+  const t = useTranslations("review.public");
+  const forecastT = useTranslations("review.forecast");
+  const format = useFormatter();
   const [answer, setAnswer] = useState<"yes" | "no" | null>(null);
   const [prediction, setPrediction] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
@@ -267,10 +267,10 @@ export function PublicQuestionCard({
     const receipt = loadReviewReceipt("public", task.roundId, isPublicSubmissionReceipt, { principalId });
     setSubmissionReceipt(receipt);
     if (receipt) {
-      setStatus("Recorded");
+      setStatus(t("recorded"));
       setError(null);
     }
-  }, [principalId, task.roundId]);
+  }, [principalId, t, task.roundId]);
 
   // Acceptance of the paid-review terms must never carry across a different round or a different
   // signed-in reviewer. It must survive a re-render caused by a queue reload of the same round,
@@ -307,8 +307,8 @@ export function PublicQuestionCard({
     setPreparedSubmission(null);
     setRecoveryDownloaded(false);
     setRecoveryConfirmed(false);
-    setStatus("Rating changed. Create a new recovery backup before submitting.");
-  }, [preparationBinding, preparedSubmission]);
+    setStatus(t("ratingChanged"));
+  }, [preparationBinding, preparedSubmission, t]);
 
   useEffect(() => {
     if (!activePreparedSubmission) {
@@ -342,17 +342,17 @@ export function PublicQuestionCard({
       setStatus(
         record
           ? isDue
-            ? "Ready to retry"
-            : "Retry scheduled"
+            ? t("readyRetry")
+            : t("retryScheduled")
           : Date.parse(task.voucherDeadline) <= Date.now()
-            ? "Submission expired"
-            : "No saved submission",
+            ? t("submissionExpired")
+            : t("noSaved"),
       );
     });
     return () => {
       active = false;
     };
-  }, [principalId, submissionReceipt, task.alreadyVouchered, task.roundId, task.voucherDeadline]);
+  }, [principalId, submissionReceipt, t, task.alreadyVouchered, task.roundId, task.voucherDeadline]);
 
   useEffect(() => {
     if (!savedCommit || retryAvailable) return;
@@ -366,24 +366,31 @@ export function PublicQuestionCard({
     const failure = await recordTokenlessCommitRelayFailure(queue, record.queueId, principalId, errorCode);
     if (failure.expired) {
       setSavedCommit(null);
-      setStatus("Submission expired");
+      setStatus(t("submissionExpired"));
       return;
     }
     setSavedCommit(failure.record);
     setRetryClock(Date.now());
-    setStatus(`Retry available after ${new Date(failure.record.nextAttemptAt).toLocaleTimeString()}`);
+    setStatus(
+      t("retryAvailableAfter", {
+        time: format.dateTime(new Date(failure.record.nextAttemptAt), {
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+      }),
+    );
   }
 
   async function acceptNetworkAssignment() {
     if (!networkAssignment || !networkTermsAccepted || busy) return;
     setBusy(true);
-    setBusyLabel("Accepting…");
+    setBusyLabel(t("accepting"));
     setError(null);
-    setStatus("Accepting paid review…");
+    setStatus(t("acceptingPaid"));
     try {
       const browserSession = await readBrowserSession();
       if (!browserSession || browserSession.principalId !== principalId) {
-        throw new Error("Your account changed. Reload this review before accepting it.");
+        throw new Error(t("accountChangedAccept"));
       }
       const result = await readAnswerJson(
         await fetch(`/api/account/assurance/assignments/${encodeURIComponent(networkAssignment.assignmentId)}/accept`, {
@@ -395,17 +402,18 @@ export function PublicQuestionCard({
             confidentialityTermsHash: networkAssignment.confidentialityTermsHash,
           }),
         }),
+        t("answerRequestFailed"),
       );
       if (result.accepted !== true || result.assignmentId !== networkAssignment.assignmentId) {
-        throw new Error("Assignment acceptance response is incomplete.");
+        throw new Error(t("acceptanceIncomplete"));
       }
       setAcceptedAssignmentId(networkAssignment.assignmentId);
       setNetworkTermsAccepted(false);
-      setStatus(result.replay === true ? "Assignment already accepted" : "Assignment accepted");
-    } catch (cause) {
+      setStatus(result.replay === true ? t("assignmentAlreadyAccepted") : t("assignmentAccepted"));
+    } catch {
       setAcceptedAssignmentId(null);
       setStatus(null);
-      setError(cause instanceof Error ? cause.message : "The paid review could not be accepted.");
+      setError(t("acceptFailed"));
     } finally {
       setBusy(false);
       setBusyLabel(null);
@@ -415,14 +423,14 @@ export function PublicQuestionCard({
   async function retrySavedCommit() {
     if (!savedCommit) return;
     setBusy(true);
-    setBusyLabel("Retrying…");
+    setBusyLabel(t("retrying"));
     setError(null);
-    setStatus("Submitting…");
+    setStatus(t("submitting"));
     try {
       const browserSession = await readBrowserSession();
       if (!browserSession || browserSession.principalId !== principalId) {
         setSavedCommit(null);
-        setError("Your account changed. Reopen this review before retrying.");
+        setError(t("accountChangedRetry"));
         setStatus(null);
         return;
       }
@@ -434,8 +442,13 @@ export function PublicQuestionCard({
         setSavedCommit(retained);
         setStatus(
           retained
-            ? `Retry available after ${new Date(retained.nextAttemptAt).toLocaleTimeString()}`
-            : "Submission expired",
+            ? t("retryAvailableAfter", {
+                time: format.dateTime(new Date(retained.nextAttemptAt), {
+                  hour: "numeric",
+                  minute: "2-digit",
+                }),
+              })
+            : t("submissionExpired"),
         );
         return;
       }
@@ -447,20 +460,22 @@ export function PublicQuestionCard({
           headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
           body: JSON.stringify(currentRecord.relayPayload),
         }),
+        t("answerRequestFailed"),
       );
-      if (typeof committed.commitId !== "string") throw new Error("Commit response is incomplete.");
+      if (typeof committed.commitId !== "string") throw new Error(t("commitIncomplete"));
       const commitId = committed.commitId;
       for (let attempt = 0; attempt < 10 && committed.state === "submitted"; attempt += 1) {
         await wait(1_000);
         committed = await readAnswerJson(
           await fetch(`/api/rater/commits/${encodeURIComponent(commitId)}`, { credentials: "same-origin" }),
+          t("answerRequestFailed"),
         );
       }
       if (committed.state === "confirmed") {
         await queue.remove(currentRecord.queueId, principalId);
         setSavedCommit(null);
         clearReviewDraft("public", task.roundId, publicDraftStorage);
-        setStatus("Recorded");
+        setStatus(t("recorded"));
         const receipt = {
           commitId,
           confirmedAt: typeof committed.confirmedAt === "string" ? committed.confirmedAt : null,
@@ -470,18 +485,18 @@ export function PublicQuestionCard({
         setSubmissionReceipt(receipt);
         onSubmitted();
       } else if (committed.state === "failed") {
-        throw new Error("The sponsored transaction failed. The prepared submission remains saved for retry.");
+        throw new Error(t("sponsoredFailedRetry"));
       } else {
         await scheduleRetry(currentRecord, "confirmation_pending");
       }
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "We couldn’t finish recording your rating. Try again.");
+    } catch {
+      setError(t("finishRecordingFailed"));
       if (savedCommit && savedCommit.principalId === principalId) {
         try {
           await scheduleRetry(savedCommit, "relay_failed");
         } catch {
-          setStatus("Retry unavailable");
-          setError("The saved submission could not be updated. Refocus this tab and try again.");
+          setStatus(t("retryUnavailable"));
+          setError(t("savedSubmissionUpdateFailed"));
         }
       } else {
         setStatus(null);
@@ -503,12 +518,12 @@ export function PublicQuestionCard({
       return;
     }
     setBusy(true);
-    setBusyLabel("Creating backup…");
+    setBusyLabel(t("creatingBackup"));
     setError(null);
-    setStatus("Creating backup…");
+    setStatus(t("creatingBackup"));
     try {
       const browserSession = await readBrowserSession();
-      if (!browserSession) throw new Error("Sign in again before creating recovery material.");
+      if (!browserSession) throw new Error(t("signInBackup"));
       const response = createPublicRaterResponse(
         {
           operationKey: task.operationKey,
@@ -547,12 +562,12 @@ export function PublicQuestionCard({
       });
       setRecoveryDownloaded(false);
       setRecoveryConfirmed(false);
-      setStatus("Backup ready");
-    } catch (cause) {
+      setStatus(t("backupReady"));
+    } catch {
       setPreparedSubmission(null);
       setRecoveryDownloaded(false);
       setRecoveryConfirmed(false);
-      setError(cause instanceof Error ? cause.message : "We couldn’t create your recovery backup. Try again.");
+      setError(t("createBackupFailed"));
       setStatus(null);
     } finally {
       setBusy(false);
@@ -563,7 +578,7 @@ export function PublicQuestionCard({
   async function confirmRecoveryBackup() {
     if (!activePreparedSubmission || !recoveryDownloaded || recoveryConfirmed || busy) return;
     setBusy(true);
-    setBusyLabel("Checking account…");
+    setBusyLabel(t("checkingAccount"));
     setError(null);
     try {
       const browserSession = await readBrowserSession();
@@ -572,13 +587,13 @@ export function PublicQuestionCard({
         setRecoveryDownloaded(false);
         setRecoveryConfirmed(false);
         setStatus(null);
-        setError("Your account changed. Create a new recovery backup before submitting.");
+        setError(t("accountChangedBackup"));
         return;
       }
       setRecoveryConfirmed(true);
-      setStatus("Backup confirmed");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "We couldn’t confirm the recovery backup. Try again.");
+      setStatus(t("backupConfirmed"));
+    } catch {
+      setError(t("confirmBackupFailed"));
     } finally {
       setBusy(false);
       setBusyLabel(null);
@@ -601,13 +616,13 @@ export function PublicQuestionCard({
       if (savePicker) {
         const handle = await savePicker({
           suggestedName: fileName,
-          types: [{ description: "RateLoop recovery backup", accept: { "application/json": [".json"] } }],
+          types: [{ description: t("backupFile"), accept: { "application/json": [".json"] } }],
         });
         const writable = await handle.createWritable();
         await writable.write(file);
         await writable.close();
       } else if (navigator.share && navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], title: "RateLoop recovery backup" });
+        await navigator.share({ files: [file], title: t("backupFile") });
       } else {
         const fallback = document.createElement("a");
         fallback.href = recoveryUrl;
@@ -618,7 +633,7 @@ export function PublicQuestionCard({
       setRecoveryDownloaded(true);
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === "AbortError") return;
-      setError(cause instanceof Error ? cause.message : "The recovery backup could not be saved.");
+      setError(t("saveBackupFailed"));
     }
   }
 
@@ -628,16 +643,16 @@ export function PublicQuestionCard({
     }
     let preparedForRetry = false;
     setBusy(true);
-    setBusyLabel("Submitting…");
+    setBusyLabel(t("submitting"));
     setError(null);
-    setStatus("Submitting…");
+    setStatus(t("submitting"));
     try {
       const browserSession = await readBrowserSession();
       if (!browserSession || browserSession.principalId !== activePreparedSubmission.principalId) {
         setPreparedSubmission(null);
         setRecoveryDownloaded(false);
         setRecoveryConfirmed(false);
-        throw new Error("The signed-in account changed. Create a new recovery backup for this account.");
+        throw new Error(t("signedInAccountChanged"));
       }
       const { response, secrets } = activePreparedSubmission;
       storeDeviceRecovery(activePreparedSubmission.recoveryRecord, browserSession.principalId);
@@ -659,8 +674,9 @@ export function PublicQuestionCard({
             }),
           ),
         }),
+        t("answerRequestFailed"),
       );
-      if (typeof voucherBody.voucherId !== "string") throw new Error("Voucher response is incomplete.");
+      if (typeof voucherBody.voucherId !== "string") throw new Error(t("voucherIncomplete"));
       const voucher = voucherBody.voucher as { nullifier: `0x${string}` };
       const authorization = await signTokenlessCommit({
         secrets,
@@ -704,8 +720,9 @@ export function PublicQuestionCard({
             response,
           }),
         }),
+        t("answerRequestFailed"),
       );
-      if (typeof committed.commitId !== "string") throw new Error("Commit response is incomplete.");
+      if (typeof committed.commitId !== "string") throw new Error(t("commitIncomplete"));
       let current = committed;
       for (let attempt = 0; attempt < 10 && current.state === "submitted"; attempt += 1) {
         await wait(1_000);
@@ -713,13 +730,14 @@ export function PublicQuestionCard({
           await fetch(`/api/rater/commits/${encodeURIComponent(committed.commitId)}`, {
             credentials: "same-origin",
           }),
+          t("answerRequestFailed"),
         );
       }
       if (current.state === "confirmed") {
         await queue.remove(queueId, browserSession.principalId);
         setSavedCommit(null);
         clearReviewDraft("public", task.roundId, publicDraftStorage);
-        setStatus("Recorded");
+        setStatus(t("recorded"));
         const receipt = {
           commitId: committed.commitId,
           confirmedAt: typeof current.confirmedAt === "string" ? current.confirmedAt : null,
@@ -729,22 +747,20 @@ export function PublicQuestionCard({
         setSubmissionReceipt(receipt);
         onSubmitted();
       } else if (current.state === "failed") {
-        throw new Error(
-          "The sponsored transaction failed. Your prepared submission is saved on this device for retry.",
-        );
+        throw new Error(t("sponsoredFailedSaved"));
       } else {
         await scheduleRetry(queuedCommit, "confirmation_pending");
       }
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "We couldn’t record your rating. Try again.");
+    } catch {
+      setError(t("recordFailed"));
       if (preparedForRetry) {
         try {
           const queued = await createIndexedDbTokenlessCommitQueue().list(principalId);
           const record = queued.find(value => value.roundId === task.roundId);
           if (record) await scheduleRetry(record, "initial_relay_failed");
         } catch {
-          setStatus("Retry unavailable");
-          setError("The saved submission could not be updated. Refocus this tab and try again.");
+          setStatus(t("retryUnavailable"));
+          setError(t("savedSubmissionUpdateFailed"));
         }
       } else {
         setStatus(null);
@@ -757,8 +773,8 @@ export function PublicQuestionCard({
 
   const options =
     task.question.kind === "head_to_head"
-      ? [task.question.optionA?.label ?? "Option A", task.question.optionB?.label ?? "Option B"]
-      : [task.question.positiveLabel ?? "Yes", task.question.negativeLabel ?? "No"];
+      ? [task.question.optionA?.label ?? t("optionA"), task.question.optionB?.label ?? t("optionB")]
+      : [task.question.positiveLabel ?? t("yes"), task.question.negativeLabel ?? t("no")];
   const feedbackMaximum = Math.min(
     (task.question.rationale?.mode === "optional" || task.question.rationale?.mode === "required"
       ? task.question.rationale.maxLength
@@ -769,22 +785,22 @@ export function PublicQuestionCard({
     task.question.rationale?.mode === "required" ? Math.max(1, task.question.rationale.minLength ?? 1) : 0;
   const feedbackIssue =
     task.question.rationale?.mode === "required" && feedbackBody.trim().length < feedbackMinimum
-      ? `Feedback must contain at least ${feedbackMinimum} character${feedbackMinimum === 1 ? "" : "s"}.`
+      ? t("feedbackMinimum", { count: feedbackMinimum })
       : feedbackBody.length > feedbackMaximum
-        ? `Feedback must contain at most ${feedbackMaximum} characters.`
+        ? t("feedbackMaximum", { count: feedbackMaximum })
         : null;
   let sourceUrlIssue: string | null = null;
   if (sourceUrl.trim()) {
     if (!feedbackBody.trim()) {
-      sourceUrlIssue = "Add feedback before adding a source URL.";
+      sourceUrlIssue = t("feedbackBeforeSource");
     } else {
       try {
         const parsed = new URL(sourceUrl.trim());
         if (parsed.protocol !== "https:" || parsed.username || parsed.password) {
-          sourceUrlIssue = "Source URL must use HTTPS and must not contain credentials.";
+          sourceUrlIssue = t("sourceHttpsCredentials");
         }
       } catch {
-        sourceUrlIssue = "Source URL must be a valid HTTPS URL.";
+        sourceUrlIssue = t("sourceValidHttps");
       }
     }
   }
@@ -794,19 +810,16 @@ export function PublicQuestionCard({
     const expired = Date.parse(networkAssignment.assignmentExpiresAt) <= Date.now();
     return (
       <Card as="section" className="rounded-lg p-5 sm:p-6">
-        <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Public paid review</p>
-        <h2 className="mt-3 text-xl font-semibold">Accept this funded review before opening it</h2>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-base-content/65">
-          This reserves your assigned seat. The question contains only public, synthetic, or safely redacted material.
-          Your sealed rating is linked to the immutable assignment and settlement terms identified below.
-        </p>
+        <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">{t("paidReview")}</p>
+        <h2 className="mt-3 text-xl font-semibold">{t("acceptTitle")}</h2>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-base-content/65">{t("acceptDescription")}</p>
         <dl className="mt-4 grid gap-2 text-xs text-base-content/60">
           <div>
-            <dt className="inline font-semibold text-base-content/80">Assignment: </dt>
+            <dt className="inline font-semibold text-base-content/80">{t("assignment")} </dt>
             <dd className="inline font-mono">{networkAssignment.assignmentId}</dd>
           </div>
           <div>
-            <dt className="inline font-semibold text-base-content/80">Terms: </dt>
+            <dt className="inline font-semibold text-base-content/80">{t("terms")} </dt>
             <dd className="inline break-all font-mono">{networkAssignment.confidentialityTermsHash}</dd>
           </div>
         </dl>
@@ -819,7 +832,7 @@ export function PublicQuestionCard({
             disabled={busy || expired}
             onChange={event => setNetworkTermsAccepted(event.target.checked)}
           />
-          <span>I accept the exact public paid-review terms for this assignment.</span>
+          <span>{t("acceptTerms")}</span>
         </label>
         <button
           type="button"
@@ -827,10 +840,10 @@ export function PublicQuestionCard({
           disabled={!networkTermsAccepted || busy || expired}
           onClick={() => void acceptNetworkAssignment()}
         >
-          {busy ? (busyLabel ?? "Accepting…") : expired ? "Assignment expired" : "Accept and open review"}
+          {busy ? (busyLabel ?? t("accepting")) : expired ? t("expired") : t("acceptOpen")}
         </button>
         {error ? (
-          <p role="alert" className="mt-4 rounded-lg bg-red-400/10 p-3 text-sm text-red-100">
+          <p role="alert" className="mt-4 rounded-lg bg-error/10 p-3 text-sm text-error">
             {error}
           </p>
         ) : null}
@@ -853,26 +866,28 @@ export function PublicQuestionCard({
       }
       advanceLabel={
         paidAccess.state !== "ready"
-          ? "Paid work required"
+          ? t("paidRequired")
           : savedCommit
-            ? "Retry submission"
+            ? t("retry")
             : task.alreadyVouchered
-              ? "No saved submission"
+              ? t("noSaved")
               : activePreparedSubmission
                 ? recoveryConfirmed
-                  ? "Submit rating"
+                  ? t("submitRating")
                   : recoveryDownloaded
-                    ? "Confirm backup above"
-                    : "Download backup above"
-                : "Create recovery backup"
+                    ? t("confirmBackupAbove")
+                    : t("downloadBackupAbove")
+                : t("createBackup")
       }
-      busyLabel={busy ? (busyLabel ?? "Working…") : null}
+      busyLabel={busy ? (busyLabel ?? t("working")) : null}
       caseIndex={0}
       laneHeader={
         <>
-          <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Public review</p>
-          <p className="mt-1 text-sm text-base-content/60">Guaranteed ${usdc(task.earnings.guaranteedBaseAtomic)}</p>
-          <DeadlineChip deadline={task.voucherDeadline} label="Submit" />
+          <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">{t("publicReview")}</p>
+          <p className="mt-1 text-sm text-base-content/60">
+            {t("guaranteed", { amount: `$${usdc(task.earnings.guaranteedBaseAtomic)}` })}
+          </p>
+          <DeadlineChip deadline={task.voucherDeadline} label={t("submit")} />
         </>
       }
       onAdvance={() =>
@@ -891,30 +906,25 @@ export function PublicQuestionCard({
       <article className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_17.25rem] xl:items-start">
         <Card as="section" className="min-h-72 rounded-lg p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-base-content/55">
-            <span>Public panel</span>
-            <span>Round {task.roundId}</span>
+            <span>{t("publicPanel")}</span>
+            <span>{t("round", { round: task.roundId })}</span>
           </div>
           <h2 className="mt-8 max-w-3xl text-2xl font-semibold leading-tight sm:text-3xl">{task.question.prompt}</h2>
           {task.question.media ? <QuestionMedia media={task.question.media} /> : null}
-          <p className="mt-5 text-sm leading-6 text-base-content/55">
-            Choose one answer, then estimate how the panel will respond. Public questions contain only public,
-            synthetic, or safely redacted material.
-          </p>
-          <div className="mt-8 flex flex-wrap gap-x-5 gap-y-2 border-t border-white/10 pt-4 text-xs text-base-content/55">
-            <span>Guaranteed ${usdc(task.earnings.guaranteedBaseAtomic)}</span>
-            <span>Quality bonus up to ${usdc(task.earnings.possibleBonusAtomic)}</span>
-            <span>Conditional surprise bonus up to ${usdc(task.earnings.possibleSurpriseBonusAtomic)}</span>
-            <span>Attempt ${usdc(task.earnings.attemptCompensationAtomic)}</span>
+          <p className="mt-5 text-sm leading-6 text-base-content/55">{t("instructions")}</p>
+          <div className="mt-8 flex flex-wrap gap-x-5 gap-y-2 border-t border-base-content/10 pt-4 text-xs text-base-content/55">
+            <span>{t("guaranteed", { amount: `$${usdc(task.earnings.guaranteedBaseAtomic)}` })}</span>
+            <span>{t("qualityBonus", { amount: `$${usdc(task.earnings.possibleBonusAtomic)}` })}</span>
+            <span>{t("surpriseBonus", { amount: `$${usdc(task.earnings.possibleSurpriseBonusAtomic)}` })}</span>
+            <span>{t("attempt", { amount: `$${usdc(task.earnings.attemptCompensationAtomic)}` })}</span>
           </div>
         </Card>
 
         <Card className="rounded-lg p-4 sm:p-5">
           {paidAccess.state === "ready" ? (
             <>
-              <p className="text-sm font-semibold">Your rating</p>
-              <p className="mt-1 text-xs text-base-content/55">
-                {reviewRatingPrivacyMessage(PUBLIC_PAID_REVIEW_PRIVACY_CONTEXT)}
-              </p>
+              <p className="text-sm font-semibold">{t("yourRating")}</p>
+              <p className="mt-1 text-xs text-base-content/55">{t("ratingPrivacy")}</p>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 {(["yes", "no"] as const).map((value, index) => (
                   <button
@@ -937,7 +947,7 @@ export function PublicQuestionCard({
               </div>
               {answer ? (
                 <CrowdForecastField
-                  accessibleLabel={`What percentage of reviewers do you expect to choose “${options[0]}”?`}
+                  accessibleLabel={forecastT("question", { label: options[0] })}
                   positiveLabel={options[0]}
                   privacyContext={PUBLIC_PAID_REVIEW_PRIVACY_CONTEXT}
                   value={prediction}
@@ -950,18 +960,18 @@ export function PublicQuestionCard({
                   className="mt-4 text-xs font-medium underline underline-offset-4"
                   onClick={() => setFeedbackOpen(true)}
                 >
-                  Add feedback
+                  {t("addFeedback")}
                 </button>
               ) : null}
               {feedbackEnabled && feedbackOpen ? (
-                <fieldset className="mt-5 border-t border-white/10 pt-4">
+                <fieldset className="mt-5 border-t border-base-content/10 pt-4">
                   <legend className="text-xs font-semibold">
-                    {task.question.rationale?.mode === "required" ? "Feedback required" : "Optional feedback"}
+                    {task.question.rationale?.mode === "required" ? t("feedbackRequired") : t("feedbackOptional")}
                   </legend>
                   <SelectField
                     containerClassName="mt-3"
-                    className="select-sm border-white/10 bg-[var(--rateloop-field)]"
-                    label="Feedback category"
+                    className="select-sm border-base-content/10 bg-[var(--rateloop-field)]"
+                    label={t("feedbackCategory")}
                     labelClassName="sr-only"
                     value={feedbackCategory}
                     onChange={event => setFeedbackCategory(event.target.value as PublicRaterResponseCategory)}
@@ -975,8 +985,8 @@ export function PublicQuestionCard({
                   <TextareaField
                     ref={rationaleRef}
                     containerClassName="mt-2"
-                    className="min-h-28 border-white/10 bg-[var(--rateloop-field)]"
-                    label="Feedback"
+                    className="min-h-28 border-base-content/10 bg-[var(--rateloop-field)]"
+                    label={t("feedback")}
                     labelClassName="sr-only"
                     error={feedbackIssue}
                     value={feedbackBody}
@@ -985,7 +995,7 @@ export function PublicQuestionCard({
                       task.question.rationale?.mode === "required" ? (task.question.rationale.minLength ?? 1) : 0
                     }
                     maxLength={feedbackMaximum}
-                    placeholder="Opinion, evidence, ambiguity, or concerns…"
+                    placeholder={t("feedbackPlaceholder")}
                   />
                   <div className="text-right text-[11px] text-base-content/55">
                     {feedbackBody.length}/{feedbackMaximum}
@@ -993,14 +1003,14 @@ export function PublicQuestionCard({
                   <Field
                     type="url"
                     containerClassName="mt-2"
-                    className="input-sm border-white/10 bg-[var(--rateloop-field)]"
-                    label="Source URL"
+                    className="input-sm border-base-content/10 bg-[var(--rateloop-field)]"
+                    label={t("sourceUrl")}
                     labelClassName="sr-only"
                     error={sourceUrlIssue}
                     value={sourceUrl}
                     onChange={event => setSourceUrl(event.target.value)}
                     maxLength={2_048}
-                    placeholder="HTTPS source, optional"
+                    placeholder={t("sourcePlaceholder")}
                   />
                 </fieldset>
               ) : null}
@@ -1010,27 +1020,20 @@ export function PublicQuestionCard({
                   aria-labelledby={`public-records-${task.roundId}`}
                 >
                   <h3 id={`public-records-${task.roundId}`} className="font-semibold">
-                    What becomes public
+                    {t("publicTitle")}
                   </h3>
-                  <p className="mt-2 text-base-content/70">
-                    Submitting a paid rating publishes a tlock ciphertext containing your vote, crowd forecast, response
-                    hash, per-round payout address, and salt. It becomes publicly decryptable after the commit deadline
-                    even if no keeper or reviewer submits a reveal. A reveal publishes the plaintext. Public blockchain
-                    records generally cannot be erased.
-                  </p>
+                  <p className="mt-2 text-base-content/70">{t("publicDescription")}</p>
                   <Link href="/legal/privacy#on-chain-data" className="mt-2 inline-block underline underline-offset-4">
-                    Read the privacy notice
+                    {t("privacyNotice")}
                   </Link>
                 </section>
               ) : null}
               {recoveryUrl && activePreparedSubmission ? (
-                <div className="mt-5 rounded-lg border border-white/10 p-3">
+                <div className="mt-5 rounded-lg border border-base-content/10 p-3">
                   <p className="font-mono text-[11px] uppercase tracking-widest text-[var(--rateloop-blue)]">
-                    Step 1 of 2 · Save backup
+                    {t("backupStep")}
                   </p>
-                  <p className="mt-2 text-xs leading-5 text-base-content/60">
-                    Save this file. It contains the only recovery secret for this rating.
-                  </p>
+                  <p className="mt-2 text-xs leading-5 text-base-content/60">{t("backupDescription")}</p>
                   <a
                     href={recoveryUrl}
                     download={`rateloop-review-${task.roundId}-backup.json`}
@@ -1040,7 +1043,7 @@ export function PublicQuestionCard({
                       void saveRecoveryBackup();
                     }}
                   >
-                    Download recovery backup
+                    {t("downloadBackup")}
                   </a>
                   <label
                     className="mt-3 flex items-start gap-2 text-xs leading-5"
@@ -1054,41 +1057,42 @@ export function PublicQuestionCard({
                       disabled={!recoveryDownloaded || recoveryConfirmed || busy}
                       onChange={event => event.target.checked && void confirmRecoveryBackup()}
                     />
-                    <span>I saved the recovery backup</span>
+                    <span>{t("backupSaved")}</span>
                   </label>
                   {recoveryConfirmed ? (
-                    <p className="mt-3 border-t border-white/10 pt-3 font-mono text-[11px] uppercase tracking-widest text-[var(--rateloop-green)]">
-                      Step 2 of 2 · Submit rating
+                    <p className="mt-3 border-t border-base-content/10 pt-3 font-mono text-[11px] uppercase tracking-widest text-[var(--rateloop-green)]">
+                      {t("submitStep")}
                     </p>
                   ) : (
-                    <p className="mt-2 text-[11px] leading-4 text-base-content/55">
-                      No voucher or commit is requested until you confirm the backup.
-                    </p>
+                    <p className="mt-2 text-[11px] leading-4 text-base-content/55">{t("backupGate")}</p>
                   )}
                 </div>
               ) : null}
               {status ? (
-                <p role="status" className="mt-3 text-xs leading-5 text-emerald-100">
+                <p role="status" className="mt-3 text-xs leading-5 text-success">
                   {status}
                 </p>
               ) : null}
               {submissionReceipt ? (
                 <section
-                  className="mt-3 rounded-lg border border-emerald-300/20 bg-emerald-300/[0.06] p-3 text-xs"
-                  aria-label="Submission receipt"
+                  className="mt-3 rounded-lg border border-success/20 bg-success/[0.06] p-3 text-xs"
+                  aria-label={t("receipt")}
                 >
-                  <p className="font-semibold text-emerald-100">Rating recorded</p>
+                  <p className="font-semibold text-success">{t("recorded")}</p>
                   <dl className="mt-2 grid gap-2">
                     <div>
-                      <dt className="text-base-content/55">Commit receipt</dt>
+                      <dt className="text-base-content/55">{t("commitReceipt")}</dt>
                       <dd className="mt-0.5 break-all font-mono">{submissionReceipt.commitId}</dd>
                     </div>
                     {submissionReceipt.confirmedAt ? (
                       <div>
-                        <dt className="text-base-content/55">Confirmed</dt>
+                        <dt className="text-base-content/55">{t("confirmed")}</dt>
                         <dd className="mt-0.5">
                           <time dateTime={submissionReceipt.confirmedAt}>
-                            {new Date(submissionReceipt.confirmedAt).toLocaleString()}
+                            {format.dateTime(new Date(submissionReceipt.confirmedAt), {
+                              dateStyle: "medium",
+                              timeStyle: "short",
+                            })}
                           </time>
                         </dd>
                       </div>
@@ -1101,13 +1105,13 @@ export function PublicQuestionCard({
                       target="_blank"
                       rel="noreferrer"
                     >
-                      View confirmed transaction
+                      {t("viewTransaction")}
                     </a>
                   ) : null}
                 </section>
               ) : null}
               {error ? (
-                <p role="alert" className="mt-3 text-xs leading-5 text-red-100">
+                <p role="alert" className="mt-3 text-xs leading-5 text-error">
                   {error}
                 </p>
               ) : null}
@@ -1115,27 +1119,27 @@ export function PublicQuestionCard({
                 href="/human/profile?section=paid-work"
                 className="mt-4 block text-center text-xs underline underline-offset-4"
               >
-                Paid-work eligibility
+                {t("eligibility")}
               </Link>
             </>
           ) : (
             <div className="flex min-h-52 flex-col justify-center">
-              <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-yellow)]">Paid work</p>
+              <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-yellow)]">
+                {t("paidWork")}
+              </p>
               <h3 className="mt-2 text-lg font-semibold">
                 {paidAccess.state === "payout_wallet_required"
-                  ? "Add a payout wallet"
+                  ? t("addWallet")
                   : paidAccess.eligibilityStatus === "expired"
-                    ? "Renew paid-work access"
+                    ? t("renew")
                     : paidAccess.eligibilityStatus === "review"
-                      ? "Eligibility review pending"
+                      ? t("reviewPending")
                       : paidAccess.eligibilityStatus === "blocked"
-                        ? "Paid work unavailable"
-                        : "Complete paid-work eligibility"}
+                        ? t("unavailable")
+                        : t("completeEligibility")}
               </h3>
               <p className="mt-3 text-xs leading-5 text-base-content/55">
-                {paidAccess.state === "payout_wallet_required"
-                  ? "Public reviews can be browsed now. Add a purpose-bound wallet before submitting paid work."
-                  : "Every paid-work check must be complete before RateLoop issues your first voucher."}
+                {paidAccess.state === "payout_wallet_required" ? t("walletDescription") : t("eligibilityDescription")}
               </p>
               <Link
                 href={
@@ -1145,7 +1149,7 @@ export function PublicQuestionCard({
                 }
                 className="rateloop-gradient-action mt-5 w-full px-4 text-center text-sm"
               >
-                {paidAccess.state === "payout_wallet_required" ? "Add payout wallet" : "Review paid-work access"}
+                {paidAccess.state === "payout_wallet_required" ? t("addWallet") : t("reviewAccess")}
               </Link>
             </div>
           )}

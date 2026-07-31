@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { formatEvidenceDeliveryDate, readEvidenceDeliveryJson } from "./evidenceDeliveryClient";
+import { AgentText } from "./AgentText";
+import { useAgentFormatter, useAgentTranslations } from "./AgentsLocaleProvider";
+import { readEvidenceDeliveryJson } from "./evidenceDeliveryClient";
 import { ChoiceInput, Field, SelectField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { Card } from "~~/components/tokenless/ui/Card";
@@ -53,6 +55,10 @@ function connectorBody(connector: GrcConnector, status: "enabled" | "paused") {
 }
 
 export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
+  const copy = useAgentTranslations("evidencePanels.delivery");
+  const errors = useAgentTranslations("errors");
+  const format = useAgentFormatter();
+  const statusCopy = useAgentTranslations("status");
   const endpoint = `/api/account/workspaces/${encodeURIComponent(workspaceId)}/assurance/grc-connectors`;
   const [connectors, setConnectors] = useState<GrcConnector[]>([]);
   const [form, setForm] = useState(INITIAL_FORM);
@@ -69,8 +75,8 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
   }, [endpoint]);
 
   useEffect(() => {
-    void load().catch(error => capture(error, "Unable to load GRC connectors."));
-  }, [capture, load]);
+    void load().catch(() => capture(errors("loadGrc"), errors("loadGrc")));
+  }, [capture, errors, load]);
 
   const changeStatus = async (connector: GrcConnector) => {
     setBusy(true);
@@ -89,9 +95,9 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
             });
       if (!response.ok) await readEvidenceDeliveryJson(response);
       await load();
-      setMessage(connector.status === "enabled" ? "Connector paused." : "Connector resumed.");
-    } catch (error) {
-      capture(error, "Unable to update GRC connector.");
+      setMessage(connector.status === "enabled" ? copy("connectorPaused") : copy("connectorResumed"));
+    } catch {
+      capture(errors("updateGrc"), errors("updateGrc"));
     } finally {
       setBusy(false);
     }
@@ -102,66 +108,86 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 id="grc-connectors-heading" className="font-semibold">
-            GRC connectors
+            <AgentText id="translated176" />
           </h3>
           <p className="mt-2 text-sm leading-6 text-base-content/55">
-            Deliver signed assurance evidence to Drata or Vanta.
+            <AgentText id="translated177" />
           </p>
         </div>
         <span className="badge badge-ghost">
-          {connectors.length} {connectors.length === 1 ? "connector" : "connectors"}
+          {copy(connectors.length === 1 ? "connectorCountOne" : "connectorCountMany", { count: connectors.length })}
         </span>
       </div>
 
       {connectors.length > 0 ? (
         <div className="mt-4 space-y-3">
           {connectors.map(connector => (
-            <article key={connector.connectorId} className="rounded-xl border border-white/10 p-4">
+            <article key={connector.connectorId} className="rounded-xl border border-base-content/10 p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="font-semibold">{connector.displayName}</p>
                   <p className="mt-1 text-xs capitalize text-base-content/55">
-                    {connector.provider} · {connector.controlMappings.length} control mappings
+                    {connector.provider} · {connector.controlMappings.length} <AgentText id="translated178" />
                   </p>
                 </div>
                 <span
-                  className={`badge border-0 ${connector.status === "enabled" ? "bg-emerald-300/10 text-emerald-100" : "bg-white/[0.06] text-base-content/55"}`}
+                  className={`badge border-0 ${connector.status === "enabled" ? "bg-success/10 text-success" : "bg-base-content/[0.06] text-base-content/55"}`}
                 >
-                  {connector.status}
+                  {copy(connector.status)}
                 </span>
               </div>
               <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
                 <div>
-                  <dt className="text-xs text-base-content/55">Last reconciliation</dt>
-                  <dd className="mt-1">{formatEvidenceDeliveryDate(connector.lastReconciledAt)}</dd>
+                  <dt className="text-xs text-base-content/55">
+                    <AgentText id="lastReconciliation" />
+                  </dt>
+                  <dd className="mt-1">
+                    {connector.lastReconciledAt
+                      ? format.dateTime(new Date(connector.lastReconciledAt), {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })
+                      : copy("never")}
+                  </dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-base-content/55">Delivery</dt>
-                  <dd className="mt-1 capitalize">{connector.lastDeliveryStatus ?? "Not delivered"}</dd>
+                  <dt className="text-xs text-base-content/55">
+                    <AgentText id="delivery" />
+                  </dt>
+                  <dd className="mt-1">
+                    {connector.lastDeliveryStatus ? copy(connector.lastDeliveryStatus) : <AgentText id="dynamic041" />}
+                  </dd>
                 </div>
                 {connector.lastReceipt ? (
                   <div className="sm:col-span-2">
-                    <dt className="text-xs text-base-content/55">Latest receipt</dt>
+                    <dt className="text-xs text-base-content/55">
+                      <AgentText id="latestReceipt" />
+                    </dt>
                     <dd className="mt-1">
-                      {connector.lastReceipt.recordCount} records ·{" "}
-                      {formatEvidenceDeliveryDate(connector.lastReceipt.deliveredAt)}
+                      {connector.lastReceipt.recordCount} <AgentText id="translated179" />{" "}
+                      {format.dateTime(new Date(connector.lastReceipt.deliveredAt), {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })}
                     </dd>
                   </div>
                 ) : null}
               </dl>
               <button
                 type="button"
-                className="btn btn-xs mt-3 border-white/10 bg-white/[0.06]"
+                className="btn btn-xs mt-3 border-base-content/10 bg-base-content/[0.06]"
                 disabled={busy}
                 onClick={() => void changeStatus(connector)}
               >
-                {connector.status === "enabled" ? "Pause" : "Resume"}
+                {copy(connector.status === "enabled" ? "pause" : "resume")}
               </button>
             </article>
           ))}
         </div>
       ) : (
-        <p className="mt-4 text-sm text-base-content/55">No GRC connector is configured.</p>
+        <p className="mt-4 text-sm text-base-content/55">
+          <AgentText id="noGrc" />
+        </p>
       )}
 
       <button
@@ -172,12 +198,12 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
         disabled={busy}
         onClick={() => setShowForm(true)}
       >
-        Add connector
+        <AgentText id="translated180" />
       </button>
       {showForm ? (
         <form
           id="grc-connector-form"
-          className="mt-4 grid gap-4 rounded-xl border border-white/10 p-4 sm:grid-cols-2"
+          className="mt-4 grid gap-4 rounded-xl border border-base-content/10 p-4 sm:grid-cols-2"
           onSubmit={event => {
             event.preventDefault();
             setBusy(true);
@@ -214,15 +240,15 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
               .then(() => {
                 setForm(INITIAL_FORM);
                 setShowForm(false);
-                setMessage("GRC connector added. Reconciliation runs daily.");
+                setMessage(statusCopy("grcAdded"));
               })
-              .catch(error => capture(error, "Unable to add GRC connector."))
+              .catch(() => capture(errors("addGrc"), errors("addGrc")))
               .finally(() => setBusy(false));
           }}
         >
           <SelectField
-            className="border-white/10 bg-[var(--rateloop-field)]"
-            label="Provider"
+            className="border-base-content/10 bg-[var(--rateloop-field)]"
+            label={<AgentText id="attribute021" />}
             labelClassName="text-sm text-base-content/65"
             value={form.provider}
             onChange={event => setForm(current => ({ ...current, provider: event.target.value as Provider }))}
@@ -231,7 +257,7 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
             <option value="drata">Drata</option>
           </SelectField>
           <Field
-            label="Name"
+            label={<AgentText id="attribute022" />}
             value={form.displayName}
             error={fieldErrors.displayName}
             onChange={event => {
@@ -244,8 +270,8 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
           {form.provider === "vanta" ? (
             <Field
               containerClassName="sm:col-span-2"
-              className="border-white/10 bg-[var(--rateloop-field)]"
-              label="Vanta document ID"
+              className="border-base-content/10 bg-[var(--rateloop-field)]"
+              label={<AgentText id="attribute023" />}
               labelClassName="text-sm text-base-content/65"
               value={form.documentId}
               onChange={event => setForm(current => ({ ...current, documentId: event.target.value }))}
@@ -254,8 +280,8 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
           ) : (
             <>
               <Field
-                className="border-white/10 bg-[var(--rateloop-field)]"
-                label="Drata connection ID"
+                className="border-base-content/10 bg-[var(--rateloop-field)]"
+                label={<AgentText id="attribute024" />}
                 labelClassName="text-sm text-base-content/65"
                 inputMode="numeric"
                 value={form.connectionId}
@@ -263,8 +289,8 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
                 required
               />
               <Field
-                className="border-white/10 bg-[var(--rateloop-field)]"
-                label="Drata resource ID"
+                className="border-base-content/10 bg-[var(--rateloop-field)]"
+                label={<AgentText id="attribute025" />}
                 labelClassName="text-sm text-base-content/65"
                 inputMode="numeric"
                 value={form.resourceId}
@@ -275,12 +301,12 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
           )}
           <div className="sm:col-span-2">
             <Field
-              label="Server credential reference"
+              label={<AgentText id="attribute026" />}
               className="font-mono"
               value={form.credentialReference}
               error={fieldErrors.credentialReference}
               format="grcCredentialReference"
-              hint="Use a RateLoop vault, KMS, or secret reference. Provider tokens never pass through this form."
+              hint={copy("grcCredentialHint")}
               onChange={event => {
                 clear("credentialReference");
                 setForm(current => ({ ...current, credentialReference: event.target.value }));
@@ -291,26 +317,29 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
             />
           </div>
           <Field
-            className="border-white/10 bg-[var(--rateloop-field)]"
-            label="Mapping ID"
+            className="border-base-content/10 bg-[var(--rateloop-field)]"
+            label={<AgentText id="attribute027" />}
             labelClassName="text-sm text-base-content/65"
             value={form.mappingId}
             onChange={event => setForm(current => ({ ...current, mappingId: event.target.value }))}
             required
           />
           <Field
-            className="border-white/10 bg-[var(--rateloop-field)]"
-            label="Control ID"
+            className="border-base-content/10 bg-[var(--rateloop-field)]"
+            label={<AgentText id="attribute028" />}
             labelClassName="text-sm text-base-content/65"
             value={form.controlId}
             onChange={event => setForm(current => ({ ...current, controlId: event.target.value }))}
             required
           />
           <Field
-            className="border-white/10 bg-[var(--rateloop-field)]"
+            className="border-base-content/10 bg-[var(--rateloop-field)]"
             label={
               <>
-                Scope ID <span className="text-base-content/55">(optional)</span>
+                <AgentText id="translated181" />{" "}
+                <span className="text-base-content/55">
+                  <AgentText id="optional" />
+                </span>
               </>
             }
             labelClassName="text-sm text-base-content/65"
@@ -318,8 +347,8 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
             onChange={event => setForm(current => ({ ...current, scopeId: event.target.value }))}
           />
           <Field
-            className="border-white/10 bg-[var(--rateloop-field)]"
-            label="Minimum coverage"
+            className="border-base-content/10 bg-[var(--rateloop-field)]"
+            label={<AgentText id="attribute029" />}
             labelClassName="text-sm text-base-content/65"
             type="number"
             min={0}
@@ -327,7 +356,7 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
             step="0.1"
             value={form.minimumCoveragePercent}
             onChange={event => setForm(current => ({ ...current, minimumCoveragePercent: event.target.value }))}
-            hint="Percent of eligible evidence."
+            hint={copy("eligibleEvidencePercent")}
             required
           />
           <label
@@ -341,11 +370,12 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
               checked={form.requireSignedPacket}
               onChange={event => setForm(current => ({ ...current, requireSignedPacket: event.target.checked }))}
             />
-            Require a signed packet for this control
+
+            <AgentText id="translated182" />
           </label>
           <div className="flex flex-wrap gap-2 sm:col-span-2">
             <button type="submit" className="btn btn-sm rateloop-gradient-action" disabled={busy}>
-              {busy ? "Adding…" : "Add connector"}
+              {busy ? <AgentText id="dynamic040" /> : <AgentText id="dynamic039" />}
             </button>
             <button
               type="button"
@@ -356,7 +386,7 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
                 setShowForm(false);
               }}
             >
-              Cancel
+              <AgentText id="translated183" />
             </button>
           </div>
         </form>
@@ -367,7 +397,7 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
         </p>
       ) : null}
       {formError ? (
-        <p className="mt-4 text-sm text-red-100" role="alert">
+        <p className="mt-4 text-sm text-error" role="alert">
           {formError}
         </p>
       ) : null}

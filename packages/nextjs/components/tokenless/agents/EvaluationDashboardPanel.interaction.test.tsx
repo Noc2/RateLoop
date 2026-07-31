@@ -1,6 +1,7 @@
 import React from "react";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { EnglishAgentTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 function run(overrides: Record<string, unknown> = {}) {
@@ -46,7 +47,9 @@ function dashboard(overrides: Record<string, unknown> = {}) {
 async function mount() {
   const { render } = await import("@testing-library/react");
   const { EvaluationDashboardPanel } = await import("./EvaluationDashboardPanel");
-  return render(<EvaluationDashboardPanel initialWorkspaceId="workspace-1" />);
+  return render(<EvaluationDashboardPanel initialWorkspaceId="workspace-1" />, {
+    wrapper: EnglishAgentTestProviders,
+  });
 }
 
 function installFetch(dashboardBody: Record<string, unknown>, caseView?: Record<string, unknown>) {
@@ -77,7 +80,7 @@ test("the ten-character reason rule stays visible while the decider types", asyn
       .setup({ document })
       .click(await view.findByRole("button", { name: "Record override or corrective action" }));
     const reasons = (await view.findAllByRole("textbox", { name: /Reasons/ }))[0]!;
-    const accepted = view.getByRole("button", { name: "accepted" });
+    const accepted = view.getByRole("button", { name: "Accepted" });
 
     assert.ok(view.getByText("At least 10 characters are required before you can record an outcome — 10 to go."));
     assert.equal(accepted.hasAttribute("disabled"), true);
@@ -294,7 +297,7 @@ test("a failed run explains the recorded failure and exposes its case reasons", 
   try {
     const view = await mount();
     assert.ok(await view.findByRole("heading", { name: "Why this failed" }));
-    assert.ok(view.getByText("1 review case stopped before the run could settle."));
+    assert.ok(view.getByText("The run failed. Open case detail for the available evidence and reviewer reasons."));
     await userEvent.setup({ document }).click(view.getByText("Why this failed: case detail and reviewer reasons"));
     assert.ok(await view.findByText("The candidate did not answer the question."));
   } finally {
@@ -367,7 +370,8 @@ test("aggregate-only network detail does not render the per-response pseudonym e
   try {
     const view = await mount();
     await userEvent.setup({ document }).click(await view.findByText("Case detail and reviewer reasons"));
-    assert.ok(await view.findByText(aggregateNote));
+    assert.ok(await view.findByText("Case detail is unavailable. Check your access or try again later."));
+    assert.equal(view.queryByText(aggregateNote), null);
     assert.equal(
       view.queryByText(
         "Reviewer labels are run-specific pseudonyms by design. Responses are not linked here to roster identities.",

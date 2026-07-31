@@ -9,7 +9,7 @@ const settingsSource = readFileSync(new URL("./WorkspaceSettingsClient.tsx", imp
 
 test("the danger-zone stop action requires a reason and never resumes agents implicitly", () => {
   assert.match(controlSource, /Stop all agent activity/);
-  assert.match(dangerSource, /border-red-400\/30/);
+  assert.match(dangerSource, /border-error\/30/);
   // Two-step confirm: the destructive action is behind an explicit confirmation
   // with a required reason that lands in the audit chain.
   assert.match(controlSource, /Confirm: stop all agent activity/);

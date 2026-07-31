@@ -109,7 +109,7 @@ export function DurationInput({
             onChangeSeconds(String(durationAmountToSeconds(normalizedValue, visibleParts.unit)));
           }}
           onBlur={onBlur}
-          className={`input w-full border-white/10 bg-[var(--rateloop-field)] ${invalid ? "input-error" : ""} ${inputClassName}`}
+          className={`input w-full border-base-content/10 bg-[var(--rateloop-field)] ${invalid ? "input-error" : ""} ${inputClassName}`}
         />
         <select
           value={visibleParts.unit}
@@ -128,7 +128,7 @@ export function DurationInput({
             onChangeSeconds(String(durationAmountToSeconds(visibleParts.amount, nextUnit)));
           }}
           onBlur={onBlur}
-          className={`select w-full border-white/10 bg-[var(--rateloop-field)] ${invalid ? "select-error" : ""} ${selectClassName}`}
+          className={`select w-full border-base-content/10 bg-[var(--rateloop-field)] ${invalid ? "select-error" : ""} ${selectClassName}`}
         >
           {HUMAN_DURATION_UNIT_OPTIONS.map(option => (
             <option key={option.value} value={option.value}>

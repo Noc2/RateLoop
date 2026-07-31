@@ -1,6 +1,7 @@
 import React from "react";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 test("invalid pasted JSON fails locally without contacting a server", async () => {
@@ -11,7 +12,8 @@ test("invalid pasted JSON fails locally without contacting a server", async () =
     fetchCount += 1;
     throw new Error("Unexpected request.");
   };
-  const { act, cleanup, fireEvent, render } = await import("@testing-library/react");
+  const { act, cleanup, fireEvent, render: baseRender } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const { PublicEvidenceVerifier } = await import("./PublicEvidenceVerifier");
 
   try {

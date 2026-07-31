@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, useState } from "react";
+import { useAgentTranslations } from "../AgentsLocaleProvider";
 import { AgentSetupProgress } from "./AgentSetupProgress";
 import { SetupActionBar } from "./SetupActionBar";
 import { SetupStageHeader } from "./SetupStageHeader";
@@ -8,6 +9,7 @@ import { Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
+import { useRouter } from "~~/i18n/navigation";
 import { readJson } from "~~/lib/tokenless/http";
 
 const INITIAL_STAGES = [
@@ -19,6 +21,8 @@ const INITIAL_STAGES = [
 ];
 
 export function WorkspaceSetupStart() {
+  const t = useAgentTranslations("setup");
+  const router = useRouter();
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const { capture, clear, fieldErrors, formError } = useFormErrors();
@@ -36,10 +40,10 @@ export function WorkspaceSetupStart() {
           headers: { "Content-Type": "application/json" },
         }),
       );
-      if (typeof body.workspaceId !== "string") throw new Error("RateLoop did not return the new workspace.");
-      window.location.assign(`/agents/connections?workspace=${encodeURIComponent(body.workspaceId)}&step=connect`);
+      if (typeof body.workspaceId !== "string") throw new Error(t("createMissing"));
+      router.push(`/agents/connections?workspace=${encodeURIComponent(body.workspaceId)}&step=connect`);
     } catch (cause) {
-      capture(cause, "Unable to create the workspace.");
+      capture(cause, t("createError"));
       setBusy(false);
     }
   }
@@ -53,12 +57,12 @@ export function WorkspaceSetupStart() {
         allowNavigation={false}
       />
       <form className="mt-8 w-full" onSubmit={createWorkspace} aria-busy={busy}>
-        <SetupStageHeader title="Name your workspace" />
+        <SetupStageHeader title={t("nameTitle")} />
         <div className="mt-8">
           <Field
             id="setup-workspace-name"
-            label="Workspace name"
-            className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+            label={t("workspaceName")}
+            className="input mt-2 w-full border-base-content/10 bg-[var(--rateloop-field)]"
             value={name}
             onChange={event => {
               setName(event.target.value);
@@ -72,7 +76,7 @@ export function WorkspaceSetupStart() {
         </div>
         <SetupActionBar>
           <Button className="min-h-11 w-full sm:w-auto" type="submit" disabled={busy}>
-            {busy ? "Creating…" : "Create workspace"}
+            {busy ? t("creating") : t("createWorkspace")}
           </Button>
         </SetupActionBar>
         {formError ? (

@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
+import { useAgentTranslations } from "./AgentsLocaleProvider";
 import { Field } from "~~/components/tokenless/forms/Field";
 
 export function OneTimeSecretNotice({
@@ -12,6 +13,7 @@ export function OneTimeSecretNotice({
   value: string;
   onDismiss: () => void;
 }) {
+  const t = useAgentTranslations("secret");
   const headingId = useId();
   const guidanceId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -20,31 +22,31 @@ export function OneTimeSecretNotice({
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(value);
-      setCopyStatus("Copied to clipboard.");
+      setCopyStatus(t("copied"));
     } catch {
       inputRef.current?.focus();
       inputRef.current?.select();
-      setCopyStatus("Automatic copy failed. The value is selected so you can copy it manually.");
+      setCopyStatus(t("copyFailed"));
     }
   };
 
   return (
     <section
-      className="mt-4 rounded-xl border border-amber-300/25 bg-amber-300/[0.06] p-4"
+      className="mt-4 rounded-xl border border-warning/25 bg-warning/[0.06] p-4"
       aria-labelledby={headingId}
       role="alert"
     >
-      <h3 id={headingId} className="text-sm font-semibold text-amber-100">
-        Copy {label} now
+      <h3 id={headingId} className="text-sm font-semibold text-warning">
+        {t("title", { label })}
       </h3>
-      <p id={guidanceId} className="mt-2 text-xs leading-5 text-amber-50/75">
-        This value is shown once. It cannot be recovered after you dismiss it, reload, or leave this page.
+      <p id={guidanceId} className="mt-2 text-xs leading-5 text-warning/75">
+        {t("guidance")}
       </p>
       <div className="mt-3 flex flex-col gap-2 sm:flex-row">
         <Field
           ref={inputRef}
           containerClassName="min-w-0 flex-1"
-          className="border-amber-300/20 bg-black/35 font-mono text-xs"
+          className="border-warning/20 bg-base-content/[0.055] font-mono text-xs"
           label={label}
           labelClassName="sr-only"
           aria-describedby={guidanceId}
@@ -54,13 +56,13 @@ export function OneTimeSecretNotice({
           spellCheck={false}
           onFocus={event => event.currentTarget.select()}
         />
-        <button type="button" className="btn btn-sm border-amber-300/20 bg-amber-300/10" onClick={() => void copy()}>
-          Copy
+        <button type="button" className="btn btn-sm border-warning/20 bg-warning/10" onClick={() => void copy()}>
+          {t("copy")}
         </button>
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-3">
-        <button type="button" className="btn btn-xs border-white/10 bg-white/[0.06]" onClick={onDismiss}>
-          I stored it — dismiss
+        <button type="button" className="btn btn-xs border-base-content/10 bg-base-content/[0.06]" onClick={onDismiss}>
+          {t("dismiss")}
         </button>
         {copyStatus ? (
           <p className="text-xs text-base-content/65" role="status" aria-live="polite">

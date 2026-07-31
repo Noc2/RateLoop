@@ -1,0 +1,22 @@
+{
+  "localeName": "English",
+  "recovery": {
+    "usefulDestinations": "Useful destinations",
+    "search": "Search",
+    "reviewWork": "Review work",
+    "manageAgents": "Manage agents",
+    "readDocs": "Read docs",
+    "notFound": {
+      "title": "Page not found",
+      "description": "This address may be wrong, or the page may have moved.",
+      "home": "Home"
+    },
+    "error": {
+      "eyebrow": "Error",
+      "title": "Something went wrong",
+      "description": "Try loading this page again. If the problem continues, return to the previous page or choose another task.",
+      "tryAgain": "Try again",
+      "goBack": "Go back"
+    }
+  }
+}

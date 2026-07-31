@@ -68,10 +68,12 @@ test("every public page and machine-doc mirror derives verified-host capability 
   if (hasVerifiedDeliveryHost) return;
 
   const files = [
-    ...publicSurfaceFiles(path.join(NEXTJS_DIRECTORY, "app", "(public)"), [".tsx"]),
+    ...publicSurfaceFiles(path.join(NEXTJS_DIRECTORY, "app", "[locale]", "(public)"), [".tsx"]),
     ...publicSurfaceFiles(path.join(NEXTJS_DIRECTORY, "public", "docs"), [".md"]),
   ];
-  assert.ok(files.some(file => file.endsWith(`${path.sep}app${path.sep}(public)${path.sep}page.tsx`)));
+  assert.ok(
+    files.some(file => file.endsWith(`${path.sep}app${path.sep}[locale]${path.sep}(public)${path.sep}page.tsx`)),
+  );
   assert.ok(files.some(file => file.endsWith(`${path.sep}public${path.sep}docs${path.sep}evidence.md`)));
 
   const unearnedCapabilityClaim =

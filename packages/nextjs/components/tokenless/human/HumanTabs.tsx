@@ -1,47 +1,43 @@
 "use client";
 
 import type { ReactNode } from "react";
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { HumanInboxBadge } from "~~/components/tokenless/human/HumanInboxBadge";
 import { type HumanNavigation, humanSectionHref } from "~~/components/tokenless/human/humanNavigation";
+import { Link } from "~~/i18n/navigation";
 
 export type { HumanTab } from "~~/components/tokenless/human/humanNavigation";
 
-const tabs: Array<{ value: HumanNavigation; label: string }> = [
-  { value: "discover", label: "To review" },
-  { value: "history", label: "History" },
-  { value: "inbox", label: "Inbox" },
-  { value: "profile", label: "Profile" },
-  { value: "settings", label: "Settings" },
-];
+const tabs: HumanNavigation[] = ["discover", "history", "inbox", "profile", "settings"];
 
 export function HumanTabs({ active, endAction }: { active: HumanNavigation; endAction?: ReactNode }) {
+  const t = useTranslations("human.tabs");
   const searchParams = useSearchParams();
   const preservedSearch = new URLSearchParams(searchParams?.toString() ?? "");
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <nav aria-label="Human sections" className="flex flex-wrap gap-2">
+      <nav aria-label={t("ariaLabel")} className="flex flex-wrap gap-2">
         {tabs.map(tab => (
           <Link
-            key={tab.value}
+            key={tab}
             href={humanSectionHref(
-              tab.value,
-              active === tab.value
+              tab,
+              active === tab
                 ? preservedSearch
-                : tab.value === "history"
+                : tab === "history"
                   ? new URLSearchParams({ scope: "private" })
                   : undefined,
             )}
-            aria-current={active === tab.value ? "page" : undefined}
+            aria-current={active === tab ? "page" : undefined}
             className={`tab-control px-4 py-1.5 text-base font-medium transition-colors ${
-              active === tab.value ? "pill-active" : "pill-inactive"
+              active === tab ? "pill-active" : "pill-inactive"
             }`}
           >
             <span className="inline-flex items-center gap-2">
-              {tab.label}
-              {tab.value === "inbox" ? <HumanInboxBadge /> : null}
+              {t(tab)}
+              {tab === "inbox" ? <HumanInboxBadge /> : null}
             </span>
           </Link>
         ))}

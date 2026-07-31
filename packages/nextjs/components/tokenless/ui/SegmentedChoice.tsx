@@ -28,7 +28,7 @@ export function SegmentedChoice<Value extends string>({
             className={`min-h-9 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
               selected
                 ? "border-[var(--rateloop-blue)]/45 bg-[var(--rateloop-blue)]/12 text-base-content"
-                : "border-white/12 bg-white/[0.025] text-base-content/65 hover:bg-white/[0.06]"
+                : "border-base-content/15 bg-base-content/[0.025] text-base-content/65 hover:bg-base-content/[0.06]"
             }`}
             onClick={() => onChange(option.value)}
           >

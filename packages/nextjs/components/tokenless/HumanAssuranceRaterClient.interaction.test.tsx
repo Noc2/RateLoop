@@ -3,6 +3,7 @@ import type { AssignmentTask } from "./HumanAssuranceRaterClient";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 const PRINCIPAL_A = "rlp_private_reviewer_a";
@@ -137,7 +138,8 @@ function privateArtifactResponse(url: string) {
 
 test("private-review credentials stay behind a manual fallback", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, screen } = await import("@testing-library/react");
+  const { cleanup, render: baseRender, screen } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { HumanAssuranceRaterClient } = await import("./HumanAssuranceRaterClient");
 
@@ -155,7 +157,7 @@ test("private-review credentials stay behind a manual fallback", async () => {
 });
 
 test("direct invitation links retain credentials while Discover history does not expose them", () => {
-  const page = readFileSync(new URL("../../app/(app)/human/HumanSectionPage.tsx", import.meta.url), "utf8");
+  const page = readFileSync(new URL("../../app/[locale]/(app)/human/HumanSectionPage.tsx", import.meta.url), "utf8");
   const card = readFileSync(new URL("./answer/PrivateAssignmentCard.tsx", import.meta.url), "utf8");
   assert.match(page, /initialAssignmentId=\{searchParams\.assignment\}/);
   assert.match(page, /initialTermsHash=\{searchParams\.terms\}/);
@@ -166,7 +168,8 @@ test("direct invitation links retain credentials while Discover history does not
 
 test("closed assignments are distinguished from expired assignments", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render } = await import("@testing-library/react");
+  const { cleanup, render: baseRender } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const { PrivateAssignmentCard } = await import("./answer/PrivateAssignmentCard");
   const assignment = {
     assignmentId: "assignment-status",
@@ -202,7 +205,8 @@ test("closed assignments are distinguished from expired assignments", async () =
 
 test("an unchanged private-group policy opens without asking for terms again", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, waitFor } = await import("@testing-library/react");
+  const { cleanup, render: baseRender, waitFor } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { HumanAssuranceRaterClient } = await import("./HumanAssuranceRaterClient");
   const previousFetch = globalThis.fetch;
@@ -262,7 +266,8 @@ test("an unchanged private-group policy opens without asking for terms again", a
 
 test("a closed private review has one terminal recovery path", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, waitFor } = await import("@testing-library/react");
+  const { cleanup, render: baseRender, waitFor } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const { HumanAssuranceRaterClient } = await import("./HumanAssuranceRaterClient");
   const previousFetch = globalThis.fetch;
   const termsHash = `sha256:${"b".repeat(64)}`;
@@ -302,7 +307,8 @@ test("a closed private review has one terminal recovery path", async () => {
 
 test("a recoverable reservation shows restore instead of a second acceptance action", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, waitFor } = await import("@testing-library/react");
+  const { cleanup, render: baseRender, waitFor } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { HumanAssuranceRaterClient } = await import("./HumanAssuranceRaterClient");
   const previousFetch = globalThis.fetch;
@@ -350,7 +356,8 @@ test("a recoverable reservation shows restore instead of a second acceptance act
 
 test("an owner-fixed private task shows source and output separately and submits the binary rating", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, waitFor } = await import("@testing-library/react");
+  const { cleanup, render: baseRender, waitFor } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { HumanAssuranceRaterClient } = await import("./HumanAssuranceRaterClient");
   const previousFetch = globalThis.fetch;
@@ -413,7 +420,8 @@ test("an owner-fixed private task shows source and output separately and submits
 
 test("an incomplete private review explains what is missing instead of trapping the submit action", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, waitFor } = await import("@testing-library/react");
+  const { cleanup, render: baseRender, waitFor } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { HumanAssuranceRaterClient } = await import("./HumanAssuranceRaterClient");
   const previousFetch = globalThis.fetch;
@@ -474,7 +482,8 @@ test("an incomplete private review explains what is missing instead of trapping 
 
 test("an initially signed-out visitor without loaded private content is not treated as a session loss", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, waitFor } = await import("@testing-library/react");
+  const { cleanup, render: baseRender, waitFor } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const { HumanAssuranceRaterClient } = await import("./HumanAssuranceRaterClient");
   const previousFetch = globalThis.fetch;
   let sessionReads = 0;
@@ -498,7 +507,8 @@ test("an initially signed-out visitor without loaded private content is not trea
 
 test("a principal switch clears rendered private review content and requires reopening", async () => {
   const restoreDom = installTestDom();
-  const { act, cleanup, render, waitFor } = await import("@testing-library/react");
+  const { act, cleanup, render: baseRender, waitFor } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const { HumanAssuranceRaterClient } = await import("./HumanAssuranceRaterClient");
   const previousFetch = globalThis.fetch;
   let sessionPrincipal = PRINCIPAL_A;
@@ -534,7 +544,8 @@ test("a principal switch clears rendered private review content and requires reo
 
 test("sign-out clears rendered private review content and acceptance state", async () => {
   const restoreDom = installTestDom();
-  const { act, cleanup, render, waitFor } = await import("@testing-library/react");
+  const { act, cleanup, render: baseRender, waitFor } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const { HumanAssuranceRaterClient } = await import("./HumanAssuranceRaterClient");
   const previousFetch = globalThis.fetch;
   let signedIn = true;
@@ -585,7 +596,8 @@ test("sign-out clears rendered private review content and acceptance state", asy
 
 test("a transient session read failure retains private content and in-memory drafts", async () => {
   const restoreDom = installTestDom();
-  const { act, cleanup, render, waitFor } = await import("@testing-library/react");
+  const { act, cleanup, render: baseRender, waitFor } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { HumanAssuranceRaterClient } = await import("./HumanAssuranceRaterClient");
   const previousFetch = globalThis.fetch;
@@ -627,7 +639,8 @@ test("a transient session read failure retains private content and in-memory dra
 
 test("refreshing short-lived artifact access preserves a draft until the assignment deadline", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, waitFor } = await import("@testing-library/react");
+  const { cleanup, render: baseRender, waitFor } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { HumanAssuranceRaterClient } = await import("./HumanAssuranceRaterClient");
   const previousFetch = globalThis.fetch;
@@ -699,7 +712,8 @@ test("refreshing short-lived artifact access preserves a draft until the assignm
 
 test("the last case opens an editable summary and submits only after explicit confirmation", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, waitFor } = await import("@testing-library/react");
+  const { cleanup, render: baseRender, waitFor } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { HumanAssuranceRaterClient } = await import("./HumanAssuranceRaterClient");
   const previousFetch = globalThis.fetch;

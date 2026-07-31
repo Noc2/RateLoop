@@ -5,15 +5,15 @@ import test from "node:test";
 test("agent details render in the connection-focused registry", () => {
   const source = readFileSync(new URL("./AgentRegistryPanel.tsx", import.meta.url), "utf8");
   const form = readFileSync(new URL("./AgentVersionForm.tsx", import.meta.url), "utf8");
-  assert.match(source, /Change workflow version/);
+  assert.match(source, /<AgentText id="translated095"/);
   assert.doesNotMatch(source, /Edit reviews|Review configuration|onReviewAgentChange|activeReviewAgentId/);
   assert.doesNotMatch(source, />Review behavior</);
   assert.doesNotMatch(source, />Autonomous requests</);
-  assert.match(source, /Technical details/);
-  assert.match(source, /Audit history/);
+  assert.match(source, /<AgentText id="translated097"/);
+  assert.match(source, /<AgentText id="translated098"/);
   assert.match(source, /agentRevision = 0/);
   assert.match(source, /onAgentsChanged\?\.\(\)/);
-  assert.match(form, /Workflow name/);
+  assert.match(form, /t\("workflowName"\)/);
   assert.match(form, /provider: "unknown"/);
   assert.match(form, /model: "unknown"/);
   assert.doesNotMatch(form, /Saving creates an immutable workflow version/);
@@ -27,8 +27,8 @@ test("agent details render in the connection-focused registry", () => {
     source,
     /showArchived\s*\?\s*agents\s*:\s*agents\.filter\(agent => agent\.status === "active" \|\| agent\.agentId === selectedAgentId\)/,
   );
-  assert.match(source, /Show archived \(\$\{archivedAgentCount\}\)/);
-  assert.match(source, /Hide archived/);
+  assert.match(source, /ui\("showArchived", \{ count: archivedAgentCount \}\)/);
+  assert.match(source, /ui\("hideArchived"\)/);
   assert.match(source, /aria-pressed=\{showArchived\}/);
   assert.match(source, /visibleAgents\.map/);
   assert.doesNotMatch(source, /Workflow v\{agent\.currentVersion\.versionNumber\}/);
@@ -49,11 +49,11 @@ test("agent details render in the connection-focused registry", () => {
 
 test("agent management actions stay visible while technical records remain optional", () => {
   const source = readFileSync(new URL("./AgentRegistryPanel.tsx", import.meta.url), "utf8");
-  assert.match(source, />\s*Change workflow version\s*</);
-  assert.match(source, />\s*Deactivate\s*</);
+  assert.match(source, /<AgentText id="translated095"/);
+  assert.match(source, /<AgentText id="translated096"/);
   assert.doesNotMatch(source, /<summary[^>]*>Manage<\/summary>/);
-  assert.match(source, /<summary[^>]*>\s*Technical details/);
-  assert.match(source, /Audit history \(\{auditEntries\.length\}\)/);
+  assert.match(source, /<summary[^>]*>[\s\S]*?<AgentText id="translated097"/);
+  assert.match(source, /<AgentText id="translated098" \/>/);
   assert.match(source, /mergeAgentAuditHistory\(visibleAgents, connectionHistory\)/);
   assert.match(source, /entry\.kind === "connection"/);
 });

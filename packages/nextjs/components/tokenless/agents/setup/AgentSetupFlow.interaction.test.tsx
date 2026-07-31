@@ -1,4 +1,6 @@
 import React from "react";
+import { AgentsLocaleProvider } from "../AgentsLocaleProvider";
+import { NextIntlClientProvider } from "next-intl";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
@@ -162,11 +164,15 @@ async function renderFlow(initialSetup: WorkspaceAgentSetupView, router: unknown
   const { RateLoopNotificationProvider } = await import("~~/components/tokenless/RateLoopNotificationProvider");
   const { AgentSetupFlow } = await import("./AgentSetupFlow");
   return render(
-    <AppRouterContext.Provider value={router as never}>
-      <RateLoopNotificationProvider>
-        <AgentSetupFlow initialSetup={initialSetup} />
-      </RateLoopNotificationProvider>
-    </AppRouterContext.Provider>,
+    <NextIntlClientProvider locale="en" messages={{}}>
+      <AgentsLocaleProvider locale="en">
+        <AppRouterContext.Provider value={router as never}>
+          <RateLoopNotificationProvider>
+            <AgentSetupFlow initialSetup={initialSetup} />
+          </RateLoopNotificationProvider>
+        </AppRouterContext.Provider>
+      </AgentsLocaleProvider>
+    </NextIntlClientProvider>,
   );
 }
 
@@ -259,7 +265,8 @@ test("a failed step load surfaces the reason instead of doing nothing", async ()
 
     await userEvent.setup().click(back);
 
-    assert.ok(screen.getByText("Your session expired. Sign in again."));
+    assert.ok(screen.getByText("That setup step could not be opened. Try again."));
+    assert.equal(screen.queryByText("Your session expired. Sign in again."), null);
     assert.deepEqual(calls, []);
   } finally {
     await act(async () => cleanup());
@@ -349,7 +356,7 @@ test("a rejected description shows its message on the description field", async 
     await user.type(description, "   ");
     await user.click(screen.getByRole("button", { name: "Confirm workflow" }));
 
-    const message = screen.getByText("Agent description must contain 1-1000 characters.");
+    const message = screen.getByText("Unable to confirm the agent. Check the highlighted field and try again.");
     assert.equal(message.getAttribute("role"), "alert");
     assert.equal(description.getAttribute("aria-invalid"), "true");
     assert.equal(description.getAttribute("aria-describedby"), message.getAttribute("id"));
@@ -381,8 +388,9 @@ test("a failed reviewer-group check reads as a failure, not as an endless check"
     await renderFlow(setupView("people"), stubRouter().router);
     const screen = within(document.body);
 
-    const failure = await screen.findByText("The reviewer directory is unavailable.");
+    const failure = await screen.findByText("The saved reviewer group could not be checked.");
     assert.equal(failure.getAttribute("role"), "alert");
+    assert.equal(screen.queryByText("The reviewer directory is unavailable."), null);
     assert.equal(screen.queryByText("Checking the saved reviewer group…"), null);
     assert.ok(screen.getByRole("button", { name: "Check again" }));
     // An unknown group size must not be sized as "nobody has joined yet".

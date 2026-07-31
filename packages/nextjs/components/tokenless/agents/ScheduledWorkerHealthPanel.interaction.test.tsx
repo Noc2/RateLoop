@@ -20,7 +20,7 @@ test("workspace maintenance health renders actionable redacted signals", async (
   try {
     const view = render(<ScheduledWorkerHealthPanel workspaceId="workspace_health" />);
     await waitFor(() => assert.ok(view.getByText("Maintenance needs attention")));
-    assert.ok(view.getByText("Parked notifications"));
+    assert.ok(view.getByText("Issue: notifications.parked"));
     assert.doesNotMatch(view.container.textContent ?? "", /delivery[_-]id|last_error/u);
     await new Promise(resolve => window.setTimeout(resolve, 0));
   } finally {

@@ -1,14 +1,25 @@
-import Link from "next/link";
+import { translatePublicString } from "~~/components/docs/LocalizedPublicContent";
+import { PublicLink as Link } from "~~/components/docs/PublicLink";
 import { Card } from "~~/components/tokenless/ui/Card";
+import type { Locale } from "~~/i18n/config";
 import { searchSite } from "~~/lib/search/siteSearch";
 
-export function SiteSearchResults({ query, excludeHrefs = [] }: { query: string; excludeHrefs?: readonly string[] }) {
-  const results = searchSite(query).filter(result => !excludeHrefs.includes(result.href));
+export function SiteSearchResults({
+  query,
+  excludeHrefs = [],
+  locale = "en",
+}: {
+  query: string;
+  excludeHrefs?: readonly string[];
+  locale?: Locale;
+}) {
+  const t = (value: string) => translatePublicString(value, locale, "site");
+  const results = searchSite(query, 12, locale).filter(result => !excludeHrefs.includes(result.href));
   const taskResults = results.filter(result => result.area === "Task");
   const pageResults = results.filter(result => result.area !== "Task");
   const groups = [
-    { title: "Tasks", results: taskResults },
-    { title: "Pages and docs", results: pageResults },
+    { id: "tasks", title: t("Tasks"), results: taskResults },
+    { id: "pages-and-docs", title: t("Pages and docs"), results: pageResults },
   ].filter(group => group.results.length > 0);
 
   return (
@@ -18,18 +29,15 @@ export function SiteSearchResults({ query, excludeHrefs = [] }: { query: string;
           RateLoop
         </h2>
         <span className="font-mono text-xs text-base-content/55">
-          {results.length} {results.length === 1 ? "result" : "results"}
+          {results.length} {results.length === 1 ? t("result") : t("results")}
         </span>
       </div>
       {results.length ? (
         <div className="mt-5 space-y-7">
           {groups.map(group => (
-            <section key={group.title} aria-labelledby={`search-${group.title.toLowerCase().replaceAll(" ", "-")}`}>
+            <section key={group.id} aria-labelledby={`search-${group.id}`}>
               <div className="flex items-center justify-between gap-4">
-                <h3
-                  id={`search-${group.title.toLowerCase().replaceAll(" ", "-")}`}
-                  className="text-sm font-semibold text-base-content"
-                >
+                <h3 id={`search-${group.id}`} className="text-sm font-semibold text-base-content">
                   {group.title}
                 </h3>
                 <span className="font-mono text-[0.7rem] text-base-content/60">{group.results.length}</span>
@@ -48,7 +56,7 @@ export function SiteSearchResults({ query, excludeHrefs = [] }: { query: string;
                         {result.title}
                       </h4>
                       <span className="shrink-0 rounded-full bg-base-content/[0.08] px-2 py-1 font-mono text-[0.65rem] uppercase tracking-wider text-base-content/55">
-                        {result.area}
+                        {t(result.area)}
                       </span>
                     </div>
                     <p className="mt-1 text-sm leading-6 text-base-content/60">{result.description}</p>
@@ -60,7 +68,7 @@ export function SiteSearchResults({ query, excludeHrefs = [] }: { query: string;
         </div>
       ) : (
         <Card as="p" className="mt-4 rounded-xl p-5 text-sm text-base-content/60">
-          No pages or docs match &quot;{query}&quot;.
+          {t("No pages or docs match")} &quot;{query}&quot;.
         </Card>
       )}
     </section>

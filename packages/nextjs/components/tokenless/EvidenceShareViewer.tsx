@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { LocalizedSharedContent } from "~~/components/tokenless/LocalizedSharedContent";
 import { PublicEvidenceVerifier } from "~~/components/tokenless/PublicEvidenceVerifier";
 import { readJson } from "~~/lib/tokenless/http";
 
@@ -31,16 +32,20 @@ export function EvidenceShareViewer({ grantId }: { grantId: string }) {
 
   if (unavailable) {
     return (
-      <p className="mt-6 rounded-2xl border border-red-300/20 bg-red-300/[0.06] p-4 text-sm text-red-100" role="alert">
-        This evidence share is unavailable. Ask the sender for a new link.
-      </p>
+      <LocalizedSharedContent>
+        <p className="mt-6 rounded-2xl border border-error/20 bg-error/[0.06] p-4 text-sm text-error" role="alert">
+          This evidence share is unavailable. Ask the sender for a new link.
+        </p>
+      </LocalizedSharedContent>
     );
   }
   if (!packetJson) {
     return (
-      <p className="mt-6 text-sm text-base-content/60" role="status">
-        Opening evidence packet…
-      </p>
+      <LocalizedSharedContent>
+        <p className="mt-6 text-sm text-base-content/60" role="status">
+          Opening evidence packet…
+        </p>
+      </LocalizedSharedContent>
     );
   }
   return <PublicEvidenceVerifier initialPacketJson={packetJson} />;

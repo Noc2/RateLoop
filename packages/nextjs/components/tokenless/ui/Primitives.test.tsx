@@ -29,8 +29,8 @@ test("shared cards, buttons, badges, and chips retain semantic elements and name
   assert.match(html, /^<section/);
   assert.match(html, /surface-card-nested/);
   assert.match(html, /type="button"/);
-  assert.match(html, /text-red-100/);
-  assert.match(html, /bg-emerald-300\/10/);
+  assert.match(html, /text-error/);
+  assert.match(html, /bg-success\/10/);
   assert.match(html, /type="checkbox"/);
   assert.match(html, /checked=""/);
 });

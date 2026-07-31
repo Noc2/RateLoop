@@ -1,3 +1,4 @@
+import { DEFAULT_LOCALE, SUPPORTED_LOCALES } from "../i18n/config";
 import {
   buildContentSecurityPolicy,
   createContentSecurityPolicyNonce,
@@ -61,15 +62,24 @@ test("thirdweb OAuth popups retain their opener", async () => {
 
 test("shared evidence pages are non-cacheable, non-indexable, and never send referrers", async () => {
   const headers = typeof nextConfig.headers === "function" ? await nextConfig.headers() : [];
-  const evidenceHeaders = headers.find(header => header.source === "/evidence/share/:path*")?.headers ?? [];
-  const value = (key: string) => evidenceHeaders.find(header => header.key === key)?.value;
+  const expectedSources = [
+    "/evidence/share/:path*",
+    ...SUPPORTED_LOCALES.filter(locale => locale !== DEFAULT_LOCALE).map(locale => `/${locale}/evidence/share/:path*`),
+  ];
+  for (const source of expectedSources) {
+    const evidenceHeaders = headers.find(header => header.source === source)?.headers ?? [];
+    const value = (key: string) => evidenceHeaders.find(header => header.key === key)?.value;
 
-  assert.equal(value("Cache-Control"), "private, no-store, max-age=0");
-  assert.equal(value("Referrer-Policy"), "no-referrer");
-  assert.equal(value("X-Robots-Tag"), "noindex, nofollow, noarchive");
-  assert.ok(
-    headers.findIndex(header => header.source === "/evidence/share/:path*") >
-      headers.findIndex(header => header.source === "/(.*)"),
+    assert.equal(value("Cache-Control"), "private, no-store, max-age=0");
+    assert.equal(value("Referrer-Policy"), "no-referrer");
+    assert.equal(value("X-Robots-Tag"), "noindex, nofollow, noarchive");
+    assert.ok(
+      headers.findIndex(header => header.source === source) > headers.findIndex(header => header.source === "/(.*)"),
+    );
+  }
+  assert.deepEqual(
+    headers.filter(header => header.source.endsWith("/evidence/share/:path*")).map(header => header.source),
+    expectedSources,
   );
 });
 

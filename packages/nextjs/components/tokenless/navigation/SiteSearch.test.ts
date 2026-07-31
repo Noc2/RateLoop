@@ -10,8 +10,9 @@ test("site search routes every page to global results", () => {
   assert.match(source, /router\.replace\(target, \{ scroll: false \}\)/);
   assert.match(source, /workspaceReturnPathForLocation\(pathname, searchParams\)/);
   assert.match(source, /workspacePublicContentHref\(destination, returnPath\)/);
+  assert.match(source, /usePathname, useRouter \} from "~~\/i18n\/navigation"/);
   assert.match(source, /type="submit"/);
-  assert.match(source, /aria-label="Search"/);
+  assert.match(source, /aria-label=\{t\("submit"\)\}/);
   assert.doesNotMatch(source, /SEARCH_DEBOUNCE_MS|setTimeout|startTransition/);
   assert.doesNotMatch(source, /\/human\?tab=discover/);
 });

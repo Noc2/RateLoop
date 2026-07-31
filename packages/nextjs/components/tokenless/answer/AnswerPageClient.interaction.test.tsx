@@ -2,6 +2,7 @@ import React from "react";
 import type { PublicAnswerTask } from "./PublicQuestionCard";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 const PRINCIPAL = `rlp_${"a".repeat(48)}`;
@@ -88,7 +89,8 @@ function settle() {
 
 test("a selected private scope with no assignments left still renders the public review work", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, waitFor, within } = await import("@testing-library/react");
+  const { cleanup, render: baseRender, waitFor, within } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const { AppRouterContext } = await import("next/dist/shared/lib/app-router-context.shared-runtime");
   const { AnswerPageClient } = await import("./AnswerPageClient");
   // The one private assignment has been submitted, so only public review work is left in the queue.
@@ -108,7 +110,7 @@ test("a selected private scope with no assignments left still renders the public
     );
     assert.deepEqual(
       pills.map(pill => pill.textContent),
-      ["all", "public", "private"],
+      ["All", "Public", "Private"],
     );
     assert.deepEqual(
       pills.map(pill => pill.getAttribute("aria-pressed")),
@@ -125,7 +127,8 @@ test("a selected private scope with no assignments left still renders the public
 
 test("a selected public scope with no tasks left still renders the private review work", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, waitFor, within } = await import("@testing-library/react");
+  const { cleanup, render: baseRender, waitFor, within } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const { AppRouterContext } = await import("next/dist/shared/lib/app-router-context.shared-runtime");
   const { AnswerPageClient } = await import("./AnswerPageClient");
   const restoreFetch = installQueueFetch({ assignments: [privateAssignment], tasks: [] });
@@ -160,7 +163,8 @@ test("a selected public scope with no tasks left still renders the private revie
 
 test("a selected scope still filters out the other kind of review work while both exist", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, waitFor, within } = await import("@testing-library/react");
+  const { cleanup, render: baseRender, waitFor, within } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const { AppRouterContext } = await import("next/dist/shared/lib/app-router-context.shared-runtime");
   const { AnswerPageClient } = await import("./AnswerPageClient");
   const restoreFetch = installQueueFetch({ assignments: [privateAssignment], tasks: [publicTask] });
@@ -191,7 +195,8 @@ test("a selected scope still filters out the other kind of review work while bot
 
 test("an empty review queue keeps its empty state and hides the scope pills", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, waitFor, within } = await import("@testing-library/react");
+  const { cleanup, render: baseRender, waitFor, within } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const { AppRouterContext } = await import("next/dist/shared/lib/app-router-context.shared-runtime");
   const { AnswerPageClient } = await import("./AnswerPageClient");
   const restoreFetch = installQueueFetch({ assignments: [], tasks: [] });
@@ -217,7 +222,8 @@ test("an empty review queue keeps its empty state and hides the scope pills", as
 
 test("an empty history uses history-specific copy without an invitation action", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, waitFor, within } = await import("@testing-library/react");
+  const { cleanup, render: baseRender, waitFor, within } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const { AppRouterContext } = await import("next/dist/shared/lib/app-router-context.shared-runtime");
   const { AnswerPageClient } = await import("./AnswerPageClient");
   const restoreFetch = installQueueFetch({ assignments: [], tasks: [] });

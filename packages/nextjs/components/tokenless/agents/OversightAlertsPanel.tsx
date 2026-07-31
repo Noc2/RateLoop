@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AgentText } from "./AgentText";
+import { useAgentFormatter, useAgentTranslations } from "./AgentsLocaleProvider";
 import { ChoiceInput, Field } from "~~/components/tokenless/forms/Field";
 import { Badge } from "~~/components/tokenless/ui/Badge";
 import { Button } from "~~/components/tokenless/ui/Button";
@@ -13,18 +15,10 @@ const POLL_INTERVAL_MS = 60_000;
 type Inbox = { unreadCount: number; notifications: OversightInboxNotification[] };
 
 const ALERT_EVENT_OPTIONS = [
-  { key: "gateBlocked", label: "Output gate blocked", description: "An output was held undelivered by the gate." },
-  {
-    key: "reviewFailed",
-    label: "Review failed or expired",
-    description: "A review reached terminal failure or expired.",
-  },
-  { key: "workspaceStop", label: "Workspace stop engaged", description: "Someone engaged the workspace-wide stop." },
-  {
-    key: "coverageFloorHit",
-    label: "Coverage floor reached",
-    description: "Adaptive sampling dropped to the configured production floor.",
-  },
+  { key: "gateBlocked", labelKey: "alertGateBlocked", descriptionKey: "alertGateBlockedDescription" },
+  { key: "reviewFailed", labelKey: "alertReviewFailed", descriptionKey: "alertReviewFailedDescription" },
+  { key: "workspaceStop", labelKey: "alertWorkspaceStop", descriptionKey: "alertWorkspaceStopDescription" },
+  { key: "coverageFloorHit", labelKey: "alertCoverageFloor", descriptionKey: "alertCoverageFloorDescription" },
 ] as const;
 
 function belongsToWorkspace(notification: OversightInboxNotification, workspaceId: string) {
@@ -53,6 +47,8 @@ function fireBrowserNotifications(fresh: OversightInboxNotification[], enabled: 
 }
 
 function AlertSettings({ workspaceId }: { workspaceId: string }) {
+  const ui = useAgentTranslations("ui");
+  const errors = useAgentTranslations("errors");
   const [preferences, setPreferences] = useState<WorkspaceAlertPreferences | null>(null);
   const [browserPermission, setBrowserPermission] = useState<NotificationPermission | "unsupported">("default");
   const [saving, setSaving] = useState(false);
@@ -75,14 +71,14 @@ function AlertSettings({ workspaceId }: { workspaceId: string }) {
           }),
         );
         if (!controller.signal.aborted) setPreferences(body.preferences);
-      } catch (cause) {
+      } catch {
         if (!controller.signal.aborted) {
-          setError(cause instanceof Error ? cause.message : "Unable to load alert settings.");
+          setError(errors("loadAlerts"));
         }
       }
     })();
     return () => controller.abort();
-  }, [workspaceId]);
+  }, [errors, workspaceId]);
 
   async function save(next: WorkspaceAlertPreferences) {
     const previous = preferences;
@@ -107,9 +103,9 @@ function AlertSettings({ workspaceId }: { workspaceId: string }) {
           }),
         }),
       );
-    } catch (cause) {
+    } catch {
       setPreferences(previous);
-      setError(cause instanceof Error ? cause.message : "Unable to save alert settings.");
+      setError(errors("saveAlerts"));
     } finally {
       setSaving(false);
     }
@@ -129,11 +125,13 @@ function AlertSettings({ workspaceId }: { workspaceId: string }) {
 
   if (!preferences) {
     return error ? (
-      <p className="mt-3 text-xs text-red-100" role="alert">
+      <p className="mt-3 text-xs text-error" role="alert">
         {error}
       </p>
     ) : (
-      <p className="mt-3 text-xs text-base-content/55">Loading alert settings…</p>
+      <p className="mt-3 text-xs text-base-content/55">
+        <AgentText id="loadingAlertSettings" />
+      </p>
     );
   }
 
@@ -142,17 +140,17 @@ function AlertSettings({ workspaceId }: { workspaceId: string }) {
       {ALERT_EVENT_OPTIONS.map(option => (
         <label
           key={option.key}
-          className="flex items-start justify-between gap-4 rounded-xl border border-white/10 bg-black/20 px-4 py-3"
+          className="flex items-start justify-between gap-4 rounded-xl border border-base-content/10 bg-base-content/[0.04] px-4 py-3"
           htmlFor={`oversight-alert-${option.key}`}
         >
           <span>
-            <span className="block text-sm font-semibold">{option.label}</span>
-            <span className="mt-1 block text-xs leading-5 text-base-content/55">{option.description}</span>
+            <span className="block text-sm font-semibold">{ui(option.labelKey)}</span>
+            <span className="mt-1 block text-xs leading-5 text-base-content/55">{ui(option.descriptionKey)}</span>
           </span>
           <ChoiceInput
             id={`oversight-alert-${option.key}`}
             type="checkbox"
-            aria-label={option.label}
+            aria-label={ui(option.labelKey)}
             className="toggle toggle-sm toggle-primary mt-1"
             checked={preferences[option.key]}
             disabled={saving}
@@ -160,19 +158,21 @@ function AlertSettings({ workspaceId }: { workspaceId: string }) {
           />
         </label>
       ))}
-      <div className="flex items-start justify-between gap-4 rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+      <div className="flex items-start justify-between gap-4 rounded-xl border border-base-content/10 bg-base-content/[0.04] px-4 py-3">
         <span>
-          <span className="block text-sm font-semibold">Disagreement spike threshold</span>
+          <span className="block text-sm font-semibold">
+            <AgentText id="disagreementThreshold" />
+          </span>
           <span className="mt-1 block text-xs leading-5 text-base-content/55">
-            Alert when 30-day reviewer disagreement reaches this share of comparable cases. Clear to disable.
+            <AgentText id="translated212" />
           </span>
         </span>
         <Field
           containerClassName="w-24 shrink-0"
-          label="Disagreement spike threshold percent"
+          label={<AgentText id="attribute032" />}
           labelClassName="sr-only"
           type="number"
-          className="input-sm border-white/10 bg-[var(--rateloop-field)] text-right"
+          className="input-sm border-base-content/10 bg-[var(--rateloop-field)] text-right"
           min={0.01}
           max={100}
           step={0.01}
@@ -186,17 +186,21 @@ function AlertSettings({ workspaceId }: { workspaceId: string }) {
           }}
         />
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-base-content/10 bg-base-content/[0.04] px-4 py-3">
         <span>
-          <span className="block text-sm font-semibold">Browser notifications</span>
+          <span className="block text-sm font-semibold">
+            <AgentText id="browserNotifications" />
+          </span>
           <span className="mt-1 block text-xs leading-5 text-base-content/55">
-            {browserPermission === "unsupported"
-              ? "This browser does not support notifications."
-              : browserPermission === "denied"
-                ? "Blocked in the browser settings."
-                : preferences.browserEnabled && browserPermission === "granted"
-                  ? "Enabled while the dashboard is open."
-                  : "Off until you enable them explicitly."}
+            {browserPermission === "unsupported" ? (
+              <AgentText id="dynamic057" />
+            ) : browserPermission === "denied" ? (
+              <AgentText id="dynamic052" />
+            ) : preferences.browserEnabled && browserPermission === "granted" ? (
+              <AgentText id="dynamic055" />
+            ) : (
+              <AgentText id="dynamic056" />
+            )}
           </span>
         </span>
         {browserPermission !== "unsupported" && !(preferences.browserEnabled && browserPermission === "granted") ? (
@@ -207,7 +211,7 @@ function AlertSettings({ workspaceId }: { workspaceId: string }) {
             disabled={saving || browserPermission === "denied"}
             onClick={() => void enableBrowserNotifications()}
           >
-            Enable browser notifications
+            <AgentText id="translated213" />
           </Button>
         ) : (
           <Button
@@ -217,12 +221,12 @@ function AlertSettings({ workspaceId }: { workspaceId: string }) {
             disabled={saving || !preferences.browserEnabled}
             onClick={() => void save({ ...preferences, browserEnabled: false })}
           >
-            Turn off
+            <AgentText id="translated214" />
           </Button>
         )}
       </div>
       {error ? (
-        <p className="text-xs text-red-100" role="alert">
+        <p className="text-xs text-error" role="alert">
           {error}
         </p>
       ) : null}
@@ -231,6 +235,9 @@ function AlertSettings({ workspaceId }: { workspaceId: string }) {
 }
 
 export function OversightAlertsPanel({ workspaceId }: { workspaceId: string }) {
+  const format = useAgentFormatter();
+  const ui = useAgentTranslations("ui");
+  const errors = useAgentTranslations("errors");
   const [inbox, setInbox] = useState<Inbox | null>(null);
   const [browserEnabled, setBrowserEnabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -287,9 +294,9 @@ export function OversightAlertsPanel({ workspaceId }: { workspaceId: string }) {
     void (async () => {
       try {
         await loadInbox(controller.signal);
-      } catch (cause) {
+      } catch {
         if (!controller.signal.aborted) {
-          setError(cause instanceof Error ? cause.message : "Unable to load notifications.");
+          setError(errors("loadNotifications"));
         }
       }
       if (controller.signal.aborted) return;
@@ -303,7 +310,7 @@ export function OversightAlertsPanel({ workspaceId }: { workspaceId: string }) {
       controller.abort();
       if (timer) clearInterval(timer);
     };
-  }, [browserEnabled, loadInbox]);
+  }, [browserEnabled, errors, loadInbox]);
 
   async function markAllRead() {
     const notificationIds = inbox?.notifications
@@ -321,8 +328,8 @@ export function OversightAlertsPanel({ workspaceId }: { workspaceId: string }) {
         }),
       );
       await loadInbox();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to mark notifications as read.");
+    } catch {
+      setError(errors("markNotifications"));
     } finally {
       setMarking(false);
     }
@@ -333,11 +340,11 @@ export function OversightAlertsPanel({ workspaceId }: { workspaceId: string }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 id="oversight-alerts-heading" className="text-xl font-semibold">
-            Alerts needing attention
+            <AgentText id="translated215" />
             {inbox && inbox.unreadCount > 0 ? (
               <span role="status" className="ml-2 align-middle">
                 <Badge variant="info" className="text-xs">
-                  {inbox.unreadCount} unread
+                  {inbox.unreadCount} <AgentText id="translated216" />
                 </Badge>
               </span>
             ) : null}
@@ -346,7 +353,7 @@ export function OversightAlertsPanel({ workspaceId }: { workspaceId: string }) {
         <div className="flex flex-wrap gap-2">
           {inbox && inbox.unreadCount > 0 ? (
             <Button type="button" size="sm" variant="secondary" disabled={marking} onClick={() => void markAllRead()}>
-              Mark all read
+              <AgentText id="translated217" />
             </Button>
           ) : null}
           <Button
@@ -357,19 +364,21 @@ export function OversightAlertsPanel({ workspaceId }: { workspaceId: string }) {
             aria-expanded={settingsOpen}
             onClick={() => setSettingsOpen(current => !current)}
           >
-            {settingsOpen ? "Done" : "Change alert settings"}
+            {settingsOpen ? <AgentText id="dynamic054" /> : <AgentText id="dynamic053" />}
           </Button>
         </div>
       </div>
 
       {error ? (
-        <p className="mt-3 text-sm text-red-100" role="alert">
+        <p className="mt-3 text-sm text-error" role="alert">
           {error}
         </p>
       ) : null}
 
       {inbox && inbox.notifications.length === 0 ? (
-        <p className="mt-3 text-sm text-base-content/55">No alerts need attention.</p>
+        <p className="mt-3 text-sm text-base-content/55">
+          <AgentText id="noAlerts" />
+        </p>
       ) : null}
 
       {inbox && inbox.notifications.length > 0 ? (
@@ -377,8 +386,8 @@ export function OversightAlertsPanel({ workspaceId }: { workspaceId: string }) {
           {inbox.notifications.map(notification => (
             <li
               key={notification.notificationId}
-              className={`rounded-xl border border-white/10 px-4 py-3 ${
-                notification.readAt ? "bg-black/10" : "bg-white/[0.04]"
+              className={`rounded-xl border border-base-content/10 px-4 py-3 ${
+                notification.readAt ? "bg-base-content/[0.03]" : "bg-base-content/[0.04]"
               }`}
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -389,13 +398,13 @@ export function OversightAlertsPanel({ workspaceId }: { workspaceId: string }) {
                   {notification.title}
                 </p>
                 <time dateTime={notification.createdAt} className="text-xs text-base-content/55">
-                  {new Date(notification.createdAt).toLocaleString()}
+                  {format.dateTime(new Date(notification.createdAt), { dateStyle: "medium", timeStyle: "short" })}
                 </time>
               </div>
               <p className="mt-1 text-xs leading-5 text-base-content/60">{notification.body}</p>
               {notification.href ? (
                 <a href={notification.href} className="mt-1 inline-block text-xs text-[var(--rateloop-blue)]">
-                  Open
+                  <AgentText id="translated218" />
                 </a>
               ) : null}
             </li>
@@ -406,8 +415,8 @@ export function OversightAlertsPanel({ workspaceId }: { workspaceId: string }) {
       {settingsOpen ? (
         <section
           id="oversight-alert-settings"
-          className="mt-5 border-t border-white/10 pt-4"
-          aria-label="Alert settings"
+          className="mt-5 border-t border-base-content/10 pt-4"
+          aria-label={ui("alertSettingsLabel")}
         >
           <AlertSettings workspaceId={workspaceId} />
         </section>

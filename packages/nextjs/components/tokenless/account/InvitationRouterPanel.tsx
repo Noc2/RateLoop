@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { useFormatter, useTranslations } from "next-intl";
 import { Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { Card } from "~~/components/tokenless/ui/Card";
@@ -15,11 +16,9 @@ type ReviewerInvitationPreview = {
 
 export type InvitationKind = "reviewer" | "workspace";
 
-function formatDate(value: string | null) {
-  return value ? new Date(value).toLocaleString() : "No expiry";
-}
-
 export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: InvitationKind) => void }) {
+  const t = useTranslations("account.invitation");
+  const format = useFormatter();
   const [token, setToken] = useState("");
   const [preview, setPreview] = useState<ReviewerInvitationPreview | null>(null);
   const [busy, setBusy] = useState(false);
@@ -44,7 +43,7 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
             }),
           );
           setToken("");
-          setStatus("Workspace invitation accepted.");
+          setStatus(t("workspaceAccepted"));
           onAccepted?.("workspace");
           return;
         }
@@ -58,7 +57,7 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
             }),
           );
           setToken("");
-          setStatus("Invitation accepted.");
+          setStatus(t("accepted"));
           onAccepted?.("reviewer");
           return;
         }
@@ -74,17 +73,14 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
           setPreview(body.invitation as ReviewerInvitationPreview);
           return;
         }
-        capture(
-          { field: "token", message: "Enter a valid RateLoop invitation code." },
-          "Unable to check the invitation.",
-        );
+        capture({ field: "token", message: t("invalid") }, t("checkFailed"));
       } catch (cause) {
-        capture(cause, "Unable to check the invitation.");
+        capture(cause, t("checkFailed"));
       } finally {
         setBusy(false);
       }
     },
-    [capture, clear, onAccepted],
+    [capture, clear, onAccepted, t],
   );
 
   useEffect(() => {
@@ -120,10 +116,10 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
       );
       setPreview(null);
       setToken("");
-      setStatus("Reviewer invitation accepted.");
+      setStatus(t("reviewerAccepted"));
       onAccepted?.("reviewer");
     } catch (cause) {
-      capture(cause, "Unable to accept the invitation.");
+      capture(cause, t("acceptFailed"));
     } finally {
       setBusy(false);
     }
@@ -131,12 +127,12 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
 
   return (
     <Card as="section" className="rounded-2xl p-6">
-      <h2 className="text-2xl font-semibold">Add invitation</h2>
+      <h2 className="text-2xl font-semibold">{t("title")}</h2>
       <form className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end" onSubmit={checkInvitation}>
         <div className="grow">
           <Field
             id="invitation-code"
-            label="Invitation code"
+            label={t("code")}
             type="password"
             autoComplete="off"
             value={token}
@@ -146,36 +142,42 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
               setStatus(null);
               clear("token");
             }}
-            className="input w-full border-white/10 bg-[var(--rateloop-field)] font-mono text-sm"
-            placeholder="Paste invitation code"
+            className="input w-full border-base-content/10 bg-[var(--rateloop-field)] font-mono text-sm"
+            placeholder={t("placeholder")}
             error={fieldErrors.token}
             required
           />
         </div>
         <button type="submit" className="rateloop-gradient-action px-5" disabled={busy || !token.trim()}>
-          {busy ? "Checking…" : "Continue"}
+          {busy ? t("checking") : t("continue")}
         </button>
       </form>
 
       {preview ? (
         <Card as="div" variant="nested" className="mt-5 rounded-xl p-5">
           <p className="text-sm text-base-content/55">{preview.workspaceName}</p>
-          <h3 className="mt-1 text-lg font-semibold">Reviewer invitation</h3>
-          <p className="mt-2 text-sm text-base-content/60">
-            Review assigned private work without joining the workspace.
-          </p>
+          <h3 className="mt-1 text-lg font-semibold">{t("reviewerTitle")}</h3>
+          <p className="mt-2 text-sm text-base-content/60">{t("description")}</p>
           <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
             <div>
-              <dt className="text-xs text-base-content/55">Private material limit</dt>
+              <dt className="text-xs text-base-content/55">{t("materialLimit")}</dt>
               <dd className="mt-1 capitalize">{preview.maxPrivateSensitivity}</dd>
             </div>
             <div>
-              <dt className="text-xs text-base-content/55">Invitation expires</dt>
-              <dd className="mt-1">{formatDate(preview.expiresAt)}</dd>
+              <dt className="text-xs text-base-content/55">{t("invitationExpires")}</dt>
+              <dd className="mt-1">
+                {preview.expiresAt
+                  ? format.dateTime(new Date(preview.expiresAt), { dateStyle: "medium", timeStyle: "short" })
+                  : t("noExpiry")}
+              </dd>
             </div>
             <div>
-              <dt className="text-xs text-base-content/55">Reviewer access expires</dt>
-              <dd className="mt-1">{formatDate(preview.accessExpiresAt)}</dd>
+              <dt className="text-xs text-base-content/55">{t("accessExpires")}</dt>
+              <dd className="mt-1">
+                {preview.accessExpiresAt
+                  ? format.dateTime(new Date(preview.accessExpiresAt), { dateStyle: "medium", timeStyle: "short" })
+                  : t("noExpiry")}
+              </dd>
             </div>
           </dl>
           <div className="mt-5 flex flex-wrap gap-3">
@@ -185,22 +187,22 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
               disabled={busy}
               onClick={acceptReviewerInvitation}
             >
-              {busy ? "Accepting…" : "Accept invitation"}
+              {busy ? t("accepting") : t("accept")}
             </button>
             <button type="button" className="btn rateloop-secondary-action" onClick={() => setPreview(null)}>
-              Cancel
+              {t("cancel")}
             </button>
           </div>
         </Card>
       ) : null}
 
       {status ? (
-        <p role="status" className="mt-5 rounded-lg bg-emerald-300/10 p-3 text-sm text-emerald-100">
+        <p role="status" className="mt-5 rounded-lg bg-success/10 p-3 text-sm text-success">
           {status}
         </p>
       ) : null}
       {formError ? (
-        <p role="alert" className="mt-5 rounded-lg bg-red-400/10 p-3 text-sm text-red-100">
+        <p role="alert" className="mt-5 rounded-lg bg-error/10 p-3 text-sm text-error">
           {formError}
         </p>
       ) : null}

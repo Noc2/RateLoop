@@ -6,8 +6,11 @@ import test from "node:test";
 
 const focusSource = readFileSync(new URL("./ProfileSectionFocus.tsx", import.meta.url), "utf8");
 const tabsSource = readFileSync(new URL("./HumanTabs.tsx", import.meta.url), "utf8");
-const legacyPageSource = readFileSync(new URL("../../../app/(app)/human/page.tsx", import.meta.url), "utf8");
-const sectionPageSource = readFileSync(new URL("../../../app/(app)/human/[section]/page.tsx", import.meta.url), "utf8");
+const legacyPageSource = readFileSync(new URL("../../../app/[locale]/(app)/human/page.tsx", import.meta.url), "utf8");
+const sectionPageSource = readFileSync(
+  new URL("../../../app/[locale]/(app)/human/[section]/page.tsx", import.meta.url),
+  "utf8",
+);
 
 test("profile deep links resolve only visible account sections", () => {
   assert.equal(resolveHumanProfileSection("paid-work"), "paid-work");
@@ -52,9 +55,9 @@ test("human route compatibility preserves history, profile, and invitation state
 
 test("human sections use normal route links and canonicalize legacy tab URLs", () => {
   assert.match(tabsSource, /href=\{humanSectionHref\(/);
-  assert.match(tabsSource, /aria-current=\{active === tab\.value \? "page" : undefined\}/);
+  assert.match(tabsSource, /aria-current=\{active === tab \? "page" : undefined\}/);
   assert.doesNotMatch(tabsSource, /role="tablist"|role="tab"|aria-selected=|tabIndex=/);
-  assert.match(legacyPageSource, /redirect\(legacyHumanRouteHref\(await searchParams\)\)/);
+  assert.match(legacyPageSource, /redirect\(\{ href: legacyHumanRouteHref\(requestedSearchParams\), locale \}\)/);
   assert.match(sectionPageSource, /section !== humanSectionForNavigation\(navigation\)/);
   assert.match(sectionPageSource, /requestedSearchParams\.assignment/);
   assert.match(sectionPageSource, /requestedSearchParams\.view === "history"/);

@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import {
   type TokenlessAskResponse,
   type TokenlessQuestion,
@@ -15,6 +14,8 @@ import {
   parseTokenlessResult,
   parseTokenlessWaitResponse,
 } from "@rateloop/sdk";
+import { useLocale } from "next-intl";
+import { LocalizedSharedContent } from "~~/components/tokenless/LocalizedSharedContent";
 import {
   QuestionMedia,
   type QuestionMediaPreviewCapability,
@@ -22,6 +23,7 @@ import {
 } from "~~/components/tokenless/answer/QuestionMedia";
 import { ChoiceInput, Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
 import { Card } from "~~/components/tokenless/ui/Card";
+import { Link } from "~~/i18n/navigation";
 import { subscribeToBrowserAuthSessionChanges } from "~~/lib/auth/client";
 
 const HANDOFF_VERSION = "rateloop.handoff.v1" as const;
@@ -369,11 +371,11 @@ async function readApiJson(response: Response): Promise<unknown> {
   throw failure;
 }
 
-export function formatUsdcAtomic(value: string) {
+export function formatUsdcAtomic(value: string, locale = "en") {
   const atomicValue = BigInt(value);
   const whole = atomicValue / 1_000_000n;
   const fraction = (atomicValue % 1_000_000n).toString().padStart(6, "0");
-  return `${whole.toLocaleString("en-US")}.${fraction} USDC`;
+  return `${whole.toLocaleString(locale)}.${fraction} USDC`;
 }
 
 export function formatBpsPercent(value: number) {
@@ -383,8 +385,8 @@ export function formatBpsPercent(value: number) {
     .replace(/(\.\d)0$/, "$1")}%`;
 }
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "long" }).format(new Date(value));
+function formatDate(value: string, locale: string) {
+  return new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "long" }).format(new Date(value));
 }
 
 function sourceLabel(source: TokenlessQuoteRequest["audience"]["source"]) {
@@ -419,7 +421,7 @@ function percentFromBps(value: number) {
 
 function SummaryItem({ label, value, mono = false }: { label: string; value: React.ReactNode; mono?: boolean }) {
   return (
-    <div className="border-l border-white/15 pl-4">
+    <div className="border-l border-base-content/15 pl-4">
       <dt className="text-xs uppercase tracking-wider text-base-content/55">{label}</dt>
       <dd className={`mt-1 break-words text-sm text-base-content/85 ${mono ? "font-mono" : ""}`}>{value}</dd>
     </div>
@@ -427,6 +429,7 @@ function SummaryItem({ label, value, mono = false }: { label: string; value: Rea
 }
 
 export function TokenlessHandoffClient() {
+  const locale = useLocale();
   const [handoff, setHandoff] = useState<HandoffState>({ status: "loading" });
   const [request, setRequest] = useState<TokenlessQuoteRequest | null>(null);
   const [session, setSession] = useState<SessionState>({ status: "loading" });
@@ -560,14 +563,14 @@ export function TokenlessHandoffClient() {
               ? current
               : (nextWorkspaces[0]?.workspaceId ?? ""),
           );
-        } catch (cause) {
+        } catch {
           if (!signal.aborted) {
-            setWorkspaceError(cause instanceof Error ? cause.message : "Unable to load prepaid workspaces.");
+            setWorkspaceError("Unable to load prepaid workspaces.");
           }
         }
-      } catch (cause) {
+      } catch {
         if (!signal.aborted) {
-          setSession({ status: "error", message: cause instanceof Error ? cause.message : "Unable to load sign-in." });
+          setSession({ status: "error", message: "Unable to load sign-in." });
         }
       } finally {
         if (!signal.aborted) setWorkspaceLoading(false);
@@ -678,9 +681,9 @@ export function TokenlessHandoffClient() {
       if (principalGeneration !== principalGenerationRef.current) return;
       if (Date.parse(active.expiresAt) <= Date.now()) throw new Error("This handoff link expired while quoting.");
       setQuote(parsed);
-    } catch (cause) {
+    } catch {
       if (principalGeneration !== principalGenerationRef.current) return;
-      setError(cause instanceof Error ? cause.message : "Unable to create the quote.");
+      setError("Unable to create the quote.");
     } finally {
       if (principalGeneration === principalGenerationRef.current) setBusy(null);
     }
@@ -742,9 +745,9 @@ export function TokenlessHandoffClient() {
         if (remainingMs <= 0) break;
         await retryDelay(Math.min(waited.continuation.retryAfterMs, remainingMs), controller.signal);
       }
-    } catch (cause) {
+    } catch {
       if (controller.signal.aborted || principalGeneration !== principalGenerationRef.current) return;
-      setError(cause instanceof Error ? cause.message : "Unable to wait for the authenticated result.");
+      setError("Unable to wait for the authenticated result.");
     } finally {
       if (resultControllerRef.current === controller) resultControllerRef.current = null;
       if (principalGeneration === principalGenerationRef.current) setBusy(null);
@@ -797,107 +800,113 @@ export function TokenlessHandoffClient() {
       setRecoveryOperationKey(parsed.operationKey);
       setAsk(parsed);
       setBusy(null);
-    } catch (cause) {
+    } catch {
       if (principalGeneration !== principalGenerationRef.current) return;
-      setError(cause instanceof Error ? cause.message : "Unable to submit the ask.");
+      setError("Unable to submit the ask.");
       setBusy(null);
     }
   }
 
   if (handoff.status === "loading") {
     return (
-      <div className="mx-auto flex w-full max-w-5xl grow items-center justify-center px-4 py-20" aria-busy="true">
-        <p className="text-base-content/65" role="status">
-          Reading the private handoff fragment in this browser…
-        </p>
-      </div>
+      <LocalizedSharedContent>
+        <div className="mx-auto flex w-full max-w-5xl grow items-center justify-center px-4 py-20" aria-busy="true">
+          <p className="text-base-content/65" role="status">
+            Reading the private handoff fragment in this browser…
+          </p>
+        </div>
+      </LocalizedSharedContent>
     );
   }
 
   if (handoff.status === "invalid") {
     return (
-      <div className="mx-auto w-full max-w-3xl grow px-4 py-16 sm:py-24">
-        <Card as="section" variant="marketing" className="border-error/30 p-6 sm:p-9" role="alert">
-          <p className="font-mono text-xs uppercase tracking-widest text-error">Cannot open review</p>
-          <h1 className="mt-4 text-3xl font-semibold">This review link is not valid</h1>
-          <p className="mt-4 leading-7 text-base-content/65">Return to your agent and request a new review link.</p>
-        </Card>
-      </div>
+      <LocalizedSharedContent>
+        <div className="mx-auto w-full max-w-3xl grow px-4 py-16 sm:py-24">
+          <Card as="section" variant="marketing" className="border-error/30 p-6 sm:p-9" role="alert">
+            <p className="font-mono text-xs uppercase tracking-widest text-error">Cannot open review</p>
+            <h1 className="mt-4 text-3xl font-semibold">This review link is not valid</h1>
+            <p className="mt-4 leading-7 text-base-content/65">Return to your agent and request a new review link.</p>
+          </Card>
+        </div>
+      </LocalizedSharedContent>
     );
   }
 
   if (handoff.status === "recovery") {
     return (
-      <div className="mx-auto w-full max-w-4xl grow px-4 py-16 sm:py-24">
-        <header>
-          <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Browser handoff</p>
-          <h1 className="mt-4 text-4xl font-semibold">Track your ask.</h1>
-          <p className="mt-3 text-base leading-7 text-base-content/65">
-            RateLoop saved this non-secret request reference so the authenticated result survives reloads.
-          </p>
-        </header>
-
-        {error ? (
-          <div className="mt-7 rounded-xl border border-error/30 bg-error/10 px-5 py-4 text-sm" role="alert">
-            {error}
-          </div>
-        ) : null}
-
-        <Card as="section" variant="marketing" className="mt-7 p-5 sm:p-7" aria-live="polite">
-          <h2 className="text-2xl font-semibold">{result ? "Authenticated outcome" : "Ask submitted"}</h2>
-          <p className="mt-2 font-mono text-xs text-base-content/55">Request {handoff.operationKey}</p>
-
-          {session.status === "loading" ? (
-            <p className="mt-5 text-sm text-base-content/60" role="status">
-              Checking your RateLoop session…
+      <LocalizedSharedContent>
+        <div className="mx-auto w-full max-w-4xl grow px-4 py-16 sm:py-24">
+          <header>
+            <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Browser handoff</p>
+            <h1 className="mt-4 text-4xl font-semibold">Track your ask.</h1>
+            <p className="mt-3 text-base leading-7 text-base-content/65">
+              RateLoop saved this non-secret request reference so the authenticated result survives reloads.
             </p>
-          ) : session.status === "anonymous" ? (
-            <div className="mt-5 text-sm leading-6 text-base-content/70">
-              <p>Sign in to the account that submitted this ask, then return here.</p>
-              <a
-                href="/sign-in"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-3 inline-block font-semibold underline underline-offset-4"
-              >
-                Sign in in a new tab
-              </a>
+          </header>
+
+          {error ? (
+            <div className="mt-7 rounded-xl border border-error/30 bg-error/10 px-5 py-4 text-sm" role="alert">
+              {error}
             </div>
-          ) : session.status === "error" ? (
-            <p className="mt-5 text-sm text-error" role="alert">
-              {session.message}
-            </p>
-          ) : result ? (
-            <dl className="mt-6 grid gap-5 sm:grid-cols-2">
-              <SummaryItem label="Status" value={result.verdictStatus.replaceAll("_", " ")} />
-              <SummaryItem label="Selected" value={displaySelected(result)} />
-              <SummaryItem
-                label="Participants"
-                value={`${result.audience.participantCount} · ${result.audience.label}`}
-              />
-              <SummaryItem label="Round" value={result.roundId} mono />
-            </dl>
-          ) : (
-            <div className="mt-5 flex flex-wrap items-center justify-between gap-4">
-              <p className="text-sm text-base-content/60" role="status">
-                {busy === "result"
-                  ? "Waiting for the authenticated result…"
-                  : resultPending
-                    ? "Result not ready. Check again when you are ready."
-                    : "Result not ready."}
+          ) : null}
+
+          <Card as="section" variant="marketing" className="mt-7 p-5 sm:p-7" aria-live="polite">
+            <h2 className="text-2xl font-semibold">{result ? "Authenticated outcome" : "Ask submitted"}</h2>
+            <p className="mt-2 font-mono text-xs text-base-content/55">Request {handoff.operationKey}</p>
+
+            {session.status === "loading" ? (
+              <p className="mt-5 text-sm text-base-content/60" role="status">
+                Checking your RateLoop session…
               </p>
-              <button
-                type="button"
-                className="btn rateloop-secondary-action btn-sm"
-                disabled={busy !== null}
-                onClick={() => void waitForResult(handoff.operationKey)}
-              >
-                Check again
-              </button>
-            </div>
-          )}
-        </Card>
-      </div>
+            ) : session.status === "anonymous" ? (
+              <div className="mt-5 text-sm leading-6 text-base-content/70">
+                <p>Sign in to the account that submitted this ask, then return here.</p>
+                <Link
+                  href="/sign-in"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 inline-block font-semibold underline underline-offset-4"
+                >
+                  Sign in in a new tab
+                </Link>
+              </div>
+            ) : session.status === "error" ? (
+              <p className="mt-5 text-sm text-error" role="alert">
+                {session.message}
+              </p>
+            ) : result ? (
+              <dl className="mt-6 grid gap-5 sm:grid-cols-2">
+                <SummaryItem label="Status" value={result.verdictStatus.replaceAll("_", " ")} />
+                <SummaryItem label="Selected" value={displaySelected(result)} />
+                <SummaryItem
+                  label="Participants"
+                  value={`${result.audience.participantCount} · ${result.audience.label}`}
+                />
+                <SummaryItem label="Round" value={result.roundId} mono />
+              </dl>
+            ) : (
+              <div className="mt-5 flex flex-wrap items-center justify-between gap-4">
+                <p className="text-sm text-base-content/60" role="status">
+                  {busy === "result"
+                    ? "Waiting for the authenticated result…"
+                    : resultPending
+                      ? "Result not ready. Check again when you are ready."
+                      : "Result not ready."}
+                </p>
+                <button
+                  type="button"
+                  className="btn rateloop-secondary-action btn-sm"
+                  disabled={busy !== null}
+                  onClick={() => void waitForResult(handoff.operationKey)}
+                >
+                  Check again
+                </button>
+              </div>
+            )}
+          </Card>
+        </div>
+      </LocalizedSharedContent>
     );
   }
 
@@ -905,451 +914,468 @@ export function TokenlessHandoffClient() {
 
   if (handoff.status === "expired") {
     return (
-      <div className="mx-auto w-full max-w-3xl grow px-4 py-16 sm:py-24">
-        <Card as="section" variant="marketing" className="border-error/30 p-6 sm:p-9" role="alert">
-          <p className="font-mono text-xs uppercase tracking-widest text-error">Review link expired</p>
-          <h1 className="mt-4 text-3xl font-semibold">Ask the agent for a new link.</h1>
-          <p className="mt-4 text-sm leading-6 text-base-content/65">
-            This link expired <time dateTime={payload.expiresAt}>{formatDate(payload.expiresAt)}</time>.
-          </p>
-        </Card>
-      </div>
+      <LocalizedSharedContent>
+        <div className="mx-auto w-full max-w-3xl grow px-4 py-16 sm:py-24">
+          <Card as="section" variant="marketing" className="border-error/30 p-6 sm:p-9" role="alert">
+            <p className="font-mono text-xs uppercase tracking-widest text-error">Review link expired</p>
+            <h1 className="mt-4 text-3xl font-semibold">Ask the agent for a new link.</h1>
+            <p className="mt-4 text-sm leading-6 text-base-content/65">
+              This link expired <time dateTime={payload.expiresAt}>{formatDate(payload.expiresAt, locale)}</time>.
+            </p>
+          </Card>
+        </div>
+      </LocalizedSharedContent>
     );
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl grow px-4 py-10 sm:py-14">
-      <header className="max-w-4xl">
-        <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Browser handoff</p>
-        <h1 className="mt-4 text-4xl font-semibold leading-tight sm:text-5xl">Review this ask.</h1>
-        <p className="mt-4 max-w-3xl text-base leading-7 text-base-content/65 sm:text-lg">
-          Check the question, confirm it is safe to share, then get the exact price.
-        </p>
-        <p className="mt-3 text-sm text-base-content/55">
-          Link expires <time dateTime={payload.expiresAt}>{formatDate(payload.expiresAt)}</time>
-        </p>
-      </header>
-
-      {error ? (
-        <div className="mt-7 rounded-xl border border-error/30 bg-error/10 px-5 py-4 text-sm leading-6" role="alert">
-          {error}
-        </div>
-      ) : null}
-
-      <div className="mt-8 max-w-4xl">
-        <Card as="section" variant="marketing" className="p-5 sm:p-7" aria-labelledby="review-heading">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <h2 id="review-heading" className="text-2xl font-semibold">
-              Question
-            </h2>
-            <span className="rounded-full border border-white/15 px-3 py-1 text-xs text-base-content/65">
-              {request.question.kind === "binary" ? "Binary" : "Head to head"}
-            </span>
-          </div>
-
-          <TextareaField
-            id="handoff-prompt"
-            containerClassName="mt-6"
-            className="min-h-36 rounded-lg border-white/10 bg-[var(--rateloop-field)] text-base leading-7"
-            label="Exact prompt"
-            labelClassName="text-sm font-medium"
-            maxLength={MAX_PROMPT_LENGTH}
-            disabled={formDisabled}
-            value={request.question.prompt}
-            onChange={event =>
-              changeRequest({ ...request, question: { ...request.question, prompt: event.target.value } })
-            }
-          />
-          <p className="mt-1 text-right font-mono text-xs text-base-content/55">
-            {request.question.prompt.length}/{MAX_PROMPT_LENGTH}
+    <LocalizedSharedContent>
+      <div className="mx-auto w-full max-w-6xl grow px-4 py-10 sm:py-14">
+        <header className="max-w-4xl">
+          <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Browser handoff</p>
+          <h1 className="mt-4 text-4xl font-semibold leading-tight sm:text-5xl">Review this ask.</h1>
+          <p className="mt-4 max-w-3xl text-base leading-7 text-base-content/65 sm:text-lg">
+            Check the question, confirm it is safe to share, then get the exact price.
           </p>
+          <p className="mt-3 text-sm text-base-content/55">
+            Link expires <time dateTime={payload.expiresAt}>{formatDate(payload.expiresAt, locale)}</time>
+          </p>
+        </header>
 
-          {request.question.kind === "binary" ? (
-            <fieldset className="mt-5 grid gap-4 sm:grid-cols-2" disabled={formDisabled}>
-              <legend className="sr-only">Binary answer labels</legend>
-              <Field
-                className="rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                label="Negative label"
-                labelClassName="text-sm text-base-content/65"
-                maxLength={200}
-                placeholder="No"
-                value={request.question.negativeLabel ?? ""}
-                onChange={event => changeBinaryLabel("negativeLabel", event.target.value)}
-              />
-              <Field
-                className="rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                label="Positive label"
-                labelClassName="text-sm text-base-content/65"
-                maxLength={200}
-                placeholder="Yes"
-                value={request.question.positiveLabel ?? ""}
-                onChange={event => changeBinaryLabel("positiveLabel", event.target.value)}
-              />
-            </fieldset>
-          ) : (
-            <fieldset className="mt-5 grid gap-4 sm:grid-cols-2" disabled={formDisabled}>
-              <legend className="sr-only">Head-to-head options</legend>
-              <Field
-                className="rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                label="Option A"
-                labelClassName="text-sm text-base-content/65"
-                hint={<span className="font-mono">Key: {request.question.optionA.key}</span>}
-                maxLength={200}
-                value={request.question.optionA.label}
-                onChange={event => changeComparisonLabel("optionA", event.target.value)}
-              />
-              <Field
-                className="rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                label="Option B"
-                labelClassName="text-sm text-base-content/65"
-                hint={<span className="font-mono">Key: {request.question.optionB.key}</span>}
-                maxLength={200}
-                value={request.question.optionB.label}
-                onChange={event => changeComparisonLabel("optionB", event.target.value)}
-              />
-            </fieldset>
-          )}
-
-          {request.question.media ? (
-            <div className="mt-7 border-t border-white/10 pt-6" aria-labelledby="handoff-media-heading">
-              <h3 id="handoff-media-heading" className="text-sm font-medium">
-                Attached context
-              </h3>
-              <p className="mt-1 text-sm leading-6 text-base-content/55">
-                Review all attached context before confirming it is safe to share.
-              </p>
-              <QuestionMedia
-                media={request.question.media}
-                onReviewStateChange={handleMediaReview}
-                previewCapabilities={payload.mediaPreviews}
-              />
-              {mediaReview.status === "pending" ? (
-                <p className="mt-3 text-sm text-base-content/55" role="status">
-                  {request.question.media.kind === "youtube"
-                    ? "Load the video to continue."
-                    : "Loading attached images…"}
-                </p>
-              ) : null}
-              {mediaReview.status === "error" ? (
-                <p className="mt-3 text-sm text-error" role="alert">
-                  {mediaReview.message}
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-
-          <div className="mt-7 border-t border-white/10 pt-6">
-            <p className="mb-5 text-sm leading-6 text-base-content/65">
-              {sourceLabel(request.audience.source)} · {request.requestedPanelSize} reviewers
-            </p>
-            <dl className="mb-5 grid gap-4 rounded-xl border border-white/10 bg-black/15 p-4 sm:grid-cols-2">
-              <SummaryItem label="Classification" value={classificationLabel(payload.dataClassification)} />
-              <SummaryItem
-                label="Redaction summary"
-                value={payload.redactionSummary.trim() || "No redaction applied"}
-              />
-            </dl>
-            <label
-              className="flex items-start gap-3 text-sm leading-6 text-base-content/80"
-              htmlFor="handoff-privacy-confirmed"
-            >
-              <ChoiceInput
-                id="handoff-privacy-confirmed"
-                type="checkbox"
-                className="checkbox checkbox-sm mt-1 border-white/30"
-                checked={privacyConfirmed}
-                disabled={formDisabled || !mediaReady}
-                onChange={event => setPrivacyConfirmed(event.target.checked)}
-              />
-              <span>
-                I confirm this ask contains only public, synthetic, or meaningfully redacted non-sensitive data. It
-                contains no secrets, credentials, regulated personal data, or confidential customer material.
-              </span>
-            </label>
-          </div>
-
-          <details className="mt-6 rounded-xl border border-white/10 bg-black/15 p-4 text-sm">
-            <summary className="cursor-pointer font-medium">Technical request details</summary>
-            <dl className="mt-5 grid gap-5 sm:grid-cols-2">
-              <SummaryItem label="Reviewer rules" value={request.audience.admissionPolicyHash} mono />
-              <SummaryItem label="Handoff ID" value={payload.handoffId} mono />
-            </dl>
-          </details>
-        </Card>
-      </div>
-
-      <Card as="section" variant="marketing" className="mt-6 max-w-4xl p-5 sm:p-7" aria-labelledby="quote-heading">
-        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-          <div>
-            <h2 id="quote-heading" className="text-2xl font-semibold">
-              Get the exact price
-            </h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-base-content/55">
-              No funds are reserved until you submit the ask.
-            </p>
-          </div>
-          <button
-            type="button"
-            className="rateloop-gradient-action min-h-11 shrink-0 px-5 disabled:cursor-not-allowed disabled:opacity-40"
-            disabled={busy !== null || submitted || handoff.status !== "ready" || !mediaReady || !privacyConfirmed}
-            onClick={() => void createQuote()}
-          >
-            {busy === "quote" ? "Getting price…" : quote ? "Refresh price" : "Get price"}
-          </button>
-        </div>
-
-        {quote ? (
-          <div
-            className="mt-6 rounded-xl border border-[var(--rateloop-green)]/25 bg-[var(--rateloop-green)]/5 p-5"
-            aria-live="polite"
-          >
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <p className="text-sm text-base-content/55">Total</p>
-                <p className="mt-1 text-2xl font-semibold">{formatUsdcAtomic(quote.economics.totalFundedAtomic)}</p>
-              </div>
-              <p className="text-sm text-base-content/55">
-                {quote.panel.requestedSize} reviewers · expires {formatDate(quote.expiresAt)}
-              </p>
-            </div>
-            <div className="mt-5 border-t border-white/10 pt-4 text-sm">
-              <h3 className="font-medium">Price breakdown</h3>
-              <dl className="mt-4 grid gap-4 sm:grid-cols-2">
-                <SummaryItem label="Reviewer bounty" value={formatUsdcAtomic(quote.economics.bounty.fundedAtomic)} />
-                <SummaryItem
-                  label={`Platform fee · ${formatBpsPercent(quote.economics.fee.bps)}`}
-                  value={formatUsdcAtomic(quote.economics.fee.fundedAtomic)}
-                />
-                <SummaryItem
-                  label="Accepted-work reserve"
-                  value={formatUsdcAtomic(quote.economics.attemptReserve.fundedAtomic)}
-                />
-                <SummaryItem
-                  label="Minimum reveals"
-                  value={`${quote.panel.minimumReveals} of ${quote.panel.requestedSize}`}
-                />
-                <SummaryItem label="Audience" value={quote.audience.label} />
-                <SummaryItem label="Estimated time" value={`${quote.slo.estimatedSeconds} seconds`} />
-              </dl>
-              <details className="mt-4">
-                <summary className="cursor-pointer text-base-content/65">Technical quote details</summary>
-                <dl className="mt-4">
-                  <SummaryItem label="Quote ID" value={quote.quoteId} mono />
-                </dl>
-              </details>
-            </div>
+        {error ? (
+          <div className="mt-7 rounded-xl border border-error/30 bg-error/10 px-5 py-4 text-sm leading-6" role="alert">
+            {error}
           </div>
         ) : null}
-      </Card>
 
-      {quote ? (
-        <Card as="section" variant="marketing" className="mt-6 max-w-4xl p-5 sm:p-7" aria-labelledby="submit-heading">
-          <h2 id="submit-heading" className="text-2xl font-semibold">
-            Send this ask
-          </h2>
-          <p className="mt-2 text-sm leading-6 text-base-content/60">
-            Submitting reserves {formatUsdcAtomic(quote.economics.totalFundedAtomic)} from the selected workspace.
-          </p>
+        <div className="mt-8 max-w-4xl">
+          <Card as="section" variant="marketing" className="p-5 sm:p-7" aria-labelledby="review-heading">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <h2 id="review-heading" className="text-2xl font-semibold">
+                Question
+              </h2>
+              <span className="rounded-full border border-base-content/15 px-3 py-1 text-xs text-base-content/65">
+                {request.question.kind === "binary" ? "Binary" : "Head to head"}
+              </span>
+            </div>
 
-          {session.status !== "authenticated" ? (
-            <div className="mt-5 rounded-xl border border-white/10 bg-black/15 p-4">
-              {session.status === "loading" ? (
-                <p className="text-sm text-base-content/60" role="status">
-                  Checking your RateLoop session…
+            <TextareaField
+              id="handoff-prompt"
+              containerClassName="mt-6"
+              className="min-h-36 rounded-lg border-base-content/10 bg-[var(--rateloop-field)] text-base leading-7"
+              label="Exact prompt"
+              labelClassName="text-sm font-medium"
+              maxLength={MAX_PROMPT_LENGTH}
+              disabled={formDisabled}
+              value={request.question.prompt}
+              onChange={event =>
+                changeRequest({ ...request, question: { ...request.question, prompt: event.target.value } })
+              }
+            />
+            <p className="mt-1 text-right font-mono text-xs text-base-content/55">
+              {request.question.prompt.length}/{MAX_PROMPT_LENGTH}
+            </p>
+
+            {request.question.kind === "binary" ? (
+              <fieldset className="mt-5 grid gap-4 sm:grid-cols-2" disabled={formDisabled}>
+                <legend className="sr-only">Binary answer labels</legend>
+                <Field
+                  className="rounded-lg border-base-content/10 bg-[var(--rateloop-field)]"
+                  label="Negative label"
+                  labelClassName="text-sm text-base-content/65"
+                  maxLength={200}
+                  placeholder="No"
+                  value={request.question.negativeLabel ?? ""}
+                  onChange={event => changeBinaryLabel("negativeLabel", event.target.value)}
+                />
+                <Field
+                  className="rounded-lg border-base-content/10 bg-[var(--rateloop-field)]"
+                  label="Positive label"
+                  labelClassName="text-sm text-base-content/65"
+                  maxLength={200}
+                  placeholder="Yes"
+                  value={request.question.positiveLabel ?? ""}
+                  onChange={event => changeBinaryLabel("positiveLabel", event.target.value)}
+                />
+              </fieldset>
+            ) : (
+              <fieldset className="mt-5 grid gap-4 sm:grid-cols-2" disabled={formDisabled}>
+                <legend className="sr-only">Head-to-head options</legend>
+                <Field
+                  className="rounded-lg border-base-content/10 bg-[var(--rateloop-field)]"
+                  label="Option A"
+                  labelClassName="text-sm text-base-content/65"
+                  hint={<span className="font-mono">Key: {request.question.optionA.key}</span>}
+                  maxLength={200}
+                  value={request.question.optionA.label}
+                  onChange={event => changeComparisonLabel("optionA", event.target.value)}
+                />
+                <Field
+                  className="rounded-lg border-base-content/10 bg-[var(--rateloop-field)]"
+                  label="Option B"
+                  labelClassName="text-sm text-base-content/65"
+                  hint={<span className="font-mono">Key: {request.question.optionB.key}</span>}
+                  maxLength={200}
+                  value={request.question.optionB.label}
+                  onChange={event => changeComparisonLabel("optionB", event.target.value)}
+                />
+              </fieldset>
+            )}
+
+            {request.question.media ? (
+              <div className="mt-7 border-t border-base-content/10 pt-6" aria-labelledby="handoff-media-heading">
+                <h3 id="handoff-media-heading" className="text-sm font-medium">
+                  Attached context
+                </h3>
+                <p className="mt-1 text-sm leading-6 text-base-content/55">
+                  Review all attached context before confirming it is safe to share.
                 </p>
-              ) : session.status === "anonymous" ? (
-                <div className="text-sm leading-6 text-base-content/70">
-                  <p>
-                    <strong className="text-base-content">Sign in required.</strong> Open sign-in in a new tab, then
-                    return to this tab to continue. This review link stays in this browser tab and is never sent to
-                    RateLoop during sign-in.
+                <QuestionMedia
+                  media={request.question.media}
+                  onReviewStateChange={handleMediaReview}
+                  previewCapabilities={payload.mediaPreviews}
+                />
+                {mediaReview.status === "pending" ? (
+                  <p className="mt-3 text-sm text-base-content/55" role="status">
+                    {request.question.media.kind === "youtube"
+                      ? "Load the video to continue."
+                      : "Loading attached images…"}
                   </p>
-                  <a
-                    href="/sign-in"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-3 inline-block font-semibold underline underline-offset-4"
-                  >
-                    Sign in in a new tab
-                  </a>
-                </div>
-              ) : (
-                <p className="text-sm leading-6 text-error" role="alert">
-                  {session.message}
-                </p>
-              )}
-            </div>
-          ) : null}
+                ) : null}
+                {mediaReview.status === "error" ? (
+                  <p className="mt-3 text-sm text-error" role="alert">
+                    {mediaReview.message}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
 
-          {session.status === "authenticated" ? (
-            <div className="mt-5">
-              <label className="block text-sm font-medium" htmlFor="handoff-workspace">
-                Prepaid workspace
+            <div className="mt-7 border-t border-base-content/10 pt-6">
+              <p className="mb-5 text-sm leading-6 text-base-content/65">
+                {sourceLabel(request.audience.source)} · {request.requestedPanelSize} reviewers
+              </p>
+              <dl className="mb-5 grid gap-4 rounded-xl border border-base-content/10 bg-base-content/[0.035] p-4 sm:grid-cols-2">
+                <SummaryItem label="Classification" value={classificationLabel(payload.dataClassification)} />
+                <SummaryItem
+                  label="Redaction summary"
+                  value={payload.redactionSummary.trim() || "No redaction applied"}
+                />
+              </dl>
+              <label
+                className="flex items-start gap-3 text-sm leading-6 text-base-content/80"
+                htmlFor="handoff-privacy-confirmed"
+              >
+                <ChoiceInput
+                  id="handoff-privacy-confirmed"
+                  type="checkbox"
+                  className="checkbox checkbox-sm mt-1 border-base-content/30"
+                  checked={privacyConfirmed}
+                  disabled={formDisabled || !mediaReady}
+                  onChange={event => setPrivacyConfirmed(event.target.checked)}
+                />
+                <span>
+                  I confirm this ask contains only public, synthetic, or meaningfully redacted non-sensitive data. It
+                  contains no secrets, credentials, regulated personal data, or confidential customer material.
+                </span>
               </label>
-              {workspaceLoading ? (
-                <p className="mt-2 text-sm text-base-content/55" role="status">
-                  Loading workspaces…
-                </p>
-              ) : workspaceError ? (
-                <p className="mt-2 text-sm leading-6 text-error" role="alert">
-                  {workspaceError}
-                </p>
-              ) : workspaces.length ? (
-                <>
-                  <SelectField
-                    id="handoff-workspace"
-                    containerClassName="max-w-xl"
-                    className="rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                    label="Prepaid workspace"
-                    labelClassName="sr-only"
-                    disabled={busy !== null || submitted}
-                    value={selectedWorkspaceId}
-                    onChange={event => setSelectedWorkspaceId(event.target.value)}
-                  >
-                    {workspaces.map(workspace => (
-                      <option key={workspace.workspaceId} value={workspace.workspaceId}>
-                        {workspace.name} · {formatUsdcAtomic(workspace.prepaid.availableAtomic)} available
-                      </option>
-                    ))}
-                  </SelectField>
-                  {insufficientPrepaid ? (
-                    <div className="mt-2 text-sm text-error" role="alert">
-                      <p>This workspace has less available prepaid USDC than the quoted total.</p>
-                      <Link
-                        className="mt-1 inline-block font-semibold underline underline-offset-4"
-                        href={`/agents/overview?workspace=${encodeURIComponent(selectedWorkspace.workspaceId)}#panel-funding`}
-                      >
-                        Top up balance
-                      </Link>
-                    </div>
-                  ) : null}
-                </>
-              ) : (
-                <div className="mt-2 text-sm leading-6 text-base-content/60">
-                  <p>No prepaid workspace is available. Create and fund one before submitting this handoff.</p>
-                  <Link className="font-semibold underline underline-offset-4" href="/agents/overview#panel-funding">
-                    Top up balance
-                  </Link>
-                </div>
-              )}
             </div>
-          ) : null}
 
-          <div className="mt-6 flex justify-end border-t border-white/10 pt-6">
+            <details className="mt-6 rounded-xl border border-base-content/10 bg-base-content/[0.035] p-4 text-sm">
+              <summary className="cursor-pointer font-medium">Technical request details</summary>
+              <dl className="mt-5 grid gap-5 sm:grid-cols-2">
+                <SummaryItem label="Reviewer rules" value={request.audience.admissionPolicyHash} mono />
+                <SummaryItem label="Handoff ID" value={payload.handoffId} mono />
+              </dl>
+            </details>
+          </Card>
+        </div>
+
+        <Card as="section" variant="marketing" className="mt-6 max-w-4xl p-5 sm:p-7" aria-labelledby="quote-heading">
+          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+            <div>
+              <h2 id="quote-heading" className="text-2xl font-semibold">
+                Get the exact price
+              </h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-base-content/55">
+                No funds are reserved until you submit the ask.
+              </p>
+            </div>
             <button
               type="button"
               className="rateloop-gradient-action min-h-11 shrink-0 px-5 disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={
-                busy !== null ||
-                submitted ||
-                handoff.status !== "ready" ||
-                !quote ||
-                !privacyConfirmed ||
-                session.status !== "authenticated" ||
-                !selectedWorkspace ||
-                insufficientPrepaid
-              }
-              onClick={() => void submitAsk()}
+              disabled={busy !== null || submitted || handoff.status !== "ready" || !mediaReady || !privacyConfirmed}
+              onClick={() => void createQuote()}
             >
-              {busy === "submit"
-                ? "Submitting…"
-                : `Submit and reserve ${formatUsdcAtomic(quote.economics.totalFundedAtomic)}`}
+              {busy === "quote" ? "Getting price…" : quote ? "Refresh price" : "Get price"}
             </button>
           </div>
-        </Card>
-      ) : null}
 
-      {activeOperationKey ? (
-        <Card
-          as="section"
-          variant="marketing"
-          className="mt-6 max-w-4xl p-5 sm:p-7"
-          aria-labelledby="result-heading"
-          aria-live="polite"
-        >
-          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
-            <div>
-              <h2 id="result-heading" className="text-2xl font-semibold">
-                {result ? "Authenticated outcome" : "Ask submitted"}
-              </h2>
-              <p className="mt-2 font-mono text-xs text-base-content/55">Request {activeOperationKey}</p>
+          {quote ? (
+            <div
+              className="mt-6 rounded-xl border border-[var(--rateloop-green)]/25 bg-[var(--rateloop-green)]/5 p-5"
+              aria-live="polite"
+            >
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <p className="text-sm text-base-content/55">Total</p>
+                  <p className="mt-1 text-2xl font-semibold">
+                    {formatUsdcAtomic(quote.economics.totalFundedAtomic, locale)}
+                  </p>
+                </div>
+                <p className="text-sm text-base-content/55">
+                  {quote.panel.requestedSize} reviewers · expires {formatDate(quote.expiresAt, locale)}
+                </p>
+              </div>
+              <div className="mt-5 border-t border-base-content/10 pt-4 text-sm">
+                <h3 className="font-medium">Price breakdown</h3>
+                <dl className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <SummaryItem
+                    label="Reviewer bounty"
+                    value={formatUsdcAtomic(quote.economics.bounty.fundedAtomic, locale)}
+                  />
+                  <SummaryItem
+                    label={`Platform fee · ${formatBpsPercent(quote.economics.fee.bps)}`}
+                    value={formatUsdcAtomic(quote.economics.fee.fundedAtomic, locale)}
+                  />
+                  <SummaryItem
+                    label="Accepted-work reserve"
+                    value={formatUsdcAtomic(quote.economics.attemptReserve.fundedAtomic, locale)}
+                  />
+                  <SummaryItem
+                    label="Minimum reveals"
+                    value={`${quote.panel.minimumReveals} of ${quote.panel.requestedSize}`}
+                  />
+                  <SummaryItem label="Audience" value={quote.audience.label} />
+                  <SummaryItem label="Estimated time" value={`${quote.slo.estimatedSeconds} seconds`} />
+                </dl>
+                <details className="mt-4">
+                  <summary className="cursor-pointer text-base-content/65">Technical quote details</summary>
+                  <dl className="mt-4">
+                    <SummaryItem label="Quote ID" value={quote.quoteId} mono />
+                  </dl>
+                </details>
+              </div>
             </div>
-            {!result ? (
+          ) : null}
+        </Card>
+
+        {quote ? (
+          <Card as="section" variant="marketing" className="mt-6 max-w-4xl p-5 sm:p-7" aria-labelledby="submit-heading">
+            <h2 id="submit-heading" className="text-2xl font-semibold">
+              Send this ask
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-base-content/60">
+              Submitting reserves {formatUsdcAtomic(quote.economics.totalFundedAtomic, locale)} from the selected
+              workspace.
+            </p>
+
+            {session.status !== "authenticated" ? (
+              <div className="mt-5 rounded-xl border border-base-content/10 bg-base-content/[0.035] p-4">
+                {session.status === "loading" ? (
+                  <p className="text-sm text-base-content/60" role="status">
+                    Checking your RateLoop session…
+                  </p>
+                ) : session.status === "anonymous" ? (
+                  <div className="text-sm leading-6 text-base-content/70">
+                    <p>
+                      <strong className="text-base-content">Sign in required.</strong> Open sign-in in a new tab, then
+                      return to this tab to continue. This review link stays in this browser tab and is never sent to
+                      RateLoop during sign-in.
+                    </p>
+                    <Link
+                      href="/sign-in"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-3 inline-block font-semibold underline underline-offset-4"
+                    >
+                      Sign in in a new tab
+                    </Link>
+                  </div>
+                ) : (
+                  <p className="text-sm leading-6 text-error" role="alert">
+                    {session.message}
+                  </p>
+                )}
+              </div>
+            ) : null}
+
+            {session.status === "authenticated" ? (
+              <div className="mt-5">
+                <label className="block text-sm font-medium" htmlFor="handoff-workspace">
+                  Prepaid workspace
+                </label>
+                {workspaceLoading ? (
+                  <p className="mt-2 text-sm text-base-content/55" role="status">
+                    Loading workspaces…
+                  </p>
+                ) : workspaceError ? (
+                  <p className="mt-2 text-sm leading-6 text-error" role="alert">
+                    {workspaceError}
+                  </p>
+                ) : workspaces.length ? (
+                  <>
+                    <SelectField
+                      id="handoff-workspace"
+                      containerClassName="max-w-xl"
+                      className="rounded-lg border-base-content/10 bg-[var(--rateloop-field)]"
+                      label="Prepaid workspace"
+                      labelClassName="sr-only"
+                      disabled={busy !== null || submitted}
+                      value={selectedWorkspaceId}
+                      onChange={event => setSelectedWorkspaceId(event.target.value)}
+                    >
+                      {workspaces.map(workspace => (
+                        <option key={workspace.workspaceId} value={workspace.workspaceId}>
+                          {workspace.name} · {formatUsdcAtomic(workspace.prepaid.availableAtomic, locale)} available
+                        </option>
+                      ))}
+                    </SelectField>
+                    {insufficientPrepaid ? (
+                      <div className="mt-2 text-sm text-error" role="alert">
+                        <p>This workspace has less available prepaid USDC than the quoted total.</p>
+                        <Link
+                          className="mt-1 inline-block font-semibold underline underline-offset-4"
+                          href={`/agents/overview?workspace=${encodeURIComponent(selectedWorkspace.workspaceId)}#panel-funding`}
+                        >
+                          Top up balance
+                        </Link>
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
+                  <div className="mt-2 text-sm leading-6 text-base-content/60">
+                    <p>No prepaid workspace is available. Create and fund one before submitting this handoff.</p>
+                    <Link className="font-semibold underline underline-offset-4" href="/agents/overview#panel-funding">
+                      Top up balance
+                    </Link>
+                  </div>
+                )}
+              </div>
+            ) : null}
+
+            <div className="mt-6 flex justify-end border-t border-base-content/10 pt-6">
               <button
                 type="button"
-                className="btn rateloop-secondary-action min-h-10 px-4"
-                disabled={busy !== null}
-                onClick={() => void waitForResult(activeOperationKey)}
+                className="rateloop-gradient-action min-h-11 shrink-0 px-5 disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={
+                  busy !== null ||
+                  submitted ||
+                  handoff.status !== "ready" ||
+                  !quote ||
+                  !privacyConfirmed ||
+                  session.status !== "authenticated" ||
+                  !selectedWorkspace ||
+                  insufficientPrepaid
+                }
+                onClick={() => void submitAsk()}
               >
-                {busy === "result" ? "Waiting…" : "Check authenticated result"}
+                {busy === "submit"
+                  ? "Submitting…"
+                  : `Submit and reserve ${formatUsdcAtomic(quote.economics.totalFundedAtomic, locale)}`}
               </button>
-            ) : null}
-          </div>
-
-          {busy === "result" ? (
-            <p className="mt-5 text-sm text-base-content/60" role="status">
-              Waiting for the authenticated result…
-            </p>
-          ) : resultPending ? (
-            <div className="mt-5 rounded-xl border border-white/10 bg-black/15 p-4 text-sm leading-6 text-base-content/65">
-              The ask is authenticated and still running. Automatic checking stopped; you can check again without
-              resubmitting it.
             </div>
-          ) : null}
+          </Card>
+        ) : null}
 
-          {result ? (
-            <>
-              <div className="mt-6 rounded-xl border border-[var(--rateloop-blue)]/25 bg-[var(--rateloop-blue)]/[0.06] p-4 text-sm leading-6 text-base-content/70">
-                <p className="font-semibold text-base-content">Commissioned paid panel</p>
-                <p className="mt-1">
-                  The customer funded this business research panel and its reviewers. This is not organic consumer
-                  feedback, a testimonial, or a measure of general public opinion.
-                </p>
+        {activeOperationKey ? (
+          <Card
+            as="section"
+            variant="marketing"
+            className="mt-6 max-w-4xl p-5 sm:p-7"
+            aria-labelledby="result-heading"
+            aria-live="polite"
+          >
+            <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+              <div>
+                <h2 id="result-heading" className="text-2xl font-semibold">
+                  {result ? "Authenticated outcome" : "Ask submitted"}
+                </h2>
+                <p className="mt-2 font-mono text-xs text-base-content/55">Request {activeOperationKey}</p>
               </div>
-              <dl className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-                <SummaryItem label="Status" value={result.verdictStatus.replaceAll("_", " ")} />
-                <SummaryItem label="Selected" value={displaySelected(result, request.question)} />
-                <SummaryItem
-                  label="Preference share"
-                  value={
-                    result.verdict?.preferenceShareBps === null || result.verdict?.preferenceShareBps === undefined
-                      ? "Not available"
-                      : percentFromBps(result.verdict.preferenceShareBps)
-                  }
-                />
-                <SummaryItem
-                  label="Participants"
-                  value={`${result.audience.participantCount} · ${result.audience.label}`}
-                />
-                <SummaryItem
-                  label="Interval"
-                  value={
-                    result.verdict?.intervalBps
-                      ? `${percentFromBps(result.verdict.intervalBps.lower)}–${percentFromBps(result.verdict.intervalBps.upper)}`
-                      : "Not available"
-                  }
-                />
-                <SummaryItem label="Paid bounty" value={formatUsdcAtomic(result.economics.bounty.paidAtomic)} />
-                <SummaryItem label="Refunded" value={formatUsdcAtomic(result.economics.refund.totalAtomic)} />
-                <SummaryItem label="Updated" value={formatDate(result.updatedAt)} />
-              </dl>
-              <div className="mt-6 rounded-xl border border-amber-300/20 bg-amber-300/5 p-5 text-sm leading-6 text-base-content/65">
-                <p className="font-semibold text-base-content">Limitations</p>
-                <p className="mt-2">
-                  This panel is decision support, not an automatic release, safety, legal, or compliance approval. The
-                  accountable person remains responsible for the final action.
-                </p>
-                <a
-                  className="mt-3 inline-block text-[var(--rateloop-blue)] underline underline-offset-4"
-                  href={result.methodologyUrl}
+              {!result ? (
+                <button
+                  type="button"
+                  className="btn rateloop-secondary-action min-h-10 px-4"
+                  disabled={busy !== null}
+                  onClick={() => void waitForResult(activeOperationKey)}
                 >
-                  Read the methodology and result limitations
-                </a>
+                  {busy === "result" ? "Waiting…" : "Check authenticated result"}
+                </button>
+              ) : null}
+            </div>
+
+            {busy === "result" ? (
+              <p className="mt-5 text-sm text-base-content/60" role="status">
+                Waiting for the authenticated result…
+              </p>
+            ) : resultPending ? (
+              <div className="mt-5 rounded-xl border border-base-content/10 bg-base-content/[0.035] p-4 text-sm leading-6 text-base-content/65">
+                The ask is authenticated and still running. Automatic checking stopped; you can check again without
+                resubmitting it.
               </div>
-            </>
-          ) : null}
-        </Card>
-      ) : null}
-    </div>
+            ) : null}
+
+            {result ? (
+              <>
+                <div className="mt-6 rounded-xl border border-[var(--rateloop-blue)]/25 bg-[var(--rateloop-blue)]/[0.06] p-4 text-sm leading-6 text-base-content/70">
+                  <p className="font-semibold text-base-content">Commissioned paid panel</p>
+                  <p className="mt-1">
+                    The customer funded this business research panel and its reviewers. This is not organic consumer
+                    feedback, a testimonial, or a measure of general public opinion.
+                  </p>
+                </div>
+                <dl className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+                  <SummaryItem label="Status" value={result.verdictStatus.replaceAll("_", " ")} />
+                  <SummaryItem label="Selected" value={displaySelected(result, request.question)} />
+                  <SummaryItem
+                    label="Preference share"
+                    value={
+                      result.verdict?.preferenceShareBps === null || result.verdict?.preferenceShareBps === undefined
+                        ? "Not available"
+                        : percentFromBps(result.verdict.preferenceShareBps)
+                    }
+                  />
+                  <SummaryItem
+                    label="Participants"
+                    value={`${result.audience.participantCount} · ${result.audience.label}`}
+                  />
+                  <SummaryItem
+                    label="Interval"
+                    value={
+                      result.verdict?.intervalBps
+                        ? `${percentFromBps(result.verdict.intervalBps.lower)}–${percentFromBps(result.verdict.intervalBps.upper)}`
+                        : "Not available"
+                    }
+                  />
+                  <SummaryItem
+                    label="Paid bounty"
+                    value={formatUsdcAtomic(result.economics.bounty.paidAtomic, locale)}
+                  />
+                  <SummaryItem label="Refunded" value={formatUsdcAtomic(result.economics.refund.totalAtomic, locale)} />
+                  <SummaryItem label="Updated" value={formatDate(result.updatedAt, locale)} />
+                </dl>
+                <div className="mt-6 rounded-xl border border-warning/20 bg-warning/5 p-5 text-sm leading-6 text-base-content/65">
+                  <p className="font-semibold text-base-content">Limitations</p>
+                  <p className="mt-2">
+                    This panel is decision support, not an automatic release, safety, legal, or compliance approval. The
+                    accountable person remains responsible for the final action.
+                  </p>
+                  <a
+                    className="mt-3 inline-block text-[var(--rateloop-blue)] underline underline-offset-4"
+                    href={
+                      locale !== "en" && result.methodologyUrl.startsWith("/")
+                        ? `/${locale}${result.methodologyUrl}`
+                        : result.methodologyUrl
+                    }
+                  >
+                    Read the methodology and result limitations
+                  </a>
+                </div>
+              </>
+            ) : null}
+          </Card>
+        ) : null}
+      </div>
+    </LocalizedSharedContent>
   );
 }

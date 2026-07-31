@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const source = readFileSync(new URL("./PaidEligibilityClient.tsx", import.meta.url), "utf8");
+const source = [
+  readFileSync(new URL("./PaidEligibilityClient.tsx", import.meta.url), "utf8"),
+  readFileSync(new URL("../../messages/en/human.json", import.meta.url), "utf8"),
+].join("\n");
 
 test("paid eligibility asks residence first and conditionally renders the structured DAC7 form", () => {
   assert.ok((source.match(/<Field/g)?.length ?? 0) >= 10);
@@ -24,7 +27,7 @@ test("paid eligibility asks residence first and conditionally renders the struct
 test("paid eligibility preserves server field errors and clears them as values change", () => {
   assert.match(source, /typeof body\.field === "string" \? body\.field : null/);
   assert.match(source, /const \{ capture, clear, fieldErrors, formError \} = useFormErrors\(\)/);
-  assert.match(source, /capture\(cause, "Unable to complete paid-task eligibility\."\)/);
+  assert.match(source, /capture\(cause, t\("completeFailed"\)\)/);
   assert.match(source, /clear\(key\)/);
   assert.match(source, /error=\{fieldErrors\.birthDate\}/);
   assert.match(source, /error=\{fieldErrors\.declaredResidenceCountry\}/);

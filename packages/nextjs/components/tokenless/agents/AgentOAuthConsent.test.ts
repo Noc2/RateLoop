@@ -3,10 +3,13 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const authorizePage = readFileSync(
-  new URL("../../../app/(public)/agent/oauth/authorize/page.tsx", import.meta.url),
+  new URL("../../../app/[locale]/(public)/agent/oauth/authorize/page.tsx", import.meta.url),
   "utf8",
 );
-const devicePage = readFileSync(new URL("../../../app/(public)/agent/oauth/device/page.tsx", import.meta.url), "utf8");
+const devicePage = readFileSync(
+  new URL("../../../app/[locale]/(public)/agent/oauth/device/page.tsx", import.meta.url),
+  "utf8",
+);
 const consentForm = readFileSync(new URL("./AgentOAuthConsentForm.tsx", import.meta.url), "utf8");
 const authorizeRoute = readFileSync(
   new URL("../../../app/api/agent/oauth/authorize/route.ts", import.meta.url),
@@ -14,8 +17,9 @@ const authorizeRoute = readFileSync(
 );
 
 test("OAuth consent shows exact scopes before the decision", () => {
-  assert.match(authorizePage, /Allow \$\{authorization\.clientName\}/);
-  assert.match(authorizePage, /This agent can/);
+  assert.match(authorizePage, /getTranslations\(\{ locale, namespace: "agents\.oauth" \}\)/);
+  assert.match(authorizePage, /t\("allowClient", \{ client: authorization\.clientName \}\)/);
+  assert.match(authorizePage, /t\("thisAgentCan"\)/);
   assert.match(authorizePage, /authorization\.scopes\.map/);
   assert.ok(authorizePage.indexOf("authorization.scopes.map") < authorizePage.indexOf("<AgentOAuthConsentForm"));
   assert.doesNotMatch(authorizePage, /<details/);
@@ -25,26 +29,27 @@ test("OAuth consent shows exact scopes before the decision", () => {
 });
 
 test("invalid OAuth and device requests provide plain-language recovery without raw protocol errors", () => {
-  assert.match(authorizePage, /RateLoop couldn&apos;t verify the information in this authorization link\./);
-  assert.match(authorizePage, /start the connection again/);
+  assert.match(authorizePage, /t\("invalidRequestDescription"\)/);
+  assert.match(authorizePage, /t\("restartConnection"\)/);
   assert.doesNotMatch(authorizePage, /oauth\.message|client_id is required/);
-  assert.match(devicePage, /That code is invalid or expired\./);
-  assert.match(devicePage, /return to your agent for a new code/);
+  assert.match(devicePage, /t\("invalidCode"\)/);
+  assert.match(devicePage, /t\("checkCodeFailed"\)/);
   assert.doesNotMatch(devicePage, /error\.message/);
 });
 
 test("loopback OAuth completion stays branded while preserving a no-JavaScript redirect", () => {
   assert.match(consentForm, /x-rateloop-oauth-callback-relay/);
-  assert.match(consentForm, /Authorization approved/);
-  assert.match(consentForm, /Authentication complete/);
-  assert.match(consentForm, /use Continue if the host offers it/);
-  assert.match(consentForm, /Authorization canceled/);
+  assert.match(consentForm, /useAgentTranslations\("oauth"\)/);
+  assert.match(consentForm, /t\("approved"\)/);
+  assert.match(consentForm, /t\("complete"\)/);
+  assert.match(consentForm, /t\("returnTask"\)/);
+  assert.match(consentForm, /t\("authorizationCanceled"\)/);
   assert.doesNotMatch(consentForm, /Agent connected/);
   assert.match(consentForm, /sandbox=""/);
   assert.match(consentForm, /referrerPolicy="no-referrer"/);
   assert.match(consentForm, /window\.close\(\)/);
   assert.match(consentForm, /OAUTH_WORKSPACE_RETURN = "\/agents\/connections\?returning=oauth"/);
-  assert.match(consentForm, /window\.location\.replace\(OAUTH_WORKSPACE_RETURN\)/);
+  assert.match(consentForm, /router\.replace\(OAUTH_WORKSPACE_RETURN\)/);
   assert.match(consentForm, /action="\/api\/agent\/oauth\/authorize"[\s\S]*method="post"/);
   assert.match(authorizeRoute, /BROWSER_RELAY_HEADER/);
   assert.match(authorizeRoute, /outcome \? \{ outcome \} : \{\}/);
@@ -52,18 +57,18 @@ test("loopback OAuth completion stays branded while preserving a no-JavaScript r
 });
 
 test("device consent shows its code and scopes before the decision", () => {
-  assert.match(devicePage, /Allow \$\{approval\.clientName\}/);
-  assert.match(devicePage, /Verification code/);
+  assert.match(devicePage, /t\("allowClient", \{ client: approval\.clientName \}\)/);
+  assert.match(devicePage, /t\("verificationCode"\)/);
   assert.match(devicePage, /\{approval\.userCode\}/);
-  assert.match(devicePage, /This agent can/);
+  assert.match(devicePage, /t\("thisAgentCan"\)/);
   assert.match(devicePage, /approval\.scopes\.map/);
   assert.ok(
     devicePage.indexOf("approval.scopes.map") < devicePage.indexOf('action="/api/agent/oauth/device/authorize"'),
   );
   assert.doesNotMatch(devicePage, /<details/);
   assert.doesNotMatch(devicePage, /Allowed actions|Access and refresh tokens/);
-  assert.match(devicePage, /Authorization approved/);
-  assert.match(devicePage, /Authentication complete/);
-  assert.match(devicePage, /Return to the same agent task\. RateLoop will show the connection after verification\./);
+  assert.match(devicePage, /title: t\("approved"\)/);
+  assert.match(devicePage, /title: t\("complete"\)/);
+  assert.match(devicePage, /message: t\("approvedMessage"\)/);
   assert.doesNotMatch(devicePage, /Agent connected/);
 });

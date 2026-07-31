@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const styles = readFileSync(new URL("../../styles/globals.css", import.meta.url), "utf8");
-const landingPage = readFileSync(new URL("../../app/(public)/page.tsx", import.meta.url), "utf8");
+const landingPage = readFileSync(new URL("../../app/[locale]/(public)/page.tsx", import.meta.url), "utf8");
 const setupFlow = readFileSync(new URL("./agents/setup/AgentSetupFlow.tsx", import.meta.url), "utf8");
 
 test("secondary app actions reuse the legacy solid treatment", () => {

@@ -11,8 +11,8 @@ test("human and agent hubs use shared skeleton loading states", async () => {
       "./agents/AgentReviewsPanel.tsx",
       "./agents/EvaluationDashboardPanel.tsx",
       "./agents/EvidenceWorkspacePanel.tsx",
-      "../../app/(app)/human/loading.tsx",
-      "../../app/(app)/agents/loading.tsx",
+      "../../app/[locale]/(app)/human/loading.tsx",
+      "../../app/[locale]/(app)/agents/loading.tsx",
     ].map(path => readFile(new URL(path, import.meta.url), "utf8")),
   );
 

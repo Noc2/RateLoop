@@ -3,6 +3,7 @@ import { QuestionMedia, questionMediaImageSource } from "./QuestionMedia";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import test from "node:test";
+import { AgentTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 
 const require = createRequire(import.meta.url);
 const { renderToStaticMarkup } = require("react-dom/server") as {
@@ -12,18 +13,20 @@ const { renderToStaticMarkup } = require("react-dom/server") as {
 
 test("image context renders only same-origin moderated asset routes with meaningful alternatives", () => {
   const html = renderToStaticMarkup(
-    <QuestionMedia
-      media={{
-        kind: "images",
-        items: [
-          {
-            alt: "Mobile checkout confirmation",
-            assetId: `pqm_${"A".repeat(24)}`,
-            digest: `sha256:${"ab".repeat(32)}`,
-          },
-        ],
-      }}
-    />,
+    <AgentTestProviders>
+      <QuestionMedia
+        media={{
+          kind: "images",
+          items: [
+            {
+              alt: "Mobile checkout confirmation",
+              assetId: `pqm_${"A".repeat(24)}`,
+              digest: `sha256:${"ab".repeat(32)}`,
+            },
+          ],
+        }}
+      />
+    </AgentTestProviders>,
   );
 
   assert.match(html, /\/api\/public-media\/images\/pqm_/);
@@ -33,7 +36,11 @@ test("image context renders only same-origin moderated asset routes with meaning
 });
 
 test("YouTube context is click-to-load and starts without a third-party request", () => {
-  const html = renderToStaticMarkup(<QuestionMedia media={{ kind: "youtube", videoId: "dQw4w9WgXcQ" }} />);
+  const html = renderToStaticMarkup(
+    <AgentTestProviders>
+      <QuestionMedia media={{ kind: "youtube", videoId: "dQw4w9WgXcQ" }} />
+    </AgentTestProviders>,
+  );
 
   assert.match(html, /Load YouTube video/);
   assert.doesNotMatch(html, /iframe|youtube-nocookie/);

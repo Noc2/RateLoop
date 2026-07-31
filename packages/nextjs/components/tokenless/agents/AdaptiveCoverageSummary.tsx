@@ -1,4 +1,7 @@
+"use client";
+
 import React from "react";
+import { useAgentFormatter, useAgentTranslations } from "./AgentsLocaleProvider";
 import { Card } from "~~/components/tokenless/ui/Card";
 import type {
   AdaptiveCoverageReasonCode,
@@ -6,44 +9,33 @@ import type {
   EvaluationDashboard,
 } from "~~/lib/tokenless/evaluationDashboard";
 
-const reasonLabels: Record<AdaptiveCoverageReasonCode, string> = {
-  two_stable_windows: "Two stable review windows",
-  fifty_stable_cases: "50 stable comparable cases",
-  one_hundred_stable_cases: "100 stable comparable cases",
-  safety_gates_unavailable: "Safety evidence is not available; review returned to 100%",
-  agreement_below_threshold: "Agreement fell below the policy threshold",
-  completion_gate_failed: "Completion evidence missed its gate",
-  human_agreement_gate_failed: "Human agreement missed its gate",
-  latency_gate_failed: "Review latency missed its gate",
-  drift_gate_failed: "Comparable results drifted",
-  missing_metadata: "Required decision context was missing",
-  severe_disagreement_open: "A severe disagreement remains open",
-  policy_evidence_changed: "Policy evidence changed",
-};
-
-const dateFormatter = new Intl.DateTimeFormat("en", {
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-  timeZone: "UTC",
-});
-
-function formatRate(bps: number) {
-  const percent = bps / 100;
-  return `${Number.isInteger(percent) ? percent.toFixed(0) : percent.toFixed(1)}%`;
-}
-
-function stageLabel(stage: AdaptiveCoverageTile["stage"]) {
-  if (stage === "high_coverage") return "High coverage";
-  if (stage === "medium_coverage") return "Medium coverage";
-  return stage === "monitoring" ? "Monitoring" : "Calibrating";
-}
+const reasonKeys = {
+  two_stable_windows: "reasonTwoStableWindows",
+  fifty_stable_cases: "reasonFiftyStableCases",
+  one_hundred_stable_cases: "reasonHundredStableCases",
+  safety_gates_unavailable: "reasonSafetyUnavailable",
+  agreement_below_threshold: "reasonAgreementLow",
+  completion_gate_failed: "reasonCompletionFailed",
+  human_agreement_gate_failed: "reasonHumanAgreementFailed",
+  latency_gate_failed: "reasonLatencyFailed",
+  drift_gate_failed: "reasonDriftFailed",
+  missing_metadata: "reasonMissingMetadata",
+  severe_disagreement_open: "reasonSevereDisagreement",
+  policy_evidence_changed: "reasonPolicyChanged",
+} as const satisfies Record<AdaptiveCoverageReasonCode, string>;
 
 function safeId(value: string) {
   return value.replace(/[^A-Za-z0-9_-]/gu, "-");
 }
 
 function CoverageSparkline({ coverage }: { coverage: AdaptiveCoverageTile }) {
+  const format = useAgentFormatter();
+  const t = useAgentTranslations("adaptive");
+  const formatRate = (bps: number) =>
+    format.number(bps / 10_000, {
+      style: "percent",
+      maximumFractionDigits: Number.isInteger(bps / 100) ? 0 : 1,
+    });
   const chronological = [...coverage.changes].reverse();
   const rates =
     chronological.length > 0
@@ -60,8 +52,8 @@ function CoverageSparkline({ coverage }: { coverage: AdaptiveCoverageTile }) {
   const id = `adaptive-coverage-${safeId(coverage.scopeId)}`;
   const description =
     coverage.changes.length > 0
-      ? `Baseline review coverage moved ${rates.map(formatRate).join(" to ")}.`
-      : `Baseline review coverage remains ${formatRate(coverage.reviewRateBps)}; no change is recorded.`;
+      ? t("trendMoved", { rates: rates.map(formatRate).join(t("ratesSeparator")) })
+      : t("trendUnchanged", { rate: formatRate(coverage.reviewRateBps) });
 
   return (
     <svg
@@ -70,7 +62,7 @@ function CoverageSparkline({ coverage }: { coverage: AdaptiveCoverageTile }) {
       role="img"
       aria-labelledby={`${id}-title ${id}-description`}
     >
-      <title id={`${id}-title`}>Adaptive review-rate trend</title>
+      <title id={`${id}-title`}>{t("trendTitle")}</title>
       <desc id={`${id}-description`}>{description}</desc>
       <line
         x1={padding}
@@ -98,15 +90,30 @@ function CoverageSparkline({ coverage }: { coverage: AdaptiveCoverageTile }) {
 }
 
 export function AdaptiveCoverageSummary({ agents }: { agents: EvaluationDashboard["agents"] }) {
+  const format = useAgentFormatter();
+  const t = useAgentTranslations("adaptive");
+  const formatRate = (bps: number) =>
+    format.number(bps / 10_000, {
+      style: "percent",
+      maximumFractionDigits: Number.isInteger(bps / 100) ? 0 : 1,
+    });
+  const stageLabel = (stage: AdaptiveCoverageTile["stage"]) =>
+    stage === "high_coverage"
+      ? t("stageHigh")
+      : stage === "medium_coverage"
+        ? t("stageMedium")
+        : stage === "monitoring"
+          ? t("stageMonitoring")
+          : t("stageCalibrating");
   const tiles = agents.flatMap(agent => agent.adaptiveCoverage.map(coverage => ({ agent, coverage })));
   if (tiles.length === 0) return null;
 
   return (
     <Card as="section" className="rounded-2xl p-6" aria-labelledby="adaptive-coverage-heading">
       <h2 id="adaptive-coverage-heading" className="text-xl font-semibold">
-        Adaptive coverage
+        {t("title")}
       </h2>
-      <p className="mt-1 text-sm text-base-content/60">Review rates change only after evidence gates pass.</p>
+      <p className="mt-1 text-sm text-base-content/60">{t("description")}</p>
       <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {tiles.map(({ agent, coverage }) => {
           const latest = coverage.changes[0];
@@ -119,11 +126,11 @@ export function AdaptiveCoverageSummary({ agents }: { agents: EvaluationDashboar
                 <div>
                   <h3 className="font-medium">{coverage.workflowKey}</h3>
                   <p className="mt-1 text-xs text-base-content/60">
-                    <span className="capitalize">{coverage.riskTier} risk</span> · {stageLabel(coverage.stage)}
+                    <span>{t("risk", { tier: coverage.riskTier })}</span> · {stageLabel(coverage.stage)}
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs text-base-content/60">Review rate</p>
+                  <p className="text-xs text-base-content/60">{t("reviewRate")}</p>
                   <p className="mt-1 font-mono text-xl font-semibold">{formatRate(coverage.reviewRateBps)}</p>
                 </div>
               </div>
@@ -132,15 +139,15 @@ export function AdaptiveCoverageSummary({ agents }: { agents: EvaluationDashboar
               </div>
               {latest ? (
                 <p className="mt-2 text-xs leading-5 text-base-content/70">
-                  <span className="font-semibold text-base-content">Why:</span> {reasonLabels[latest.reason]}
+                  <span className="font-semibold text-base-content">{t("why")}</span> {t(reasonKeys[latest.reason])}
                 </p>
               ) : (
-                <p className="mt-2 text-xs text-base-content/60">No rate change yet.</p>
+                <p className="mt-2 text-xs text-base-content/60">{t("noChange")}</p>
               )}
               {coverage.changes.length > 0 ? (
-                <details className="mt-3 border-t border-white/10 pt-3">
+                <details className="mt-3 border-t border-base-content/10 pt-3">
                   <summary className="cursor-pointer rounded text-xs font-medium text-base-content/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--rateloop-blue)]">
-                    Rate history ({coverage.changes.length})
+                    {t("history", { count: coverage.changes.length })}
                   </summary>
                   <ol className="mt-3 space-y-2">
                     {coverage.changes.map(change => (
@@ -150,10 +157,15 @@ export function AdaptiveCoverageSummary({ agents }: { agents: EvaluationDashboar
                             {formatRate(change.fromRateBps)} → {formatRate(change.toRateBps)}
                           </span>
                           <time dateTime={change.changedAt} className="text-base-content/60">
-                            {dateFormatter.format(new Date(change.changedAt))}
+                            {format.dateTime(new Date(change.changedAt), {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                              timeZone: "UTC",
+                            })}
                           </time>
                         </div>
-                        <p className="mt-1 text-base-content/70">{reasonLabels[change.reason]}</p>
+                        <p className="mt-1 text-base-content/70">{t(reasonKeys[change.reason])}</p>
                       </li>
                     ))}
                   </ol>

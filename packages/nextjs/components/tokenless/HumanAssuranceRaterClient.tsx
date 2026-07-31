@@ -1,9 +1,9 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
+import { useFormatter, useTranslations } from "next-intl";
 import { ChoiceInput, Field, TextareaField } from "~~/components/tokenless/forms/Field";
-import { CrowdForecastField, reviewRatingPrivacyMessage } from "~~/components/tokenless/review/CrowdForecastField";
+import { CrowdForecastField } from "~~/components/tokenless/review/CrowdForecastField";
 import { DeadlineChip } from "~~/components/tokenless/review/DeadlineChip";
 import { PrivateArtifactPreview } from "~~/components/tokenless/review/PrivateArtifactPreview";
 import { ReviewerShell } from "~~/components/tokenless/review/ReviewerShell";
@@ -11,6 +11,7 @@ import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { Chip } from "~~/components/tokenless/ui/Chip";
 import { PageHeading } from "~~/components/tokenless/ui/PageHeading";
+import { Link } from "~~/i18n/navigation";
 import { readBrowserSession, subscribeToBrowserAuthSessionChanges } from "~~/lib/auth/client";
 import { HttpJsonError, readJson } from "~~/lib/tokenless/http";
 import { clearReviewDraft, loadReviewDraft, saveReviewDraft } from "~~/lib/tokenless/reviewDrafts";
@@ -189,41 +190,44 @@ function persistReviewerAssignment(assignmentId: string, termsHash: string) {
   if (href) window.history.replaceState(window.history.state, "", href);
 }
 
-const PRIVATE_REVIEW_JSON_OPTIONS = { fallbackMessage: "The private review request failed." };
 export const PRIVATE_UNPAID_REVIEW_PRIVACY_CONTEXT = "private_unpaid" as const;
 
-function formatDate(value: string) {
-  const date = new Date(value);
-  return Number.isFinite(date.getTime())
-    ? new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(date)
-    : value;
-}
+type TermsTranslator = (
+  key:
+    | "assignedContent"
+    | "confidentiality"
+    | "export"
+    | "exportAllowed"
+    | "exportDenied"
+    | "privateMaterial"
+    | "viewPolicy",
+) => string;
 
-function privateTermsSummary(terms: DirectAssignmentTerms) {
+function privateTermsSummary(terms: DirectAssignmentTerms, t: TermsTranslator) {
   const classifications = Array.isArray(terms.policy.dataClassifications)
     ? terms.policy.dataClassifications.filter((value): value is string => typeof value === "string")
     : [];
   const exportAllowed = terms.policy.exportAllowed === true;
   return (
     <section
-      className="mt-5 rounded-lg border border-white/10 bg-black/20 p-4 text-sm"
-      aria-label="Confidentiality terms"
+      className="mt-5 rounded-lg border border-base-content/10 bg-base-content/[0.03] p-4 text-sm"
+      aria-label={t("confidentiality")}
     >
-      <p className="font-semibold">Confidentiality terms</p>
+      <p className="font-semibold">{t("confidentiality")}</p>
       <p className="mt-2 leading-6 text-base-content/65">{terms.purpose}</p>
       <dl className="mt-3 grid gap-3 text-xs sm:grid-cols-2">
         <div>
-          <dt className="text-base-content/55">Private material</dt>
-          <dd className="mt-1">{classifications.length ? classifications.join(", ") : "Assigned private content"}</dd>
+          <dt className="text-base-content/55">{t("privateMaterial")}</dt>
+          <dd className="mt-1">{classifications.length ? classifications.join(", ") : t("assignedContent")}</dd>
         </div>
         <div>
-          <dt className="text-base-content/55">Export</dt>
-          <dd className="mt-1">{exportAllowed ? "Allowed by this policy" : "Not allowed"}</dd>
+          <dt className="text-base-content/55">{t("export")}</dt>
+          <dd className="mt-1">{exportAllowed ? t("exportAllowed") : t("exportDenied")}</dd>
         </div>
       </dl>
       <details className="mt-3 text-xs text-base-content/60">
-        <summary className="cursor-pointer font-semibold text-base-content/75">View exact policy</summary>
-        <pre className="mt-3 max-h-52 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-black/30 p-3 font-mono text-[11px] leading-5">
+        <summary className="cursor-pointer font-semibold text-base-content/75">{t("viewPolicy")}</summary>
+        <pre className="mt-3 max-h-52 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-base-content/[0.04] p-3 font-mono text-[11px] leading-5">
           {JSON.stringify(terms.policy, null, 2)}
         </pre>
       </details>
@@ -271,6 +275,22 @@ function caseCompletionIssue(task: AssignmentTask, draft: ReviewDraft | undefine
   return null;
 }
 
+function localizedCaseCompletionIssue(
+  issue: string | null,
+  translate: (key: string, values?: Record<string, number>) => string,
+) {
+  if (!issue) return null;
+  if (issue === "Choose Approve or Reject.") return translate("chooseBinary");
+  if (issue === "Choose an answer.") return translate("chooseAnswer");
+  if (issue === "Enter a crowd forecast from 1% to 99%.") return translate("forecastRange");
+
+  const minimum = issue.match(/^Add at least (\d+) characters of decision rationale\.$/u)?.[1];
+  if (minimum) return translate("rationaleMinimum", { count: Number(minimum) });
+  const maximum = issue.match(/^Shorten the decision rationale to (\d+) characters\.$/u)?.[1];
+  if (maximum) return translate("rationaleMaximum", { count: Number(maximum) });
+  return translate("completeBeforeContinue");
+}
+
 function isPrivatePredictionPercent(value: unknown): value is number | null {
   return value === null || (typeof value === "number" && Number.isSafeInteger(value) && value >= 1 && value <= 99);
 }
@@ -295,7 +315,7 @@ export function HumanAssuranceRaterClient({
   initialTask = null,
   initialTermsHash = "",
   presentation = "standalone",
-  assignmentTitle = "Assigned private review",
+  assignmentTitle,
   assignmentExpiresAt = null,
   onContinue,
 }: {
@@ -309,6 +329,10 @@ export function HumanAssuranceRaterClient({
   assignmentExpiresAt?: string | null;
   onContinue?: () => void;
 }) {
+  const t = useTranslations("review.assignment");
+  const format = useFormatter();
+  const resolvedAssignmentTitle = assignmentTitle ?? t("assignedTitle");
+  const privateReviewJsonOptions = useMemo(() => ({ fallbackMessage: t("requestFailed") }), [t]);
   const initialAssignment = firstValue(initialAssignmentId);
   const initialTerms = firstValue(initialTermsHash);
   const validatedInitialTask = initialTask === null ? null : validateLoadedAssignmentTask(initialTask);
@@ -396,15 +420,11 @@ export function HumanAssuranceRaterClient({
           setBusyAction(null);
           setConfidentialityAccepted(false);
           setError(null);
-          setSessionCheckError(
-            nextPrincipalId === null
-              ? "You signed out. Sign in and reopen this assignment."
-              : "Your session changed. Reopen this assignment to continue.",
-          );
+          setSessionCheckError(nextPrincipalId === null ? t("signedOut") : t("sessionChanged"));
         }
       } catch {
         if (active && currentRead === sessionReadSequence) {
-          setSessionCheckError("Could not verify your session. Refocus this tab to retry.");
+          setSessionCheckError(t("sessionFailed"));
         }
       }
     };
@@ -414,7 +434,7 @@ export function HumanAssuranceRaterClient({
       active = false;
       unsubscribe();
     };
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     const id = assignmentId.trim();
@@ -432,7 +452,7 @@ export function HumanAssuranceRaterClient({
             `/api/account/assurance/assignments/${encodeURIComponent(id)}/accept?terms=${encodeURIComponent(terms)}`,
             { cache: "no-store", credentials: "same-origin" },
           ),
-          PRIVATE_REVIEW_JSON_OPTIONS,
+          privateReviewJsonOptions,
         )) as DirectAssignmentAccess;
         if (!active) return;
         if (
@@ -463,17 +483,17 @@ export function HumanAssuranceRaterClient({
         ) {
           setAutoOpenRequested(true);
         }
-      } catch (cause) {
+      } catch {
         if (!active) return;
         setTermsRequired(true);
         setCanRecover(false);
-        setError(cause instanceof Error ? cause.message : "Unable to check assignment access.");
+        setError(t("accessFailed"));
       }
     })();
     return () => {
       active = false;
     };
-  }, [activePrincipalId, assignmentId, presentation, task, termsHash]);
+  }, [activePrincipalId, assignmentId, presentation, privateReviewJsonOptions, t, task, termsHash]);
 
   const leaseDeadline = useMemo(() => {
     const values = task?.cases.flatMap(reviewCase => {
@@ -499,8 +519,7 @@ export function HumanAssuranceRaterClient({
     task?.cases.length && task.cases.every(reviewCase => caseCompletionIssue(task, drafts[reviewCase.caseId]) === null),
   );
   const activeCase = task?.cases[activeCaseIndex] ?? null;
-  const activeCaseIssue =
-    task && activeCase ? caseCompletionIssue(task, drafts[activeCase.caseId]) : "This review is unavailable.";
+  const activeCaseIssue = task && activeCase ? caseCompletionIssue(task, drafts[activeCase.caseId]) : t("unavailable");
   const activeCaseComplete = activeCaseIssue === null;
 
   useEffect(() => {
@@ -544,7 +563,7 @@ export function HumanAssuranceRaterClient({
         cache: "no-store",
         credentials: "same-origin",
       }),
-      PRIVATE_REVIEW_JSON_OPTIONS,
+      privateReviewJsonOptions,
     );
     if (privateStateEpoch !== privateStateEpochRef.current) return;
     applyLoadedTask(body);
@@ -569,7 +588,7 @@ export function HumanAssuranceRaterClient({
             confidentialityTermsHash: termsHash.trim(),
           }),
         }),
-        PRIVATE_REVIEW_JSON_OPTIONS,
+        privateReviewJsonOptions,
       );
       if (privateStateEpoch !== privateStateEpochRef.current) return;
       if (
@@ -595,7 +614,7 @@ export function HumanAssuranceRaterClient({
       setCanRecover(recoverable);
       setAssignmentClosed(closed);
       setAssignmentUnavailable(false);
-      setError(cause instanceof Error ? cause.message : "Unable to open this assignment.");
+      setError(t("openFailed"));
     } finally {
       if (privateStateEpoch === privateStateEpochRef.current) setBusyAction(null);
     }
@@ -631,7 +650,7 @@ export function HumanAssuranceRaterClient({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ confidentialityTermsHash: termsHash.trim() }),
         }),
-        PRIVATE_REVIEW_JSON_OPTIONS,
+        privateReviewJsonOptions,
       );
       if (privateStateEpoch !== privateStateEpochRef.current) return;
       setCanRecover(false);
@@ -642,11 +661,7 @@ export function HumanAssuranceRaterClient({
       setCanRecover(false);
       setAssignmentClosed(cause instanceof HttpJsonError && cause.code === "assignment_closed");
       setAssignmentUnavailable(!(cause instanceof HttpJsonError && cause.code === "assignment_closed"));
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "This assignment can no longer be recovered. Ask the customer for a new private assignment.",
-      );
+      setError(t("recoveryFailed"));
     } finally {
       if (privateStateEpoch === privateStateEpochRef.current) setBusyAction(null);
     }
@@ -685,7 +700,7 @@ export function HumanAssuranceRaterClient({
               const option = reviewCase.options.find(value => value.key === draft.selectedOption);
               const selectedArtifactId = reviewCase.binaryReview?.suggestion.artifactId ?? option?.artifactId;
               if (!selectedArtifactId || !draft.selectedOption) {
-                throw new Error("A selected case option is unavailable.");
+                throw new Error(t("optionUnavailable"));
               }
               return {
                 caseId: reviewCase.caseId,
@@ -701,7 +716,7 @@ export function HumanAssuranceRaterClient({
             }),
           }),
         }),
-        PRIVATE_REVIEW_JSON_OPTIONS,
+        privateReviewJsonOptions,
       );
       if (privateStateEpoch !== privateStateEpochRef.current) return;
       if (
@@ -712,15 +727,15 @@ export function HumanAssuranceRaterClient({
         body.compensation !== "unpaid" ||
         body.settlementStatus !== "not_applicable"
       ) {
-        throw new Error("The response acceptance was incomplete.");
+        throw new Error(t("acceptanceIncomplete"));
       }
       const acceptance = body as AssuranceServerAcceptance;
       saveReviewReceipt("private", task.assignmentId, acceptance, { principalId: activePrincipalId! });
       setServerAcceptance(acceptance);
       clearReviewDraft("private", task.assignmentId, privateDraftStorage);
-    } catch (cause) {
+    } catch {
       if (privateStateEpoch !== privateStateEpochRef.current) return;
-      setError(cause instanceof Error ? cause.message : "The server did not accept this response batch.");
+      setError(t("submitFailed"));
     } finally {
       if (privateStateEpoch === privateStateEpochRef.current) setBusyAction(null);
     }
@@ -733,7 +748,7 @@ export function HumanAssuranceRaterClient({
       return;
     }
     if (!activeCase || !activeCaseComplete) {
-      setError(activeCaseIssue ?? "Complete this review before continuing.");
+      setError(localizedCaseCompletionIssue(activeCaseIssue, t));
       if (activeCaseIssue?.includes("rationale")) rationaleRef.current?.focus();
       return;
     }
@@ -756,13 +771,13 @@ export function HumanAssuranceRaterClient({
     <div className={presentation === "embedded" ? "w-full" : "mx-auto w-full max-w-4xl px-4 py-8 sm:py-10"}>
       {presentation === "standalone" ? (
         <PageHeading
-          heading={task ? "Complete your assigned review" : "Open your assigned review"}
+          heading={task ? t("headingComplete") : t("headingOpen")}
           subtitle={
             task
               ? task.taskKind === "binary_review"
-                ? "Review the source and decide whether the agent output meets the criterion."
-                : "Compare each blinded pair and explain your choice."
-              : "Use the details from your invitation."
+                ? t("binaryDescription")
+                : t("comparisonDescription")
+              : t("invitationDescription")
           }
         />
       ) : null}
@@ -776,52 +791,53 @@ export function HumanAssuranceRaterClient({
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-pink)]">
-                        Private assignment
+                        {t("privateAssignment")}
                       </p>
-                      <h2 className="mt-2 text-2xl font-semibold">{assignmentTitle}</h2>
+                      <h2 className="mt-2 text-2xl font-semibold">{resolvedAssignmentTitle}</h2>
                     </div>
-                    <span className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-base-content/60">
-                      Unpaid review
+                    <span className="rounded-full border border-base-content/10 px-3 py-1.5 text-xs text-base-content/60">
+                      {t("unpaid")}
                     </span>
                   </div>
                   {assignmentExpiresAt ? (
-                    <p className="mt-4 text-sm text-base-content/55">Complete by {formatDate(assignmentExpiresAt)}</p>
+                    <p className="mt-4 text-sm text-base-content/55">
+                      {t("completeBy", {
+                        date: format.dateTime(new Date(assignmentExpiresAt), {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        }),
+                      })}
+                    </p>
                   ) : null}
-                  <p className="mt-4 text-sm leading-6 text-base-content/65">
-                    Only this assigned review becomes visible. Access is account-bound, short-lived, and logged.
-                  </p>
-                  {assignmentTerms ? privateTermsSummary(assignmentTerms) : null}
+                  <p className="mt-4 text-sm leading-6 text-base-content/65">{t("accessDescription")}</p>
+                  {assignmentTerms ? privateTermsSummary(assignmentTerms, t) : null}
                   {assignmentClosed || assignmentUnavailable ? (
-                    <div role="status" className="mt-5 rounded-lg border border-white/10 p-4 text-sm">
-                      <p>
-                        {assignmentClosed
-                          ? "This review window has closed."
-                          : "This assignment is no longer available."}
-                      </p>
+                    <div role="status" className="mt-5 rounded-lg border border-base-content/10 p-4 text-sm">
+                      <p>{assignmentClosed ? t("windowClosed") : t("noLongerAvailable")}</p>
                       {onContinue ? (
                         <Button type="button" variant="secondary" className="mt-3 w-full" onClick={onContinue}>
-                          Return to review queue
+                          {t("returnQueue")}
                         </Button>
                       ) : (
                         <Link
                           href="/human/review"
                           className="mt-3 inline-flex font-semibold underline underline-offset-4"
                         >
-                          Return to review queue
+                          {t("returnQueue")}
                         </Link>
                       )}
                     </div>
                   ) : termsRequired === null ? (
                     <p
                       role="status"
-                      className="mt-5 rounded-lg border border-white/10 p-4 text-sm text-base-content/60"
+                      className="mt-5 rounded-lg border border-base-content/10 p-4 text-sm text-base-content/60"
                     >
-                      Checking access…
+                      {t("checkingAccess")}
                     </p>
                   ) : termsRequired ? (
                     <label
                       htmlFor="private-review-confidentiality-acceptance-embedded"
-                      className="mt-5 flex items-start gap-3 rounded-lg border border-white/10 p-4 text-sm leading-6 text-base-content/70"
+                      className="mt-5 flex items-start gap-3 rounded-lg border border-base-content/10 p-4 text-sm leading-6 text-base-content/70"
                     >
                       <ChoiceInput
                         id="private-review-confidentiality-acceptance-embedded"
@@ -830,16 +846,14 @@ export function HumanAssuranceRaterClient({
                         checked={confidentialityAccepted}
                         onChange={event => setConfidentialityAccepted(event.target.checked)}
                       />
-                      <span>
-                        I accept the current confidentiality terms and will not copy or share this private material.
-                      </span>
+                      <span>{t("acceptance")}</span>
                     </label>
                   ) : (
                     <p
                       role="status"
-                      className="mt-5 rounded-lg border border-white/10 p-4 text-sm text-base-content/65"
+                      className="mt-5 rounded-lg border border-base-content/10 p-4 text-sm text-base-content/65"
                     >
-                      {busyAction === "assignment" ? "Loading the review…" : "Private access is confirmed."}
+                      {busyAction === "assignment" ? t("loadingReview") : t("accessConfirmed")}
                     </p>
                   )}
                   {!canRecover &&
@@ -858,10 +872,10 @@ export function HumanAssuranceRaterClient({
                       }
                     >
                       {busyAction === "assignment"
-                        ? "Opening review…"
+                        ? t("openingReview")
                         : termsRequired === false
-                          ? "Open review"
-                          : "Accept terms and begin"}
+                          ? t("openReview")
+                          : t("acceptBegin")}
                     </Button>
                   ) : null}
                   {canRecover ? (
@@ -872,7 +886,7 @@ export function HumanAssuranceRaterClient({
                       disabled={busyAction !== null}
                       onClick={() => void recoverAssignment()}
                     >
-                      {busyAction === "recovery" ? "Restoring access…" : "Restore review access"}
+                      {busyAction === "recovery" ? t("restoring") : t("restoreReview")}
                     </Button>
                   ) : null}
                 </form>
@@ -880,33 +894,33 @@ export function HumanAssuranceRaterClient({
             ) : (
               <>
                 <Card as="section" variant="marketing" className="p-5 sm:p-7">
-                  <h2 className="text-xl font-semibold">Assignment details</h2>
+                  <h2 className="text-xl font-semibold">{t("details")}</h2>
                   <form className="mt-4 space-y-4" onSubmit={openAssignment}>
                     {hasInvitationCredentials && !manualCredentialEntry ? (
-                      <div className="rounded-lg border border-white/10 bg-white/[0.02] p-4">
-                        <p className="text-sm font-semibold">Invitation details loaded</p>
-                        <p className="mt-1 text-xs text-base-content/55">This link identifies your assigned review.</p>
+                      <div className="rounded-lg border border-base-content/10 bg-base-content/[0.02] p-4">
+                        <p className="text-sm font-semibold">{t("invitationLoaded")}</p>
+                        <p className="mt-1 text-xs text-base-content/55">{t("linkIdentifies")}</p>
                         <button
                           type="button"
                           className="mt-3 text-xs font-medium underline underline-offset-4"
                           onClick={() => setManualCredentialEntry(true)}
                         >
-                          Use different details
+                          {t("useDifferent")}
                         </button>
                       </div>
                     ) : manualCredentialEntry ? (
                       <div className="space-y-4">
                         <Field
-                          label="Assignment ID"
-                          className="rounded-lg border-white/10 bg-[var(--rateloop-field)] font-mono text-sm"
+                          label={t("assignmentId")}
+                          className="rounded-lg border-base-content/10 bg-[var(--rateloop-field)] font-mono text-sm"
                           value={assignmentId}
                           onChange={event => setAssignmentId(event.target.value)}
                           placeholder="haas_…"
                           required
                         />
                         <Field
-                          label="Confidentiality terms hash"
-                          className="rounded-lg border-white/10 bg-[var(--rateloop-field)] font-mono text-sm"
+                          label={t("termsHash")}
+                          className="rounded-lg border-base-content/10 bg-[var(--rateloop-field)] font-mono text-sm"
                           value={termsHash}
                           onChange={event => setTermsHash(event.target.value)}
                           placeholder="sha256:…"
@@ -915,59 +929,59 @@ export function HumanAssuranceRaterClient({
                         />
                       </div>
                     ) : (
-                      <div className="rounded-lg border border-white/10 bg-white/[0.02] p-4">
-                        <p className="text-sm font-semibold">Open your invitation link</p>
-                        <p className="mt-1 text-xs text-base-content/55">
-                          It includes the assignment and exact confidentiality terms.
-                        </p>
+                      <div className="rounded-lg border border-base-content/10 bg-base-content/[0.02] p-4">
+                        <p className="text-sm font-semibold">{t("openInvitation")}</p>
+                        <p className="mt-1 text-xs text-base-content/55">{t("invitationIncludes")}</p>
                         <button
                           type="button"
                           className="mt-3 text-xs font-medium underline underline-offset-4"
                           onClick={() => setManualCredentialEntry(true)}
                         >
-                          Enter details manually
+                          {t("enterManually")}
                         </button>
                       </div>
                     )}
                     <section
-                      className="rounded-lg border border-white/10 bg-black/20 p-4 text-sm text-base-content/65"
+                      className="rounded-lg border border-base-content/10 bg-base-content/[0.03] p-4 text-sm text-base-content/65"
                       aria-labelledby="private-review-access-title"
                     >
                       <h3 id="private-review-access-title" className="font-medium text-base-content/80">
-                        Privacy and access
+                        {t("accessRules")}
                       </h3>
                       <ul className="mt-3 space-y-2 text-xs leading-5">
-                        <li>Only your assigned, blinded cases are returned.</li>
-                        <li>Private artifact access is short-lived and logged.</li>
-                        <li>Do not copy, share, or reuse assigned material, or put personal data in your rationale.</li>
+                        <li>{t("accessRuleCases")}</li>
+                        <li>{t("accessRuleLogged")}</li>
+                        <li>{t("accessRulePrivacy")}</li>
                       </ul>
                     </section>
-                    {assignmentTerms ? privateTermsSummary(assignmentTerms) : null}
+                    {assignmentTerms ? privateTermsSummary(assignmentTerms, t) : null}
                     {assignmentClosed || assignmentUnavailable ? (
-                      <div role="status" className="rounded-lg border border-white/10 bg-white/[0.02] p-4 text-sm">
-                        <p className="font-semibold">
-                          {assignmentClosed ? "Review window closed" : "Assignment unavailable"}
-                        </p>
+                      <div
+                        role="status"
+                        className="rounded-lg border border-base-content/10 bg-base-content/[0.02] p-4 text-sm"
+                      >
+                        <p className="font-semibold">{assignmentClosed ? t("closedTitle") : t("unavailableTitle")}</p>
                         <p className="mt-1 text-xs leading-5 text-base-content/55">
-                          {assignmentClosed
-                            ? "This assignment can no longer accept a response."
-                            : "This assignment could not be restored. Open Review work for another assignment."}
+                          {assignmentClosed ? t("closedDescription") : t("unavailableDescription")}
                         </p>
                         <Link
                           href="/human/review"
                           className="mt-3 inline-flex text-xs font-semibold underline underline-offset-4"
                         >
-                          Return to review queue
+                          {t("returnQueue")}
                         </Link>
                       </div>
                     ) : termsRequired === null ? (
-                      <p role="status" className="rounded-lg border border-white/10 p-4 text-sm text-base-content/60">
-                        Checking confidentiality terms…
+                      <p
+                        role="status"
+                        className="rounded-lg border border-base-content/10 p-4 text-sm text-base-content/60"
+                      >
+                        {t("checkingTerms")}
                       </p>
                     ) : termsRequired ? (
                       <label
                         htmlFor="private-review-confidentiality-acceptance"
-                        className="flex items-start gap-3 rounded-lg border border-white/10 p-4 text-sm leading-6 text-base-content/70"
+                        className="flex items-start gap-3 rounded-lg border border-base-content/10 p-4 text-sm leading-6 text-base-content/70"
                       >
                         <ChoiceInput
                           id="private-review-confidentiality-acceptance"
@@ -976,14 +990,14 @@ export function HumanAssuranceRaterClient({
                           checked={confidentialityAccepted}
                           onChange={event => setConfidentialityAccepted(event.target.checked)}
                         />
-                        <span>
-                          I accept this reviewer group&apos;s current confidentiality terms and will follow the privacy
-                          rules above.
-                        </span>
+                        <span>{t("acceptance")}</span>
                       </label>
                     ) : (
-                      <p role="status" className="rounded-lg border border-white/10 p-4 text-sm text-base-content/65">
-                        Confidentiality terms already accepted for this reviewer group.
+                      <p
+                        role="status"
+                        className="rounded-lg border border-base-content/10 p-4 text-sm text-base-content/65"
+                      >
+                        {t("termsAccepted")}
                       </p>
                     )}
                     {!canRecover && !assignmentClosed && !assignmentUnavailable ? (
@@ -999,10 +1013,10 @@ export function HumanAssuranceRaterClient({
                         }
                       >
                         {busyAction === "assignment"
-                          ? "Opening assignment…"
+                          ? t("openingAssignment")
                           : termsRequired === false
-                            ? "Open assignment"
-                            : "Accept terms and open assignment"}
+                            ? t("openAssignment")
+                            : t("acceptOpen")}
                       </Button>
                     ) : null}
                   </form>
@@ -1014,7 +1028,7 @@ export function HumanAssuranceRaterClient({
                       disabled={busyAction !== null}
                       onClick={() => void recoverAssignment()}
                     >
-                      {busyAction === "recovery" ? "Restoring access…" : "Restore assignment access"}
+                      {busyAction === "recovery" ? t("restoring") : t("restoreAssignment")}
                     </Button>
                   ) : null}
                 </Card>
@@ -1028,27 +1042,27 @@ export function HumanAssuranceRaterClient({
               advanceHint={serverAcceptance || reviewingResponses ? null : activeCaseIssue}
               advanceLabel={
                 serverAcceptance
-                  ? "Review recorded"
+                  ? t("recorded")
                   : reviewingResponses
-                    ? "Submit review"
+                    ? t("submitReview")
                     : activeCaseIndex === task.cases.length - 1
                       ? task.cases.length === 1
-                        ? "Submit review"
-                        : "Review answers"
-                      : "Next case"
+                        ? t("submitReview")
+                        : t("reviewAnswers")
+                      : t("nextCase")
               }
               backDisabled={busyAction !== null || serverAcceptance !== null}
-              backLabel={reviewingResponses ? "Back to last case" : "Previous case"}
-              busyLabel={busyAction === "response" ? "Submitting…" : null}
+              backLabel={reviewingResponses ? t("backLast") : t("previousCase")}
+              busyLabel={busyAction === "response" ? t("submitting") : null}
               caseIndex={activeCaseIndex}
               laneHeader={
                 <>
                   <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-green)]">
-                    Private · unpaid
+                    {task.taskKind === "binary_review" ? t("binaryLane") : t("comparisonLane")}
                   </p>
-                  <p className="mt-1 text-sm font-semibold">{assignmentTitle}</p>
-                  <DeadlineChip deadline={draftExpiresAt} label="Submit" />
-                  <DeadlineChip deadline={leaseDeadline} label="Access" />
+                  <p className="mt-1 text-sm font-semibold">{resolvedAssignmentTitle}</p>
+                  <DeadlineChip deadline={draftExpiresAt} label={t("submitDeadline")} />
+                  <DeadlineChip deadline={leaseDeadline} label={t("accessDeadline")} />
                 </>
               }
               onAdvance={advanceReview}
@@ -1068,21 +1082,19 @@ export function HumanAssuranceRaterClient({
               {serverAcceptance ? null : reviewingResponses ? (
                 <Card as="section" className="rounded-2xl p-5 sm:p-7" aria-labelledby="private-review-summary">
                   <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-green)]">
-                    Final check
+                    {t("finalCheck")}
                   </p>
                   <h2 id="private-review-summary" className="mt-2 text-2xl font-semibold">
-                    Review every answer before submitting
+                    {t("reviewEvery")}
                   </h2>
-                  <p className="mt-2 text-sm leading-6 text-base-content/60">
-                    Submission closes this assignment. Open any case below to make a correction first.
-                  </p>
+                  <p className="mt-2 text-sm leading-6 text-base-content/60">{t("submissionCloses")}</p>
                   <ol className="mt-5 space-y-3">
                     {task.cases.map((reviewCase, index) => {
                       const draft = drafts[reviewCase.caseId];
                       return (
                         <li
                           key={reviewCase.caseId}
-                          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/10 bg-black/20 p-4"
+                          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-base-content/10 bg-base-content/[0.03] p-4"
                         >
                           <div>
                             <p className="text-sm font-semibold">
@@ -1093,14 +1105,14 @@ export function HumanAssuranceRaterClient({
                                 ? draft?.selectedOption === "A"
                                   ? reviewCase.binaryReview.positiveLabel
                                   : reviewCase.binaryReview.negativeLabel
-                                : `Candidate ${draft?.selectedOption}`}
+                                : t("candidate", { option: draft?.selectedOption ?? "—" })}
                               {(draft?.failureTags.length ?? 0) > 0
-                                ? ` · ${draft!.failureTags.length} failure tag${draft!.failureTags.length === 1 ? "" : "s"}`
+                                ? ` · ${t("failureCount", { count: draft!.failureTags.length })}`
                                 : ""}
                             </p>
                           </div>
                           <Button type="button" variant="secondary" size="sm" onClick={() => returnToCase(index)}>
-                            Edit case {index + 1}
+                            {t("editCase", { case: index + 1 })}
                           </Button>
                         </li>
                       );
@@ -1120,7 +1132,7 @@ export function HumanAssuranceRaterClient({
                   return (
                     <Card as="article" key={reviewCase.caseId} className="rounded-2xl p-5 sm:p-7">
                       <p className="font-mono text-xs uppercase tracking-widest text-base-content/55">
-                        Case {String(activeCaseIndex + 1).padStart(2, "0")}
+                        {t("caseLabel", { current: String(activeCaseIndex + 1).padStart(2, "0") })}
                       </p>
                       <h2 className="mt-2 text-2xl font-semibold">{reviewCase.title}</h2>
                       {reviewCase.instructions.trim() &&
@@ -1128,8 +1140,8 @@ export function HumanAssuranceRaterClient({
                         <p className="mt-3 text-sm leading-6 text-base-content/60">{reviewCase.instructions}</p>
                       ) : null}
                       {reviewCase.objectiveReference ? (
-                        <p className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3 text-xs leading-5 text-base-content/55">
-                          Objective reference: {reviewCase.objectiveReference}
+                        <p className="mt-3 rounded-lg border border-base-content/10 bg-base-content/[0.03] p-3 text-xs leading-5 text-base-content/55">
+                          {t("objectiveReference", { reference: reviewCase.objectiveReference })}
                         </p>
                       ) : null}
                       {reviewCase.binaryReview ? (
@@ -1137,8 +1149,8 @@ export function HumanAssuranceRaterClient({
                           <div className="space-y-3">
                             {(
                               [
-                                ["Source", reviewCase.binaryReview.source],
-                                ["Agent output", reviewCase.binaryReview.suggestion],
+                                [t("source"), reviewCase.binaryReview.source],
+                                [t("agentOutput"), reviewCase.binaryReview.suggestion],
                               ] as const
                             ).map(([label, artifact]) => (
                               <PrivateArtifactPreview
@@ -1151,9 +1163,7 @@ export function HumanAssuranceRaterClient({
                           </div>
                           <fieldset className="lg:sticky lg:top-4 lg:self-start">
                             <legend className="text-sm font-semibold">{task.rubric.prompt}</legend>
-                            <p className="mt-1 text-xs leading-5 text-base-content/55">
-                              {reviewRatingPrivacyMessage(PRIVATE_UNPAID_REVIEW_PRIVACY_CONTEXT)}
-                            </p>
+                            <p className="mt-1 text-xs leading-5 text-base-content/55">{t("ratingPrivacy")}</p>
                             <div className="mt-3 grid gap-3">
                               {(
                                 [
@@ -1166,8 +1176,8 @@ export function HumanAssuranceRaterClient({
                                   htmlFor={`choice-${reviewCase.caseId}-${key}`}
                                   className={`cursor-pointer rounded-lg border p-4 transition-colors ${
                                     draft.selectedOption === key
-                                      ? "border-[var(--rateloop-green)] bg-emerald-300/10"
-                                      : "border-white/10 bg-black/20 hover:border-white/25"
+                                      ? "border-[var(--rateloop-green)] bg-success/10"
+                                      : "border-base-content/10 bg-base-content/[0.03] hover:border-base-content/25"
                                   }`}
                                 >
                                   <span className="flex items-center gap-3 font-semibold">
@@ -1204,7 +1214,7 @@ export function HumanAssuranceRaterClient({
                             {reviewCase.options.map(option => (
                               <PrivateArtifactPreview
                                 key={option.key}
-                                label={`Candidate ${option.key}`}
+                                label={t("candidate", { option: option.key })}
                                 artifactUrl={artifactUrl(task.assignmentId, option)}
                                 onRefreshAccess={() => openAssignmentRef.current()}
                               />
@@ -1219,13 +1229,13 @@ export function HumanAssuranceRaterClient({
                                   htmlFor={`choice-${reviewCase.caseId}-${option.key}`}
                                   className={`cursor-pointer rounded-lg border p-4 transition-colors ${
                                     draft.selectedOption === option.key
-                                      ? "border-[var(--rateloop-green)] bg-emerald-300/10"
-                                      : "border-white/10 bg-black/20 hover:border-white/25"
+                                      ? "border-[var(--rateloop-green)] bg-success/10"
+                                      : "border-base-content/10 bg-base-content/[0.03] hover:border-base-content/25"
                                   }`}
                                 >
                                   <ChoiceInput
                                     id={`choice-${reviewCase.caseId}-${option.key}`}
-                                    aria-label={`Candidate ${option.key}`}
+                                    aria-label={t("candidate", { option: option.key })}
                                     type="radio"
                                     name={`choice-${reviewCase.caseId}`}
                                     value={option.key}
@@ -1234,7 +1244,7 @@ export function HumanAssuranceRaterClient({
                                     onClick={() => updateDraft(reviewCase.caseId, { selectedOption: option.key })}
                                     onChange={() => updateDraft(reviewCase.caseId, { selectedOption: option.key })}
                                   />
-                                  <span className="ml-3 font-semibold">Candidate {option.key}</span>
+                                  <span className="ml-3 font-semibold">{t("candidate", { option: option.key })}</span>
                                 </label>
                               ))}
                             </div>
@@ -1243,11 +1253,9 @@ export function HumanAssuranceRaterClient({
                       )}
 
                       {failureTags.length > 0 ? (
-                        <fieldset className="mt-6 border-t border-white/10 pt-5">
-                          <legend className="text-sm font-semibold">Failure tags</legend>
-                          <p className="mt-1 text-xs leading-5 text-base-content/55">
-                            Select every issue that materially affected your decision.
-                          </p>
+                        <fieldset className="mt-6 border-t border-base-content/10 pt-5">
+                          <legend className="text-sm font-semibold">{t("failureTags")}</legend>
+                          <p className="mt-1 text-xs leading-5 text-base-content/55">{t("failureHelp")}</p>
                           <div className="mt-3 flex flex-wrap gap-2">
                             {failureTags.map(tag => (
                               <Chip
@@ -1266,17 +1274,15 @@ export function HumanAssuranceRaterClient({
                       {task.rubric.rationale.mode !== "off" ? (
                         <TextareaField
                           ref={rationaleRef}
-                          label="Decision rationale"
-                          className="mt-2 min-h-32 rounded-lg border-white/10 bg-[var(--rateloop-field)] text-sm leading-6"
+                          label={t("rationale")}
+                          className="mt-2 min-h-32 rounded-lg border-base-content/10 bg-[var(--rateloop-field)] text-sm leading-6"
                           value={draft.rationale}
                           onChange={event => updateDraft(reviewCase.caseId, { rationale: event.target.value })}
                           minLength={requiredRationaleLength(task)}
                           maxLength={Math.min(2_000, task.rubric.rationale.maxLength)}
                           disabled={serverAcceptance !== null}
                           placeholder={
-                            task.taskKind === "binary_review"
-                              ? "Explain the concrete evidence behind your rating."
-                              : "Identify the concrete difference that determined your choice."
+                            task.taskKind === "binary_review" ? t("binaryRationale") : t("comparisonRationale")
                           }
                           required={task.rubric.rationale.mode === "required"}
                         />
@@ -1287,28 +1293,27 @@ export function HumanAssuranceRaterClient({
               ) : null}
 
               {serverAcceptance ? (
-                <Card className="rounded-2xl p-5 sm:p-7" aria-label="Submission receipt">
-                  <p role="status" className="rounded-lg bg-emerald-300/10 p-3 text-sm leading-6 text-emerald-100">
-                    {serverAcceptance.replay ? "Review already recorded." : "Review submitted."} Private content is now
-                    closed. This assignment was unpaid.
+                <Card className="rounded-2xl p-5 sm:p-7" aria-label={t("receipt")}>
+                  <p role="status" className="rounded-lg bg-success/10 p-3 text-sm leading-6 text-success">
+                    {serverAcceptance.replay ? t("alreadyRecorded") : t("submitted")} {t("privateClosed")}
                   </p>
                   <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
                     <div>
-                      <dt className="text-base-content/55">Assignment receipt</dt>
+                      <dt className="text-base-content/55">{t("receiptId")}</dt>
                       <dd className="mt-1 break-all font-mono text-xs">{task.assignmentId}</dd>
                     </div>
                     <div>
-                      <dt className="text-base-content/55">Responses recorded</dt>
+                      <dt className="text-base-content/55">{t("responses")}</dt>
                       <dd className="mt-1">{serverAcceptance.responseCount}</dd>
                     </div>
                     <div>
-                      <dt className="text-base-content/55">Compensation</dt>
-                      <dd className="mt-1">Unpaid · no settlement or claim required</dd>
+                      <dt className="text-base-content/55">{t("compensation")}</dt>
+                      <dd className="mt-1">{t("unpaidSettlement")}</dd>
                     </div>
                   </dl>
                   {onContinue ? (
                     <Button type="button" className="mt-4 w-full sm:w-auto" onClick={onContinue}>
-                      Review next assignment
+                      {t("nextAssignment")}
                     </Button>
                   ) : null}
                 </Card>
@@ -1317,12 +1322,12 @@ export function HumanAssuranceRaterClient({
           )}
 
           {error ? (
-            <p role="alert" className="rounded-lg bg-red-400/10 p-4 text-sm leading-6 text-red-100">
+            <p role="alert" className="rounded-lg bg-error/10 p-4 text-sm leading-6 text-error">
               {error}
             </p>
           ) : null}
           {sessionCheckError ? (
-            <p role="alert" className="rounded-lg bg-red-400/10 p-4 text-sm leading-6 text-red-100">
+            <p role="alert" className="rounded-lg bg-error/10 p-4 text-sm leading-6 text-error">
               {sessionCheckError}
             </p>
           ) : null}

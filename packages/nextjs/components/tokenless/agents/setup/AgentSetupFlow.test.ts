@@ -10,28 +10,33 @@ const choiceGroupSource = readFileSync(new URL("./SetupChoiceGroup.tsx", import.
 const startSource = readFileSync(new URL("./WorkspaceSetupStart.tsx", import.meta.url), "utf8");
 const actionBarSource = readFileSync(new URL("./SetupActionBar.tsx", import.meta.url), "utf8");
 const stageHeaderSource = readFileSync(new URL("./SetupStageHeader.tsx", import.meta.url), "utf8");
+const messagesSource = readFileSync(new URL("../../../../messages/en/agents.json", import.meta.url), "utf8");
+const localizedFlowSource = `${flowSource}\n${messagesSource}`;
+const localizedRoutingSource = `${routingSource}\n${messagesSource}`;
+const localizedProgressSource = `${progressSource}\n${messagesSource}`;
+const localizedStartSource = `${startSource}\n${messagesSource}`;
 
 test("setup uses one canonical URL and a focused workspace creation stage", () => {
   assert.equal(agentSetupUrl("ws one", "connect"), "/agents/connections?workspace=ws%20one&step=connect");
-  assert.match(startSource, /Name your workspace/);
-  assert.match(startSource, /Step/);
+  assert.match(localizedStartSource, /Name your workspace/);
+  assert.match(localizedStartSource, /Step/);
   assert.match(startSource, /\/agents\/connections\?workspace=.*&step=connect/);
   assert.doesNotMatch(startSource, /billing|publishing|API key/i);
 });
 
 test("progress is semantic, textual, keyboard-operable, and marks only the current step", () => {
-  assert.match(progressSource, /<nav aria-label="Workspace setup progress">/);
+  assert.match(progressSource, /<nav aria-label=\{t\("progress"\)\}>/);
   assert.match(progressSource, /<ol/);
   assert.match(progressSource, /aria-current=\{stage\.key === currentStep \? "step" : undefined\}/);
-  assert.match(progressSource, /"Complete"/);
-  assert.match(progressSource, /"Current"/);
-  assert.match(progressSource, /"Not started"/);
+  assert.match(localizedProgressSource, /"Complete"/);
+  assert.match(localizedProgressSource, /"Current"/);
+  assert.match(localizedProgressSource, /"Not started"/);
   assert.match(progressSource, /<button/);
 });
 
 test("guided setup renders one stage at a time and keeps implementation details absent", () => {
   for (const heading of ["Workspace", "Connect your agent", "Name this workflow", "Set review behavior", "People"]) {
-    assert.match(flowSource, new RegExp(heading));
+    assert.match(localizedFlowSource, new RegExp(heading));
   }
   assert.match(flowSource, /currentStep === "connect"/);
   assert.match(flowSource, /currentStep === "agent"/);
@@ -40,7 +45,7 @@ test("guided setup renders one stage at a time and keeps implementation details 
   assert.match(flowSource, /\/agents\/\$\{encodeURIComponent\(connectedAgent\.agentId\)\}\/human-review/);
   assert.match(flowSource, /expectedBindingVersion: draft\.bindingRevision/);
   assert.match(flowSource, /bindingRevision: Number\(ownerView\.bindingRevision\)/);
-  assert.match(routingSource, /without creating or sending a request/i);
+  assert.match(localizedRoutingSource, /without creating or sending a request/i);
   assert.doesNotMatch(flowSource, /Audience policy binding|admission policy hash/i);
   assert.doesNotMatch(flowSource, /Deployment name/i);
 });
@@ -52,9 +57,9 @@ test("the connection stage links the setup guide without replacing its primary a
   );
   assert.match(connectStage, /href="\/docs\/connect"/);
   assert.match(connectStage, /<WorkspacePublicContentLink/);
-  assert.match(connectStage, /Connection guide/);
+  assert.match(localizedFlowSource, /Connection guide/);
   assert.doesNotMatch(connectStage, /target="_blank"|opens in a new tab/);
-  assert.match(connectStage, /Create connection message/);
+  assert.match(localizedFlowSource, /Create connection message/);
 });
 
 test("review setup distinguishes a saved policy decision from delivery authority", () => {
@@ -62,16 +67,16 @@ test("review setup distinguishes a saved policy decision from delivery authority
   assert.doesNotMatch(flowSource, /This saves a review policy/i);
   assert.doesNotMatch(flowSource, /safe\s+connection does not send requests or pay reviewers/i);
   for (const label of ["Every output — Recommended", "Adaptive", "Fixed percentage", "Rules and conditions"]) {
-    assert.match(routingSource, new RegExp(label));
+    assert.match(localizedRoutingSource, new RegExp(label));
   }
-  assert.match(routingSource, /Manual handoff only/);
-  assert.match(routingSource, /Never requires review automatically\. You start each handoff\./);
-  assert.match(flowSource, /reviewPolicyCopy\.limits\.adaptiveRate/);
+  assert.match(localizedRoutingSource, /Manual handoff only/);
+  assert.match(localizedRoutingSource, /Never requires review automatically\. You start each handoff\./);
+  assert.match(flowSource, /policyCopy\.limits\.adaptiveRate/);
   assert.match(flowSource, /disabled=\{reviewFrequency\.mode === "adaptive"\}/);
-  assert.match(flowSource, /reviewPolicyCopy\.limits\.fixedRate/);
-  assert.match(flowSource, /reviewPolicyCopy\.limits\.maximumGap/);
-  assert.match(flowSource, /reviewPolicyCopy\.limits\.riskTiers/);
-  assert.match(flowSource, /reviewPolicyCopy\.limits\.confidence/);
+  assert.match(flowSource, /policyCopy\.limits\.fixedRate/);
+  assert.match(flowSource, /policyCopy\.limits\.maximumGap/);
+  assert.match(flowSource, /policyCopy\.limits\.riskTiers/);
+  assert.match(flowSource, /policyCopy\.limits\.confidence/);
   assert.match(flowSource, /buildReviewFrequencySelection\(draft\.selection, reviewFrequency\)/);
   assert.doesNotMatch(flowSource, /Choose when this agent should involve people/i);
   assert.doesNotMatch(flowSource, /reviewerAudience|contentBoundary: "private_workspace"/);
@@ -88,10 +93,10 @@ test("review setup resolves frequency before reviewer terms and authority", () =
   assert.match(flowSource, /reviewFrequency\.mode === "rules"/);
   assert.match(flowSource, /mode === "manual"/);
   assert.match(flowSource, /authority: "check_only"/);
-  assert.match(flowSource, /Reviewers, timing and payment/);
+  assert.match(localizedFlowSource, /Reviewers, timing and payment/);
   assert.match(flowSource, /reviewerDetailsSummary/);
   const frequencyIndex = flowSource.indexOf("<ReviewFrequencyFields");
-  const reviewerTermsIndex = flowSource.indexOf("Reviewers, timing and payment");
+  const reviewerTermsIndex = flowSource.indexOf('t("reviewerDetails")');
   const authorityIndex = flowSource.indexOf("<ReviewAuthorityFields");
   const actionIndex = flowSource.indexOf("<SetupActionBar>", authorityIndex);
   assert.ok(frequencyIndex < reviewerTermsIndex);
@@ -103,14 +108,14 @@ test("review setup resolves frequency before reviewer terms and authority", () =
 });
 
 test("review setup controls audience and shows only the relevant material boundary", () => {
-  assert.match(flowSource, /reviewPolicyCopy\.audience\.rateLoopNetwork/);
-  assert.match(flowSource, /reviewPolicyCopy\.audience\.invited/);
-  assert.match(flowSource, /private workspace material/);
+  assert.match(flowSource, /policyCopy\.audience\.rateLoopNetwork/);
+  assert.match(flowSource, /policyCopy\.audience\.invited/);
+  assert.match(localizedFlowSource, /private material/i);
   assert.match(flowSource, /checked=\{reviewAudience\.audience === value\}/);
   assert.doesNotMatch(flowSource, /Private material sensitivity/);
   assert.doesNotMatch(flowSource, /<option value="(?:internal|confidential|restricted|regulated)">/);
-  assert.match(flowSource, /Public, synthetic, or safely redacted material only/);
-  assert.match(flowSource, /Public and hybrid network assignments currently require a guaranteed bounty/);
+  assert.match(localizedFlowSource, /Public, synthetic, or safely redacted material only/);
+  assert.match(localizedFlowSource, /Public and hybrid network assignments currently require a guaranteed bounty/);
   assert.match(flowSource, /buildReviewAudienceRequestProfile\(draft\.requestProfile, reviewAudience\)/);
   assert.match(flowSource, /privateClassificationsThrough\(reviewAudience\.privateSensitivity\)/);
   assert.match(flowSource, /audience === "public_network" \? null/);
@@ -118,7 +123,7 @@ test("review setup controls audience and shows only the relevant material bounda
 
 test("review setup resumes a controlled question and compact answer format", () => {
   for (const label of ["Answer format"]) {
-    assert.match(flowSource, new RegExp(label));
+    assert.match(localizedFlowSource, new RegExp(label));
   }
   for (const path of [
     "question.authority",
@@ -129,10 +134,10 @@ test("review setup resumes a controlled question and compact answer format", () 
     "question.negativeAnswer",
     "question.rationale",
   ]) {
-    assert.ok(flowSource.includes(`reviewPolicyCopy.${path}`));
+    assert.ok(flowSource.includes(`policyCopy.${path}`));
   }
   assert.match(flowSource, /questionAuthority === "owner_fixed"/);
-  assert.match(flowSource, /reviewPolicyCopy\.question\.agentWrittenNote/);
+  assert.match(flowSource, /policyCopy\.question\.agentWrittenNote/);
   assert.match(flowSource, /adaptiveAvailable=\{reviewCriterion\.questionAuthority !== "agent_per_request"\}/);
   assert.match(flowSource, /questionAuthority === "agent_per_request" && value !== "public_network"/);
   for (const option of ["off", "optional", "required"]) {
@@ -149,12 +154,12 @@ test("review setup resumes a controlled question and compact answer format", () 
 });
 
 test("review setup uses one duration control for the frozen response deadline", () => {
-  assert.match(flowSource, /Review round/);
-  assert.match(flowSource, /reviewPolicyCopy\.timing\.responseWindow/);
-  assert.match(flowSource, /reviewPolicyCopy\.timing\.panelSize/);
+  assert.match(localizedFlowSource, /Review round/);
+  assert.match(flowSource, /policyCopy\.timing\.responseWindow/);
+  assert.match(flowSource, /policyCopy\.timing\.panelSize/);
   assert.match(flowSource, /<DurationInput/);
   assert.match(flowSource, /valueSeconds=\{reviewTiming\.responseWindowSeconds\}/);
-  assert.match(flowSource, /summarySuffix="Frozen when a request opens"/);
+  assert.match(flowSource, /summarySuffix=\{t\("frozenWhenOpen"\)\}/);
   assert.match(flowSource, /reviewAudience\.audience === "private_invited" \? MIN_REVIEW_PANEL_SIZE : 3/);
   assert.match(flowSource, /buildReviewTimingRequestProfile\(expertiseProfile, reviewTiming\)/);
   assert.doesNotMatch(flowSource, /Expected active review time|Effective-hourly guidance/);
@@ -172,19 +177,20 @@ test("review setup defines specialist requirements and leaves pool coverage to P
     "Define another specialist area",
     "What qualifies someone?",
   ]) {
-    assert.match(flowSource, new RegExp(label.replace(/[?]/gu, "\\?")));
+    assert.match(localizedFlowSource, new RegExp(label.replace(/[?]/gu, "\\?")));
   }
   assert.match(flowSource, /reviewer-expertise\/definitions\?/);
   assert.match(flowSource, /method: "POST"/);
   assert.match(flowSource, /reviewExpertise\.requirements/);
-  assert.match(flowSource, /Required for all.*network reviewers/);
+  assert.match(localizedFlowSource, /Required for all/);
+  assert.match(localizedFlowSource, /network reviewers/);
   assert.doesNotMatch(flowSource, /reviewer-expertise\/eligibility/);
   assert.doesNotMatch(flowSource, /expertiseEligibilityStatus/);
 });
 
 test("review setup controls independent base compensation, optional Feedback Bonus, and agent authority", () => {
   for (const label of ["Check only", "Prepare for approval", "Send automatically"]) {
-    assert.match(`${flowSource}\n${routingSource}`, new RegExp(label));
+    assert.match(`${flowSource}\n${localizedRoutingSource}`, new RegExp(label));
   }
   for (const path of [
     "payment.bounty",
@@ -197,14 +203,12 @@ test("review setup controls independent base compensation, optional Feedback Bon
     "payment.bonusPool",
     "payment.awarder",
   ]) {
-    assert.ok(flowSource.includes(`reviewPolicyCopy.${path}`));
+    assert.ok(flowSource.includes(`policyCopy.${path}`));
   }
-  assert.match(flowSource, /Public and hybrid network assignments currently require a guaranteed bounty/);
-  assert.match(flowSource, /<InfoPopover label="About Feedback Bonus">/);
-  assert.match(
-    flowSource,
-    /reviewCompensation\.compensationMode === "usdc"\s*\?\s*"Optional and separate from the guaranteed bounty\. A human later chooses useful written feedback to pay\."\s*:\s*"A human later chooses useful written feedback to pay\."/,
-  );
+  assert.match(localizedFlowSource, /Public and hybrid network assignments currently require a guaranteed bounty/);
+  assert.match(flowSource, /<InfoPopover label=\{t\("aboutBonus"\)\}>/);
+  assert.match(localizedFlowSource, /Optional and separate from the guaranteed bounty/);
+  assert.match(localizedFlowSource, /A human later chooses useful written feedback to pay/);
   assert.match(flowSource, /reviewCompensation\.feedbackBonusEnabled/);
   assert.match(flowSource, /feedbackBonusAwarderKind/);
   assert.match(flowSource, /value=\{reviewCompensation\.usdcPerReviewer\}/);
@@ -217,8 +221,8 @@ test("review setup controls independent base compensation, optional Feedback Bon
   assert.match(flowSource, /buildReviewCompensationConfiguration\(timingProfile, reviewCompensation\)/);
   assert.match(flowSource, /requestProfile: \{ \.\.\.requestProfile, privateGroupId \}/);
   assert.match(flowSource, /\s+authority,\s+/);
-  assert.match(flowSource, /agent may prepare or fund this exact pool/i);
-  assert.match(flowSource, /can never select or execute\s+an award/i);
+  assert.match(localizedFlowSource, /agent may prepare or fund this exact pool/i);
+  assert.match(localizedFlowSource, /can never select or execute\s+an award/i);
   assert.doesNotMatch(flowSource, /authority: draft\.authority/);
 });
 
@@ -230,8 +234,8 @@ test("setup reconciles automatic sending after its prerequisites and fails close
   assert.match(flowSource, /changeReviewCompensationMode\("unpaid"\)/);
   assert.match(flowSource, /changeReviewCompensationMode\("usdc"\)/);
   assert.match(flowSource, /changeFeedbackBonus\(value === "enabled"\)/);
-  assert.match(flowSource, /Automatic sending changed to Prepare for approval/);
-  assert.match(flowSource, /Saving will change it to Prepare for approval/);
+  assert.match(localizedFlowSource, /Automatic sending changed to Prepare for approval/);
+  assert.match(localizedFlowSource, /Saving will change it to Prepare for approval/);
   assert.doesNotMatch(
     flowSource,
     /Setup can grant automatic delivery only for unpaid invited review without a feedback bonus/,
@@ -257,16 +261,16 @@ test("review save and wizard advance run as one retry-safe operation", () => {
 });
 
 test("review setup saves directly and confirms only spending or automatic sending", () => {
-  assert.match(flowSource, /humanReviewConfirmationMessage\(\{/);
+  assert.match(flowSource, /humanReviewConfirmationMessage\(\s*\{/);
   assert.match(flowSource, /authority,/);
   assert.match(flowSource, /bountyPerSeatAtomic:/);
   assert.match(flowSource, /feedbackBonusPoolAtomic:/);
   assert.match(flowSource, /panelSize: requestProfile\.panelSize/);
-  assert.match(flowSource, /title: reviewPolicyCopy\.confirmation\.title/);
+  assert.match(flowSource, /title: policyCopy\.confirmation\.title/);
   assert.match(flowSource, /description: confirmation/);
-  assert.match(flowSource, /confirmLabel: reviewPolicyCopy\.confirmation\.action/);
+  assert.match(flowSource, /confirmLabel: policyCopy\.confirmation\.action/);
   assert.doesNotMatch(flowSource, /window\.confirm/);
-  assert.match(flowSource, /Save and continue/);
+  assert.match(localizedFlowSource, /Save and continue/);
   assert.doesNotMatch(flowSource, /Confirm these exact terms/);
   assert.doesNotMatch(flowSource, /I confirm this exact human-review configuration/);
   assert.doesNotMatch(flowSource, /pendingReviewConfirmation/);
@@ -290,17 +294,17 @@ test("workflow setup preserves the connected environment without asking the user
 
 test("workspace step remains editable when revisited", () => {
   assert.match(flowSource, /id="agent-setup-workspace-name"/);
-  assert.match(flowSource, /label="Workspace name"/);
+  assert.match(flowSource, /label=\{t\("workspaceName"\)\}/);
   assert.match(flowSource, /value=\{workspaceName\}/);
   assert.match(flowSource, /agent-setup\/workspace/);
-  assert.match(flowSource, /Save and continue/);
+  assert.match(localizedFlowSource, /Save and continue/);
 });
 
 test("setup applies shared fields and preserves server field errors across editable stages", () => {
   assert.ok((flowSource.match(/<Field/g)?.length ?? 0) >= 12);
   assert.match(flowSource, /const \{ capture: captureFormError, clear: clearFormErrors, fieldErrors, formError \}/);
   assert.match(flowSource, /typeof body\.field === "string" \? body\.field : null/);
-  assert.match(flowSource, /captureFormError\(cause, "Unable to save review behavior\."\)/);
+  assert.match(flowSource, /captureFormError\(completion\("saveReviews"\), completion\("saveReviews"\)\)/);
   // Only these five field names are ever returned as `field` by the agent-setup API, so a binding
   // for any other name is a control that can never show an error. Keep the wiring honest: the
   // rendered behaviour of these bindings is covered by AgentSetupFlow.interaction.test.tsx.
@@ -357,7 +361,7 @@ test("setup uses one responsive action pattern and exposes busy forms", () => {
 test("reviewer audience, timing, and payment stay visible in the review step", () => {
   assert.match(flowSource, /aria-labelledby="agent-setup-reviewer-details-heading"/);
   assert.match(flowSource, /id="agent-setup-reviewer-details-heading"/);
-  assert.match(flowSource, /Reviewers, timing and payment/);
+  assert.match(localizedFlowSource, /Reviewers, timing and payment/);
   assert.match(flowSource, /\{reviewerDetailsSummary\}/);
   assert.doesNotMatch(flowSource, /reviewDetailsRef|<details ref=\{reviewDetailsRef\}/);
 });
@@ -377,20 +381,20 @@ test("connection creation keeps the complete message visible and confirms clipbo
   assert.ok(exposeMessage >= 0 && exposeMessage < automaticCopy);
   assert.match(flowSource, /id="agent-setup-connection-message"/);
   assert.match(flowSource, /value=\{connectionMessage\}/);
-  assert.match(flowSource, /Copy message/);
-  assert.match(flowSource, /notifications\.success\("Connection message copied to clipboard\."\)/);
-  assert.match(flowSource, /notifications\.error\("Clipboard access was blocked\./);
+  assert.match(localizedFlowSource, /Copy message/);
+  assert.match(flowSource, /notifications\.success\(t\("connectionMessageCopied"\)\)/);
+  assert.match(flowSource, /notifications\.error\(t\("connectionMessageCopyBlocked"\)\)/);
   assert.match(flowSource, /<AgentConnectionTroubleshooting \/>/);
 });
 
 test("people and funding are conditional on the exact review audience and compensation", () => {
-  assert.match(flowSource, /title="People"/);
+  assert.match(flowSource, /title=\{t\("people"\)\}/);
   assert.match(flowSource, /requestProfile\.audience === "public_network"/);
   assert.match(flowSource, /name="decision" value="not_required"/);
-  assert.match(flowSource, /No invitation is needed/);
+  assert.match(localizedFlowSource, /No invitation is needed/);
   assert.match(flowSource, /requestProfile\.compensationMode === "usdc"/);
-  assert.match(flowSource, /USDC per accepted reviewer/);
-  assert.match(flowSource, /checked and reserved only when a request is prepared/);
+  assert.match(localizedFlowSource, /USDC per accepted reviewer/);
+  assert.match(localizedFlowSource, /checked and reserved only when a request is prepared/);
   assert.doesNotMatch(flowSource, /RateLoop will still prepare the private group/);
 });
 
@@ -399,14 +403,14 @@ test("invitation copy states that an email-bound link is delivered", () => {
   assert.match(flowSource, /checked=\{peopleDecision === "invited" && !sharedInvitation\}/);
   assert.match(flowSource, /checked=\{peopleDecision === "later"\}/);
   assert.match(flowSource, /peopleDecision === "invited" \? \(/);
-  assert.match(flowSource, /Invite one person/);
-  assert.match(flowSource, /Bind code to recipient email/);
-  assert.match(flowSource, /RateLoop sends the personal invitation link/);
-  assert.match(flowSource, /Copy this invitation link now/);
+  assert.match(localizedFlowSource, /Invite one person/);
+  assert.match(localizedFlowSource, /Bind code to recipient email/);
+  assert.match(localizedFlowSource, /RateLoop sends the personal invitation link/);
+  assert.match(localizedFlowSource, /Copy this invitation link now/);
   assert.match(flowSource, /issuedInvitationCapacity/);
   assert.match(flowSource, /copyInvitationLink/);
-  assert.match(flowSource, /notifications\.success\("Invitation link copied to clipboard\."\)/);
-  assert.match(flowSource, /Intended specialist areas/);
+  assert.match(flowSource, /notifications\.success\(t\("invitationCopied"\)\)/);
+  assert.match(localizedFlowSource, /Intended specialist areas/);
   assert.match(flowSource, /expertiseDefinitionIds/);
   assert.match(flowSource, /required=\{invitationExpertiseIds\.length > 0\}/);
   assert.doesNotMatch(flowSource, /defaultChecked/);
@@ -415,15 +419,15 @@ test("invitation copy states that an email-bound link is delivered", () => {
 test("People offers a bounded shared code without recipient-specific specialist claims", () => {
   assert.match(flowSource, /const \[sharedInvitation, setSharedInvitation\]/);
   assert.match(flowSource, /missingReviewerSeats >= 2/);
-  assert.match(flowSource, /Invite several people/);
+  assert.match(localizedFlowSource, /Invite several people/);
   assert.match(flowSource, /name="maximumRedemptions"/);
   assert.match(flowSource, /min=\{2\}/);
   assert.match(flowSource, /max=\{missingReviewerSeats\}/);
   assert.match(flowSource, /name="intendedEmailDomain"/);
-  assert.match(flowSource, /Verified email domain/);
-  assert.match(flowSource, /Anyone with this code can claim one place/);
-  assert.match(flowSource, /Revoking the code stops future joins but does not remove existing members/);
-  assert.match(flowSource, /creates reviewer memberships only/);
+  assert.match(localizedFlowSource, /Verified email domain/);
+  assert.match(localizedFlowSource, /Anyone with this code can claim one place/);
+  assert.match(localizedFlowSource, /Revoking the code stops future joins but does not remove existing members/);
+  assert.match(localizedFlowSource, /creates reviewer memberships only/);
   assert.match(flowSource, /const creatingSharedInvitation = decision === "invited" && sharedInvitation/);
   assert.match(flowSource, /intendedEmail: creatingSharedInvitation \? null/);
   assert.match(flowSource, /intendedEmailDomain: creatingSharedInvitation/);
@@ -436,8 +440,8 @@ test("People finalizes setup once and reports operational request readiness", ()
   assert.match(flowSource, /idempotencyKey/);
   assert.match(flowSource, /crypto\.randomUUID\(\)/);
   assert.match(flowSource, /postcondition\.canSend/);
-  assert.match(flowSource, /Automatic requests stay unavailable until enough reviewers join/);
-  assert.match(flowSource, /Finish setup/);
+  assert.match(localizedFlowSource, /Automatic requests stay unavailable until enough reviewers join/);
+  assert.match(localizedFlowSource, /Finish setup/);
   assert.match(flowSource, /url\.searchParams\.delete\("step"\)/);
   assert.match(flowSource, /router\.replace\(`\$\{url\.pathname\}\$\{url\.search\}`\)/);
   assert.doesNotMatch(flowSource, /window\.location\.assign\(destination\)/);
@@ -445,14 +449,14 @@ test("People finalizes setup once and reports operational request readiness", ()
 });
 
 test("People shows confirmed and pending specialist coverage separately", () => {
-  assert.match(flowSource, /Confirmed reviewers/);
+  assert.match(localizedFlowSource, /Confirmed reviewers/);
   assert.match(flowSource, /group\?\.memberCount/);
   assert.match(flowSource, /confirmedReviewerPoolReady/);
-  assert.match(flowSource, /Use confirmed reviewers/);
-  assert.match(flowSource, /Specialist coverage/);
-  assert.match(flowSource, /Pending invitations do not make a request ready/);
+  assert.match(localizedFlowSource, /Use confirmed reviewers/);
+  assert.match(localizedFlowSource, /Specialist coverage/);
+  assert.match(localizedFlowSource, /Pending invitations do not make a request ready/);
   assert.match(flowSource, /private-groups\/\$\{encodeURIComponent\(groupId\)\}\/expertise-coverage/);
   assert.match(flowSource, /coverage\.confirmedSeats/);
   assert.match(flowSource, /coverage\.pendingInvitationSeats/);
-  assert.match(flowSource, /expertiseCoverage\.ready \? "Ready" : "Action required"/);
+  assert.match(flowSource, /expertiseCoverage\.ready \? t\("ready"\) : t\("actionRequired"\)/);
 });

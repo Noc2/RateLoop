@@ -2,13 +2,23 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const signIn = readFileSync(new URL("./BetterAuthSignIn.tsx", import.meta.url), "utf8");
-const signInPage = readFileSync(new URL("../../app/(public)/sign-in/page.tsx", import.meta.url), "utf8");
-const signInSurface = readFileSync(new URL("./SignInSurface.tsx", import.meta.url), "utf8");
-const profile = readFileSync(new URL("../tokenless/account/ProfileClient.tsx", import.meta.url), "utf8");
-const wallets = readFileSync(new URL("./WalletBindingsClient.tsx", import.meta.url), "utf8");
-const walletSettings = readFileSync(new URL("../../app/(app)/settings/wallets/page.tsx", import.meta.url), "utf8");
-const privacy = readFileSync(new URL("../../app/(public)/legal/privacy/page.tsx", import.meta.url), "utf8");
+const authMessages = readFileSync(new URL("../../messages/en/auth.json", import.meta.url), "utf8");
+const accountMessages = readFileSync(new URL("../../messages/en/account.json", import.meta.url), "utf8");
+const signIn = [readFileSync(new URL("./BetterAuthSignIn.tsx", import.meta.url), "utf8"), authMessages].join("\n");
+const signInPage = readFileSync(new URL("../../app/[locale]/(public)/sign-in/page.tsx", import.meta.url), "utf8");
+const signInSurface = [readFileSync(new URL("./SignInSurface.tsx", import.meta.url), "utf8"), authMessages].join("\n");
+const profile = [
+  readFileSync(new URL("../tokenless/account/ProfileClient.tsx", import.meta.url), "utf8"),
+  accountMessages,
+].join("\n");
+const wallets = [readFileSync(new URL("./WalletBindingsClient.tsx", import.meta.url), "utf8"), accountMessages].join(
+  "\n",
+);
+const walletSettings = readFileSync(
+  new URL("../../app/[locale]/(app)/settings/wallets/page.tsx", import.meta.url),
+  "utf8",
+);
+const privacy = readFileSync(new URL("../../app/[locale]/(public)/legal/privacy/page.tsx", import.meta.url), "utf8");
 const machineSkill = readFileSync(new URL("../../public/skill.md", import.meta.url), "utf8");
 const productionReadiness = readFileSync(
   new URL("../../scripts/check-tokenless-production-readiness.mjs", import.meta.url),
@@ -25,23 +35,23 @@ test("account sign-in is Better Auth first and explicitly creates no wallet", ()
   assert.doesNotMatch(signIn, /ConnectButton|inAppWallet/);
   assert.match(signIn, /function GoogleIcon/);
   assert.match(signIn, /function AppleIcon/);
-  assert.match(signIn, /label="Email address"/);
-  assert.doesNotMatch(signIn, /label="Work email"/);
-  assert.match(signIn, /Continue as \{accountLabel\}/);
+  assert.match(signIn, /"emailAddress": "Email address"/);
+  assert.doesNotMatch(signIn, /Work email/);
+  assert.match(signIn, /t\("continueAs", \{ account: accountLabel \}\)/);
   assert.match(signIn, /Use another account/);
   assert.match(signIn, /logoutBrowserSession/);
   assert.match(signIn, /We sent a code to/);
-  assert.match(signIn, /maskedEmailDestination\(email\)/);
+  assert.match(signIn, /maskedEmailDestination\(email, t\("maskedEmailFallback"\)\)/);
   assert.match(signIn, /Change email/);
-  assert.match(signIn, /Resend code in \$\{resendCooldown\}s/);
+  assert.match(signIn, /t\("resendIn", \{ seconds: resendCooldown \}\)/);
   assert.match(signIn, /autoComplete="one-time-code"/);
-  assert.match(signIn, /<GoogleIcon\s*\/>\s*Continue with Google/);
-  assert.match(signIn, /<AppleIcon\s*\/>\s*Continue with Apple/);
+  assert.match(signIn, /<GoogleIcon\s*\/>\s*\{t\("google"\)\}/);
+  assert.match(signIn, /<AppleIcon\s*\/>\s*\{t\("apple"\)\}/);
   assert.doesNotMatch(signIn, /result\.error\.message|cause instanceof Error \? cause\.message/);
   assert.match(signInPage, /<SignInSurface/);
-  assert.match(signInPage, /branded title="Sign in"/);
+  assert.match(signInPage, /<LocalizedPublicContent[\s\S]*<SignInSurface branded title="Sign in"/);
   assert.doesNotMatch(signInPage, /No wallet required/i);
-  assert.match(signInSurface, /The Human Assurance Loop/);
+  assert.match(signInSurface, /"brandTitle": "The Human Assurance Loop"/);
   assert.doesNotMatch(signInSurface, /Assurance <span[^>]+>Loop/);
   assert.match(signInSurface, /branded \? "rateloop-text-gradient" : "text-base-content"/);
   assert.match(signInSurface, /<RateLoopLogo/);
@@ -57,9 +67,9 @@ test("wallet setup is explicit, purpose-bound, and keeps managed wallets disable
   assert.match(wallets, /signMessage/);
   assert.match(wallets, /never grants access to your RateLoop account/);
   assert.match(walletSettings, /findAuthSession/);
-  assert.match(walletSettings, /redirect\("\/sign-in\?returnTo=%2Fsettings%2Fwallets"\)/);
-  assert.match(profile, /href="\/settings\/wallets"[\s\S]*Wallet settings/);
-  assert.match(walletSettings, /href="\/human\/profile"[\s\S]*Back to Profile/);
+  assert.match(walletSettings, /redirect\(\{ href: "\/sign-in\?returnTo=%2Fsettings%2Fwallets", locale \}\)/);
+  assert.match(profile, /href="\/settings\/wallets"[\s\S]*\{t\("wallets"\)\}/);
+  assert.match(walletSettings, /href="\/human\/profile"[\s\S]*\{t\("back"\)\}/);
   assert.match(walletSettings, /candidate === "funding" \? candidate : "payout"/);
   assert.match(
     walletSettings,

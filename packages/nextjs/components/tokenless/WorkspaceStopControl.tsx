@@ -1,6 +1,8 @@
 "use client";
 
 import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { useLocale } from "next-intl";
+import { LocalizedSharedContent } from "~~/components/tokenless/LocalizedSharedContent";
 import { TextareaField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { ConfirmDialog } from "~~/components/tokenless/ui/ConfirmDialog";
@@ -42,20 +44,24 @@ function useWorkspaceStopState(workspaceId: string, revision: number) {
 }
 
 export function WorkspaceStopBanner({ workspaceId }: { workspaceId: string }) {
+  const locale = useLocale();
   const stop = useWorkspaceStopState(workspaceId, 0);
   if (stop?.status !== "engaged") return null;
   return (
-    <div className="rounded-xl border border-red-400/40 bg-red-400/10 p-4 text-sm leading-6 text-red-100" role="alert">
-      <p className="font-semibold">All agent activity is stopped for this workspace.</p>
-      <p className="mt-1 text-red-100/80">
-        Stopped {new Date(stop.engagedAt).toLocaleString()} — {stop.reason}. New outputs stay blocked and no
-        review-triggered release can occur.
-      </p>
-    </div>
+    <LocalizedSharedContent>
+      <div className="rounded-xl border border-error/40 bg-error/10 p-4 text-sm leading-6 text-error" role="alert">
+        <p className="font-semibold">All agent activity is stopped for this workspace.</p>
+        <p className="mt-1 text-error/80">
+          Stopped {new Date(stop.engagedAt).toLocaleString(locale)} — {stop.reason}. New outputs stay blocked and no
+          review-triggered release can occur.
+        </p>
+      </div>
+    </LocalizedSharedContent>
   );
 }
 
 export function WorkspaceStopPanel({ workspaceId }: { workspaceId: string }) {
+  const locale = useLocale();
   const [revision, setRevision] = useState(0);
   const stop = useWorkspaceStopState(workspaceId, revision);
   const [confirming, setConfirming] = useState(false);
@@ -116,93 +122,95 @@ export function WorkspaceStopPanel({ workspaceId }: { workspaceId: string }) {
 
   const engaged = stop?.status === "engaged";
   return (
-    <section className="p-5 sm:p-6" aria-labelledby="workspace-stop-heading">
-      <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h3 id="workspace-stop-heading" className="font-semibold">
-            Stop all agent activity
-          </h3>
-          <p className="mt-1 max-w-3xl text-sm leading-6 text-base-content/65">
-            Blocks new outputs and holds gated work undelivered.
-          </p>
-        </div>
-        {!engaged && !confirming ? (
-          <button
-            type="button"
-            className="btn btn-sm shrink-0 border-red-400/40 bg-base-content/[0.06] text-red-200 hover:border-red-400/60 hover:bg-red-400/10"
-            onClick={() => setConfirming(true)}
-          >
-            Stop all agent activity
-          </button>
-        ) : null}
-      </div>
-
-      {engaged && stop ? (
-        <div className="mt-4 rounded-xl bg-red-400/10 p-4 text-sm leading-6 text-red-100" role="status">
-          <p className="font-semibold">Stop engaged {new Date(stop.engagedAt).toLocaleString()}</p>
-          <p className="mt-1 text-red-100/80">Reason: {stop.reason}</p>
-          <p className="mt-1 text-red-100/80">
-            Agents do not restart when this stop is released. Each agent needs a fresh publishing grant.
-          </p>
-          <button
-            type="button"
-            className="btn btn-outline btn-sm mt-3"
-            onClick={() => setConfirmingRelease(true)}
-            disabled={busy}
-          >
-            Release stop
-          </button>
-        </div>
-      ) : confirming ? (
-        <form className="mt-4 max-w-xl" onSubmit={engage}>
-          <TextareaField
-            id="workspace-stop-reason"
-            label="Give a reason. It will be recorded in the audit chain."
-            className="textarea mt-2 w-full border-red-400/40 bg-[var(--rateloop-field)]"
-            value={reason}
-            error={fieldErrors.reason}
-            onChange={event => {
-              clear("reason");
-              setReason(event.target.value);
-            }}
-            maxLength={2000}
-            rows={3}
-            required
-          />
-          <div className="mt-3 flex gap-3">
-            <button type="submit" className="btn btn-error btn-sm" disabled={busy || !reason.trim()}>
-              Confirm: stop all agent activity
-            </button>
+    <LocalizedSharedContent>
+      <section className="p-5 sm:p-6" aria-labelledby="workspace-stop-heading">
+        <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 id="workspace-stop-heading" className="font-semibold">
+              Stop all agent activity
+            </h3>
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-base-content/65">
+              Blocks new outputs and holds gated work undelivered.
+            </p>
+          </div>
+          {!engaged && !confirming ? (
             <button
               type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={() => {
-                setConfirming(false);
-                clear();
-              }}
+              className="btn btn-sm shrink-0 border-error/40 bg-base-content/[0.06] text-error hover:border-error/60 hover:bg-error/10"
+              onClick={() => setConfirming(true)}
+            >
+              Stop all agent activity
+            </button>
+          ) : null}
+        </div>
+
+        {engaged && stop ? (
+          <div className="mt-4 rounded-xl bg-error/10 p-4 text-sm leading-6 text-error" role="status">
+            <p className="font-semibold">Stop engaged {new Date(stop.engagedAt).toLocaleString(locale)}</p>
+            <p className="mt-1 text-error/80">Reason: {stop.reason}</p>
+            <p className="mt-1 text-error/80">
+              Agents do not restart when this stop is released. Each agent needs a fresh publishing grant.
+            </p>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm mt-3"
+              onClick={() => setConfirmingRelease(true)}
               disabled={busy}
             >
-              Cancel
+              Release stop
             </button>
           </div>
-        </form>
-      ) : null}
+        ) : confirming ? (
+          <form className="mt-4 max-w-xl" onSubmit={engage}>
+            <TextareaField
+              id="workspace-stop-reason"
+              label="Give a reason. It will be recorded in the audit chain."
+              className="textarea mt-2 w-full border-error/40 bg-[var(--rateloop-field)]"
+              value={reason}
+              error={fieldErrors.reason}
+              onChange={event => {
+                clear("reason");
+                setReason(event.target.value);
+              }}
+              maxLength={2000}
+              rows={3}
+              required
+            />
+            <div className="mt-3 flex gap-3">
+              <button type="submit" className="btn btn-error btn-sm" disabled={busy || !reason.trim()}>
+                Confirm: stop all agent activity
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => {
+                  setConfirming(false);
+                  clear();
+                }}
+                disabled={busy}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        ) : null}
 
-      {formError ? (
-        <p className="mt-3 rounded-lg bg-red-400/10 p-3 text-sm text-red-100" role="alert">
-          {formError}
-        </p>
-      ) : null}
-      <ConfirmDialog
-        open={confirmingRelease}
-        title="Release this workspace stop?"
-        description="Confirm that you want to release the workspace stop."
-        confirmLabel="Release stop"
-        busy={busy}
-        destructive={false}
-        onCancel={() => setConfirmingRelease(false)}
-        onConfirm={() => void release()}
-      />
-    </section>
+        {formError ? (
+          <p className="mt-3 rounded-lg bg-error/10 p-3 text-sm text-error" role="alert">
+            {formError}
+          </p>
+        ) : null}
+        <ConfirmDialog
+          open={confirmingRelease}
+          title="Release this workspace stop?"
+          description="Confirm that you want to release the workspace stop."
+          confirmLabel="Release stop"
+          busy={busy}
+          destructive={false}
+          onCancel={() => setConfirmingRelease(false)}
+          onConfirm={() => void release()}
+        />
+      </section>
+    </LocalizedSharedContent>
   );
 }

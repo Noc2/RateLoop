@@ -1,10 +1,12 @@
 "use client";
 
 import { Fragment, useEffect, useState } from "react";
-import Link from "next/link";
+import { AgentText } from "./AgentText";
+import { useAgentLocale, useAgentTranslations } from "./AgentsLocaleProvider";
 import { agentTabHref } from "./agentWorkspaceState";
 import { SelectField } from "~~/components/tokenless/forms/Field";
 import { Card } from "~~/components/tokenless/ui/Card";
+import { Link } from "~~/i18n/navigation";
 import type {
   AgentOverview,
   AgentOverviewDecisionTimeTrendPoint,
@@ -21,18 +23,12 @@ import {
 import type { AgentReviewQualityHotspot } from "~~/lib/tokenless/agentReviewQuality";
 import { readJson } from "~~/lib/tokenless/http";
 
-const trendDateFormatter = new Intl.DateTimeFormat("en", {
-  day: "numeric",
-  month: "short",
-  timeZone: "UTC",
-});
-
 function percent(bps: number) {
   return `${(bps / 100).toFixed(1)}%`;
 }
 
-function duration(milliseconds: number | null) {
-  if (milliseconds === null) return "Unavailable";
+function duration(milliseconds: number | null, unavailable: string) {
+  if (milliseconds === null) return unavailable;
   if (milliseconds < 1_000) return `${Math.round(milliseconds)} ms`;
   if (milliseconds < 60_000) return `${(milliseconds / 1_000).toFixed(1)} sec`;
   const minutes = Math.floor(milliseconds / 60_000);
@@ -40,30 +36,32 @@ function duration(milliseconds: number | null) {
   return `${minutes} min${seconds ? ` ${seconds} sec` : ""}`;
 }
 
-function usdc(atomic: string) {
+function usdc(atomic: string, locale: string, unavailable: string) {
   try {
     const amount = BigInt(atomic);
     const whole = amount / 1_000_000n;
     const fractional = (amount % 1_000_000n).toString().padStart(6, "0").replace(/0+$/u, "");
-    return `${whole.toLocaleString()}${fractional ? `.${fractional}` : ""} USDC`;
+    return `${whole.toLocaleString(locale)}${fractional ? `.${fractional}` : ""} USDC`;
   } catch {
-    return "Unavailable";
+    return unavailable;
   }
 }
 
-function stageLabel(stage: AgentOverviewScope["stage"]) {
-  if (stage === "high_coverage") return "High coverage";
-  if (stage === "medium_coverage") return "Medium coverage";
-  return stage === "monitoring" ? "Monitoring" : "Calibrating";
+type AgentTranslate = (key: string, values?: Record<string, number | string>) => string;
+
+function stageLabel(stage: AgentOverviewScope["stage"], t: AgentTranslate) {
+  if (stage === "high_coverage") return t("stageHighCoverage");
+  if (stage === "medium_coverage") return t("stageMediumCoverage");
+  return stage === "monitoring" ? t("stageMonitoring") : t("stageCalibrating");
 }
 
-function stageComposition(parent: AgentOverviewParent) {
+function stageComposition(parent: AgentOverviewParent, t: AgentTranslate) {
   return (
     [
-      ["calibrating", "calibrating"],
-      ["high_coverage", "high coverage"],
-      ["medium_coverage", "medium coverage"],
-      ["monitoring", "monitoring"],
+      ["calibrating", t("stageCalibrating")],
+      ["high_coverage", t("stageHighCoverage")],
+      ["medium_coverage", t("stageMediumCoverage")],
+      ["monitoring", t("stageMonitoring")],
     ] as const
   )
     .filter(([stage]) => parent.stageCounts[stage] > 0)
@@ -71,12 +69,14 @@ function stageComposition(parent: AgentOverviewParent) {
     .join(" · ");
 }
 
-function meanTokens(scope: AgentOverviewScope) {
-  if (scope.averageInputTokenTotal === null || scope.averageOutputTokenTotal === null) return "Unavailable";
-  return Math.round(scope.averageInputTokenTotal + scope.averageOutputTokenTotal).toLocaleString();
+function meanTokens(scope: AgentOverviewScope, locale: string, unavailable: string) {
+  if (scope.averageInputTokenTotal === null || scope.averageOutputTokenTotal === null) return unavailable;
+  return Math.round(scope.averageInputTokenTotal + scope.averageOutputTokenTotal).toLocaleString(locale);
 }
 
 function HeadlineCards({ overview }: { overview: AgentOverview }) {
+  const locale = useAgentLocale();
+  const ui = useAgentTranslations("ui");
   const completed = overview.headline.completedDecisions;
   const endorsement = overview.headline.reviewerEndorsement;
   const latency = overview.headline.medianDecisionLatency;
@@ -84,65 +84,89 @@ function HeadlineCards({ overview }: { overview: AgentOverview }) {
   return (
     <section aria-labelledby="agent-overview-headline-heading">
       <h2 id="agent-overview-headline-heading" className="sr-only">
-        Overview headline metrics
+        <AgentText id="translated038" />
       </h2>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Card as="article" className="rounded-2xl p-5">
-          <p className="text-sm text-base-content/60">Completed decisions</p>
+          <p className="text-sm text-base-content/60">
+            <AgentText id="completedDecisions" />
+          </p>
           {completed.available ? (
             <>
-              <p className="mt-2 text-3xl font-semibold">{completed.count.toLocaleString()}</p>
-              <p className="mt-2 text-xs text-base-content/55">Settled in this window</p>
+              <p className="mt-2 text-3xl font-semibold">{completed.count.toLocaleString(locale)}</p>
+              <p className="mt-2 text-xs text-base-content/55">
+                <AgentText id="settledWindow" />
+              </p>
             </>
           ) : (
             <>
-              <p className="mt-2 text-xl font-semibold">Unavailable</p>
+              <p className="mt-2 text-xl font-semibold">
+                <AgentText id="unavailable" />
+              </p>
               <p className="mt-2 text-xs leading-5 text-base-content/55">{completed.reason}</p>
             </>
           )}
         </Card>
         <Card as="article" className="rounded-2xl p-5">
-          <p className="text-sm text-base-content/60">Reviewer endorsement</p>
+          <p className="text-sm text-base-content/60">
+            <AgentText id="reviewerEndorsement" />
+          </p>
           {endorsement.available ? (
             <>
-              <p className="mt-2 text-3xl font-semibold">{percent(endorsement.rateBps)} endorsed</p>
+              <p className="mt-2 text-3xl font-semibold">
+                {percent(endorsement.rateBps)} <AgentText id="translated039" />
+              </p>
               <p className="mt-2 text-xs text-base-content/55">
                 {percent(endorsement.intervalBps.lower)}–{percent(endorsement.intervalBps.upper)} · n ={" "}
                 {endorsement.sampleSize}
-                {endorsement.limitedSample ? " · too few cases to be reliable" : ""}
+                {endorsement.limitedSample ? ui("limitedCases") : ""}
               </p>
             </>
           ) : (
             <>
-              <p className="mt-2 text-xl font-semibold">Unavailable</p>
+              <p className="mt-2 text-xl font-semibold">
+                <AgentText id="unavailable" />
+              </p>
               <p className="mt-2 text-xs leading-5 text-base-content/55">{endorsement.reason}</p>
             </>
           )}
         </Card>
         <Card as="article" className="rounded-2xl p-5">
-          <p className="text-sm text-base-content/60">Median time to decision</p>
+          <p className="text-sm text-base-content/60">
+            <AgentText id="medianDecisionTime" />
+          </p>
           {latency.available ? (
             <>
-              <p className="mt-2 text-3xl font-semibold">{duration(latency.milliseconds)}</p>
-              <p className="mt-2 text-xs text-base-content/55">n = {latency.sampleSize} timed decisions</p>
+              <p className="mt-2 text-3xl font-semibold">{duration(latency.milliseconds, ui("unavailable"))}</p>
+              <p className="mt-2 text-xs text-base-content/55">
+                n = {latency.sampleSize} <AgentText id="translated040" />
+              </p>
             </>
           ) : (
             <>
-              <p className="mt-2 text-xl font-semibold">Unavailable</p>
+              <p className="mt-2 text-xl font-semibold">
+                <AgentText id="unavailable" />
+              </p>
               <p className="mt-2 text-xs leading-5 text-base-content/55">{latency.reason}</p>
             </>
           )}
         </Card>
         <Card as="article" className="rounded-2xl p-5">
-          <p className="text-sm text-base-content/60">Cost per decision</p>
+          <p className="text-sm text-base-content/60">
+            <AgentText id="costPerDecision" />
+          </p>
           {cost.available ? (
             <>
-              <p className="mt-2 text-3xl font-semibold">{usdc(cost.averageAtomic)}</p>
-              <p className="mt-2 text-xs text-base-content/55">n = {cost.sampleSize} costed decisions</p>
+              <p className="mt-2 text-3xl font-semibold">{usdc(cost.averageAtomic, locale, ui("unavailable"))}</p>
+              <p className="mt-2 text-xs text-base-content/55">
+                n = {cost.sampleSize} <AgentText id="translated041" />
+              </p>
             </>
           ) : (
             <>
-              <p className="mt-2 text-xl font-semibold">Unavailable</p>
+              <p className="mt-2 text-xl font-semibold">
+                <AgentText id="unavailable" />
+              </p>
               <p className="mt-2 text-xs leading-5 text-base-content/55">{cost.reason}</p>
             </>
           )}
@@ -152,8 +176,12 @@ function HeadlineCards({ overview }: { overview: AgentOverview }) {
   );
 }
 
-function trendDate(date: string) {
-  return trendDateFormatter.format(new Date(`${date}T00:00:00.000Z`));
+function trendDate(date: string, locale: string) {
+  return new Intl.DateTimeFormat(locale, {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  }).format(new Date(`${date}T00:00:00.000Z`));
 }
 
 function overviewUrlStateFromWindow() {
@@ -168,11 +196,16 @@ function replaceOverviewUrlState(state: AgentOverviewUrlState) {
 }
 
 function ReviewOutcomeTrend({ overview }: { overview: AgentOverview }) {
+  const locale = useAgentLocale();
   const trend = overview.trends.outcomes;
   return (
     <Card as="article" className="rounded-2xl p-5">
-      <h3 className="text-base font-semibold">Review outcomes</h3>
-      <p className="mt-1 text-sm text-base-content/55">Daily settled decisions by panel outcome.</p>
+      <h3 className="text-base font-semibold">
+        <AgentText id="reviewOutcomes" />
+      </h3>
+      <p className="mt-1 text-sm text-base-content/55">
+        <AgentText id="reviewOutcomesDescription" />
+      </p>
       {!trend.available ? (
         <p className="mt-6 text-sm text-base-content/55">{trend.reason}</p>
       ) : (
@@ -194,10 +227,13 @@ function ReviewOutcomeTrend({ overview }: { overview: AgentOverview }) {
                 role="img"
                 aria-labelledby="agent-outcomes-trend-title agent-outcomes-trend-description"
               >
-                <title id="agent-outcomes-trend-title">Review outcome trend</title>
+                <title id="agent-outcomes-trend-title">
+                  <AgentText id="reviewOutcomeTrend" />
+                </title>
                 <desc id="agent-outcomes-trend-description">
-                  {trend.endorsedCount} endorsed, {trend.rejectedCount} rejected, and {trend.inconclusiveCount}{" "}
-                  inconclusive decisions across {overview.window.label.toLowerCase()}.
+                  {trend.endorsedCount} <AgentText id="translated042" /> {trend.rejectedCount}{" "}
+                  <AgentText id="translated043" /> {trend.inconclusiveCount} <AgentText id="translated044" />{" "}
+                  {overview.window.label.toLowerCase()}.
                 </desc>
                 <line
                   x1={left}
@@ -249,7 +285,7 @@ function ReviewOutcomeTrend({ overview }: { overview: AgentOverview }) {
                           fillOpacity="0.6"
                           fontSize="10"
                         >
-                          {trendDate(point.date)}
+                          {trendDate(point.date, locale)}
                         </text>
                       ) : null}
                     </g>
@@ -259,21 +295,22 @@ function ReviewOutcomeTrend({ overview }: { overview: AgentOverview }) {
             );
           })()}
           <p className="mt-1 text-xs text-base-content/55">
-            {trend.endorsedCount.toLocaleString()} endorsed · {trend.rejectedCount.toLocaleString()} rejected ·{" "}
-            {trend.inconclusiveCount.toLocaleString()} inconclusive
+            {trend.endorsedCount.toLocaleString(locale)} <AgentText id="translated045" />{" "}
+            {trend.rejectedCount.toLocaleString(locale)} <AgentText id="translated046" />{" "}
+            {trend.inconclusiveCount.toLocaleString(locale)} <AgentText id="translated047" />
           </p>
           <p className="mt-2 text-xs text-base-content/55">
-            Rejected means the panel did not endorse the output, not that reviewers disagreed with each other.
+            <AgentText id="translated048" />
           </p>
           <div className="mt-3 flex flex-wrap gap-4 text-xs text-base-content/55" aria-hidden="true">
             <span className="flex items-center gap-2">
-              <span className="h-2.5 w-2.5 rounded-sm bg-emerald-300/80" /> Endorsed
+              <span className="h-2.5 w-2.5 rounded-sm bg-success/80" /> <AgentText id="translated049" />
             </span>
             <span className="flex items-center gap-2">
-              <span className="h-2.5 w-2.5 rounded-sm bg-rose-300/80" /> Rejected
+              <span className="h-2.5 w-2.5 rounded-sm bg-rose-300/80" /> <AgentText id="translated050" />
             </span>
             <span className="flex items-center gap-2">
-              <span className="h-2.5 w-2.5 rounded-sm bg-amber-200/75" /> Inconclusive
+              <span className="h-2.5 w-2.5 rounded-sm bg-warning/75" /> <AgentText id="translated051" />
             </span>
           </div>
         </>
@@ -306,11 +343,16 @@ function decisionTimeSegments(
 }
 
 function DecisionTimeTrend({ overview }: { overview: AgentOverview }) {
+  const locale = useAgentLocale();
   const trend = overview.trends.decisionTime;
   return (
     <Card as="article" className="rounded-2xl p-5">
-      <h3 className="text-base font-semibold">Decision time</h3>
-      <p className="mt-1 text-sm text-base-content/55">Daily median from review request to settled decision.</p>
+      <h3 className="text-base font-semibold">
+        <AgentText id="decisionTime" />
+      </h3>
+      <p className="mt-1 text-sm text-base-content/55">
+        <AgentText id="decisionTimeDescription" />
+      </p>
       {!trend.available ? (
         <p className="mt-6 text-sm text-base-content/55">{trend.reason}</p>
       ) : (
@@ -335,10 +377,13 @@ function DecisionTimeTrend({ overview }: { overview: AgentOverview }) {
                 role="img"
                 aria-labelledby="agent-decision-time-trend-title agent-decision-time-trend-description"
               >
-                <title id="agent-decision-time-trend-title">Decision-time trend</title>
+                <title id="agent-decision-time-trend-title">
+                  <AgentText id="decisionTimeTrend" />
+                </title>
                 <desc id="agent-decision-time-trend-description">
-                  Daily median decision time from {trendDate(trend.points[0]!.date)} to{" "}
-                  {trendDate(trend.points.at(-1)!.date)}, based on {trend.sampleSize} timed decisions.
+                  <AgentText id="translated052" /> {trendDate(trend.points[0]!.date, locale)}{" "}
+                  <AgentText id="translated053" /> {trendDate(trend.points.at(-1)!.date, locale)}
+                  <AgentText id="translated054" /> {trend.sampleSize} <AgentText id="translated055" />
                 </desc>
                 <line
                   x1={left}
@@ -375,7 +420,7 @@ function DecisionTimeTrend({ overview }: { overview: AgentOverview }) {
                   ),
                 )}
                 <text x={left} y={height - 7} fill="currentColor" fillOpacity="0.6" fontSize="10">
-                  {trendDate(trend.points[0]!.date)}
+                  {trendDate(trend.points[0]!.date, locale)}
                 </text>
                 <text
                   x={width - left}
@@ -385,12 +430,14 @@ function DecisionTimeTrend({ overview }: { overview: AgentOverview }) {
                   fillOpacity="0.6"
                   fontSize="10"
                 >
-                  {trendDate(trend.points.at(-1)!.date)}
+                  {trendDate(trend.points.at(-1)!.date, locale)}
                 </text>
               </svg>
             );
           })()}
-          <p className="mt-1 text-xs text-base-content/55">{trend.sampleSize.toLocaleString()} timed decisions</p>
+          <p className="mt-1 text-xs text-base-content/55">
+            {trend.sampleSize.toLocaleString(locale)} <AgentText id="translated040" />
+          </p>
         </>
       )}
     </Card>
@@ -402,7 +449,7 @@ function TrendPanels({ overview }: { overview: AgentOverview }) {
     <section aria-labelledby="agent-overview-trends-heading">
       <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
         <h2 id="agent-overview-trends-heading" className="text-xl font-semibold">
-          Trends
+          <AgentText id="translated056" />
         </h2>
         <span className="text-xs text-base-content/55">{overview.trends.periodLabel}</span>
       </div>
@@ -429,6 +476,7 @@ function QualityDistribution({
   rows: Array<{ key: string; label: string; count: number; shareBps: number }>;
   unit: "cases" | "decisions";
 }) {
+  const locale = useAgentLocale();
   return (
     <div className="mt-4 space-y-3">
       {rows.map(row => (
@@ -436,7 +484,7 @@ function QualityDistribution({
           <div className="mb-1 flex items-center justify-between gap-3 text-xs text-base-content/60">
             <span>{row.label}</span>
             <span className="font-mono">
-              {percent(row.shareBps)} · n = {row.count.toLocaleString()}
+              {percent(row.shareBps)} · n = {row.count.toLocaleString(locale)}
             </span>
           </div>
           <progress
@@ -452,15 +500,16 @@ function QualityDistribution({
 }
 
 function QualityHotspots({ emptyMessage, hotspots }: { emptyMessage: string; hotspots: AgentReviewQualityHotspot[] }) {
+  const locale = useAgentLocale();
   if (hotspots.length === 0) return <p className="mt-4 text-sm text-base-content/55">{emptyMessage}</p>;
   return (
-    <ol className="mt-4 divide-y divide-white/10">
+    <ol className="mt-4 divide-y divide-base-content/10">
       {hotspots.map(hotspot => (
         <li key={hotspot.key} className="py-3 first:pt-0 last:pb-0">
           <p className="truncate text-sm font-medium">{hotspot.label}</p>
           <p className="mt-1 text-xs text-base-content/55">
-            {percent(hotspot.splitRateBps)} of cases split · {percent(hotspot.dissentRateBps)} of responses dissent · n
-            = {hotspot.caseCount.toLocaleString()} cases
+            {percent(hotspot.splitRateBps)} <AgentText id="translated057" /> {percent(hotspot.dissentRateBps)}{" "}
+            <AgentText id="translated058" /> {hotspot.caseCount.toLocaleString(locale)} <AgentText id="translated059" />
           </p>
         </li>
       ))}
@@ -469,30 +518,30 @@ function QualityHotspots({ emptyMessage, hotspots }: { emptyMessage: string; hot
 }
 
 function ReviewQualityPanel({ overview }: { overview: AgentOverview }) {
+  const locale = useAgentLocale();
+  const ui = useAgentTranslations("ui");
   const quality = overview.reviewQuality;
   const threshold = privacyThresholdLabel(overview);
-  const privacyCopy = threshold
-    ? `Each included case met its frozen privacy threshold (${threshold}).`
-    : "Cases appear only after their frozen privacy threshold is met.";
+  const privacyCopy = threshold ? ui("privacyThresholdMet", { threshold }) : ui("privacyThresholdPending");
   return (
     <section aria-labelledby="agent-review-quality-heading">
       <div className="mb-3">
         <div>
           <h2 id="agent-review-quality-heading" className="text-xl font-semibold">
-            Review quality
+            <AgentText id="translated060" />
           </h2>
           <p className="mt-1 text-sm text-base-content/55">
-            Workspace aggregates only. No reviewer identities or response rows.
+            <AgentText id="translated061" />
           </p>
         </div>
       </div>
       {quality.availability !== "available" ? (
         <Card as="article" className="rounded-2xl p-5">
           <p className="font-medium">
-            {quality.availability === "suppressed" ? "Privacy threshold not met" : "No data"}
+            {quality.availability === "suppressed" ? <AgentText id="dynamic009" /> : <AgentText id="dynamic005" />}
           </p>
           <p className="mt-2 text-sm text-base-content/55">
-            {quality.consensus.available ? "Review quality is available." : quality.consensus.reason}
+            {quality.consensus.available ? <AgentText id="dynamic010" /> : quality.consensus.reason}
           </p>
           <p className="mt-2 text-xs text-base-content/55">{privacyCopy}</p>
         </Card>
@@ -500,22 +549,28 @@ function ReviewQualityPanel({ overview }: { overview: AgentOverview }) {
         <>
           <div className="grid gap-5 xl:grid-cols-4">
             <Card as="article" className="rounded-2xl p-5">
-              <h3 className="text-base font-semibold">Reviewer consensus</h3>
+              <h3 className="text-base font-semibold">
+                <AgentText id="reviewerConsensus" />
+              </h3>
               {quality.consensus.available ? (
                 <>
-                  <p className="mt-2 text-3xl font-semibold">{percent(quality.consensus.unanimityRateBps)} unanimous</p>
+                  <p className="mt-2 text-3xl font-semibold">
+                    {percent(quality.consensus.unanimityRateBps)} <AgentText id="translated062" />
+                  </p>
                   <p className="mt-2 text-xs text-base-content/55">
-                    {quality.consensus.unanimousCaseCount.toLocaleString()} of{" "}
-                    {quality.consensus.caseCount.toLocaleString()} cases
-                    {quality.consensus.limitedSample ? " · too few cases to be reliable" : ""}
+                    {quality.consensus.unanimousCaseCount.toLocaleString(locale)} <AgentText id="translated063" />{" "}
+                    {quality.consensus.caseCount.toLocaleString(locale)} <AgentText id="translated059" />
+                    {quality.consensus.limitedSample ? ui("limitedCases") : ""}
                   </p>
                 </>
               ) : null}
             </Card>
             <Card as="article" className="rounded-2xl p-5">
-              <h3 className="text-base font-semibold">Reviewer consistency (α)</h3>
+              <h3 className="text-base font-semibold">
+                <AgentText id="reviewerConsistency" />
+              </h3>
               <p className="mt-1 text-sm text-base-content/55">
-                Agreement beyond chance across baseline, candidate, and tie.
+                <AgentText id="translated064" />
               </p>
               {quality.reviewerConsistency.available ? (
                 <>
@@ -523,9 +578,9 @@ function ReviewQualityPanel({ overview }: { overview: AgentOverview }) {
                     α = {(quality.reviewerConsistency.alphaMilli / 1_000).toFixed(3)}
                   </p>
                   <p className="mt-2 text-xs text-base-content/55">
-                    n = {quality.reviewerConsistency.caseCount.toLocaleString()} cases ·{" "}
-                    {quality.reviewerConsistency.ratingCount.toLocaleString()} responses
-                    {quality.reviewerConsistency.limitedSample ? " · too few cases to be reliable" : ""}
+                    n = {quality.reviewerConsistency.caseCount.toLocaleString(locale)} <AgentText id="translated065" />{" "}
+                    {quality.reviewerConsistency.ratingCount.toLocaleString(locale)} <AgentText id="translated066" />
+                    {quality.reviewerConsistency.limitedSample ? ui("limitedCases") : ""}
                   </p>
                 </>
               ) : (
@@ -533,9 +588,11 @@ function ReviewQualityPanel({ overview }: { overview: AgentOverview }) {
               )}
             </Card>
             <Card as="article" className="rounded-2xl p-5 xl:col-span-2">
-              <h3 className="text-base font-semibold">Panel-split distribution</h3>
+              <h3 className="text-base font-semibold">
+                <AgentText id="panelSplit" />
+              </h3>
               <p className="mt-1 text-sm text-base-content/55">
-                Cases grouped by the share of valid responses outside their modal choice.
+                <AgentText id="translated067" />
               </p>
               {quality.panelSplit.available ? (
                 <QualityDistribution
@@ -552,17 +609,27 @@ function ReviewQualityPanel({ overview }: { overview: AgentOverview }) {
           </div>
           <div className="mt-5 grid gap-5 xl:grid-cols-3">
             <Card as="article" className="rounded-2xl p-5">
-              <h3 className="text-base font-semibold">Time to decision</h3>
+              <h3 className="text-base font-semibold">
+                <AgentText id="timeToDecision" />
+              </h3>
               {quality.decisionTime.available ? (
                 <>
                   <div className="mt-3 grid grid-cols-2 gap-3">
                     <div>
-                      <p className="text-xs text-base-content/55">Median</p>
-                      <p className="mt-1 text-xl font-semibold">{duration(quality.decisionTime.medianMilliseconds)}</p>
+                      <p className="text-xs text-base-content/55">
+                        <AgentText id="median" />
+                      </p>
+                      <p className="mt-1 text-xl font-semibold">
+                        {duration(quality.decisionTime.medianMilliseconds, ui("unavailable"))}
+                      </p>
                     </div>
                     <div>
-                      <p className="text-xs text-base-content/55">95th percentile</p>
-                      <p className="mt-1 text-xl font-semibold">{duration(quality.decisionTime.p95Milliseconds)}</p>
+                      <p className="text-xs text-base-content/55">
+                        <AgentText id="percentile95" />
+                      </p>
+                      <p className="mt-1 text-xl font-semibold">
+                        {duration(quality.decisionTime.p95Milliseconds, ui("unavailable"))}
+                      </p>
                     </div>
                   </div>
                   <QualityDistribution
@@ -575,8 +642,8 @@ function ReviewQualityPanel({ overview }: { overview: AgentOverview }) {
                     }))}
                   />
                   <p className="mt-3 text-xs text-base-content/55">
-                    n = {quality.decisionTime.sampleSize.toLocaleString()} settled decisions
-                    {quality.decisionTime.limitedSample ? " · too few decisions to be reliable" : ""}
+                    n = {quality.decisionTime.sampleSize.toLocaleString(locale)} <AgentText id="translated068" />
+                    {quality.decisionTime.limitedSample ? ui("limitedDecisions") : ""}
                   </p>
                 </>
               ) : (
@@ -584,23 +651,23 @@ function ReviewQualityPanel({ overview }: { overview: AgentOverview }) {
               )}
             </Card>
             <Card as="article" className="rounded-2xl p-5">
-              <h3 className="text-base font-semibold">Workflow hotspots</h3>
-              <QualityHotspots
-                hotspots={quality.hotspots.workflows}
-                emptyMessage="No attributed workflow had a split panel in this window."
-              />
+              <h3 className="text-base font-semibold">
+                <AgentText id="workflowHotspots" />
+              </h3>
+              <QualityHotspots hotspots={quality.hotspots.workflows} emptyMessage={ui("noWorkflowHotspots")} />
             </Card>
             <Card as="article" className="rounded-2xl p-5">
-              <h3 className="text-base font-semibold">Risk-tier hotspots</h3>
-              <QualityHotspots
-                hotspots={quality.hotspots.riskTiers}
-                emptyMessage="No attributed risk tier had a split panel in this window."
-              />
+              <h3 className="text-base font-semibold">
+                <AgentText id="riskHotspots" />
+              </h3>
+              <QualityHotspots hotspots={quality.hotspots.riskTiers} emptyMessage={ui("noRiskHotspots")} />
             </Card>
           </div>
           {quality.hotspots.cases.length > 0 ? (
             <Card as="article" className="mt-5 rounded-2xl p-5">
-              <h3 className="text-base font-semibold">Case hotspots</h3>
+              <h3 className="text-base font-semibold">
+                <AgentText id="caseHotspots" />
+              </h3>
               <QualityHotspots hotspots={quality.hotspots.cases} emptyMessage="" />
             </Card>
           ) : null}
@@ -612,23 +679,47 @@ function ReviewQualityPanel({ overview }: { overview: AgentOverview }) {
 }
 
 function ScopeTable({ parent }: { parent: AgentOverviewParent }) {
+  const locale = useAgentLocale();
+  const ui = useAgentTranslations("ui");
   if (parent.scopes.length === 0) {
-    return <p className="p-4 text-sm text-base-content/55">No assurance scope evidence for this version yet.</p>;
+    return (
+      <p className="p-4 text-sm text-base-content/55">
+        <AgentText id="noScopeEvidence" />
+      </p>
+    );
   }
   return (
     <div className="overflow-x-auto p-3">
       <table className="table table-sm min-w-[68rem]">
         <thead>
           <tr>
-            <th>Scope</th>
-            <th>Risk</th>
-            <th>Stage</th>
-            <th>Review rate</th>
-            <th>Comparable</th>
-            <th>Endorsement · 95% lower</th>
-            <th>Agent runtime</th>
-            <th>Mean tokens</th>
-            <th>Last change</th>
+            <th>
+              <AgentText id="scope" />
+            </th>
+            <th>
+              <AgentText id="risk" />
+            </th>
+            <th>
+              <AgentText id="stage" />
+            </th>
+            <th>
+              <AgentText id="reviewRate" />
+            </th>
+            <th>
+              <AgentText id="comparable" />
+            </th>
+            <th>
+              <AgentText id="endorsementLower" />
+            </th>
+            <th>
+              <AgentText id="agentRuntime" />
+            </th>
+            <th>
+              <AgentText id="meanTokens" />
+            </th>
+            <th>
+              <AgentText id="lastChange" />
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -639,24 +730,32 @@ function ScopeTable({ parent }: { parent: AgentOverviewParent }) {
                 <code className="mt-1 block max-w-52 truncate text-[10px] text-base-content/55">{scope.scopeId}</code>
               </td>
               <td className="capitalize">{scope.riskTier}</td>
-              <td>{stageLabel(scope.stage)}</td>
+              <td>{stageLabel(scope.stage, ui)}</td>
               <td className="font-mono">{percent(scope.reviewRateBps)}</td>
-              <td className="font-mono">{scope.comparableCount.toLocaleString()}</td>
+              <td className="font-mono">{scope.comparableCount.toLocaleString(locale)}</td>
               <td className="font-mono">
-                {scope.humanAgreementBps === null || scope.humanAgreementLower95Bps === null
-                  ? "Unavailable"
-                  : `${percent(scope.humanAgreementBps)} · ${percent(scope.humanAgreementLower95Bps)} · n=${scope.comparableCount}`}
+                {scope.humanAgreementBps === null || scope.humanAgreementLower95Bps === null ? (
+                  <AgentText id="dynamic012" />
+                ) : (
+                  `${percent(scope.humanAgreementBps)} · ${percent(scope.humanAgreementLower95Bps)} · n=${scope.comparableCount}`
+                )}
               </td>
-              <td>{duration(scope.averageTotalDurationMs)}</td>
-              <td>{meanTokens(scope)}</td>
-              <td>{scope.lastTransition ? new Date(scope.lastTransition.createdAt).toLocaleDateString() : "None"}</td>
+              <td>{duration(scope.averageTotalDurationMs, ui("unavailable"))}</td>
+              <td>{meanTokens(scope, locale, ui("unavailable"))}</td>
+              <td>
+                {scope.lastTransition ? (
+                  new Date(scope.lastTransition.createdAt).toLocaleDateString(locale)
+                ) : (
+                  <AgentText id="dynamic006" />
+                )}
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
       {parent.scopesTruncated ? (
         <p className="px-2 pb-2 pt-3 text-xs text-base-content/55">
-          Showing the 8 most recently updated of {parent.scopeCount} scope partitions.
+          <AgentText id="translated069" /> {parent.scopeCount} <AgentText id="translated070" />
         </p>
       ) : null}
     </div>
@@ -672,6 +771,8 @@ function AgentVersionTable({
   onPageChange: (page: number) => void;
   overview: AgentOverview;
 }) {
+  const locale = useAgentLocale();
+  const ui = useAgentTranslations("ui");
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const firstParent =
     overview.agentVersions.totalParentCount === 0
@@ -683,29 +784,39 @@ function AgentVersionTable({
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 id="agent-version-monitor-heading" className="text-xl font-semibold">
-            Agent versions
+            <AgentText id="translated071" />
           </h2>
           <p className="mt-1 text-sm text-base-content/55">
-            {overview.agentVersions.periodLabel}. Parent rows show scope composition and the lowest observed scope
-            bound, never an average.
+            {overview.agentVersions.periodLabel}
+            <AgentText id="translated072" />
           </p>
         </div>
-        <span className="badge border-white/10 bg-white/[0.04]">Current versions · active policies</span>
+        <span className="badge border-base-content/10 bg-base-content/[0.04]">
+          <AgentText id="currentVersions" />
+        </span>
       </div>
       {overview.agentVersions.parents.length === 0 ? (
         <p className="mt-5 text-sm text-base-content/55">
-          No current agent versions match the active assurance policies and filters.
+          <AgentText id="translated073" />
         </p>
       ) : (
         <div className="mt-4 overflow-x-auto">
           <table className="table min-w-[52rem]">
             <thead>
               <tr>
-                <th>Agent version</th>
-                <th>Scope composition</th>
-                <th>Lowest observed endorsement bound</th>
                 <th>
-                  <span className="sr-only">Scope detail</span>
+                  <AgentText id="agentVersion" />
+                </th>
+                <th>
+                  <AgentText id="scopeComposition" />
+                </th>
+                <th>
+                  <AgentText id="lowestEndorsement" />
+                </th>
+                <th>
+                  <span className="sr-only">
+                    <AgentText id="scopeDetail" />
+                  </span>
                 </th>
               </tr>
             </thead>
@@ -723,10 +834,11 @@ function AgentVersionTable({
                       </td>
                       <td>
                         <p>
-                          {parent.scopeCount.toLocaleString()} {parent.scopeCount === 1 ? "scope" : "scopes"}
+                          {parent.scopeCount.toLocaleString(locale)}{" "}
+                          {parent.scopeCount === 1 ? ui("scopeOne") : ui("scopeMany")}
                         </p>
                         <p className="mt-1 text-xs text-base-content/55">
-                          {stageComposition(parent) || "No stage evidence"}
+                          {stageComposition(parent, ui) || ui("noStageEvidence")}
                         </p>
                       </td>
                       <td>
@@ -738,7 +850,9 @@ function AgentVersionTable({
                             </p>
                           </>
                         ) : (
-                          <span className="text-base-content/55">Unavailable</span>
+                          <span className="text-base-content/55">
+                            <AgentText id="unavailable" />
+                          </span>
                         )}
                       </td>
                       <td className="text-right">
@@ -756,13 +870,17 @@ function AgentVersionTable({
                             })
                           }
                         >
-                          {open ? "Hide scopes" : "View scopes"}
+                          {open ? ui("hideScopes") : ui("viewScopes")}
                         </button>
                       </td>
                     </tr>
                     {open ? (
                       <tr>
-                        <td colSpan={4} id={`agent-version-scopes-${parent.versionId}`} className="bg-black/15 p-0">
+                        <td
+                          colSpan={4}
+                          id={`agent-version-scopes-${parent.versionId}`}
+                          className="bg-base-content/[0.025] p-0"
+                        >
                           <ScopeTable parent={parent} />
                         </td>
                       </tr>
@@ -774,23 +892,30 @@ function AgentVersionTable({
           </table>
         </div>
       )}
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-base-content/10 pt-4">
         <p className="text-xs text-base-content/55">
-          {overview.agentVersions.totalParentCount === 0
-            ? "No current agent versions"
-            : `${firstParent}–${lastParent} of ${overview.agentVersions.totalParentCount} current agent versions`}
+          {overview.agentVersions.totalParentCount === 0 ? (
+            <AgentText id="dynamic004" />
+          ) : (
+            ui("agentVersionRange", {
+              first: firstParent,
+              last: lastParent,
+              total: overview.agentVersions.totalParentCount,
+            })
+          )}
         </p>
-        <nav className="flex items-center gap-2" aria-label="Agent version pages">
+        <nav className="flex items-center gap-2" aria-label={ui("agentVersionPages")}>
           <button
             type="button"
             className="btn btn-outline btn-sm"
             disabled={loading || !overview.agentVersions.hasPreviousPage}
             onClick={() => onPageChange(overview.agentVersions.page - 1)}
           >
-            Previous
+            <AgentText id="translated074" />
           </button>
           <span className="min-w-24 text-center text-xs text-base-content/60">
-            Page {overview.agentVersions.page} of {overview.agentVersions.totalPages}
+            <AgentText id="translated075" /> {overview.agentVersions.page} <AgentText id="translated063" />{" "}
+            {overview.agentVersions.totalPages}
           </span>
           <button
             type="button"
@@ -798,7 +923,7 @@ function AgentVersionTable({
             disabled={loading || !overview.agentVersions.hasNextPage}
             onClick={() => onPageChange(overview.agentVersions.page + 1)}
           >
-            Next
+            <AgentText id="translated076" />
           </button>
         </nav>
       </div>
@@ -807,51 +932,59 @@ function AgentVersionTable({
 }
 
 function AttentionList({ overview, workspaceId }: { overview: AgentOverview; workspaceId: string }) {
+  const locale = useAgentLocale();
+  const ui = useAgentTranslations("ui");
   return (
     <Card as="section" className="rounded-2xl p-5" aria-labelledby="agent-attention-heading">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 id="agent-attention-heading" className="text-xl font-semibold">
-            Attention
+            <AgentText id="translated077" />
           </h2>
           <p className="mt-1 text-sm text-base-content/55">
-            Blocked work and evidence that is objectively below its confidence requirement.
+            <AgentText id="translated078" />
           </p>
         </div>
         <span className="text-xs text-base-content/55">{overview.attention.periodLabel}</span>
       </div>
       {overview.attention.items.length === 0 ? (
-        <p className="mt-5 text-sm text-base-content/55">No blocked or evidence-confidence issues need attention.</p>
+        <p className="mt-5 text-sm text-base-content/55">
+          <AgentText id="noAttention" />
+        </p>
       ) : (
-        <ul className="mt-4 divide-y divide-white/10 rounded-xl border border-white/10">
+        <ul className="mt-4 divide-y divide-base-content/10 rounded-xl border border-base-content/10">
           {overview.attention.items.map(item => (
             <li key={item.itemId} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="badge border-white/10 bg-white/[0.04]">
-                    {item.kind === "blocked"
-                      ? "Blocked"
-                      : item.kind === "low_confidence"
-                        ? "Low confidence"
-                        : "Insufficient evidence"}
+                  <span className="badge border-base-content/10 bg-base-content/[0.04]">
+                    {item.kind === "blocked" ? (
+                      <AgentText id="dynamic003" />
+                    ) : item.kind === "low_confidence" ? (
+                      ui("lowConfidence")
+                    ) : (
+                      ui("insufficientEvidence")
+                    )}
                   </span>
                   <p className="font-medium">{item.displayName}</p>
                 </div>
                 {item.kind === "blocked" ? (
                   <p className="mt-2 text-sm text-base-content/60">
-                    {item.blockedCount.toLocaleString()} blocked {item.blockedCount === 1 ? "review" : "reviews"} cannot
-                    settle.
+                    {item.blockedCount.toLocaleString(locale)} <AgentText id="translated079" />{" "}
+                    {item.blockedCount === 1 ? ui("reviewOne") : ui("reviewMany")} <AgentText id="translated080" />
                   </p>
                 ) : item.kind === "low_confidence" ? (
                   <p className="mt-2 text-sm text-base-content/60">
-                    {item.workflowKey} · {item.riskTier} · 95% lower bound {percent(item.lower95Bps)} is below the{" "}
-                    {percent(item.policyThresholdBps)} policy threshold · {item.rejectedCount.toLocaleString()} rejected
-                    of {item.comparableCount.toLocaleString()} comparable decisions
+                    {item.workflowKey} · {item.riskTier} · 95% lower bound {percent(item.lower95Bps)}{" "}
+                    <AgentText id="translated081" /> {percent(item.policyThresholdBps)} <AgentText id="translated082" />{" "}
+                    {item.rejectedCount.toLocaleString(locale)} <AgentText id="translated083" />{" "}
+                    {item.comparableCount.toLocaleString(locale)} <AgentText id="translated084" />
                   </p>
                 ) : (
                   <p className="mt-2 text-sm text-base-content/60">
-                    {item.workflowKey} · {item.riskTier} · n = {item.comparableCount.toLocaleString()} of{" "}
-                    {item.targetComparableCount.toLocaleString()} comparable decisions
+                    {item.workflowKey} · {item.riskTier} · n = {item.comparableCount.toLocaleString(locale)}{" "}
+                    <AgentText id="translated063" /> {item.targetComparableCount.toLocaleString(locale)}{" "}
+                    <AgentText id="translated084" />
                   </p>
                 )}
               </div>
@@ -862,11 +995,13 @@ function AttentionList({ overview, workspaceId }: { overview: AgentOverview; wor
                   workspaceId,
                 )}
               >
-                {item.kind === "insufficient"
-                  ? "Review setup"
-                  : item.kind === "blocked"
-                    ? "Open approvals"
-                    : "Open results"}
+                {item.kind === "insufficient" ? (
+                  <AgentText id="dynamic011" />
+                ) : item.kind === "blocked" ? (
+                  <AgentText id="dynamic007" />
+                ) : (
+                  <AgentText id="dynamic008" />
+                )}
               </Link>
             </li>
           ))}
@@ -874,18 +1009,19 @@ function AttentionList({ overview, workspaceId }: { overview: AgentOverview; wor
       )}
       {overview.attention.itemsTruncated ? (
         <p className="mt-3 text-xs text-base-content/55">
-          Showing {overview.attention.items.length} of {overview.attention.totalItemCount} current evidence issues.
+          <AgentText id="translated085" /> {overview.attention.items.length} <AgentText id="translated063" />{" "}
+          {overview.attention.totalItemCount} <AgentText id="translated086" />
         </p>
       ) : null}
     </Card>
   );
 }
 
-const OVERVIEW_PERIOD_OPTIONS: Array<{ value: AgentOverviewPeriod; label: string }> = [
-  { value: "7", label: "7 days" },
-  { value: "30", label: "30 days" },
-  { value: "90", label: "90 days" },
-  { value: "lifetime", label: "Lifetime" },
+const OVERVIEW_PERIOD_OPTIONS: Array<{ value: AgentOverviewPeriod; labelKey: string }> = [
+  { value: "7", labelKey: "period7Days" },
+  { value: "30", labelKey: "period30Days" },
+  { value: "90", labelKey: "period90Days" },
+  { value: "lifetime", labelKey: "periodLifetime" },
 ];
 
 function OverviewControls({
@@ -899,18 +1035,19 @@ function OverviewControls({
   overview: AgentOverview;
   query: AgentOverviewUrlState;
 }) {
+  const ui = useAgentTranslations("ui");
   const hasFilters = Boolean(query.workflow || query.riskTier || query.stage || query.versionId);
-  const selectClassName = "select-sm bg-black/20";
+  const selectClassName = "select-sm bg-base-content/[0.04]";
   const labelClassName = "mb-1 text-xs text-base-content/65";
   return (
     <Card as="section" className="rounded-2xl p-5" aria-labelledby="agent-overview-filters-heading">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 id="agent-overview-filters-heading" className="text-base font-semibold">
-            View
+            <AgentText id="translated087" />
           </h2>
           <p className="mt-1 text-sm text-base-content/55">
-            Headline metrics and charts use this exact period and scope.
+            <AgentText id="translated088" />
           </p>
         </div>
         {hasFilters ? (
@@ -920,13 +1057,13 @@ function OverviewControls({
             disabled={loading}
             onClick={() => onChange({ workflow: null, riskTier: null, stage: null, versionId: null, page: 1 })}
           >
-            Clear filters
+            <AgentText id="translated089" />
           </button>
         ) : null}
       </div>
       <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <SelectField
-          label="Period"
+          label={<AgentText id="attribute001" />}
           labelClassName={labelClassName}
           className={selectClassName}
           value={query.period}
@@ -935,19 +1072,21 @@ function OverviewControls({
         >
           {OVERVIEW_PERIOD_OPTIONS.map(option => (
             <option key={option.value} value={option.value}>
-              {option.label}
+              {ui(option.labelKey)}
             </option>
           ))}
         </SelectField>
         <SelectField
-          label="Workflow"
+          label={<AgentText id="attribute002" />}
           labelClassName={labelClassName}
           className={selectClassName}
           value={query.workflow ?? ""}
           disabled={loading}
           onChange={event => onChange({ workflow: event.target.value || null, page: 1 })}
         >
-          <option value="">All workflows</option>
+          <option value="">
+            <AgentText id="allWorkflows" />
+          </option>
           {overview.facets.workflows.map(option => (
             <option key={option.value} value={option.value}>
               {option.label}
@@ -955,14 +1094,16 @@ function OverviewControls({
           ))}
         </SelectField>
         <SelectField
-          label="Risk tier"
+          label={<AgentText id="attribute003" />}
           labelClassName={labelClassName}
           className={selectClassName}
           value={query.riskTier ?? ""}
           disabled={loading}
           onChange={event => onChange({ riskTier: event.target.value || null, page: 1 })}
         >
-          <option value="">All risk tiers</option>
+          <option value="">
+            <AgentText id="allRiskTiers" />
+          </option>
           {overview.facets.riskTiers.map(option => (
             <option key={option.value} value={option.value}>
               {option.label}
@@ -970,7 +1111,7 @@ function OverviewControls({
           ))}
         </SelectField>
         <SelectField
-          label="Assurance stage"
+          label={<AgentText id="attribute004" />}
           labelClassName={labelClassName}
           className={selectClassName}
           value={query.stage ?? ""}
@@ -982,7 +1123,9 @@ function OverviewControls({
             })
           }
         >
-          <option value="">All stages</option>
+          <option value="">
+            <AgentText id="allStages" />
+          </option>
           {overview.facets.stages.map(option => (
             <option key={option.value} value={option.value}>
               {option.label}
@@ -990,14 +1133,16 @@ function OverviewControls({
           ))}
         </SelectField>
         <SelectField
-          label="Agent version"
+          label={<AgentText id="attribute005" />}
           labelClassName={labelClassName}
           className={selectClassName}
           value={query.versionId ?? ""}
           disabled={loading}
           onChange={event => onChange({ versionId: event.target.value || null, page: 1 })}
         >
-          <option value="">All current versions</option>
+          <option value="">
+            <AgentText id="allCurrentVersions" />
+          </option>
           {overview.facets.versions.map(option => (
             <option key={option.value} value={option.value}>
               {option.label}
@@ -1007,7 +1152,7 @@ function OverviewControls({
       </div>
       {overview.facets.optionsTruncated ? (
         <p className="mt-3 text-xs text-base-content/55">
-          Some filter lists are truncated. Existing URL selections remain available when valid.
+          <AgentText id="translated090" />
         </p>
       ) : null}
     </Card>
@@ -1015,6 +1160,7 @@ function OverviewControls({
 }
 
 export function AgentOverviewMonitor({ workspaceId }: { workspaceId: string }) {
+  const errors = useAgentTranslations("errors");
   const [overview, setOverview] = useState<AgentOverview | null>(null);
   const [query, setQuery] = useState(overviewUrlStateFromWindow);
   const [loading, setLoading] = useState(true);
@@ -1057,14 +1203,14 @@ export function AgentOverviewMonitor({ workspaceId }: { workspaceId: string }) {
           }
         }
       })
-      .catch(cause => {
-        if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "Unable to load overview.");
+      .catch(() => {
+        if (!controller.signal.aborted) setError(errors("loadOverview"));
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [query, workspaceId]);
+  }, [errors, query, workspaceId]);
 
   const updateQuery = (patch: Partial<AgentOverviewUrlState>) => {
     const next = { ...query, ...patch };
@@ -1075,14 +1221,14 @@ export function AgentOverviewMonitor({ workspaceId }: { workspaceId: string }) {
   if (loading && !overview) {
     return (
       <Card as="section" className="rounded-2xl p-6" role="status">
-        Loading agent monitor…
+        <AgentText id="translated091" />
       </Card>
     );
   }
   if (!overview) {
     return (
-      <Card as="section" className="rounded-2xl p-6 text-red-100" role="alert">
-        {error ?? "Agent monitor is unavailable."}
+      <Card as="section" className="rounded-2xl p-6 text-error" role="alert">
+        {error ?? <AgentText id="dynamic002" />}
       </Card>
     );
   }
@@ -1092,19 +1238,19 @@ export function AgentOverviewMonitor({ workspaceId }: { workspaceId: string }) {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 id="agent-monitor-heading" className="text-2xl font-semibold">
-              Agent monitor
+              <AgentText id="translated092" />
             </h2>
             <p className="mt-1 text-sm text-base-content/55">
-              Completed human-review decisions for current agent versions and active assurance policies.
+              <AgentText id="translated093" />
             </p>
           </div>
-          <span className="badge border-white/10 bg-white/[0.04]">{overview.window.label}</span>
+          <span className="badge border-base-content/10 bg-base-content/[0.04]">{overview.window.label}</span>
         </div>
       </Card>
       <OverviewControls loading={loading} overview={overview} query={query} onChange={updateQuery} />
       <HeadlineCards overview={overview} />
       {error ? (
-        <p className="rounded-xl border border-red-300/20 bg-red-300/[0.06] p-4 text-sm text-red-100" role="alert">
+        <p className="rounded-xl border border-error/20 bg-error/[0.06] p-4 text-sm text-error" role="alert">
           {error}
         </p>
       ) : null}

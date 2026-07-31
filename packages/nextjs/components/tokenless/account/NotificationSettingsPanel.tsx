@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { ChoiceInput, Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
@@ -10,39 +11,27 @@ import { HttpJsonError, readJson } from "~~/lib/tokenless/http";
 const notificationOptions = [
   {
     key: "assignmentAvailable",
-    group: "Review work",
-    label: "New review",
-    description: "When review work is ready for you.",
+    group: "review",
   },
   {
     key: "assignmentCompleted",
-    group: "Review work",
-    label: "Review outcome",
-    description: "When a submitted review is accepted or closed.",
+    group: "review",
   },
   {
     key: "paymentUpdates",
-    group: "Payments",
-    label: "Payment updates",
-    description: "When money from paid review work is ready or needs action.",
+    group: "payments",
   },
   {
     key: "askResults",
-    group: "Workspace",
-    label: "Workspace results",
-    description: "When a workspace review has a result or needs another step.",
+    group: "workspace",
   },
   {
     key: "accountSecurity",
-    group: "Account",
-    label: "Account security",
-    description: "Always on for important sign-in and account changes.",
+    group: "account",
   },
   {
     key: "oversightAlerts",
-    group: "Workspace",
-    label: "Workspace alerts",
-    description: "When review work is blocked, fails, expires, or is stopped.",
+    group: "workspace",
   },
 ] as const;
 
@@ -111,19 +100,23 @@ function PreferenceToggle({
   disabled: boolean;
   onChange: (value: boolean) => void;
 }) {
+  const t = useTranslations("account.notifications");
+  const label = t(`options.${option.key}.label`);
   return (
     <label
-      className="flex items-start justify-between gap-4 rounded-xl border border-white/10 bg-black/20 px-4 py-3"
+      className="flex items-start justify-between gap-4 rounded-xl border border-base-content/10 bg-base-content/[0.03] px-4 py-3"
       htmlFor={`notification-${option.key}`}
     >
       <span>
-        <span className="block text-sm font-semibold text-base-content">{option.label}</span>
-        <span className="mt-1 block text-xs leading-5 text-base-content/55">{option.description}</span>
+        <span className="block text-sm font-semibold text-base-content">{label}</span>
+        <span className="mt-1 block text-xs leading-5 text-base-content/55">
+          {t(`options.${option.key}.description`)}
+        </span>
       </span>
       <ChoiceInput
         id={`notification-${option.key}`}
         type="checkbox"
-        aria-label={option.label}
+        aria-label={label}
         className="toggle toggle-sm toggle-primary mt-1"
         checked={checked}
         disabled={disabled}
@@ -134,6 +127,7 @@ function PreferenceToggle({
 }
 
 export function NotificationSettingsPanel() {
+  const t = useTranslations("account.notifications");
   const [preferences, setPreferences] = useState<Preferences>(defaultPreferences);
   const [emailSettings, setEmailSettings] = useState<EmailSettings>(defaultEmailSettings);
   const [capabilities, setCapabilities] = useState<NotificationCapabilities>(defaultCapabilities);
@@ -155,13 +149,13 @@ export function NotificationSettingsPanel() {
       setBrowserPermission(window.Notification.permission);
     }
     const result = new URLSearchParams(window.location.search).get("email");
-    if (result === "verified") setStatus("Email verified. RateLoop can now send notifications to that address.");
-    if (result === "unsubscribed") setStatus("Email notifications unsubscribed.");
-    if (result === "invalid" || result === "invalid_unsubscribe") setError("That email link is invalid or expired.");
+    if (result === "verified") setStatus(t("verified"));
+    if (result === "unsubscribed") setStatus(t("unsubscribed"));
+    if (result === "invalid" || result === "invalid_unsubscribe") setError(t("invalidLink"));
     if (window.location.hash === "#notifications") {
       window.requestAnimationFrame(() => document.getElementById("notifications")?.scrollIntoView({ block: "start" }));
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -180,9 +174,9 @@ export function NotificationSettingsPanel() {
         setEmailDraft(nextEmail.email);
         setLoadError(null);
       })
-      .catch(cause => {
+      .catch(() => {
         if (!cancelled) {
-          setLoadError(cause instanceof Error ? cause.message : "Unable to load notification settings.");
+          setLoadError(t("loadFailed"));
         }
       })
       .finally(() => {
@@ -191,15 +185,15 @@ export function NotificationSettingsPanel() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [t]);
 
   const notificationGroups = useMemo(() => {
     const visibleOptions = notificationOptions.filter(
       option =>
-        (option.group !== "Payments" || capabilities.hasPaidActivity) &&
-        (option.group !== "Workspace" || capabilities.hasWorkspace),
+        (option.group !== "payments" || capabilities.hasPaidActivity) &&
+        (option.group !== "workspace" || capabilities.hasWorkspace),
     );
-    return (["Review work", "Payments", "Workspace", "Account"] as const)
+    return (["review", "payments", "workspace", "account"] as const)
       .map(group => ({ group, options: visibleOptions.filter(option => option.group === group) }))
       .filter((entry): entry is { group: NotificationGroup; options: typeof visibleOptions } =>
         Boolean(entry.options.length),
@@ -228,10 +222,10 @@ export function NotificationSettingsPanel() {
           body: JSON.stringify({ preferences: next }),
         }),
       );
-      setStatus("Notification settings updated.");
-    } catch (cause) {
+      setStatus(t("updated"));
+    } catch {
       setPreferences(preferences);
-      setError(cause instanceof Error ? cause.message : "Unable to update notification settings.");
+      setError(t("updateFailed"));
     } finally {
       setSavingPreferences(false);
     }
@@ -254,15 +248,13 @@ export function NotificationSettingsPanel() {
       const nextEmail = { ...defaultEmailSettings, ...(body.settings as Partial<EmailSettings>) };
       setEmailSettings(nextEmail);
       setEmailDraft(nextEmail.email);
-      setStatus(
-        body.verificationSent ? "Check your inbox to verify this notification email." : "Email settings updated.",
-      );
+      setStatus(body.verificationSent ? t("verificationSent") : t("emailUpdated"));
     } catch (cause) {
       capture(
         cause instanceof HttpJsonError && cause.status === 503
-          ? { field: cause.field, message: "Email notifications are unavailable right now." }
+          ? { field: cause.field, message: t("emailUnavailable") }
           : cause,
-        "Unable to update email notification settings.",
+        t("emailUpdateFailed"),
       );
     } finally {
       setSavingEmail(false);
@@ -276,7 +268,7 @@ export function NotificationSettingsPanel() {
     }
     const permission = await window.Notification.requestPermission();
     setBrowserPermission(permission);
-    setStatus(permission === "granted" ? "Browser notifications enabled." : "Browser notifications remain blocked.");
+    setStatus(permission === "granted" ? t("browserEnabled") : t("browserBlocked"));
   }
 
   return (
@@ -284,28 +276,26 @@ export function NotificationSettingsPanel() {
       <Card as="section" className="rounded-2xl p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h2 className="text-xl font-semibold">Choose your notifications</h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-base-content/60">
-              Choose which updates you receive. Account security notifications stay on.
-            </p>
+            <h2 className="text-xl font-semibold">{t("title")}</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-base-content/60">{t("description")}</p>
           </div>
-          <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-base-content/60">
+          <div className="rounded-lg border border-base-content/10 bg-base-content/[0.03] px-3 py-2 text-xs text-base-content/60">
             {browserPermission === "granted"
-              ? "Browser alerts enabled"
+              ? t("browserStatus.granted")
               : browserPermission === "denied"
-                ? "Browser alerts blocked"
+                ? t("browserStatus.denied")
                 : browserPermission === "unsupported"
-                  ? "Browser alerts unavailable"
-                  : "Browser alerts need permission"}
+                  ? t("browserStatus.unsupported")
+                  : t("browserStatus.default")}
           </div>
         </div>
         <AsyncSection
           className="mt-5"
           loading={loading}
-          loadingLabel="Loading notification settings"
+          loadingLabel={t("loading")}
           error={loadError}
           empty={notificationGroups.length === 0}
-          emptyTitle="No notification choices available."
+          emptyTitle={t("empty")}
         >
           <div className="mt-5 space-y-5">
             {notificationGroups.map(entry => (
@@ -314,7 +304,7 @@ export function NotificationSettingsPanel() {
                   id={`notification-group-${entry.group.replaceAll(" ", "-")}`}
                   className="mb-2 text-sm font-semibold"
                 >
-                  {entry.group}
+                  {t(`groups.${entry.group}`)}
                 </h3>
                 <div className="space-y-2">
                   {entry.options.map(option => (
@@ -336,7 +326,7 @@ export function NotificationSettingsPanel() {
               className="btn rateloop-secondary-action mt-4"
               onClick={() => void requestBrowserPermission()}
             >
-              Enable browser notifications
+              {t("enableBrowser")}
             </button>
           ) : null}
         </AsyncSection>
@@ -345,19 +335,17 @@ export function NotificationSettingsPanel() {
       <Card as="section" className="rounded-2xl p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h2 className="text-xl font-semibold">Notification email</h2>
-            <p className="mt-2 text-sm leading-6 text-base-content/60">
-              Add an email address for verified RateLoop notifications. Clearing it disables email delivery.
-            </p>
+            <h2 className="text-xl font-semibold">{t("emailTitle")}</h2>
+            <p className="mt-2 text-sm leading-6 text-base-content/60">{t("emailDescription")}</p>
           </div>
-          <span className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-base-content/60">
+          <span className="rounded-lg border border-base-content/10 bg-base-content/[0.03] px-3 py-2 text-xs text-base-content/60">
             {!emailSettings.deliveryConfigured
-              ? "Email notifications unavailable"
+              ? t("emailStatus.unavailable")
               : !emailSettings.email
-                ? "No email added"
+                ? t("emailStatus.missing")
                 : emailSettings.verified
-                  ? "Email verified"
-                  : "Verification required"}
+                  ? t("emailStatus.verified")
+                  : t("emailStatus.required")}
           </span>
         </div>
         {emailSettings.deliveryConfigured ? (
@@ -365,14 +353,14 @@ export function NotificationSettingsPanel() {
             <div className="mt-5">
               <Field
                 id="tokenless-notification-email"
-                label="Delivery email"
+                label={t("deliveryEmail")}
                 type="email"
                 value={emailDraft}
                 onChange={event => {
                   setEmailDraft(event.target.value);
                   clear("email");
                 }}
-                className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                className="input mt-2 w-full border-base-content/10 bg-[var(--rateloop-field)]"
                 placeholder="you@example.com"
                 autoComplete="email"
                 error={fieldErrors.email}
@@ -384,32 +372,26 @@ export function NotificationSettingsPanel() {
               disabled={savingEmail || !emailDirty}
               onClick={() => void saveEmailSettings()}
             >
-              {savingEmail
-                ? "Saving…"
-                : emailSettings.email && !emailDirty
-                  ? "Email settings saved"
-                  : "Save email settings"}
+              {savingEmail ? t("saving") : emailSettings.email && !emailDirty ? t("saved") : t("save")}
             </button>
           </>
         ) : (
-          <p className="mt-5 text-sm text-base-content/60">
-            Email notifications are unavailable right now. Browser notifications still use the choices above.
-          </p>
+          <p className="mt-5 text-sm text-base-content/60">{t("unavailableDescription")}</p>
         )}
       </Card>
 
       {status ? (
-        <p className="rounded-lg bg-emerald-300/10 p-3 text-sm text-emerald-100" role="status">
+        <p className="rounded-lg bg-success/10 p-3 text-sm text-success" role="status">
           {status}
         </p>
       ) : null}
       {error ? (
-        <p role="alert" className="rounded-lg bg-red-400/10 p-3 text-sm text-red-100">
+        <p role="alert" className="rounded-lg bg-error/10 p-3 text-sm text-error">
           {error}
         </p>
       ) : null}
       {formError ? (
-        <p role="alert" className="rounded-lg bg-red-400/10 p-3 text-sm text-red-100">
+        <p role="alert" className="rounded-lg bg-error/10 p-3 text-sm text-error">
           {formError}
         </p>
       ) : null}

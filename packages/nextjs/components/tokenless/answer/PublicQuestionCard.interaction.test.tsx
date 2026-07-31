@@ -2,6 +2,7 @@ import React from "react";
 import type { PublicAnswerTask } from "./PublicQuestionCard";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 import { TOKENLESS_DRAND_NETWORKS } from "~~/lib/tokenless/rater/tlock";
 
@@ -73,7 +74,8 @@ function assertNoRecoveryMaterial(storage: Storage) {
 
 test("a reserved network seat must be accepted with its exact terms before public task material opens", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, waitFor, within } = await import("@testing-library/react");
+  const { cleanup, render: baseRender, waitFor, within } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { PublicQuestionCard } = await import("./PublicQuestionCard");
   const previousFetch = globalThis.fetch;
@@ -128,7 +130,8 @@ test("a reserved network seat must be accepted with its exact terms before publi
 
 test("accepted paid-review terms survive a queue reload of the same round and reset for another round", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, within } = await import("@testing-library/react");
+  const { cleanup, render: baseRender, within } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { PublicQuestionCard } = await import("./PublicQuestionCard");
   const previousFetch = globalThis.fetch;
@@ -179,7 +182,8 @@ test("accepted paid-review terms survive a queue reload of the same round and re
 
 test("a public reviewer can choose a rating, exact crowd forecast, and optional feedback", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, fireEvent, render, waitFor, within } = await import("@testing-library/react");
+  const { cleanup, fireEvent, render: baseRender, waitFor, within } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { PublicQuestionCard } = await import("./PublicQuestionCard");
 
@@ -231,7 +235,8 @@ test("a public reviewer can choose a rating, exact crowd forecast, and optional 
 
 test("voucher and commit APIs stay unreachable until the downloaded recovery backup is confirmed", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, fireEvent, render, waitFor, within } = await import("@testing-library/react");
+  const { cleanup, fireEvent, render: baseRender, waitFor, within } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { PublicQuestionCard } = await import("./PublicQuestionCard");
   const previousFetch = globalThis.fetch;
@@ -345,7 +350,8 @@ test("voucher and commit APIs stay unreachable until the downloaded recovery bac
 
 test("a reload before backup confirmation discards private preparation and safely restarts", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, fireEvent, render, waitFor, within } = await import("@testing-library/react");
+  const { cleanup, fireEvent, render: baseRender, waitFor, within } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { PublicQuestionCard } = await import("./PublicQuestionCard");
   const previousFetch = globalThis.fetch;
@@ -401,7 +407,8 @@ test("a reload before backup confirmation discards private preparation and safel
 
 test("backup confirmation fails closed when the browser principal changes", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, fireEvent, render, waitFor, within } = await import("@testing-library/react");
+  const { cleanup, fireEvent, render: baseRender, waitFor, within } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { PublicQuestionCard } = await import("./PublicQuestionCard");
   const previousFetch = globalThis.fetch;

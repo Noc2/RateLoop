@@ -3,6 +3,7 @@ import { TokenlessHandoffClient } from "./TokenlessHandoffClient";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
+import { withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 const REDACTION_SUMMARY = "Names and account identifiers were replaced with synthetic values.";
@@ -109,7 +110,8 @@ function quoteResponse() {
 
 test("a first sign-in keeps the quote and confirmation the handoff page told the user to prepare", async () => {
   const restoreDom = installTestDom();
-  const { act, cleanup, render, waitFor } = await import("@testing-library/react");
+  const { act, cleanup, render: baseRender, waitFor } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const previousFetch = globalThis.fetch;
   let authenticated = false;
@@ -174,7 +176,8 @@ test("a first sign-in keeps the quote and confirmation the handoff page told the
 
 test("switching to a different principal still discards the previous principal's quote", async () => {
   const restoreDom = installTestDom();
-  const { act, cleanup, render, waitFor } = await import("@testing-library/react");
+  const { act, cleanup, render: baseRender, waitFor } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const previousFetch = globalThis.fetch;
   let principalId = "rlp_first_principal";

@@ -1,5 +1,5 @@
 import React from "react";
-import { TokenlessLandingPage } from "../../app/(public)/page";
+import { TokenlessLandingPage } from "../../app/[locale]/(public)/page";
 import { SignInSurface } from "../auth/SignInSurface";
 import { HumanAssuranceRaterClient } from "./HumanAssuranceRaterClient";
 import { PublicQuestionCard } from "./answer/PublicQuestionCard";
@@ -8,6 +8,7 @@ import { JSDOM } from "jsdom";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import test from "node:test";
+import { AgentTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 
 const require = createRequire(import.meta.url);
 const { renderToStaticMarkup } = require("react-dom/server") as {
@@ -16,7 +17,9 @@ const { renderToStaticMarkup } = require("react-dom/server") as {
 
 async function assertNoSemanticViolations(name: string, element: React.ReactElement) {
   const dom = new JSDOM(
-    `<!doctype html><html lang="en"><head><title>${name}</title></head><body>${renderToStaticMarkup(element)}</body></html>`,
+    `<!doctype html><html lang="en"><head><title>${name}</title></head><body>${renderToStaticMarkup(
+      <AgentTestProviders>{element}</AgentTestProviders>,
+    )}</body></html>`,
     { runScripts: "outside-only" },
   );
   dom.window.eval(axe.source);

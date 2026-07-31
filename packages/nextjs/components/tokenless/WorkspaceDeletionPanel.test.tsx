@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const source = readFileSync(new URL("./WorkspaceDeletionPanel.tsx", import.meta.url), "utf8");
+const source = [
+  readFileSync(new URL("./WorkspaceDeletionPanel.tsx", import.meta.url), "utf8"),
+  readFileSync(new URL("../../messages/en/shared.json", import.meta.url), "utf8"),
+].join("\n");
 const dangerSource = readFileSync(new URL("./WorkspaceDangerZone.tsx", import.meta.url), "utf8");
 const panelsSource = readFileSync(new URL("./agents/AgentWorkspacePanels.tsx", import.meta.url), "utf8");
 const settingsSource = readFileSync(new URL("./WorkspaceSettingsClient.tsx", import.meta.url), "utf8");
@@ -22,7 +25,7 @@ test("the visible workspace deletion action loads a preview before accepting the
 });
 
 test("workspace deletion reveals only relevant impact, warnings, and blockers", () => {
-  assert.match(source, /impactRows\(preview\)/);
+  assert.match(source, /impactRows\(preview, locale\)/);
   assert.match(source, /\.filter\(\(value\): value is string => Boolean\(value\)\)/);
   assert.match(source, /preview\.warnings\.length > 0/);
   assert.match(source, /preview\.blockers\.length > 0/);

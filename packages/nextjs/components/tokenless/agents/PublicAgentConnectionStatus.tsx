@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useAgentTranslations } from "./AgentsLocaleProvider";
 
 export function PublicAgentConnectionStatus() {
+  const t = useAgentTranslations("publicStatus");
   const [fragmentState, setFragmentState] = useState<"checking" | "present" | "missing">("checking");
 
   useEffect(() => {
@@ -14,7 +16,7 @@ export function PublicAgentConnectionStatus() {
   if (fragmentState === "checking") {
     return (
       <p className="mt-4 text-sm text-base-content/55" role="status">
-        Checking this local handoff…
+        {t("checking")}
       </p>
     );
   }
@@ -22,22 +24,22 @@ export function PublicAgentConnectionStatus() {
   if (fragmentState === "missing") {
     return (
       <p
-        className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/[0.06] p-4 text-sm text-amber-100"
+        className="mt-4 rounded-xl border border-warning/20 bg-warning/[0.06] p-4 text-sm text-warning"
         role="status"
         aria-live="polite"
       >
-        Open the original connection link. If it is unavailable, create a new connection in RateLoop.
+        {t("missing")}
       </p>
     );
   }
 
   return (
     <p
-      className="mt-4 rounded-xl border border-emerald-300/20 bg-emerald-300/[0.06] p-4 text-sm text-emerald-100"
+      className="mt-4 rounded-xl border border-success/20 bg-success/[0.06] p-4 text-sm text-success"
       role="status"
       aria-live="polite"
     >
-      Connection link found. Return to your agent to continue.
+      {t("present")}
     </p>
   );
 }

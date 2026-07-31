@@ -16,6 +16,10 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import test from "node:test";
+import {
+  EnglishAgentTestProviders,
+  withEnglishAppTestProviders,
+} from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 const require = createRequire(import.meta.url);
@@ -28,7 +32,7 @@ test("insufficient prepaid handoffs link directly to workspace top-up settings",
   assert.match(handoffSource, /Top up balance/);
   assert.match(handoffSource, /\/agents\/overview#panel-funding/);
   assert.match(handoffSource, /workspace=\$\{encodeURIComponent\(selectedWorkspace\.workspaceId\)\}/);
-  assert.match(handoffSource, /import Link from "next\/link"/);
+  assert.match(handoffSource, /import \{ Link \} from "~~\/i18n\/navigation"/);
   assert.match(handoffSource, /insufficientPrepaid/);
 });
 
@@ -238,7 +242,11 @@ test("exact USDC formatting never converts atomic values through floating point"
 
 test("handoff client renders a fragment-local loading state without server payload access", () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
-  const html = renderToStaticMarkup(<TokenlessHandoffClient />).replace(/\s+/g, " ");
+  const html = renderToStaticMarkup(
+    <EnglishAgentTestProviders>
+      <TokenlessHandoffClient />
+    </EnglishAgentTestProviders>,
+  ).replace(/\s+/g, " ");
 
   assert.match(html, /Reading the private handoff fragment in this browser/i);
   assert.match(html, /aria-busy="true"/);
@@ -275,7 +283,7 @@ test("handoff content cleanup preserves consent and consequence safeguards", () 
   assert.match(handoffSource, /No funds are reserved until you submit the ask\./);
   assert.match(
     handoffSource,
-    /Submitting reserves \{formatUsdcAtomic\(quote\.economics\.totalFundedAtomic\)\} from the selected workspace\./,
+    /Submitting reserves \{formatUsdcAtomic\(quote\.economics\.totalFundedAtomic, locale\)\} from the selected\s+workspace\./,
   );
   assert.match(
     handoffSource,
@@ -372,7 +380,8 @@ test("handoff wait transport shrinks to the remaining product deadline", () => {
 
 test("a reloaded authenticated handoff resumes from its operation reference through bounded wait", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, waitFor } = await import("@testing-library/react");
+  const { cleanup, render: baseRender, waitFor } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const previousFetch = globalThis.fetch;
   const operationKey = `op_${"b".repeat(32)}`;
   window.history.replaceState(null, "", `/?operation=${operationKey}`);

@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const panelSource = readFileSync(new URL("./AccountDeletionPanel.tsx", import.meta.url), "utf8");
+const panelSource = [
+  readFileSync(new URL("./AccountDeletionPanel.tsx", import.meta.url), "utf8"),
+  readFileSync(new URL("../../../messages/en/account.json", import.meta.url), "utf8"),
+].join("\n");
 const settingsPageSource = readFileSync(
-  new URL("../../../app/(app)/human/HumanSectionPage.tsx", import.meta.url),
+  new URL("../../../app/[locale]/(app)/human/HumanSectionPage.tsx", import.meta.url),
   "utf8",
 );
 
@@ -23,7 +26,7 @@ test("account deletion requires a literal confirmation and clears client authent
   assert.match(panelSource, /issueAccountDeletionProof\(\)/);
   assert.match(panelSource, /body: JSON\.stringify\(\{ confirmation: "DELETE", recentAuthProof \}\)/);
   assert.match(panelSource, /betterAuthClient\.signOut\(\)/);
-  assert.match(panelSource, /window\.location\.assign\("\/"\)/);
+  assert.match(panelSource, /window\.location\.assign\(locale === "en" \? "\/" : `\/\$\{locale\}`\)/);
   assert.match(panelSource, /same email address, creates a new/);
   assert.match(panelSource, /Public blockchain entries and records required for legal, tax, settlement/);
 });

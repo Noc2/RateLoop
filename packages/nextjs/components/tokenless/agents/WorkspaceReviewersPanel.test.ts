@@ -3,12 +3,13 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const panel = readFileSync(new URL("./WorkspaceReviewersPanel.tsx", import.meta.url), "utf8");
+const catalogSource = readFileSync(new URL("../../../messages/en/agents.json", import.meta.url), "utf8");
 
 test("reviewer management has one direct invitation path and states its access boundary", () => {
-  assert.match(panel, /Invite reviewer/);
-  assert.match(panel, /Reviewers can receive assigned private work\. They do not get workspace access\./);
-  assert.match(panel, /Email \(optional\)/);
-  assert.match(panel, /Private material limit/);
+  assert.match(catalogSource, /Invite reviewer/);
+  assert.match(catalogSource, /Reviewers can receive assigned private work\. They do not get workspace access\./);
+  assert.match(catalogSource, /Email \(optional\)/);
+  assert.match(catalogSource, /Private material limit/);
   assert.match(panel, /maxPrivateSensitivity/);
   assert.match(panel, /OneTimeSecretNotice/);
   assert.match(panel, /body: JSON\.stringify\(\{\s*agentId,/u);
@@ -16,8 +17,8 @@ test("reviewer management has one direct invitation path and states its access b
 });
 
 test("reviewer management lists active reviewers and pending invitations with recovery controls", () => {
-  assert.match(panel, /Active reviewers/);
-  assert.match(panel, /Pending invitations/);
+  assert.match(catalogSource, /Active reviewers/);
+  assert.match(catalogSource, /Pending invitations/);
   assert.match(panel, /reviewer\.displayName/);
   assert.match(panel, /reviewer\.email/);
   assert.match(panel, /shortPrincipal\(reviewer\.principalAddress\)/);
@@ -49,7 +50,7 @@ test("owners can materialize exact specialist records for active invited reviewe
   assert.match(panel, /confirmReviewerExpertise/u);
   assert.match(panel, /private-groups\/\$\{encodeURIComponent\(\s*expertiseContext\.groupId/u);
   assert.match(panel, /method: "PUT"/u);
-  assert.match(panel, /Confirm specialist areas/u);
+  assert.match(catalogSource, /Confirm specialist areas/u);
   assert.match(panel, /definitionVersion/u);
   assert.match(panel, /definitionHash/u);
 });

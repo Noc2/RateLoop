@@ -1,6 +1,7 @@
 "use client";
 
 import { type ReactNode, type RefObject, useEffect, useRef } from "react";
+import { useTranslations } from "next-intl";
 import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 
@@ -18,7 +19,7 @@ export function ReviewerShell({
   advanceHint,
   advanceLabel,
   backDisabled = false,
-  backLabel = "Previous case",
+  backLabel,
   busyLabel,
   caseIndex,
   children,
@@ -48,6 +49,7 @@ export function ReviewerShell({
   shortcutsEnabled?: boolean;
   totalCases: number;
 }) {
+  const t = useTranslations("review.shell");
   const shellRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -79,7 +81,7 @@ export function ReviewerShell({
     <section
       ref={shellRef}
       className="space-y-4 outline-none"
-      aria-label="Reviewer workspace"
+      aria-label={t("workspace")}
       tabIndex={-1}
       onPointerDown={event => {
         if (!isInteractiveTarget(event.target)) shellRef.current?.focus({ preventScroll: true });
@@ -89,13 +91,13 @@ export function ReviewerShell({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>{laneHeader}</div>
           <p className="font-mono text-xs uppercase tracking-widest text-base-content/55">
-            Case {caseIndex + 1} of {totalCases}
+            {t("caseProgress", { current: caseIndex + 1, total: totalCases })}
           </p>
         </div>
         <div
-          className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/10"
+          className="mt-4 h-1.5 overflow-hidden rounded-full bg-base-content/10"
           role="progressbar"
-          aria-label="Review progress"
+          aria-label={t("progress")}
           aria-valuemin={1}
           aria-valuemax={totalCases}
           aria-valuenow={caseIndex + 1}
@@ -113,7 +115,7 @@ export function ReviewerShell({
         <div className={onBack ? "grid gap-3 sm:grid-cols-2" : undefined}>
           {onBack ? (
             <Button type="button" variant="secondary" className="w-full px-6" disabled={backDisabled} onClick={onBack}>
-              {backLabel}
+              {backLabel ?? t("previous")}
             </Button>
           ) : null}
           <Button type="button" className="w-full px-6" disabled={advanceDisabled} onClick={onAdvance}>
@@ -121,11 +123,7 @@ export function ReviewerShell({
           </Button>
         </div>
         {advanceHint ? <p className="mt-3 text-center text-xs text-base-content/60">{advanceHint}</p> : null}
-        {shortcutsEnabled ? (
-          <p className="mt-3 text-center text-xs text-base-content/55">
-            Keyboard: 1 or 2 selects · R opens rationale · Enter advances
-          </p>
-        ) : null}
+        {shortcutsEnabled ? <p className="mt-3 text-center text-xs text-base-content/55">{t("shortcuts")}</p> : null}
       </Card>
     </section>
   );

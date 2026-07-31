@@ -2,6 +2,7 @@ import React from "react";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import test from "node:test";
+import { AgentTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 
 const require = createRequire(import.meta.url);
 const { renderToStaticMarkup } = require("react-dom/server") as {
@@ -40,10 +41,12 @@ test("private rater queue opens one assigned task without unrelated eligibility 
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
   const { HumanAssuranceRaterClient } = await import("./HumanAssuranceRaterClient");
   const html = renderToStaticMarkup(
-    <HumanAssuranceRaterClient
-      initialAssignmentId="haas_private_assignment"
-      initialTermsHash={`sha256:${"a".repeat(64)}`}
-    />,
+    <AgentTestProviders>
+      <HumanAssuranceRaterClient
+        initialAssignmentId="haas_private_assignment"
+        initialTermsHash={`sha256:${"a".repeat(64)}`}
+      />
+    </AgentTestProviders>,
   ).replace(/\s+/g, " ");
 
   assert.match(html, /Open your assigned review/);
@@ -54,7 +57,10 @@ test("private rater queue opens one assigned task without unrelated eligibility 
   assert.match(html, /Only your assigned, blinded cases are returned/);
   assert.match(html, /Private artifact access is short-lived and logged/);
   assert.match(html, /Do not copy, share, or reuse assigned material/);
-  assert.ok(html.indexOf("Privacy and access") < html.indexOf("I accept this reviewer group"));
+  assert.ok(
+    html.indexOf("Privacy and access") <
+      html.indexOf("I accept these confidentiality terms for this assigned private work"),
+  );
   assert.doesNotMatch(html, /<details/);
   assert.doesNotMatch(html, /Capability status|Review eligibility|No capability evidence is shown/);
   assert.doesNotMatch(html, /Tier \d|World ID|Self\.xyz|passport uniqueness|guaranteed base|on-chain payment/i);
@@ -65,51 +71,53 @@ test("assigned review keeps the content, decision, and deadline visible without 
   const { HumanAssuranceRaterClient } = await import("./HumanAssuranceRaterClient");
   const expiresAt = new Date("2030-01-02T03:04:05.000Z").toISOString();
   const html = renderToStaticMarkup(
-    <HumanAssuranceRaterClient
-      initialTask={{
-        assignmentId: "haas_assigned",
-        runId: "har_test",
-        source: "customer_invited",
-        runManifestHash: `sha256:${"b".repeat(64)}`,
-        policyHash: `sha256:${"c".repeat(64)}`,
-        qualificationProvenance: [
-          {
-            key: "customer_invitation",
-            value: true,
-            source: "customer",
-            assertedBy: "client",
-            verifiedAt: "2030-01-01T00:00:00.000Z",
+    <AgentTestProviders>
+      <HumanAssuranceRaterClient
+        initialTask={{
+          assignmentId: "haas_assigned",
+          runId: "har_test",
+          source: "customer_invited",
+          runManifestHash: `sha256:${"b".repeat(64)}`,
+          policyHash: `sha256:${"c".repeat(64)}`,
+          qualificationProvenance: [
+            {
+              key: "customer_invitation",
+              value: true,
+              source: "customer",
+              assertedBy: "client",
+              verifiedAt: "2030-01-01T00:00:00.000Z",
+            },
+            {
+              key: "expertise:code-review:typescript",
+              value: true,
+              source: "workspace_owner",
+              assertedBy: "client",
+              verifiedAt: "2030-01-01T00:00:00.000Z",
+            },
+          ],
+          rubric: {
+            prompt: "Which response is better?",
+            failureTags: [{ key: "incorrect", label: "Incorrect" }],
+            rationale: { mode: "required", minLength: 10, maxLength: 2_000 },
           },
-          {
-            key: "expertise:code-review:typescript",
-            value: true,
-            source: "workspace_owner",
-            assertedBy: "client",
-            verifiedAt: "2030-01-01T00:00:00.000Z",
-          },
-        ],
-        rubric: {
-          prompt: "Which response is better?",
-          failureTags: [{ key: "incorrect", label: "Incorrect" }],
-          rationale: { mode: "required", minLength: 10, maxLength: 2_000 },
-        },
-        cases: [
-          {
-            caseId: "hacase_1",
-            position: 0,
-            title: "Compare the support replies",
-            instructions: "Choose the reply that resolves the issue without inventing policy.",
-            options: [
-              { key: "A", artifactId: "haa_a", leaseId: "lease_a", expiresAt },
-              { key: "B", artifactId: "haa_b", leaseId: "lease_b", expiresAt },
-            ],
-            context: [],
-            objectiveReference: "Use the frozen support rubric.",
-          },
-        ],
-      }}
-      assignmentExpiresAt="2030-01-02T02:00:00.000Z"
-    />,
+          cases: [
+            {
+              caseId: "hacase_1",
+              position: 0,
+              title: "Compare the support replies",
+              instructions: "Choose the reply that resolves the issue without inventing policy.",
+              options: [
+                { key: "A", artifactId: "haa_a", leaseId: "lease_a", expiresAt },
+                { key: "B", artifactId: "haa_b", leaseId: "lease_b", expiresAt },
+              ],
+              context: [],
+              objectiveReference: "Use the frozen support rubric.",
+            },
+          ],
+        }}
+        assignmentExpiresAt="2030-01-02T02:00:00.000Z"
+      />
+    </AgentTestProviders>,
   ).replace(/\s+/g, " ");
 
   assert.match(html, /Candidate A/);
@@ -132,42 +140,44 @@ test("a server-confirmed private response shows a durable unpaid submission rece
   const { HumanAssuranceRaterClient } = await import("./HumanAssuranceRaterClient");
   const expiresAt = new Date("2030-01-02T03:04:05.000Z").toISOString();
   const html = renderToStaticMarkup(
-    <HumanAssuranceRaterClient
-      initialServerAcceptance={{
-        accepted: true,
-        replay: false,
-        responseCount: 1,
-        compensation: "unpaid",
-        settlementStatus: "not_applicable",
-      }}
-      initialTask={{
-        assignmentId: "haas_receipt",
-        runId: "har_receipt",
-        source: "customer_invited",
-        runManifestHash: `sha256:${"d".repeat(64)}`,
-        policyHash: `sha256:${"e".repeat(64)}`,
-        qualificationProvenance: [],
-        rubric: {
-          prompt: "Which response is better?",
-          failureTags: [],
-          rationale: { mode: "optional", maxLength: 2_000 },
-        },
-        cases: [
-          {
-            caseId: "hacase_receipt",
-            position: 0,
-            title: "Compare responses",
-            instructions: "Choose one.",
-            options: [
-              { key: "A", artifactId: "haa_a", leaseId: "lease_a", expiresAt },
-              { key: "B", artifactId: "haa_b", leaseId: "lease_b", expiresAt },
-            ],
-            context: [],
-            objectiveReference: null,
+    <AgentTestProviders>
+      <HumanAssuranceRaterClient
+        initialServerAcceptance={{
+          accepted: true,
+          replay: false,
+          responseCount: 1,
+          compensation: "unpaid",
+          settlementStatus: "not_applicable",
+        }}
+        initialTask={{
+          assignmentId: "haas_receipt",
+          runId: "har_receipt",
+          source: "customer_invited",
+          runManifestHash: `sha256:${"d".repeat(64)}`,
+          policyHash: `sha256:${"e".repeat(64)}`,
+          qualificationProvenance: [],
+          rubric: {
+            prompt: "Which response is better?",
+            failureTags: [],
+            rationale: { mode: "optional", maxLength: 2_000 },
           },
-        ],
-      }}
-    />,
+          cases: [
+            {
+              caseId: "hacase_receipt",
+              position: 0,
+              title: "Compare responses",
+              instructions: "Choose one.",
+              options: [
+                { key: "A", artifactId: "haa_a", leaseId: "lease_a", expiresAt },
+                { key: "B", artifactId: "haa_b", leaseId: "lease_b", expiresAt },
+              ],
+              context: [],
+              objectiveReference: null,
+            },
+          ],
+        }}
+      />
+    </AgentTestProviders>,
   ).replace(/\s+/g, " ");
 
   assert.match(html, /Submission receipt/);

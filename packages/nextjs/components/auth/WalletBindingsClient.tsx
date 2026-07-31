@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { baseSepolia } from "thirdweb/chains";
 import { ConnectButton, ThirdwebProvider, useActiveAccount, useConnect } from "thirdweb/react";
 import { readBrowserSession, subscribeToBrowserAuthSessionChanges } from "~~/lib/auth/client";
@@ -16,39 +17,7 @@ type Binding = {
 
 type SelectableWalletPurpose = Extract<WalletBindingPurpose, "funding" | "payout">;
 
-const PURPOSES: Array<{
-  purpose: SelectableWalletPurpose;
-  title: string;
-  description: string;
-  action: string;
-  confirmation: string;
-  saved: string;
-}> = [
-  {
-    purpose: "funding",
-    title: "Pay for public asks",
-    description: "Use USDC from this wallet only when you approve a public ask.",
-    action: "Set up funding",
-    confirmation: "Use for public asks",
-    saved: "Wallet saved for public asks.",
-  },
-  {
-    purpose: "payout",
-    title: "Receive reviewer payouts",
-    description: "Send future paid-review earnings to this wallet.",
-    action: "Set up payouts",
-    confirmation: "Use for payouts",
-    saved: "Payout wallet saved.",
-  },
-];
-
-function purposeTitle(purpose: WalletBindingPurpose) {
-  return PURPOSES.find(option => option.purpose === purpose)?.title ?? "Wallet connection";
-}
-
-function purposeDetails(purpose: SelectableWalletPurpose) {
-  return PURPOSES.find(option => option.purpose === purpose) ?? PURPOSES[1]!;
-}
+const PURPOSES: SelectableWalletPurpose[] = ["funding", "payout"];
 
 export function WalletPurposeChooser({
   purpose,
@@ -57,28 +26,31 @@ export function WalletPurposeChooser({
   purpose: SelectableWalletPurpose;
   onSelect: (purpose: SelectableWalletPurpose) => void;
 }) {
+  const t = useTranslations("account.walletBinding");
   return (
     <fieldset>
-      <legend className="text-xl font-semibold">What do you need this wallet for?</legend>
-      <p className="mt-2 text-sm leading-6 text-base-content/60">
-        A wallet never grants access to your RateLoop account. Each connection is limited to the action you choose.
-      </p>
+      <legend className="text-xl font-semibold">{t("chooserTitle")}</legend>
+      <p className="mt-2 text-sm leading-6 text-base-content/60">{t("chooserDescription")}</p>
       <div className="mt-5 grid gap-3 md:grid-cols-2">
         {PURPOSES.map(option => (
           <button
-            key={option.purpose}
+            key={option}
             type="button"
-            aria-pressed={purpose === option.purpose}
+            aria-pressed={purpose === option}
             className={`rounded-xl border p-4 text-left transition ${
-              purpose === option.purpose
+              purpose === option
                 ? "border-[var(--rateloop-blue)] bg-[var(--rateloop-blue)]/10"
                 : "border-base-content/10 hover:border-base-content/25"
             }`}
-            onClick={() => onSelect(option.purpose)}
+            onClick={() => onSelect(option)}
           >
-            <span className="block font-semibold">{option.title}</span>
-            <span className="mt-2 block text-sm leading-5 text-base-content/60">{option.description}</span>
-            <span className="mt-3 block text-sm font-semibold text-[var(--rateloop-blue)]">{option.action}</span>
+            <span className="block font-semibold">{t(`purpose.${option}.title`)}</span>
+            <span className="mt-2 block text-sm leading-5 text-base-content/60">
+              {t(`purpose.${option}.description`)}
+            </span>
+            <span className="mt-3 block text-sm font-semibold text-[var(--rateloop-blue)]">
+              {t(`purpose.${option}.action`)}
+            </span>
           </button>
         ))}
       </div>
@@ -86,10 +58,10 @@ export function WalletPurposeChooser({
   );
 }
 
-async function jsonRequest<T>(url: string, init?: RequestInit): Promise<T> {
+async function jsonRequest<T>(url: string, fallbackMessage: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, { credentials: "same-origin", cache: "no-store", ...init });
   const body = (await response.json()) as T & { error?: unknown };
-  if (!response.ok) throw new Error(typeof body.error === "string" ? body.error : "Wallet request failed.");
+  if (!response.ok) throw new Error(typeof body.error === "string" ? body.error : fallbackMessage);
   return body;
 }
 
@@ -104,6 +76,7 @@ function WalletBindingControls({
   initialPurpose: SelectableWalletPurpose;
   managedWalletEnabled: boolean;
 }) {
+  const t = useTranslations("account.walletBinding");
   const account = useActiveAccount();
   const { connect, isConnecting } = useConnect();
   const [purpose, setPurpose] = useState<SelectableWalletPurpose>(initialPurpose);
@@ -118,9 +91,9 @@ function WalletBindingControls({
 
   const refresh = useCallback(async () => {
     const epoch = principalEpochRef.current;
-    const result = await jsonRequest<{ bindings: Binding[] }>("/api/account/wallets");
+    const result = await jsonRequest<{ bindings: Binding[] }>("/api/account/wallets", t("requestFailed"));
     if (epoch === principalEpochRef.current) setBindings(result.bindings);
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     const refreshSession = async () => {
@@ -139,15 +112,15 @@ function WalletBindingControls({
           setNotice(null);
         }
         if (nextPrincipal) await refresh();
-      } catch (cause) {
+      } catch {
         if (sessionRead === sessionReadRef.current) {
-          setError(cause instanceof Error ? cause.message : "Unable to load wallet bindings.");
+          setError(t("loadFailed"));
         }
       }
     };
     void refreshSession();
     return subscribeToBrowserAuthSessionChanges(() => void refreshSession());
-  }, [refresh]);
+  }, [refresh, t]);
 
   async function createThirdwebWallet() {
     const client = thirdwebBrowserClient;
@@ -157,20 +130,24 @@ function WalletBindingControls({
     setError(null);
     setNotice(null);
     try {
-      const issued = await jsonRequest<{ jwt: string; jti: string }>("/api/account/wallets/thirdweb-token", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: "{}",
-      });
+      const issued = await jsonRequest<{ jwt: string; jti: string }>(
+        "/api/account/wallets/thirdweb-token",
+        t("requestFailed"),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+        },
+      );
       if (epoch !== principalEpochRef.current) return;
       await connect(async () => {
         await rateLoopThirdwebManagedWallet.connect({ client, strategy: "jwt", jwt: issued.jwt });
         return rateLoopThirdwebManagedWallet;
       });
       if (epoch === principalEpochRef.current) setThirdwebJti(issued.jti);
-    } catch (cause) {
+    } catch {
       if (epoch === principalEpochRef.current) {
-        setError(cause instanceof Error ? cause.message : "Unable to create the optional thirdweb wallet.");
+        setError(t("createFailed"));
       }
     } finally {
       if (epoch === principalEpochRef.current) setBusy(false);
@@ -184,20 +161,24 @@ function WalletBindingControls({
     setError(null);
     try {
       const source = thirdwebJti ? "thirdweb" : "self_custodial";
-      const challenge = await jsonRequest<{ challengeId: string; message: string }>("/api/account/wallets/challenge", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          address: account.address,
-          purpose,
-          source,
-          ...(thirdwebJti ? { thirdwebJti } : {}),
-        }),
-      });
+      const challenge = await jsonRequest<{ challengeId: string; message: string }>(
+        "/api/account/wallets/challenge",
+        t("requestFailed"),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            address: account.address,
+            purpose,
+            source,
+            ...(thirdwebJti ? { thirdwebJti } : {}),
+          }),
+        },
+      );
       if (epoch !== principalEpochRef.current) return;
       const signature = await account.signMessage({ message: challenge.message });
       if (epoch !== principalEpochRef.current) return;
-      await jsonRequest("/api/account/wallets/bind", {
+      await jsonRequest("/api/account/wallets/bind", t("requestFailed"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...challenge, signature }),
@@ -205,10 +186,10 @@ function WalletBindingControls({
       if (epoch !== principalEpochRef.current) return;
       setThirdwebJti(null);
       await refresh();
-      setNotice(purposeDetails(purpose).saved);
-    } catch (cause) {
+      setNotice(t(`purpose.${purpose}.saved`));
+    } catch {
       if (epoch === principalEpochRef.current) {
-        setError(cause instanceof Error ? cause.message : "Unable to bind this wallet.");
+        setError(t("bindFailed"));
       }
     } finally {
       if (epoch === principalEpochRef.current) setBusy(false);
@@ -221,13 +202,15 @@ function WalletBindingControls({
     setError(null);
     setNotice(null);
     try {
-      await jsonRequest(`/api/account/wallets/${encodeURIComponent(bindingId)}`, { method: "DELETE" });
+      await jsonRequest(`/api/account/wallets/${encodeURIComponent(bindingId)}`, t("requestFailed"), {
+        method: "DELETE",
+      });
       if (epoch !== principalEpochRef.current) return;
       await refresh();
-      setNotice("Wallet connection removed.");
-    } catch (cause) {
+      setNotice(t("removed"));
+    } catch {
       if (epoch === principalEpochRef.current) {
-        setError(cause instanceof Error ? cause.message : "Unable to revoke this wallet binding.");
+        setError(t("revokeFailed"));
       }
     } finally {
       if (epoch === principalEpochRef.current) setBusy(false);
@@ -242,32 +225,27 @@ function WalletBindingControls({
 
       <div className={`grid gap-4 ${managedWalletEnabled ? "md:grid-cols-2" : "max-w-xl"}`}>
         <section className="rounded-xl border border-base-content/10 p-5">
-          <h2 className="font-semibold">Use your existing wallet</h2>
-          <p className="mb-4 mt-2 text-sm leading-6 text-base-content/60">
-            Connect MetaMask, Coinbase Wallet, or Base Account. RateLoop never receives your private key.
-          </p>
+          <h2 className="font-semibold">{t("existingTitle")}</h2>
+          <p className="mb-4 mt-2 text-sm leading-6 text-base-content/60">{t("existingDescription")}</p>
           <ConnectButton
             client={thirdwebBrowserClient!}
             chain={baseSepolia}
             chains={[baseSepolia]}
             wallets={rateLoopThirdwebWallets}
-            connectButton={{ label: "Connect existing wallet" }}
-            connectModal={{ showThirdwebBranding: false, size: "compact", title: "Connect an existing wallet" }}
+            connectButton={{ label: t("connect") }}
+            connectModal={{ showThirdwebBranding: false, size: "compact", title: t("connectModal") }}
           />
         </section>
         {managedWalletEnabled ? (
           <section className="rounded-xl border border-base-content/10 p-5">
-            <h2 className="font-semibold">Create an app wallet</h2>
-            <p className="mb-4 mt-2 text-sm leading-6 text-base-content/60">
-              thirdweb creates the wallet only after you continue. Back it up from the wallet menu before relying on it;
-              disconnecting is not a backup.
-            </p>
+            <h2 className="font-semibold">{t("createTitle")}</h2>
+            <p className="mb-4 mt-2 text-sm leading-6 text-base-content/60">{t("createDescription")}</p>
             <button
               className="btn btn-outline w-full"
               disabled={busy || isConnecting}
               onClick={() => void createThirdwebWallet()}
             >
-              Create wallet with thirdweb
+              {t("create")}
             </button>
           </section>
         ) : null}
@@ -275,19 +253,19 @@ function WalletBindingControls({
 
       {account ? (
         <section className="rounded-xl border border-[var(--rateloop-blue)]/30 bg-[var(--rateloop-blue)]/5 p-5">
-          <p className="text-sm text-base-content/65">Connected wallet: {shortAddress(account.address)}</p>
+          <p className="text-sm text-base-content/65">{t("connected", { address: shortAddress(account.address) })}</p>
           <button
             className="rateloop-gradient-action mt-4 min-h-11 px-5"
             disabled={busy}
             onClick={() => void bindActiveWallet()}
           >
-            {purposeDetails(purpose).confirmation}
+            {t(`purpose.${purpose}.confirmation`)}
           </button>
         </section>
       ) : null}
 
       <section>
-        <h2 className="text-xl font-semibold">Your wallets</h2>
+        <h2 className="text-xl font-semibold">{t("yourWallets")}</h2>
         {bindings.length ? (
           <ul className="mt-4 space-y-3">
             {bindings.map(binding => (
@@ -296,10 +274,14 @@ function WalletBindingControls({
                 className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-base-content/10 p-4"
               >
                 <div>
-                  <p className="font-medium">{purposeTitle(binding.purpose)}</p>
+                  <p className="font-medium">
+                    {binding.purpose === "funding" || binding.purpose === "payout"
+                      ? t(`purpose.${binding.purpose}.title`)
+                      : t("purpose.connection")}
+                  </p>
                   <p className="font-mono text-xs text-base-content/50">
                     {shortAddress(binding.walletAddress)} ·{" "}
-                    {binding.source === "thirdweb" ? "app wallet" : "your wallet"}
+                    {binding.source === "thirdweb" ? t("appWallet") : t("yourWallet")}
                   </p>
                 </div>
                 <button
@@ -307,19 +289,17 @@ function WalletBindingControls({
                   disabled={busy}
                   onClick={() => void revoke(binding.bindingId)}
                 >
-                  Remove
+                  {t("remove")}
                 </button>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="mt-3 text-sm text-base-content/55">No wallet is attached to this account.</p>
+          <p className="mt-3 text-sm text-base-content/55">{t("empty")}</p>
         )}
       </section>
 
-      <p className="text-xs leading-5 text-base-content/45">
-        Funding and payout addresses are public on Base. Reusing an address can link paid activity across rounds.
-      </p>
+      <p className="text-xs leading-5 text-base-content/45">{t("privacy")}</p>
       {notice ? (
         <p className="text-sm text-success" role="status">
           {notice}
@@ -341,10 +321,11 @@ export function WalletBindingsClient({
   initialPurpose?: SelectableWalletPurpose;
   managedWalletEnabled: boolean;
 }) {
+  const t = useTranslations("account.walletBinding");
   if (!thirdwebBrowserClient) {
     return (
       <p className="rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm leading-6 text-base-content/70">
-        Wallet connections are not configured for this deployment. Your RateLoop account still works without one.
+        {t("unavailable")}
       </p>
     );
   }

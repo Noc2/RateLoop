@@ -1,35 +1,49 @@
-const stages = [
+import type { Locale } from "~~/i18n/config";
+import { getMessagesForLocale } from "~~/i18n/messages";
+
+const stageDefinitions = [
   {
     number: "01",
-    title: "Owner sets policy",
-    body: "Sets review rules, risk thresholds, reviewer audience, data boundaries, and response windows.",
-    conciseBody: "Sets review rules, risk thresholds, reviewer audience, data boundaries, and response windows.",
-    color: "#359EEE",
+    key: "policy",
+    color: "var(--rateloop-blue)",
   },
   {
     number: "02",
-    title: "Agent submits work",
-    body: "Submits the work, context, declared risk, and supporting evidence within the owner-approved policy.",
-    conciseBody: "Submits work, context, and evidence within the owner-approved policy.",
-    color: "#03CEA4",
+    key: "submit",
+    color: "var(--rateloop-green)",
   },
   {
     number: "03",
-    title: "Humans judge",
-    body: "Eligible people answer independently. The verdict, reasons, and agreement evidence return to the agent.",
-    conciseBody: "Independent humans return verdicts, reasons, and evidence.",
-    color: "#FFC43D",
+    key: "judge",
+    color: "var(--rateloop-yellow)",
   },
   {
     number: "04",
-    title: "Evaluation",
-    body: "Returns feedback and actionable human performance metrics for AI workflows.",
-    conciseBody: "Returns feedback and actionable human performance metrics for AI workflows.",
-    color: "#EF476F",
+    key: "evaluate",
+    color: "var(--rateloop-pink)",
   },
 ] as const;
 
-export function HumanAssuranceLoop({ className = "", concise = false }: { className?: string; concise?: boolean }) {
+export function HumanAssuranceLoop({
+  className = "",
+  concise = false,
+  locale = "en",
+}: {
+  className?: string;
+  concise?: boolean;
+  locale?: Locale;
+}) {
+  const copy = getMessagesForLocale(locale).home.loop;
+  const stages = stageDefinitions.map(stage => {
+    const stageCopy = copy.stages[stage.key];
+    return {
+      ...stage,
+      title: stageCopy.title,
+      body: stageCopy.body,
+      conciseBody: "concise" in stageCopy ? stageCopy.concise : stageCopy.body,
+    };
+  });
+
   return (
     <section
       className={`rateloop-assurance-loop rounded-2xl border border-base-content/10 bg-base-content/[0.025] p-5 sm:p-8 ${className}`}
@@ -43,7 +57,7 @@ export function HumanAssuranceLoop({ className = "", concise = false }: { classN
                 <radialGradient id="assurance-loop-glow" cx="50%" cy="50%" r="50%">
                   <stop offset="0%" stopColor="#03CEA4" stopOpacity="0.13" />
                   <stop offset="58%" stopColor="#359EEE" stopOpacity="0.05" />
-                  <stop offset="100%" stopColor="#000000" stopOpacity="0" />
+                  <stop offset="100%" stopColor="var(--rateloop-surface)" stopOpacity="0" />
                 </radialGradient>
                 <filter id="assurance-loop-tracer-glow" x="-200%" y="-200%" width="400%" height="400%">
                   <feGaussianBlur stdDeviation="8" result="blur" />
@@ -54,7 +68,15 @@ export function HumanAssuranceLoop({ className = "", concise = false }: { classN
                 </filter>
               </defs>
               <circle cx="220" cy="220" r="196" fill="url(#assurance-loop-glow)" />
-              <circle cx="220" cy="220" r="156" fill="none" stroke="white" strokeOpacity="0.08" strokeWidth="18" />
+              <circle
+                cx="220"
+                cy="220"
+                r="156"
+                fill="none"
+                stroke="var(--color-base-content)"
+                strokeOpacity="0.08"
+                strokeWidth="18"
+              />
               {stages.map((stage, index) => (
                 <circle
                   key={stage.number}
@@ -72,8 +94,8 @@ export function HumanAssuranceLoop({ className = "", concise = false }: { classN
                 />
               ))}
               <g className="rateloop-assurance-tracer" filter="url(#assurance-loop-tracer-glow)">
-                <circle cx="220" cy="64" r="7" fill="#f5f5f5" />
-                <circle cx="220" cy="64" r="15" fill="none" stroke="#f5f5f5" strokeOpacity="0.18" />
+                <circle cx="220" cy="64" r="7" fill="var(--color-base-content)" />
+                <circle cx="220" cy="64" r="15" fill="none" stroke="var(--color-base-content)" strokeOpacity="0.18" />
               </g>
               {[
                 [220, 64],
@@ -82,7 +104,14 @@ export function HumanAssuranceLoop({ className = "", concise = false }: { classN
                 [64, 220],
               ].map(([cx, cy], index) => (
                 <g key={`${cx}-${cy}`} className="rateloop-assurance-node">
-                  <circle cx={cx} cy={cy} r="20" fill="#090909" stroke={stages[index]?.color} strokeWidth="2" />
+                  <circle
+                    cx={cx}
+                    cy={cy}
+                    r="20"
+                    fill="var(--rateloop-surface-elevated)"
+                    stroke={stages[index]?.color}
+                    strokeWidth="2"
+                  />
                   <text
                     x={cx}
                     y={cy + 4}
@@ -96,14 +125,14 @@ export function HumanAssuranceLoop({ className = "", concise = false }: { classN
                 </g>
               ))}
             </svg>
-            <figcaption className="pointer-events-none absolute inset-[29%] flex flex-col items-center justify-center rounded-full border border-white/10 bg-black/70 text-center shadow-[0_0_80px_rgb(3_206_164/0.08)] backdrop-blur-sm">
+            <figcaption className="pointer-events-none absolute inset-[29%] flex flex-col items-center justify-center rounded-full border border-base-content/10 bg-[rgb(var(--rateloop-surface-elevated-rgb)/0.84)] text-center shadow-[0_0_80px_rgb(3_206_164/0.08)] backdrop-blur-sm">
               <h3
                 id="human-assurance-loop-title"
                 className="flex flex-col items-center text-[clamp(0.72rem,3.2vw,1.25rem)] font-bold leading-[1.08]"
               >
-                <span>Human</span>
-                <span>Assurance</span>
-                <span className="inline-block text-white">Loop</span>
+                <span>{copy.titleLine1}</span>
+                <span>{copy.titleLine2}</span>
+                <span className="inline-block text-base-content">{copy.titleLine3}</span>
               </h3>
             </figcaption>
           </div>

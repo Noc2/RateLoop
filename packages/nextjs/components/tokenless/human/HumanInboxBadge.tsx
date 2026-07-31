@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { isReviewerLifecycleNotification } from "~~/lib/notifications/reviewerInbox";
 
 type InboxResponse = {
@@ -19,6 +20,7 @@ function unreadReviewerNotifications(value: InboxResponse) {
 }
 
 export function HumanInboxBadge() {
+  const t = useTranslations("human");
   const [unread, setUnread] = useState(0);
   const refresh = useCallback(async () => {
     try {
@@ -49,7 +51,7 @@ export function HumanInboxBadge() {
   const label = unread > 99 ? "99+" : String(unread);
   return (
     <span
-      aria-label={`${unread} unread reviewer ${unread === 1 ? "notification" : "notifications"}`}
+      aria-label={t("inboxBadge", { count: unread })}
       className="inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-xs font-semibold text-primary-content"
     >
       {label}

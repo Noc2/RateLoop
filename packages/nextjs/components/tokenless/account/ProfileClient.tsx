@@ -1,10 +1,11 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { Card } from "~~/components/tokenless/ui/Card";
+import { Link } from "~~/i18n/navigation";
 import { notifyBrowserAuthSessionChanged } from "~~/lib/auth/client";
 import { readJson } from "~~/lib/tokenless/http";
 
@@ -17,6 +18,7 @@ type Profile = {
 };
 
 export function ProfileClient() {
+  const t = useTranslations("account.profile");
   const [profile, setProfile] = useState<Profile | null>(null);
   const [displayName, setDisplayName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -26,16 +28,16 @@ export function ProfileClient() {
   const refresh = useCallback(async () => {
     const profileBody = await readJson<Profile>(
       await fetch("/api/account/profile", { cache: "no-store", credentials: "same-origin" }),
-      { fallbackMessage: "Unable to load your account." },
+      { fallbackMessage: t("loadFailed") },
     );
     const nextProfile = profileBody;
     setProfile(nextProfile);
     setDisplayName(nextProfile.profileDisplayName ?? "");
-  }, []);
+  }, [t]);
 
   useEffect(() => {
-    void refresh().catch(cause => capture(cause, "Unable to load your account."));
-  }, [capture, refresh]);
+    void refresh().catch(cause => capture(cause, t("loadFailed")));
+  }, [capture, refresh, t]);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -50,7 +52,7 @@ export function ProfileClient() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ displayName }),
         }),
-        { fallbackMessage: "Unable to save your profile." },
+        { fallbackMessage: t("saveFailed") },
       );
       const nextProfile = body;
       setProfile(nextProfile);
@@ -58,7 +60,7 @@ export function ProfileClient() {
       notifyBrowserAuthSessionChanged();
       setSaved(true);
     } catch (cause) {
-      capture(cause, "Unable to save your profile.");
+      capture(cause, t("saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -70,36 +72,36 @@ export function ProfileClient() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 id="profile-display-name-heading" className="text-xl font-semibold">
-              Display name
+              {t("title")}
             </h2>
           </div>
           <Link href="/settings/wallets" className="btn btn-sm rateloop-secondary-action px-3">
-            Wallet settings
+            {t("wallets")}
           </Link>
         </div>
         <form className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end" onSubmit={save}>
           <div className="grow">
             <Field
               id="profile-display-name"
-              label="Display name"
+              label={t("label")}
               value={displayName}
               onChange={event => {
                 setDisplayName(event.target.value);
                 clear("displayName");
               }}
-              className="input w-full border-white/10 bg-[var(--rateloop-field)]"
+              className="input w-full border-base-content/10 bg-[var(--rateloop-field)]"
               maxLength={80}
-              placeholder={profile?.providerDisplayName ?? "Your private name"}
+              placeholder={profile?.providerDisplayName ?? t("placeholder")}
               error={fieldErrors.displayName}
             />
           </div>
           <button type="submit" className="rateloop-gradient-action px-5" disabled={busy}>
-            {busy ? "Saving…" : "Save profile"}
+            {busy ? t("saving") : t("save")}
           </button>
         </form>
-        {saved ? <p className="mt-3 text-sm text-emerald-100">Profile saved.</p> : null}
+        {saved ? <p className="mt-3 text-sm text-success">{t("saved")}</p> : null}
         {formError ? (
-          <p className="mt-4 rounded-lg bg-red-400/10 p-3 text-sm text-red-100" role="alert">
+          <p className="mt-4 rounded-lg bg-error/10 p-3 text-sm text-error" role="alert">
             {formError}
           </p>
         ) : null}

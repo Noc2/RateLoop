@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { useAgentTranslations } from "./AgentsLocaleProvider";
 import { Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
 import type { AgentEnvironment, AgentVersionInput, AgentVersionSnapshot } from "~~/lib/tokenless/agentRegistry";
 
@@ -21,6 +22,7 @@ export function AgentVersionForm({
   submitLabel,
   onSubmit,
 }: AgentVersionFormProps) {
+  const t = useAgentTranslations("versionForm");
   const [externalId, setExternalId] = useState("");
   const [displayName, setDisplayName] = useState(current?.displayName ?? "");
   const [description, setDescription] = useState(current?.description ?? "");
@@ -46,47 +48,47 @@ export function AgentVersionForm({
       <div className="grid gap-4 sm:grid-cols-2">
         {externalIdRequired ? (
           <Field
-            label="Stable external ID"
-            className="border-white/10 bg-[var(--rateloop-field)] font-mono text-sm"
+            label={t("externalId")}
+            className="border-base-content/10 bg-[var(--rateloop-field)] font-mono text-sm"
             value={externalId}
             onChange={event => setExternalId(event.target.value)}
-            placeholder="support-agent-prod"
+            placeholder={t("externalIdPlaceholder")}
             format="agentVersion"
             required
           />
         ) : null}
         <Field
-          className="border-white/10 bg-[var(--rateloop-field)]"
-          label="Workflow name"
+          className="border-base-content/10 bg-[var(--rateloop-field)]"
+          label={t("workflowName")}
           labelClassName="text-sm text-base-content/65"
           value={displayName}
           onChange={event => setDisplayName(event.target.value)}
-          placeholder="Support quality agent"
+          placeholder={t("workflowNamePlaceholder")}
           maxLength={120}
           required
         />
         <SelectField
-          className="border-white/10 bg-[var(--rateloop-field)]"
-          label="Environment"
+          className="border-base-content/10 bg-[var(--rateloop-field)]"
+          label={t("environment")}
           labelClassName="text-sm text-base-content/65"
           value={environment}
           onChange={event => setEnvironment(event.target.value as HostedAgentEnvironment)}
         >
-          <option value="production">Production</option>
-          <option value="staging">Staging</option>
+          <option value="production">{t("production")}</option>
+          <option value="staging">{t("staging")}</option>
         </SelectField>
       </div>
       <TextareaField
-        className="min-h-24 border-white/10 bg-[var(--rateloop-field)]"
-        label="Description"
+        className="min-h-24 border-base-content/10 bg-[var(--rateloop-field)]"
+        label={t("description")}
         labelClassName="text-sm text-base-content/65"
         value={description}
         onChange={event => setDescription(event.target.value)}
-        placeholder="What this workflow does and where human assurance is applied."
+        placeholder={t("descriptionPlaceholder")}
         maxLength={1_000}
       />
       <button className="rateloop-gradient-action px-5" disabled={busy}>
-        {busy ? "Saving…" : submitLabel}
+        {busy ? t("saving") : submitLabel}
       </button>
     </form>
   );

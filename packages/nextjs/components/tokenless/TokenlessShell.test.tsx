@@ -2,15 +2,17 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const shellSource = readFileSync(new URL("./TokenlessShell.tsx", import.meta.url), "utf8");
+const shellMessages = readFileSync(new URL("../../messages/en/shell.json", import.meta.url), "utf8");
+const shellSource = [readFileSync(new URL("./TokenlessShell.tsx", import.meta.url), "utf8"), shellMessages].join("\n");
+const globalStyles = readFileSync(new URL("../../styles/globals.css", import.meta.url), "utf8");
 
 test("tokenless shell exposes Humans, Agents, and Docs without the legacy product navigation", async () => {
   const source = shellSource;
-  assert.match(source, /href: "\/human\/review", label: "Humans"/);
-  assert.match(source, /href: "\/agents\/overview", label: "Agents"/);
+  assert.match(source, /href: "\/human\/review", labelKey: "humans"/);
+  assert.match(source, /href: "\/agents\/overview", labelKey: "agents"/);
   assert.doesNotMatch(source, /For Humans|For Agents/);
-  assert.match(source, /href: "\/docs", label: "Docs"/);
-  assert.match(source, /\["Pricing", "\/pricing"\]/);
+  assert.match(source, /href: "\/docs", labelKey: "docs"/);
+  assert.match(source, /\["pricing", "\/pricing"\]/);
   assert.match(source, /publicHref\("\/pricing"\)/);
   assert.match(source, /icon: GlobeAltIcon/);
   assert.match(source, /icon: PlusCircleIcon/);
@@ -32,8 +34,9 @@ test("tokenless navigation uses the shared page background", () => {
   const source = shellSource;
 
   assert.match(source, /<header className="[^"]*bg-base-100/);
-  assert.match(source, /<aside className="[^"]*bg-base-100/);
-  assert.doesNotMatch(source, /bg-black(?:\/\d+)?/);
+  assert.match(source, /<aside[\s\S]*data-rateloop-rail[\s\S]*bg-base-100/);
+  assert.match(globalStyles, /\[data-rateloop-rail\][\s\S]*background: var\(--rateloop-rail-surface\)/);
+  assert.match(globalStyles, /--rateloop-rail-surface: #050505/);
 });
 
 test("shell sign-in actions preserve the current destination", () => {
@@ -45,7 +48,7 @@ test("public content keeps a quiet validated return to the originating workspace
   assert.match(shellSource, /workspaceReturnPathForLocation/);
   assert.match(shellSource, /workspacePublicContentHref/);
   assert.match(shellSource, /function WorkspaceReturnLink/);
-  assert.match(shellSource, /Back to workspace/);
+  assert.match(shellSource, /"back": "Back to workspace"/);
   assert.match(shellSource, /isPublicContentPath\(pathname\)/);
   assert.match(shellSource, /href=\{publicHref\(link\.href\)\}/);
 });
@@ -62,22 +65,22 @@ test("Docs sub-navigation uses the longest matching route", () => {
 test("mobile navigation describes and closes its current state", () => {
   assert.match(shellSource, /const \[mobileNavOpen, setMobileNavOpen\] = useState\(false\)/);
   assert.match(shellSource, /useEffect\(\(\) => setMobileNavOpen\(false\), \[pathname\]\)/);
-  assert.match(shellSource, /aria-label=\{mobileNavOpen \? "Close navigation" : "Open navigation"\}/);
+  assert.match(shellSource, /aria-label=\{mobileNavOpen \? t\("navigation\.close"\) : t\("navigation\.open"\)\}/);
   assert.match(shellSource, /<NavLinks mobile onNavigate=\{\(\) => setMobileNavOpen\(false\)\} \/>/);
 });
 
 test("tokenless routes expose one main landmark and a keyboard skip link", () => {
   assert.match(shellSource, /href="#main-content"/);
-  assert.match(shellSource, /Skip to main content/);
+  assert.match(shellSource, /"skipToContent": "Skip to main content"/);
   assert.match(shellSource, /focus:not-sr-only/);
   assert.match(shellSource, /<main[\s\S]*id="main-content"[\s\S]*tabIndex=\{-1\}/);
 
   const nestedSurfaces = [
-    "../../app/(app)/settings/wallets/page.tsx",
-    "../../app/(public)/agent/oauth/authorize/page.tsx",
-    "../../app/(public)/agent/oauth/device/page.tsx",
-    "../../app/(public)/connect/[intentId]/not-found.tsx",
-    "../../app/(public)/connect/[intentId]/page.tsx",
+    "../../app/[locale]/(app)/settings/wallets/page.tsx",
+    "../../app/[locale]/(public)/agent/oauth/authorize/page.tsx",
+    "../../app/[locale]/(public)/agent/oauth/device/page.tsx",
+    "../../app/[locale]/(public)/connect/[intentId]/not-found.tsx",
+    "../../app/[locale]/(public)/connect/[intentId]/page.tsx",
     "./TokenlessHandoffClient.tsx",
   ];
   for (const path of nestedSurfaces) {
@@ -103,18 +106,20 @@ test("root recovery routes use the shell's single landmark", () => {
 });
 
 test("tokenless site search keeps the navbar treatment with explicit submission", () => {
-  const source = readFileSync(new URL("./navigation/SiteSearch.tsx", import.meta.url), "utf8");
+  const source = [readFileSync(new URL("./navigation/SiteSearch.tsx", import.meta.url), "utf8"), shellMessages].join(
+    "\n",
+  );
 
   assert.match(source, /MagnifyingGlassIcon/);
   assert.match(source, /border-0 bg-base-content\/\[0\.12\]/);
   assert.match(source, /!shadow-none/);
   assert.match(source, /pl-3 pr-16 text-base/);
   assert.doesNotMatch(source, /input-bordered|header-search-input/);
-  assert.match(source, /placeholder="Search"/);
+  assert.match(source, /placeholder=\{t\("placeholder"\)\}/);
   assert.match(source, /const SEARCH_ROUTE = "\/search"/);
   assert.match(source, /<form onSubmit=\{submit\}/);
   assert.match(source, /type="submit"/);
   assert.doesNotMatch(source, /SEARCH_DEBOUNCE_MS/);
-  assert.match(source, /aria-label="Search RateLoop"/);
+  assert.match(source, /aria-label=\{t\("label"\)\}/);
   assert.doesNotMatch(source, /placeholder="Search answers"/);
 });

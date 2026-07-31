@@ -2,8 +2,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+const source = `${readFileSync(new URL("./EvaluationDashboardPanel.tsx", import.meta.url), "utf8")}\n${readFileSync(
+  new URL("../../../messages/en/agents.json", import.meta.url),
+  "utf8",
+)}`;
+
 test("evaluation dashboard leads with results and progressively discloses detail", () => {
-  const source = readFileSync(new URL("./EvaluationDashboardPanel.tsx", import.meta.url), "utf8");
   assert.match(source, /dashboard\?\.runs\.length === 0/);
   assert.match(source, /No evaluations yet/);
   assert.match(source, /initialWorkspaceId/);
@@ -11,11 +15,11 @@ test("evaluation dashboard leads with results and progressively discloses detail
   assert.doesNotMatch(source, /showWorkspaceSelector/);
   assert.match(source, /Results appear after your agent requests human review\./);
   assert.match(source, /dashboard && dashboard\.runs\.length > 0/);
-  assert.match(source, /decisionLabel\(clientDecision\)/);
-  assert.match(source, /label: "Needs action"/);
-  assert.match(source, /label: "Completed"/);
-  assert.match(source, /label: "Failed"/);
-  assert.match(source, /label: "Waiting"/);
+  assert.match(source, /decisionLabel\(clientDecision, copy\)/);
+  assert.match(source, /label: copy\("status\.needsAction"\)/);
+  assert.match(source, /label: copy\("status\.completed"\)/);
+  assert.match(source, /label: copy\("status\.failed"\)/);
+  assert.match(source, /label: copy\("status\.waiting"\)/);
   assert.match(source, /\["completed", "cancelled"\]\.includes\(run\.status\)/);
   assert.match(source, /\["failed", "dead"\]\.includes\(run\.status\)/);
   assert.doesNotMatch(source, /\["failed", "dead", "cancelled"\]/);
@@ -26,7 +30,7 @@ test("evaluation dashboard leads with results and progressively discloses detail
   );
   assert.match(source, /orderedRuns\.map\(run =>/);
   assert.match(source, /Insufficient responses/);
-  assert.match(source, /run\.status === "completed".*"Insufficient responses"/s);
+  assert.match(source, /run\.status === "completed"[\s\S]*copy\("insufficientResponses"\)/);
   assert.match(source, /Evidence and run details/);
   assert.match(source, /Calibration items/);
   assert.match(source, /Quorum-case unanimity/);
@@ -40,7 +44,7 @@ test("evaluation dashboard leads with results and progressively discloses detail
   assert.doesNotMatch(source, /How results are shown/);
   const populatedDashboard = source.slice(source.indexOf("dashboard && dashboard.runs.length > 0"));
   const results = populatedDashboard.indexOf('aria-labelledby="evaluation-runs-heading"');
-  const workspaceDetails = populatedDashboard.indexOf(">Operations and policy details</summary>");
+  const workspaceDetails = populatedDashboard.indexOf('<AgentText id="operations" />');
   const publishingLimits = populatedDashboard.indexOf('aria-labelledby="publishing-limits-heading"');
   assert.ok(results >= 0 && results < workspaceDetails);
   assert.ok(publishingLimits > workspaceDetails);
@@ -50,7 +54,7 @@ test("evaluation dashboard leads with results and progressively discloses detail
   assert.match(source, /Assurance operations/);
   assert.match(source, /Sampling rate/);
   assert.match(source, /Mean verdict latency/);
-  assert.match(source, /formatHumanDurationFromSeconds/);
+  assert.match(source, /humanDuration/);
   assert.doesNotMatch(source, /toLocaleString\(\)\} sec/);
   assert.match(source, /Disagreement rate/);
   assert.match(source, /Override rate/);
@@ -72,7 +76,6 @@ test("evaluation dashboard leads with results and progressively discloses detail
 });
 
 test("completed runs expose an oversight case detail that respects lane boundaries", () => {
-  const source = readFileSync(new URL("./EvaluationDashboardPanel.tsx", import.meta.url), "utf8");
   assert.match(source, /Case detail and reviewer reasons/);
   // Lazy fetch through the dedicated access-checked endpoint.
   assert.match(source, /\/cases`/);
@@ -80,7 +83,7 @@ test("completed runs expose an oversight case detail that respects lane boundari
   // Denied and aggregate-only outcomes stay explained, never silently empty.
   assert.match(source, /owners, admins, and designated decision owners/);
   assert.match(source, /view && !view\.detailAvailable/);
-  assert.match(source, /\{view\.note\}/);
+  assert.match(source, /locale === "en" \? view\.note : copy\("caseNoteFallback"\)/);
   // Material renders via the existing lease/encryption artifact route.
   assert.match(source, /assurance\/projects\/\$\{encodeURIComponent\(view\.projectId\)\}\/artifacts\//);
   assert.match(source, /reviewerPseudonym/);
@@ -96,7 +99,6 @@ test("completed runs expose an oversight case detail that respects lane boundari
 });
 
 test("run details show exact agent-version attribution and reserve the legacy note for unmatched runs", () => {
-  const source = readFileSync(new URL("./EvaluationDashboardPanel.tsx", import.meta.url), "utf8");
   assert.match(source, /run\.attribution\.status === "attributed"/);
   assert.match(source, /run\.attribution\.agentId/);
   assert.match(source, /run\.attribution\.versionId/);
@@ -106,7 +108,6 @@ test("run details show exact agent-version attribution and reserve the legacy no
 });
 
 test("run cards submit go/revise/stop and record per-output overrides without a preselected choice", () => {
-  const source = readFileSync(new URL("./EvaluationDashboardPanel.tsx", import.meta.url), "utf8");
   // Go/revise/stop write control: plain buttons, nothing preselected, wired to
   // the existing decision API and gated on a completed evidence-backed run.
   assert.match(source, /\["go", "revise", "stop"\] as const/);
@@ -121,14 +122,13 @@ test("run cards submit go/revise/stop and record per-output overrides without a 
   // optional corrective action, append-only supersession semantics.
   assert.match(source, /\["accepted", "disregarded", "overridden", "reversed"\] as const/);
   assert.match(source, /evidence\/overrides/);
-  assert.match(source, /Reasons \(required, 10-2000 characters\)/);
+  assert.match(source, /Reasons \(required, 10.2000 characters\)/);
   assert.match(source, /Linked corrective action \(optional\)/);
   assert.match(source, /a new record supersedes, never edits/i);
   assert.match(source, /reasons\.trim\(\)\.length < 10/);
 });
 
 test("anti-rubber-stamping: signals sit above every decision control and nothing is preselected", () => {
-  const source = readFileSync(new URL("./EvaluationDashboardPanel.tsx", import.meta.url), "utf8");
   // Signals block: disagreement, gold/mechanism health, and evidence age.
   assert.match(source, /Before you decide/);
   assert.match(source, /Reviewer dissent/);
