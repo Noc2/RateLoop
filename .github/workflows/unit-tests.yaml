@@ -153,6 +153,8 @@ jobs:
           cache: yarn
       - name: Install dependencies
         run: yarn install --immutable
+      - name: Build app workspace dependencies
+        run: yarn workspace @rateloop/nextjs build:workspace-deps
       - name: Migrate the isolated MCP database
         run: yarn workspace @rateloop/nextjs exec drizzle-kit migrate
       - name: Verify PostgreSQL rollback and uniqueness invariants
