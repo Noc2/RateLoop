@@ -79,8 +79,9 @@ test("0168 encodes the Article 17 applicability subset and follows 0167", () => 
   }
   assert.match(migration, /"sor_applicability" = 'required' AND "non_required_basis" IS NULL/u);
   assert.match(migration, /"sor_applicability" <> 'required' AND "non_required_basis" = "sor_applicability"/u);
+  const ledgerIndex = journal.entries.findIndex(entry => entry.idx === 168);
   assert.deepEqual(
-    journal.entries.slice(-2).map(entry => ({ idx: entry.idx, tag: entry.tag })),
+    journal.entries.slice(ledgerIndex - 1, ledgerIndex + 1).map(entry => ({ idx: entry.idx, tag: entry.tag })),
     [
       { idx: 167, tag: "0167_reviewer_engagement_events" },
       { idx: 168, tag: "0168_dsa_population_ledger" },

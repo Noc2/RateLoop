@@ -92,6 +92,7 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
       "0166_employment_data_governance.sql",
       "0167_reviewer_engagement_events.sql",
       "0168_dsa_population_ledger.sql",
+      "0169_dsa_part8_source_facts.sql",
     ].includes(file) &&
     (/\bDO \$\$/u.test(statement) ||
       /\bCREATE OR REPLACE FUNCTION\b/u.test(statement) ||
@@ -363,6 +364,48 @@ export function createMemoryDatabaseResources(): DatabaseResources {
     args: [DataType.jsonb],
     returns: DataType.integer,
     implementation: value => (Array.isArray(value) ? value.length : 0),
+  });
+  memoryDb.public.registerFunction({
+    name: "tokenless_dsa_part8_language_codes_are_canonical",
+    args: [DataType.text],
+    returns: DataType.bool,
+    implementation: value => {
+      try {
+        const parsed: unknown = JSON.parse(value);
+        const allowed = new Set([
+          "bg",
+          "cs",
+          "da",
+          "de",
+          "el",
+          "en",
+          "es",
+          "et",
+          "fi",
+          "fr",
+          "ga",
+          "hr",
+          "hu",
+          "it",
+          "lt",
+          "lv",
+          "mt",
+          "nl",
+          "pl",
+          "pt",
+          "ro",
+          "sk",
+          "sl",
+          "sv",
+        ]);
+        if (!Array.isArray(parsed) || parsed.some(code => typeof code !== "string" || !allowed.has(code))) {
+          return false;
+        }
+        return new Set(parsed).size === parsed.length && JSON.stringify([...parsed].sort()) === value;
+      } catch {
+        return false;
+      }
+    },
   });
   memoryDb.public.registerFunction({
     name: "jsonb_build_object",
