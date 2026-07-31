@@ -53,7 +53,8 @@ test("0167 appends server-timestamped reviewer engagement evidence with exact sc
 });
 
 test("0167 follows employment governance in the migration journal", () => {
-  assert.deepEqual(journal.entries.slice(-2), [
+  const entryIndex = journal.entries.findIndex(entry => entry.tag === "0167_reviewer_engagement_events");
+  assert.deepEqual(journal.entries.slice(entryIndex - 1, entryIndex + 1), [
     { idx: 166, version: "7", when: 1785247200000, tag: "0166_employment_data_governance", breakpoints: true },
     { idx: 167, version: "7", when: 1785250800000, tag: "0167_reviewer_engagement_events", breakpoints: true },
   ]);
