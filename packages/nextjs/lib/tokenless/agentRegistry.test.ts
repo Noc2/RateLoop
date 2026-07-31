@@ -447,7 +447,7 @@ test("agent registry returns source-derived human-assurance evidence without poo
         `sha256:metadata-${index}`,
         status === "skipped" ? "skip" : "required",
         index,
-        `sha256:sampler-${index}`,
+        `sha256:${index.toString(16).padStart(64, "0")}`,
         status,
         `evidence/registry/${index}`,
         `sha256:evidence-${index}`,

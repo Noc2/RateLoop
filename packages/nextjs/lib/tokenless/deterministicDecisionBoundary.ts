@@ -34,7 +34,12 @@ export const DETERMINISTIC_DECISION_BOUNDARY = {
     {
       path: "packages/nextjs/lib/tokenless/adaptiveReview.ts",
       role: "triage",
-      requiredSourceMarkers: ["createHmac", "ADAPTIVE_REVIEW_STAGE_RATE_BPS", "sampleBucket"],
+      requiredSourceMarkers: ["createDeterministicReviewSample", "ADAPTIVE_REVIEW_STAGE_RATE_BPS", "sampleBucket"],
+    },
+    {
+      path: "packages/nextjs/lib/tokenless/reviewSampling.ts",
+      role: "triage",
+      requiredSourceMarkers: ["createHmac", "ReviewSamplerDomain", "sampleBucket"],
     },
     {
       path: "packages/nextjs/lib/tokenless/adaptiveReviewService.ts",
