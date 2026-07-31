@@ -346,9 +346,52 @@ product's evidence could populate directly.
 Article 20(6) is the second hook, not the first. It says decisions are _"taken under the
 supervision of appropriately qualified staff, and not solely on the basis of automated
 means"_ — but "appropriately qualified" is nowhere defined, and it requires
-_supervision_, not that each decision be made by a qualified person. Article 50(4)'s editorial-review
-exemption (applies 2 August 2026; "natural **or legal** person") and Article 72
-post-market monitoring are the next two. Article 26 rides a deadline sixteen months out.
+_supervision_, not that each decision be made by a qualified person. Article 50(4)'s
+editorial-responsibility carve-out (an obligation with a carve-out rather than an
+exemption, applying 2 August 2026, reaching a "natural **or legal** person") is the
+third. Article 26 rides a deadline sixteen months out. Note that Article 72 binds the
+**provider**, not the deployer — this set's own legal document flags deployer-facing
+Article 72 citations as a defect, and an earlier draft reproduced it.
+
+### The strongest citation found anywhere, and it is not about AI
+
+**FINRA Rule 3110.07** requires evidence of review to "clearly identify the reviewer,
+the internal communication or correspondence that was reviewed, the date of review, and
+the actions taken" — and states plainly: **"Merely opening a communication is not
+sufficient review."**
+
+That is a binding rule with a **named record schema matching what this product already
+emits**, applying to AI-assisted review today with no new AI regulation needed. Rule
+3110.09 requires preparer and reviewer names to be ascertainable from retained records;
+SEC Rule 17a-4(b)(4) preserves communications "and any approvals thereof"; 17a-4(f)
+requires a time-stamped audit trail including the identity of whoever created or
+modified a record.
+
+**But it gives no volume driver.** FINRA Notice 07-59 permits sampling explicitly:
+**"There is no prescribed minimum or fixed percentage that is required by
+regulation."** The FCA has published nothing either. **No US or UK regulator prescribes
+a sampling rate.** Sell the defensibility of a chosen methodology, never compliance with
+a mandated review volume.
+
+**And the pre-use approval hook is eroding.** FINRA proposed in July 2026 to delete
+mandatory principal pre-use approval of retail communications, **citing the speed and
+volume of AI-generated communications as a reason**. The evidence-of-review obligation
+is being carried across and made universal instead — a better fit for a continuous audit
+trail than a one-off signature.
+
+**The direction of travel is this plan's thesis in miniature.** The SEC withdrew its
+predictive-analytics proposal in June 2025; the CFPB withdrew both AI adverse-action
+circulars in May 2025; the banking agencies replaced SR 11-7 in April 2026 with guidance
+that is expressly non-enforceable and **scopes generative and agentic AI out entirely**;
+the FCA states outright that it does not plan to introduce extra regulations for AI. What
+grows instead is the expectation of evidence — prompt and output logs, model version and
+timestamp, exam attention to AI supervision procedures, board-approved outcomes
+reporting.
+
+**The market is for evidence infrastructure, not for compliance with a human-review
+mandate.** That is the clearest external confirmation of this plan's direction found
+anywhere in the research, and simultaneously the sharpest warning against selling a
+mandate that does not exist.
 
 **Germany raised the federal direct-award threshold to €50,000 net on 1 July 2026** —
 a mid-five-figure public contract can now be signed with no tender. That lands on the
