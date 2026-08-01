@@ -135,7 +135,7 @@ test("reviewer removal and invitation revocation require their explicit dialogs"
                 hasEmailBinding: true,
                 intendedEmailDomain: "example.test",
                 accessExpiresAt: null,
-                expiresAt: "2026-08-01T00:00:00.000Z",
+                expiresAt: "2027-08-01T00:00:00.000Z",
                 maximumRedemptions: 1,
                 redemptionCount: 0,
                 revokedAt: null,
