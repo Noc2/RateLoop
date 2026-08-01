@@ -29,7 +29,7 @@ import { requirePaidLaneComplianceApproval } from "~~/lib/tokenless/paidLaneComp
 import {
   type PreparedProductAsk,
   attachProductAsk,
-  prepareProductAsk,
+  prepareOpportunityBoundNetworkProductAsk,
   releasePreparedProductAsk,
   requireProductPrincipalScope,
 } from "~~/lib/tokenless/productCore";
@@ -53,8 +53,8 @@ import {
 } from "~~/lib/tokenless/reviewerExpertiseVocabulary";
 import {
   TokenlessServiceError,
-  createTokenlessAsk,
-  createTokenlessQuote,
+  createOpportunityBoundNetworkAsk,
+  createOpportunityBoundNetworkQuote,
   getTokenlessAskReplay,
   hashTokenlessQuoteRequest,
 } from "~~/lib/tokenless/server";
@@ -1384,7 +1384,7 @@ export async function requestPublicPaidHumanReview(
   const askRequest = replay?.request ?? {
     idempotencyKey,
     payment: { mode: "prepaid" as const, workspaceId: input.principal.integration.workspaceId },
-    quoteId: (await createTokenlessQuote(quoteRequest)).quoteId,
+    quoteId: (await createOpportunityBoundNetworkQuote(quoteRequest, opportunity.opportunityId)).quoteId,
   };
   if (
     askRequest.payment.mode !== "prepaid" ||
@@ -1401,7 +1401,11 @@ export async function requestPublicPaidHumanReview(
   let askCreated = false;
   let opportunityBound = false;
   try {
-    prepared = await prepareProductAsk({ principal: input.principal.principal, request: askRequest });
+    prepared = await prepareOpportunityBoundNetworkProductAsk({
+      principal: input.principal.principal,
+      request: askRequest,
+      opportunityId: opportunity.opportunityId,
+    });
     foundation = await ensurePublicNetworkReviewFoundation({
       workspaceId: input.principal.integration.workspaceId,
       integrationId: input.principal.integration.integrationId,
@@ -1422,7 +1426,13 @@ export async function requestPublicPaidHumanReview(
       preparedProductAsk: prepared,
       publication,
     });
-    const ask = await createTokenlessAsk(askRequest, idempotencyKey, input.appOrigin, prepared.idempotencyScope);
+    const ask = await createOpportunityBoundNetworkAsk(
+      askRequest,
+      idempotencyKey,
+      input.appOrigin,
+      prepared.idempotencyScope,
+      opportunity.opportunityId,
+    );
     askCreated = true;
     await finalizePublicPaidAsk({
       principal: input.principal,
@@ -1610,7 +1620,7 @@ export async function requestPublicPaidNetworkChild(
   const askRequest = replay?.request ?? {
     idempotencyKey,
     payment: { mode: "prepaid" as const, workspaceId: input.principal.integration.workspaceId },
-    quoteId: (await createTokenlessQuote(quoteRequest)).quoteId,
+    quoteId: (await createOpportunityBoundNetworkQuote(quoteRequest, parentOpportunity.opportunityId)).quoteId,
   };
   if (
     askRequest.payment.mode !== "prepaid" ||
@@ -1627,7 +1637,11 @@ export async function requestPublicPaidNetworkChild(
   let childBound = false;
   let foundation: PublicNetworkFoundation | null = null;
   try {
-    prepared = await prepareProductAsk({ principal: input.principal.principal, request: askRequest });
+    prepared = await prepareOpportunityBoundNetworkProductAsk({
+      principal: input.principal.principal,
+      request: askRequest,
+      opportunityId: parentOpportunity.opportunityId,
+    });
     foundation = await ensurePublicNetworkReviewFoundation({
       workspaceId: input.principal.integration.workspaceId,
       integrationId: input.principal.integration.integrationId,
@@ -1656,7 +1670,13 @@ export async function requestPublicPaidNetworkChild(
       expectedAmountAtomic: preparation.maximumChargeAtomic,
       now: new Date(),
     });
-    const ask = await createTokenlessAsk(askRequest, idempotencyKey, input.appOrigin, prepared.idempotencyScope);
+    const ask = await createOpportunityBoundNetworkAsk(
+      askRequest,
+      idempotencyKey,
+      input.appOrigin,
+      prepared.idempotencyScope,
+      parentOpportunity.opportunityId,
+    );
     askCreated = true;
     await attachProductAsk(prepared, ask);
     await persistHybridNetworkChildState({

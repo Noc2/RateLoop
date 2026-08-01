@@ -20,6 +20,10 @@ import { createHash, randomUUID } from "node:crypto";
 import { db, dbClient } from "~~/lib/db";
 import { tokenlessAgentAsks, tokenlessAgentQuotes } from "~~/lib/db/schema";
 import { assertDataIngressPolicy } from "~~/lib/privacy/dataPolicy";
+import {
+  type ProductAudienceCreationBoundary,
+  evaluateProductAudienceCreation,
+} from "~~/lib/tokenless/productAudienceCreationBoundary";
 
 const QUOTE_TTL_MS = 15 * 60_000;
 const DEFAULT_WAIT_TIMEOUT_MS = 30_000;
@@ -404,6 +408,17 @@ function askIdempotencyScope(idempotencyScope: string, idempotencyKey: string) {
   return isTokenlessHandoffIdempotencyKey(idempotencyKey) ? TOKENLESS_HANDOFF_IDEMPOTENCY_SCOPE : idempotencyScope;
 }
 
+function assertProductAudienceCreation(request: TokenlessQuoteRequest, boundary: ProductAudienceCreationBoundary) {
+  const decision = evaluateProductAudienceCreation({
+    audienceSource: request.audience.source,
+    policyReviewerSource: request.audiencePolicy.reviewerSource,
+    boundary,
+  });
+  if (!decision.allowed) {
+    throw new TokenlessServiceError(decision.message, 409, decision.code);
+  }
+}
+
 async function readAskByIdempotency(idempotencyScope: string, idempotencyKey: string): Promise<StoredAsk | null> {
   const [row] = await db
     .select()
@@ -443,8 +458,10 @@ async function createQuote(
   value: unknown,
   owner: TokenlessQuoteOwner | undefined,
   allowInternalPrivateReview: boolean,
+  boundary: ProductAudienceCreationBoundary,
 ): Promise<TokenlessQuoteResponse> {
   const request = parseTokenlessQuoteRequest(value);
+  assertProductAudienceCreation(request, boundary);
   if (request.visibility === "private" && !allowInternalPrivateReview) {
     throw new TokenlessServiceError(
       "Private quotes are created only by the internal encrypted-review workflow.",
@@ -500,7 +517,15 @@ async function createQuote(
 }
 
 export async function createTokenlessQuote(value: unknown): Promise<TokenlessQuoteResponse> {
-  return createQuote(value, undefined, false);
+  return createQuote(value, undefined, false, { kind: "generic_product" });
+}
+
+/** Narrow internal entry point for the exact opportunity-bound adapter guarded by migration 0177. */
+export async function createOpportunityBoundNetworkQuote(
+  value: unknown,
+  opportunityId: string,
+): Promise<TokenlessQuoteResponse> {
+  return createQuote(value, undefined, false, { kind: "opportunity_bound_network", opportunityId });
 }
 
 /** Narrow internal entry point used only after the paid private-review operation has frozen exact artifacts. */
@@ -508,7 +533,7 @@ export async function createInternalPrivateReviewQuote(
   value: unknown,
   owner: TokenlessQuoteOwner,
 ): Promise<TokenlessQuoteResponse> {
-  return createQuote(value, owner, true);
+  return createQuote(value, owner, true, { kind: "generic_product" });
 }
 
 export async function sweepExpiredTokenlessQuotes(input: { now?: Date; limit?: number } = {}) {
@@ -605,11 +630,12 @@ async function askResponse(
   };
 }
 
-export async function createTokenlessAsk(
+async function createAsk(
   value: unknown,
   idempotencyHeader: string | null,
   appOrigin: string,
-  idempotencyScope = "legacy:global",
+  idempotencyScope: string,
+  boundary: ProductAudienceCreationBoundary,
 ): Promise<TokenlessAskResponse> {
   const request = parseTokenlessAskRequest(value, idempotencyHeader);
 
@@ -628,6 +654,7 @@ export async function createTokenlessAsk(
     }
     const existingQuote = await readQuote(existing.quoteId);
     if (!existingQuote) throw new TokenlessServiceError("Ask quote not found.", 409, "invalid_quote");
+    assertProductAudienceCreation(parseTokenlessQuoteRequest(JSON.parse(existingQuote.requestJson)), boundary);
     return askResponse(existing, parseTokenlessQuoteResponse(JSON.parse(existingQuote.responseJson)), appOrigin);
   }
 
@@ -635,6 +662,7 @@ export async function createTokenlessAsk(
   if (!storedQuote || storedQuote.expiresAt.getTime() <= Date.now()) {
     throw new TokenlessServiceError("Quote is missing or expired.", 410, "quote_expired");
   }
+  assertProductAudienceCreation(parseTokenlessQuoteRequest(JSON.parse(storedQuote.requestJson)), boundary);
   const quote = parseTokenlessQuoteResponse(JSON.parse(storedQuote.responseJson));
   const now = new Date();
   const operationKey = `op_${randomUUID().replaceAll("-", "")}`;
@@ -667,6 +695,29 @@ export async function createTokenlessAsk(
   }
 
   return askResponse(persisted, quote, appOrigin);
+}
+
+export async function createTokenlessAsk(
+  value: unknown,
+  idempotencyHeader: string | null,
+  appOrigin: string,
+  idempotencyScope = "legacy:global",
+): Promise<TokenlessAskResponse> {
+  return createAsk(value, idempotencyHeader, appOrigin, idempotencyScope, { kind: "generic_product" });
+}
+
+/** Narrow internal entry point for the exact opportunity-bound adapter guarded by migration 0177. */
+export async function createOpportunityBoundNetworkAsk(
+  value: unknown,
+  idempotencyHeader: string | null,
+  appOrigin: string,
+  idempotencyScope: string,
+  opportunityId: string,
+): Promise<TokenlessAskResponse> {
+  return createAsk(value, idempotencyHeader, appOrigin, idempotencyScope, {
+    kind: "opportunity_bound_network",
+    opportunityId,
+  });
 }
 
 export async function waitForTokenlessAsk(

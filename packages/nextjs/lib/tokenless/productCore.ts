@@ -25,6 +25,10 @@ import {
   parseDataClassification,
   parseDataUses,
 } from "~~/lib/privacy/dataPolicy";
+import {
+  type ProductAudienceCreationBoundary,
+  evaluateProductAudienceCreation,
+} from "~~/lib/tokenless/productAudienceCreationBoundary";
 import { bindPublicQuestionMediaToQuestion } from "~~/lib/tokenless/publicQuestionMedia";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -1463,16 +1467,27 @@ async function persistPaymentIntent(input: {
   return { reference: paymentIntentId, state, created: true };
 }
 
-export async function prepareProductAsk(input: {
-  mediaPreviews?: TokenlessQuestionImagePreviewGrant[];
-  principal: ProductPrincipal;
-  request: TokenlessAskRequest;
-}): Promise<PreparedProductAsk> {
+async function prepareAsk(
+  input: {
+    mediaPreviews?: TokenlessQuestionImagePreviewGrant[];
+    principal: ProductPrincipal;
+    request: TokenlessAskRequest;
+  },
+  boundary: ProductAudienceCreationBoundary,
+): Promise<PreparedProductAsk> {
   const requestedWorkspace = input.request.payment.mode === "prepaid" ? input.request.payment.workspaceId : undefined;
   const workspaceId = await resolveWorkspace(input.principal, requestedWorkspace);
-  await requireWorkspacePaidPanels(workspaceId);
   const { quoteRequest, quote } = await loadQuote(input.request.quoteId, input.principal, workspaceId);
   const normalizedQuoteRequest = normalizeTokenlessQuoteRequest(quoteRequest as unknown as TokenlessQuoteRequest);
+  const audienceDecision = evaluateProductAudienceCreation({
+    audienceSource: normalizedQuoteRequest.audience.source,
+    policyReviewerSource: normalizedQuoteRequest.audiencePolicy.reviewerSource,
+    boundary,
+  });
+  if (!audienceDecision.allowed) {
+    throw new TokenlessServiceError(audienceDecision.message, 409, audienceDecision.code);
+  }
+  await requireWorkspacePaidPanels(workspaceId);
   if (!normalizedQuoteRequest.audiencePolicy) {
     throw new TokenlessServiceError(
       "This quote has no canonical audience policy and cannot reserve payment or execute on chain.",
@@ -1555,6 +1570,24 @@ export async function prepareProductAsk(input: {
     if (policyReservation?.created) await releaseAgentPolicyBudget(policyReservation.reservationId);
     throw error;
   }
+}
+
+export async function prepareProductAsk(input: {
+  mediaPreviews?: TokenlessQuestionImagePreviewGrant[];
+  principal: ProductPrincipal;
+  request: TokenlessAskRequest;
+}): Promise<PreparedProductAsk> {
+  return prepareAsk(input, { kind: "generic_product" });
+}
+
+/** Narrow internal entry point for the exact opportunity-bound adapter guarded by migration 0177. */
+export async function prepareOpportunityBoundNetworkProductAsk(input: {
+  mediaPreviews?: TokenlessQuestionImagePreviewGrant[];
+  principal: ProductPrincipal;
+  request: TokenlessAskRequest;
+  opportunityId: string;
+}): Promise<PreparedProductAsk> {
+  return prepareAsk(input, { kind: "opportunity_bound_network", opportunityId: input.opportunityId });
 }
 
 export async function attachProductAsk(prepared: PreparedProductAsk, ask: TokenlessAskResponse) {
