@@ -472,6 +472,77 @@ test("a DSA named-panel reviewer confirms conflicts, renews exact access, and su
   }
 });
 
+test("a DSA reviewer can explicitly report content self-identification without creating a policy response", async () => {
+  const restoreDom = installTestDom();
+  const { cleanup, render: baseRender, waitFor } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
+  const userEvent = (await import("@testing-library/user-event")).default;
+  const { HumanAssuranceRaterClient } = await import("./HumanAssuranceRaterClient");
+  const previousFetch = globalThis.fetch;
+  const reportRequest: { current: Record<string, unknown> | null } = { current: null };
+
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url === "/api/auth/session") return Response.json(authenticatedSession(PRINCIPAL_A));
+    if (url.endsWith(`/artifacts/${dsaTask.case.content.artifactId}`)) {
+      return new Response("Content that identifies the signed-in reviewer.", {
+        headers: { "Content-Type": "text/plain" },
+      });
+    }
+    if (url.endsWith("/responses") && init?.method === "POST") {
+      reportRequest.current = JSON.parse(String(init.body)) as Record<string, unknown>;
+      return Response.json({
+        accepted: true,
+        replay: false,
+        responseCount: 0,
+        compensation: "unpaid",
+        settlementStatus: "not_applicable",
+        terminalKind: "content_self_identification_gap",
+        reportId: `dsapa_selfid_${"8".repeat(40)}`,
+        reportHash: `sha256:${"9".repeat(64)}`,
+      });
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  };
+
+  try {
+    const view = render(
+      <HumanAssuranceRaterClient
+        principalId={PRINCIPAL_A}
+        initialTask={dsaTask as unknown as AssignmentTask}
+        initialAssignmentId={dsaTask.assignmentId}
+      />,
+    );
+    const user = userEvent.setup({ document });
+    await waitFor(() => assert.ok(view.getByText("Content that identifies the signed-in reviewer.")));
+
+    const reportButton = view.getByRole("button", { name: "This content identifies me" });
+    assert.equal(reportRequest.current, null);
+    assert.ok(view.getByText(/does not classify, redact, replace, or count the content/u));
+    await user.click(reportButton);
+
+    assert.equal(reportRequest.current, null);
+    assert.ok(view.getByText(/ends this unpaid assignment without a policy response or label/u));
+    assert.ok(view.getByText(/A separate auditor must decide/u));
+    assert.equal((view.getByRole("button", { name: "Submit review" }) as HTMLButtonElement).disabled, true);
+    await user.click(view.getByRole("button", { name: "Report and close assignment" }));
+
+    await waitFor(() => assert.ok(reportRequest.current));
+    assert.deepEqual(reportRequest.current, {
+      dsaGapReport: { reason: "content_self_identification" },
+    });
+    assert.equal("dsaResponse" in reportRequest.current!, false);
+    assert.equal("responses" in reportRequest.current!, false);
+    assert.ok(view.getByRole("status").textContent?.includes("No policy label was created"));
+    assert.ok(view.getByText("1 report recorded"));
+    assert.ok(view.getByText("Unpaid · no settlement or claim required"));
+  } finally {
+    cleanup();
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});
+
 test("a closed private review has one terminal recovery path", async () => {
   const restoreDom = installTestDom();
   const { cleanup, render: baseRender, waitFor } = await import("@testing-library/react");

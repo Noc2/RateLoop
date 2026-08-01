@@ -275,6 +275,9 @@ export type AssuranceServerAcceptance = {
   accepted: true;
   replay: boolean;
   responseCount: number;
+  terminalKind?: "content_self_identification_gap";
+  reportId?: string;
+  reportHash?: `sha256:${string}`;
 } & (
   | { compensation: "unpaid"; settlementStatus: "not_applicable" }
   | { compensation: "paid"; settlementStatus: "pending" }
@@ -283,10 +286,20 @@ export type AssuranceServerAcceptance = {
 function isAssuranceServerAcceptance(value: unknown): value is AssuranceServerAcceptance {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const acceptance = value as Record<string, unknown>;
+  const isContentSelfIdentificationGap = acceptance.terminalKind === "content_self_identification_gap";
   return (
     acceptance.accepted === true &&
     typeof acceptance.replay === "boolean" &&
     Number.isSafeInteger(acceptance.responseCount) &&
+    (acceptance.terminalKind === undefined ||
+      (isContentSelfIdentificationGap &&
+        acceptance.responseCount === 0 &&
+        acceptance.compensation === "unpaid" &&
+        acceptance.settlementStatus === "not_applicable" &&
+        typeof acceptance.reportId === "string" &&
+        /^dsapa_selfid_[0-9a-f]{40}$/u.test(acceptance.reportId) &&
+        typeof acceptance.reportHash === "string" &&
+        SHA256_PATTERN.test(acceptance.reportHash))) &&
     ((acceptance.compensation === "unpaid" && acceptance.settlementStatus === "not_applicable") ||
       (acceptance.compensation === "paid" && acceptance.settlementStatus === "pending"))
   );
@@ -514,6 +527,7 @@ export function HumanAssuranceRaterClient({
   );
   const [dsaLeaseExpiresAt, setDsaLeaseExpiresAt] = useState<string | null>(null);
   const [dsaArtifactReady, setDsaArtifactReady] = useState(false);
+  const [dsaSelfIdentificationConfirming, setDsaSelfIdentificationConfirming] = useState(false);
   const rationaleRef = useRef<HTMLTextAreaElement>(null);
   const activePrincipalRef = useRef(principalId);
   const taskRef = useRef(task);
@@ -577,6 +591,7 @@ export function HumanAssuranceRaterClient({
           setDsaConflictConfirmed(false);
           setDsaLeaseExpiresAt(null);
           setDsaArtifactReady(false);
+          setDsaSelfIdentificationConfirming(false);
           setBusyAction(null);
           setConfidentialityAccepted(false);
           setError(null);
@@ -711,6 +726,7 @@ export function HumanAssuranceRaterClient({
     setPendingDsaAcceptance(false);
     setDsaConflictConfirmed(nextTask.taskKind === "dsa_reference_panel");
     setDsaArtifactReady(false);
+    setDsaSelfIdentificationConfirming(false);
     if (nextTask.taskKind !== "dsa_reference_panel") setDsaLeaseExpiresAt(null);
     if (!refreshingCurrentTask) {
       setDrafts(emptyDrafts(nextTask.cases));
@@ -972,6 +988,41 @@ export function HumanAssuranceRaterClient({
     } catch {
       if (privateStateEpoch !== privateStateEpochRef.current) return;
       setError(task.taskKind === "dsa_reference_panel" ? t("dsaSubmitFailed") : t("submitFailed"));
+    } finally {
+      if (privateStateEpoch === privateStateEpochRef.current) setBusyAction(null);
+    }
+  }
+
+  async function submitDsaSelfIdentificationReport() {
+    if (task?.taskKind !== "dsa_reference_panel" || !dsaArtifactReady || serverAcceptance) return;
+    const privateStateEpoch = privateStateEpochRef.current;
+    setBusyAction("response");
+    setError(null);
+    try {
+      const body = await readJson(
+        await fetch(`/api/account/assurance/assignments/${encodeURIComponent(task.assignmentId)}/responses`, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ dsaGapReport: { reason: "content_self_identification" } }),
+        }),
+        privateReviewJsonOptions,
+      );
+      if (privateStateEpoch !== privateStateEpochRef.current) return;
+      if (
+        !isAssuranceServerAcceptance(body) ||
+        body.terminalKind !== "content_self_identification_gap" ||
+        body.compensation !== "unpaid"
+      ) {
+        throw new Error(t("acceptanceIncomplete"));
+      }
+      saveReviewReceipt("private", task.assignmentId, body, { principalId: activePrincipalId! });
+      setServerAcceptance(body);
+      setDsaSelfIdentificationConfirming(false);
+      clearReviewDraft("private", task.assignmentId, privateDraftStorage);
+    } catch {
+      if (privateStateEpoch !== privateStateEpochRef.current) return;
+      setError(t("dsaSelfIdentificationSubmitFailed"));
     } finally {
       if (privateStateEpoch === privateStateEpochRef.current) setBusyAction(null);
     }
@@ -1323,6 +1374,7 @@ export function HumanAssuranceRaterClient({
               advanceDisabled={
                 busyAction !== null ||
                 serverAcceptance !== null ||
+                dsaSelfIdentificationConfirming ||
                 (task.taskKind === "dsa_reference_panel" && !dsaArtifactReady) ||
                 (reviewingResponses ? !completeDraft : false)
               }
@@ -1338,7 +1390,7 @@ export function HumanAssuranceRaterClient({
                         : t("reviewAnswers")
                       : t("nextCase")
               }
-              backDisabled={busyAction !== null || serverAcceptance !== null}
+              backDisabled={busyAction !== null || serverAcceptance !== null || dsaSelfIdentificationConfirming}
               backLabel={reviewingResponses ? t("backLast") : t("previousCase")}
               busyLabel={busyAction === "response" ? t("submitting") : null}
               caseIndex={activeCaseIndex}
@@ -1472,7 +1524,7 @@ export function HumanAssuranceRaterClient({
                                       name={`choice-${reviewCase.caseId}`}
                                       value={key}
                                       checked={draft.selectedOption === key}
-                                      disabled={serverAcceptance !== null}
+                                      disabled={serverAcceptance !== null || dsaSelfIdentificationConfirming}
                                       onClick={() => updateDraft(reviewCase.caseId, { selectedOption: key })}
                                       onChange={() => updateDraft(reviewCase.caseId, { selectedOption: key })}
                                     />
@@ -1480,6 +1532,50 @@ export function HumanAssuranceRaterClient({
                                   </span>
                                 </label>
                               ))}
+                            </div>
+                            <div className="mt-5 border-t border-base-content/10 pt-4">
+                              {dsaSelfIdentificationConfirming ? (
+                                <div className="rounded-lg border border-warning/40 bg-warning/10 p-4">
+                                  <p className="text-sm font-semibold">{t("dsaSelfIdentificationConfirmTitle")}</p>
+                                  <p className="mt-2 text-xs leading-5 text-base-content/70">
+                                    {t("dsaSelfIdentificationConfirmDescription")}
+                                  </p>
+                                  <div className="mt-4 grid gap-2">
+                                    <Button
+                                      type="button"
+                                      disabled={busyAction !== null || !dsaArtifactReady}
+                                      onClick={() => void submitDsaSelfIdentificationReport()}
+                                    >
+                                      {busyAction === "response"
+                                        ? t("dsaSelfIdentificationSubmitting")
+                                        : t("dsaSelfIdentificationConfirm")}
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="secondary"
+                                      disabled={busyAction !== null}
+                                      onClick={() => setDsaSelfIdentificationConfirming(false)}
+                                    >
+                                      {t("dsaSelfIdentificationCancel")}
+                                    </Button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <>
+                                  <Button
+                                    type="button"
+                                    variant="secondary"
+                                    className="w-full"
+                                    disabled={serverAcceptance !== null || busyAction !== null || !dsaArtifactReady}
+                                    onClick={() => setDsaSelfIdentificationConfirming(true)}
+                                  >
+                                    {t("dsaSelfIdentificationAction")}
+                                  </Button>
+                                  <p className="mt-2 text-xs leading-5 text-base-content/60">
+                                    {t("dsaSelfIdentificationHelp")}
+                                  </p>
+                                </>
+                              )}
                             </div>
                           </fieldset>
                         </div>
@@ -1638,8 +1734,14 @@ export function HumanAssuranceRaterClient({
               {serverAcceptance ? (
                 <Card className="rounded-2xl p-5 sm:p-7" aria-label={t("receipt")}>
                   <p role="status" className="rounded-lg bg-success/10 p-3 text-sm leading-6 text-success">
-                    {serverAcceptance.replay ? t("alreadyRecorded") : t("submitted")}{" "}
-                    {serverAcceptance.compensation === "paid" ? t("paidPrivateClosed") : t("privateClosed")}
+                    {serverAcceptance.terminalKind === "content_self_identification_gap" ? (
+                      t("dsaSelfIdentificationRecorded")
+                    ) : (
+                      <>
+                        {serverAcceptance.replay ? t("alreadyRecorded") : t("submitted")}{" "}
+                        {serverAcceptance.compensation === "paid" ? t("paidPrivateClosed") : t("privateClosed")}
+                      </>
+                    )}
                   </p>
                   <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
                     <div>
@@ -1647,8 +1749,16 @@ export function HumanAssuranceRaterClient({
                       <dd className="mt-1 break-all font-mono text-xs">{task.assignmentId}</dd>
                     </div>
                     <div>
-                      <dt className="text-base-content/55">{t("responses")}</dt>
-                      <dd className="mt-1">{serverAcceptance.responseCount}</dd>
+                      <dt className="text-base-content/55">
+                        {serverAcceptance.terminalKind === "content_self_identification_gap"
+                          ? t("dsaSelfIdentificationReceipt")
+                          : t("responses")}
+                      </dt>
+                      <dd className="mt-1">
+                        {serverAcceptance.terminalKind === "content_self_identification_gap"
+                          ? t("dsaSelfIdentificationOneReport")
+                          : serverAcceptance.responseCount}
+                      </dd>
                     </div>
                     <div>
                       <dt className="text-base-content/55">{t("compensation")}</dt>
