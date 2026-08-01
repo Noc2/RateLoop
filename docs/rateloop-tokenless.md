@@ -202,8 +202,10 @@ arithmetic cannot underflow.
 The credential issuer **signs nothing** — it verifies against a digest the panel
 builds, and it holds no token reference at all.
 
-**The deployed artifact is a test profile.** The currency is a mock token with
-unrestricted minting. This is not a real-value deployment.
+**The checked-in Base Sepolia artifact is a historical test profile and is stale after
+the current fund-core changes.** The active v4 registry is intentionally empty. There is
+no current complete deployment key, and the web, keeper and indexer must not be updated
+independently. The currency remains a mock token; this is not a real-value deployment.
 
 ### Evidence packets
 
@@ -225,12 +227,11 @@ while doing nothing**.
 
 ### The branch bypass, which contextualises everything else
 
-The production-readiness check returns early for any branch that is not `main`. On
-`tokenless`, **the entire production path never runs** — not the required
-variables and not the regional manifest. Signer-role separation still runs on the
-test path; what is skipped is the stricter address-level check. This is
-deliberate and documented, but it means everything green on the hosted tokenless
-deployment was validated by the _test_ path only.
+Tokenless and main are separate deployment lines. The tokenless readiness path permits a
+network-off hosted application without an active address bundle, but any network-enabled
+release requires one complete fresh deployment key shared by the app, Ponder and keeper.
+The canonical tokenless application is currently stale; a web-only release must fail
+closed until the empty v4 registry is regenerated from a fresh Base Sepolia deployment.
 
 The hosted release capability map is a frozen all-false set, and nothing in the
 repository ever passes a different one, so a `main` hosted release is currently
@@ -363,8 +364,8 @@ packet generation loads an entire run — every case, every response, every over
 cohort size, or assignments per run.
 
 Migrations are hand-authored, hash-verified at deploy, and applied under an
-advisory lock; generation and push are both hard-disabled. There are 159 of them
-with one declared, recorded gap.
+advisory lock; generation and push are both hard-disabled. The current journal has 170
+ordered entries and ends at `0170_dsa_reference_sampling_epochs`.
 
 ---
 
@@ -372,17 +373,17 @@ with one declared, recorded gap.
 
 Recorded so the same drift is not reintroduced.
 
-| Claim                                          | Reality                                                                      |
-| ---------------------------------------------- | ---------------------------------------------------------------------------- |
-| A scope has five dimensions                    | Twelve in the database constraint, fourteen in the identity hash             |
-| Monitoring floor is 10%                        | Shared runtime, UI, projection, and alert invariant                          |
-| Adaptive reports safety gates unavailable      | That branch is unreachable; gates are available                              |
-| Opportunity keyed on integration id            | Keyed on agent id                                                            |
-| Deployment is `tokenless-v3` at an older block | `tokenless-v4`, a full generation newer                                      |
-| README advertises paid mechanisms plainly      | All of them are gated off                                                    |
-| Adaptive coverage pinned at 100%               | The ladder shipped                                                           |
-| An agents `handoff` CLI command exists         | It does not; the real path is a media upload followed by an MCP tool call    |
-| 66 mapped tables, 219 total                    | 67 mapped, roughly 245 total                                                 |
+| Claim                                          | Reality                                                                                                             |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| A scope has five dimensions                    | Twelve in the database constraint, fourteen in the identity hash                                                    |
+| Monitoring floor is 10%                        | Shared runtime, UI, projection, and alert invariant                                                                 |
+| Adaptive reports safety gates unavailable      | That branch is unreachable; gates are available                                                                     |
+| Opportunity keyed on integration id            | Keyed on agent id                                                                                                   |
+| Deployment is `tokenless-v3` at an older block | The target schema is `tokenless-v4`; its active registry is empty and the historical Base Sepolia artifact is stale |
+| README advertises paid mechanisms plainly      | All of them are gated off                                                                                           |
+| Adaptive coverage pinned at 100%               | The ladder shipped                                                                                                  |
+| An agents `handoff` CLI command exists         | It does not; the real path is a media upload followed by an MCP tool call                                           |
+| 66 mapped tables, 219 total                    | 67 mapped, roughly 245 total                                                                                        |
 
 **Left deliberately unresolved**, because they are decisions rather than facts:
 whether the adaptive ladder shipped ahead of its safety gate or the register is

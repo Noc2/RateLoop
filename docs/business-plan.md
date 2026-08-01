@@ -139,29 +139,28 @@ Do not report alpha as a headline without a bootstrap interval. Also note the da
 constraint still permits a panel of one and the SDK accepts up to five hundred, against
 an enforced floor of two — three bounds that disagree.
 
-### What this does NOT yet do, stated before anyone sells it
+### What the measurement foundation does and does not yet do
 
-A code audit killed three claims a first draft of this section made. They are roadmap,
-not product:
+A later DSA-focused implementation pass changed the repository state. The
+[implementation plan](./implementation-plan.md) is the design and status authority when
+this market narrative conflicts with it.
 
-- **Judge calibration is not implemented.** There is no agreement statistic between an
-  automated evaluator and humans anywhere — no confusion matrix, no precision or recall
-  against human labels, no kappa. What ships is a labelled-data export.
-- **Worse, the export is structurally biased.** Only receipts marked `uncertain` escalate
-  to a human; `pass` and `fail` never do. So a customer can never measure their
-  evaluator's false-positive or false-negative rate — **precisely the number a
-  calibration buyer wants** — and the labels they do get come from the evaluator's own
-  uncertainty band, where its accuracy is worst and least representative.
+- **Design-weighted point estimation is implemented, not released.** The repository now
+  computes weighted confusion matrices and typed accuracy, precision and recall from
+  frozen reference evidence. Public intervals remain disabled until an external method
+  reviewer accepts the variance design.
+- **A separate DSA reference channel now covers automated `pass` and `fail`.** It is kept
+  out of operational adaptive rollups. The persisted report, authorized-panel consumer,
+  immutable publication versions and provider pilots remain open.
 - **Alpha measures the panel, not the agent.** It is inter-rater reliability. A customer
   reading "reviewer consistency" as an agent quality score is being misled.
 - **You cannot compare two versions of the same agent.** Every quality surface is bound
   to current versions; ship a v2 and v1's numbers vanish from the UI with no read path
   back. This kills "did my agent get better?" outright.
-- **The sample does not support unbiased inference.** Forced strata union the HMAC draw,
-  the sampling rate is lowered _because_ past agreement passed a threshold — selection on
-  the dependent variable — and recorded inclusion probabilities are never used to weight.
-  **A statistically literate buyer will notice within one meeting.** It is a defensible,
-  tamper-evident _coverage policy_, not a sampling frame.
+- **The operational adaptive sample is not the DSA reference sample.** Its point estimate
+  now uses the recorded history-conditioned propensities, while the DSA channel freezes a
+  separate closed frame and future-beacon draw. Neither supports a public interval until
+  its declared variance method passes external review.
 - The sampler key is never disclosed, so coverage is auditable by RateLoop rather than
   independently verifiable.
 
@@ -184,7 +183,7 @@ Three claims survive the audit, and they are enough:
    pinned false in the claim gate, so it cannot appear in public copy until both are
    fixed.
 
-**The positioning sentence:**
+**The old positioning sentence, retained only as background:**
 
 > Generic benchmarks cannot tell you whether your agent is good enough for your use
 > case. We put a sampled, blinded panel of qualified humans on your live production
@@ -199,9 +198,11 @@ not claim that the current artifact already satisfies a final official format. N
 Article 72 binds the **provider**, not the deployer — this set's own legal document flags
 deployer-facing Article 72 citations as a defect, and an earlier draft reproduced it.
 
-Judge calibration is the natural next claim and it is **three build items away**:
-collect human labels on a sample of `pass` and `fail` receipts too, compute the
-confusion matrix, and weight by recorded inclusion probability. Do not sell it first.
+Do not sell generic judge calibration first. The active wedge is reproducible DSA
+automated-means reporting evidence: a reconciled decision population, system-specific
+reference labels, design-weighted cells and an offline-reproducible official-template
+section. It is not released until the method review, two provider pilots and durable
+publication path are complete.
 
 ---
 
@@ -314,22 +315,10 @@ live counter of platforms currently filing, not the obligated population, and Ar
 is disapplied for micro and small enterprises, which excludes much of this ICP — naming ten of them is an hour's work and is
 the difference between a plan and an intention.
 
-**The sharpest obligation is DSA Article 42(2)(b)**, not Article 20(6) and not
-the AI Act. Very large platforms must report **"the qualifications and linguistic
-expertise of the persons carrying out"** content moderation, "as well as the training
-and support given to such staff" — a **recurring, public, mandatory disclosure about
-reviewer qualifications** that someone has to produce every period, and that this
-product's evidence could populate directly.
-
-Article 20(6) is the second hook, not the first. It says decisions are _"taken under the
-supervision of appropriately qualified staff, and not solely on the basis of automated
-means"_ — but "appropriately qualified" is nowhere defined, and it requires
-_supervision_, not that each decision be made by a qualified person. Article 50(4)'s
-editorial-responsibility carve-out (an obligation with a carve-out rather than an
-exemption, applying 2 August 2026, reaching a "natural **or legal** person") is the
-third. Article 26 rides a deadline sixteen months out. Note that Article 72 binds the
-**provider**, not the deployer — this set's own legal document flags deployer-facing
-Article 72 citations as a defect, and an earlier draft reproduced it.
+**The sharpest artifact is the harmonised Article 15(1)(e)/42(2)(c)
+automated-means section.** It requires recurring, system-specific accuracy, precision and
+recall rows in a mandatory format. Article 20(6) supervision evidence is adjacent and
+separate; Article 42(2)(b) staff qualification disclosure is not the launch headline.
 
 ### The strongest citation found anywhere, and it is not about AI
 
@@ -473,7 +462,9 @@ SLA at four-figure monthly prices is a contractual liability until that changes.
 1. **Change the meter** to agents plus retention, per §4. Fix the pricing page's
    decision-allowance claim, which the code does not support.
 2. **Name ten accounts** from the DSA provider list.
-3. **Run the demand test.** Lead with Article 20(6) and the judge-calibration pitch.
+3. **Run the demand test.** Lead with reproducible automated-means rows and the exact
+   limitations an auditor can independently recompute; keep Article 20 supervision as a
+   separate control artifact.
 4. **Then unblock revenue:** Stripe on, business verification path, meter wired.
 5. **Ship the standalone verifier and the CI gate** — the two items that compound.
 

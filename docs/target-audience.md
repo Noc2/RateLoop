@@ -71,14 +71,16 @@ exactly this buyer.
 
 ### The fact that reframes everything
 
-**The paid marketplace is implemented and switched off.** The reviewer surface
+**The paid reviewer network is retained but is not a released marketplace.** The reviewer surface
 offers eligibility, earnings, a payout wallet and identity assurance — all inert.
 The designed economics are specified in detail and unfunded. Live landing statistics
 read zero verified humans and zero paid out.
 
-So **RateLoop today is not a two-sided marketplace.** It is a single-sided workflow
-and evidence product for a team reviewing its own agent's output, with a marketplace
-built behind a compliance gate. The public copy is honest about this.
+So **RateLoop today is not a two-sided marketplace.** It is a workflow and evidence
+product for a team or named authorized panel reviewing an agent's output. A closed,
+principal-assigned network remains default-off for a separately measured public-safe
+benchmark; it has no browsing or case self-selection and cannot silently change the
+private-panel estimand.
 
 ---
 
@@ -105,15 +107,15 @@ must look like, and therefore no procurement checklist to sell against.**
 
 ### What actually bites today
 
-| Regime                  | In force       | Human review required                                  | Per-decision record                    |
-| ----------------------- | -------------- | ------------------------------------------------------ | -------------------------------------- |
-| **DSA Art. 17**         | now            | —                                                      | **yes**, filed to a public EU database |
-| **DSA Art. 20(6)**      | now            | **yes, explicit** — not solely automated               | via Art. 17                            |
-| **GDPR Art. 22(3)**     | since 2018     | **yes** — intervention _on the part of the controller_ | evidentially essential                 |
-| **CCPA §7221**          | **1 Jan 2027** | **yes** — with authority to decide                     | —                                      |
-| **Colorado SB 26-189**  | **1 Jan 2027** | **yes** — meaningful review and reconsideration        | —                                      |
-| **FINRA 2210(b)(1)(A)** | now            | **yes** — a registered principal, before use           | **yes**                                |
-| **AI Act Art. 26(2)**   | **2 Dec 2027** | yes — competence, training, authority                  | no                                     |
+| Regime                  | In force       | Human review required                                  | Per-decision record                                                              |
+| ----------------------- | -------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| **DSA Art. 17**         | now            | —                                                      | statement to the affected recipient                                              |
+| **DSA Art. 20(6)**      | now            | **yes, explicit** — not solely automated               | provider control evidence; applicable Art. 17/24 subset is reconciled separately |
+| **GDPR Art. 22(3)**     | since 2018     | **yes** — intervention _on the part of the controller_ | evidentially essential                                                           |
+| **CCPA §7221**          | **1 Jan 2027** | **yes** — with authority to decide                     | —                                                                                |
+| **Colorado SB 26-189**  | **1 Jan 2027** | **yes** — meaningful review and reconsideration        | —                                                                                |
+| **FINRA 2210(b)(1)(A)** | now            | **yes** — a registered principal, before use           | **yes**                                                                          |
+| **AI Act Art. 26(2)**   | **2 Dec 2027** | yes — competence, training, authority                  | no                                                                               |
 
 Enforcement under the data-protection route is real: a €5M fine in November 2024 for
 algorithmic management without a human-intervention mechanism, following two earlier

@@ -145,29 +145,24 @@ database with no read path back.
 **This kills "did my agent get better?" outright**, which is the first question anyone
 evaluating an agent asks. It is a read-path problem, not a data problem.
 
-### C0b. Collect human labels outside the uncertain band — days
+### C0b. Finish the consumer for reference labels outside the uncertain band — days
 
-Only automated-eval receipts marked `uncertain` escalate to a human; `pass` and `fail`
-never do. So a customer can never measure their evaluator's false-positive or
-false-negative rate — the exact number judge calibration means — and the labels they do
-get are drawn from the band where the evaluator is least accurate and least
-representative.
-
-Sample a small fraction of `pass` and `fail` too. Then compute the confusion matrix and
-weight by the inclusion probability already recorded per opportunity. **Those two steps
-turn a labelled-data faucet into judge calibration**, which is the strongest available
-claim and currently not implemented at all.
+The repository now has a separate, future-beacon reference draw for automated `pass` and
+`fail`, plus design-weighted confusion-matrix point estimates. What remains is the
+authorized reviewer assignment/label consumer and durable report publication. Reference
+labels never enter the operational adaptive-promotion window.
 
 ### C0c. Fix or disclose the sampling bias — days to disclose, longer to fix
 
-Forced strata union the deterministic draw, and the sampling rate is lowered _because_
-past agreement passed a threshold — selection on the dependent variable. Inclusion
-probabilities are recorded per decision and never used to weight anything, so every
-published rate is an unweighted count over a non-representative sample.
+Forced strata union the operational deterministic draw, and the sampling rate is lowered
+_because_ past agreement passed a threshold. The implementation now reports an explicitly
+typed history-conditioned weighted point estimate and uses a separate closed-frame DSA
+draw. Public intervals stay disabled until the actual dependency/variance design passes
+external method review.
 
-Cheapest honest fix: report the weighted estimate alongside the raw one, and say plainly
-in the UI that the figure describes reviewed outputs. A statistically literate buyer
-notices this in one meeting; better they hear it from the product.
+The remaining honest fix is to finish the two-number UI and disclosure, then obtain the
+external method decision. A statistically literate buyer notices unsupported intervals
+in one meeting; the product must return a typed gap instead.
 
 ### C1. Expose suites, cases and gold items to the live lane — weeks
 
@@ -263,10 +258,11 @@ decides only what a human looks at, never the outcome.
 **A prompt editor or playground.** That is an LLM development tool. It would start a
 fight against better-resourced products and dilute the only thing no competitor does.
 
-**Turning on the reviewer marketplace.** See the business plan: no comparable company
-launched as a marketplace, the Platform Work Directive's Article 10 duties attach even
-to the genuinely self-employed from December 2026, and the paid lane does not produce
-the Article 26(2) artefact the product sells.
+**Turning on an open reviewer marketplace.** No comparable company launched with that
+model, the Platform Work Directive reaches genuinely self-employed platform workers from
+national transposition, and open case selection would damage the sampling claim. Keep the
+principal-assigned network as a default-off public-safe benchmark experiment; do not add
+browsing, rankings, streaks, dynamic bonuses or hybrid supply.
 
 **ISO 42001.** About 350 certificates exist worldwide, first-year cost is $85–150k, and
 there is no evidence of it appearing in European tenders. Revisit in 2027.

@@ -291,7 +291,14 @@ onboarding and sandbox conformance. No outbound field may contain personal data.
   requires qualified human oversight, human account-termination decisions and reasoned
   review after national transposition by 2 December 2026. It is a strong second vertical,
   but implementation is still settling and an outside panel cannot substitute for the
-  platform's authorised decision-maker.
+  platform's authorised decision-maker. As of the
+  [Bundestag's 24 April 2026 update](https://www.bundestag.de/presse/hib/kurzmeldungen-1167478),
+  BMAS was still preparing the German draft. BMAS said on 19 May that implementation
+  would occur in 2026, and a
+  [7 July Bundesrat motion](https://dserver.bundestag.de/brd/2026/0399-26.pdf) still asked
+  the government to present a draft promptly. The directive can cover a service that
+  organises platform work even when the supply pool is curated, so “closed network” is a
+  product boundary, not a labour-law exemption.
 - GDPR automated-decision contests are broad and already live, but lack the DSA's
   recurring public metric and statutory audit artifact.
 - AI Act Annex III is a horizon, not a launch wedge. Its high-risk duties now start on
@@ -413,27 +420,26 @@ The concrete draw protocol is:
    probability for every frame unit; and
 5. freeze the complete selected/non-selected manifest before assignment.
 
-| #   | Task                                                            | Days |
-| --- | --------------------------------------------------------------- | ---- |
-| 2.1 | Closed-frame sampling epochs and witnessed commitments          | 8–10 |
-| 2.2 | Future-beacon verification and domain-separated seed derivation | 3–4  |
-| 2.3 | Reviewer/scope override detector with employment-data gate      | 2–3  |
-| 2.4 | Auditable engagement events with aggregate-only mode            | 3–4  |
-| 2.5 | Separate reference-sampling channel for automated pass and fail | 7–8  |
-| 2.8 | Typed packet schema on DSSE + RFC 8785 canonicalisation         | 5    |
-| 2.6 | Bind audit/coverage heads to the existing attestation pipeline  | 2    |
-| 2.7 | Least-privileged compliance-reader grant and bounded view       | 5    |
+| #    | Task                                                            | Days         | Repository status                                                          |
+| ---- | --------------------------------------------------------------- | ------------ | -------------------------------------------------------------------------- |
+| 2.1  | Closed-frame sampling epochs and witnessed commitments          | 8–10         | Persistence foundation implemented; hosted exercise remains a release gate |
+| 2.2  | Future-beacon verification and domain-separated seed derivation | 3–4          | Shared verified core implemented; hosted exercise remains a release gate   |
+| 2.3  | Reviewer/scope override detector with employment-data gate      | 2–3          | Implemented                                                                |
+| 2.4  | Auditable engagement events with aggregate-only mode            | 3–4          | Implemented                                                                |
+| 2.5  | Separate reference-sampling channel for automated pass and fail | 7–8          | Sampling foundation implemented; assignment/label consumer remains open    |
+| 2.8  | Typed packet schema on DSSE + RFC 8785 canonicalisation         | 5            | Implemented for new evidence packets with immutable legacy verification    |
+| 2.6  | Bind audit/coverage heads to the existing attestation pipeline  | 2            | Implemented                                                                |
+| 2.7  | Least-privileged compliance evidence share and bounded view     | 5            | Existing share foundation; bounded project/window consumer remains open    |
+| 2.9  | Contractual public-safe benchmark research grant                | 3–5          | Pure commit-gated contract implemented; persistence and route remain open  |
+| 2.10 | Statutory Article 40 vetted-researcher access                   | External + 5 | Not implemented; requires DSC-vetted request workflow                      |
 
-**2.3 and 2.4 are the Uber and Cigna findings turned into features, but the raw material
-is not the finished feature.** Override outcomes are already aggregated in evidence
-packets, coverage exports and workspace metrics. The missing work is scope/reviewer-
-level pattern detection with a minimum denominator and an employment-data governance
-gate. Aggregate-only mode computes and persists no per-reviewer score; necessary identity
-evidence uses a restricted crosswalk and independent retention. Reviewer analytics also
-require recorded controller/processor roles, lawful-basis/necessity and DPIA decisions,
-worker notice, access/retention policy, data-subject process, and works-council status.
-Existing latency is workflow elapsed time, not active engagement; 2.4 must define first
-artifact access, idle, reopen and submission events before displaying reviewer metrics.
+**2.3 and 2.4 are the Uber and Cigna findings turned into features, but the foundation is
+not release approval.** Scope/reviewer override patterns have a minimum denominator and
+are gated by the persisted employment-data governance record. Append-only engagement
+events distinguish first artifact access, idle, reopen and submission. Aggregate-only
+mode persists no per-reviewer score; the UI consumer must preserve that property and may
+show reviewer metrics only when controller/processor roles, lawful basis/necessity, DPIA,
+notice, access/retention, data-subject process and works-council status are all resolved.
 
 **2.5 is a separate append-only channel.** It samples automated `pass` and `fail` while
 `uncertain` remains always reviewed. Its labels never enter operational adaptive rollups.
@@ -461,6 +467,17 @@ only to an exact selected, principal-bound seat. Keep that closed network defaul
 outside the initial release. Do not add public task browsing, rankings, streaks, dynamic
 bonuses or self-selection.
 
+The benchmark test is an experiment, not a launch. Freeze the qualified reviewer frame,
+availability window, invitation probabilities, assignment rule and non-response handling
+before outcomes. Randomize principal-bound invitations or assignments within declared
+qualification strata; do not let workers browse or choose cases. Report invited,
+accepted, assigned, opened, completed and timed-out counts, and keep panel-vs-network
+comparisons descriptive unless the precommitted design supports a population claim.
+[Adaptive allocation can make completed tasks unrepresentative](https://www.nature.com/articles/s41598-022-10794-9),
+and [reputation filters can improve observed quality](https://pubmed.ncbi.nlm.nih.gov/24356996/)
+while changing the represented worker population; neither effect may be hidden behind
+one headline accuracy number.
+
 The four lanes have different decisions:
 
 | Lane                     | Decision now                                               | Reason                                                                                                                                                                                          |
@@ -487,6 +504,12 @@ The planning target for each first pilot is one system/category/language scope, 
 independent labels per case. Those numbers are a test configuration, not a prescribed
 DSA sampling rate. Compensation may be handled by the pilot contract so that evidence
 usability is tested before on-chain network settlement becomes a dependency.
+
+Freeze who contracts and pays every pilot reviewer. A RateLoop-recruited named panel is
+not exempt from paid eligibility, tax, sanctions, payout, worker-information, appeal or
+applicable platform-work duties merely because the customer authorizes access to its
+cases. Reassess both paid panel and network gates when Germany publishes its implementing
+draft; the absence of a public draft is not permission to assume the final rules.
 
 The reference sample is separate from the operational adaptive-review sample. It never
 feeds the adaptive promotion window. In provider-evidence mode RateLoop controls only its
@@ -565,19 +588,19 @@ shipped native approve-and-resume.
 
 ## 9. Sequence
 
-| Order | Work                                                               | Days/Status  |
-| ----- | ------------------------------------------------------------------ | ------------ |
-| 1     | 1.1–1.3 — make the operational frame load and stay fixed           | Done         |
-| 2     | 1.4a–1.4c — estimand, estimator, variance decision and validation  | 5–6          |
-| 3     | 1.5, 1.6 — decision view, disclosure and fail-closed claims        | 3            |
-| 4     | 2.3, 2.4 — governance gate, override pattern and engagement events | 5–7          |
-| 5     | 2.8 — shared canonical packet schema before new public artifacts   | 5            |
-| 6     | 3.1 — complete DSA population import and reconciliation            | 7–10         |
-| 7     | 2.1, 2.2, 2.5 — committed frame, future beacon and reference draw  | 18–22        |
-| 8     | 3.2–3.5 — frozen sample, authorized panel, blinding and metrics    | 16–21        |
-| 9     | 2.6, 2.7 — witnessed heads and compliance-reader access            | 7            |
-| 10    | 3.6 — audit-partner review and two provider pilots                 | Release gate |
-| 11    | 3.7 — separate paid-network hosted/testnet validation              | Release gate |
+| Order | Work                                                               | Days/status                                  |
+| ----- | ------------------------------------------------------------------ | -------------------------------------------- |
+| 1     | 1.1–1.3 — make the operational frame load and stay fixed           | Done                                         |
+| 2     | 1.4a–1.4b — estimand and point estimator                           | Done                                         |
+| 3     | 1.4c — variance validation and external method decision            | Release gate                                 |
+| 4     | 1.5, 1.6 — decision view, disclosure and fail-closed claims        | 3                                            |
+| 5     | 2.3, 2.4 — governance and engagement foundations                   | Done                                         |
+| 6     | 2.8, 2.6 — canonical v4 packets and witnessed audit heads          | Done                                         |
+| 7     | 3.1, 2.1, 2.2 — population and persisted witnessed draw foundation | Implemented; integration verification active |
+| 8     | 2.5, 3.2–3.5 — system evaluations, labels and durable reports      | 16–21                                        |
+| 9     | 2.7, 2.9 — persist separate compliance and research grants         | 7                                            |
+| 10    | 3.6 — audit-partner review and two provider pilots                 | Release gate                                 |
+| 11    | 3.7 — separate paid-network hosted/testnet validation              | Release gate                                 |
 
 Rows two and three ship useful provider-side measurement without claiming independence.
 Rows six through nine build the DSA artifact. Row ten decides whether the evidence product
@@ -587,7 +610,9 @@ has a market. Row eleven decides separately whether the closed network deserves 
 
 - **Reference and operational channels never share rollups.** Implement the exclusion in
   1.4 before 2.5 writes its first label.
-- **One migration in flight at a time.** `0165` is taken; the next is `0166`.
+- **One migration in flight at a time.** `0170` is the sampling-epoch migration in this
+  implementation slice; the next available migration number is `0171`. Do not start it
+  until `0170` and its real-Postgres invariant suite are green.
 - **The claim-gate walker does not scan message catalogs.** Extend it to English and German
   JSON before adding estimator or DSA copy; editing a component alone can leave localized
   overclaims green.
@@ -676,9 +701,11 @@ this document should hold to the same standard.
   the official sandbox, delegated-token model and zero-personal-data gate pass.
 - **Not that reviewer analytics are lawful because a switch exists.** Employment-data
   governance and, where applicable, a works-council agreement remain customer gates.
-- **Not that the DSA product is implemented.** Generic assurance, privacy, assignment and
-  evidence primitives exist; the population schema, single-case blinding, reference draw,
-  estimator and DSA export remain open work below.
+- **Not that the DSA product is released.** Population reconciliation, content-moderation
+  decision facts, witnessed reference-draw foundations, single-case blinding, point
+  estimators and a typed Part 8 draft verifier exist. Durable report-version publication,
+  the complete authorized-panel consumer, external method acceptance, two provider pilots
+  and one synchronized hosted/testnet exercise remain release gates below.
 
 ---
 
@@ -712,10 +739,10 @@ done only when the named consumer path and exit tests pass together.
 
 ### 2.1–2.2 — committed reference draw
 
-- Add dedicated sampling-epoch/frame tables beginning with the next available migration;
-  do not reuse reviewer-integrity epochs in `integrityEpochs.ts`. States are `draft`,
-  `frame_committed`, `beacon_available`, `sample_frozen` and `closed`, with one immutable
-  transition record per state change.
+- Migration `0170` adds dedicated sampling-epoch, projection, sample, manifest and
+  transition tables rather than reusing reviewer-integrity epochs. Finish integration by
+  consuming the frozen sample in the authorized label and report paths; do not add a
+  second epoch model.
 - Extract the reusable verification core from `packages/keeper/src/drand.ts` into a shared
   package consumed by both keeper and Next.js. A cross-consumer golden-vector test must
   bind exact network, round, signature, randomness and derivation domain.
@@ -729,29 +756,31 @@ done only when the named consumer path and exit tests pass together.
   `adaptiveCoverageExport.ts`/`assuranceMetrics.ts`, and latency data in
   `agentReviewQuality.ts`. Keep reviewer disagreement, decision-owner override, reversal
   and supersession as separate events.
-- Add the per-workspace employment-data governance record before persisting or displaying
-  reviewer-level engagement. Aggregate-only mode computes no per-reviewer score and
-  remains functional.
+- The per-workspace employment-data governance record and append-only engagement events
+  are implemented. The remaining consumer must keep aggregate-only mode free of persisted
+  per-reviewer scores and expose reviewer metrics only under the frozen governance gate.
 - Exit with minimum-denominator, zero-override, supersession, idle/reopen, timestamp,
   privacy-role, EN/DE and works-council-off tests.
 
 ### 2.5 — reference-sampling channel
 
-- Extend `automatedEvalReceipts.ts` with a separate append-only reference-sample record,
-  not an ordinary adaptive opportunity. Stratify automated `pass` and `fail`; retain
-  always-review for `uncertain`.
+- Consume the separate append-only reference sample produced by the persisted epoch; do
+  not turn it into an ordinary adaptive opportunity. Stratify automated `pass` and `fail`;
+  retain always-review for `uncertain`.
 - Exit when both strata are sampled reproducibly, labels are excluded from adaptive
   promotion, disagreement can reset coverage, agreement cannot promote it, and exports
   identify the reference stratum and method.
 
 ### 2.8, then 2.6–2.7 — packet and adverse-reader path
 
-- Replace hand-rolled canonical JSON in `assuranceAttestations.ts`, `evidencePackets.ts`,
-  `adaptiveCoverageExport.ts` and their script verifiers with one RFC 8785 implementation.
-  Version the new JSON Schema and keep legacy verification; never rewrite old evidence.
-- Enqueue real `audit_export_head` checkpoints through
-  `assuranceAttestationPipeline.ts`, then extend `evidenceShareGrants.ts` from a single
-  packet to a bounded, revocable project/window grant.
+- New evidence packets use the shared RFC 8785 implementation and retain immutable legacy
+  verification. Real `audit_export_head` checkpoints use one enqueue invariant in both
+  standalone and database-transaction consumers.
+- Extend `evidenceShareGrants.ts` from a single packet to a bounded, revocable
+  project/window compliance share. Persist `benchmarkResearchGrants.ts` separately for
+  contractual public-safe research; it explicitly is not Article 40 access. A statutory
+  Article 40 path may be built only around a DSC-vetted researcher and reasoned request
+  under [Delegated Regulation 2025/2050](https://eur-lex.europa.eu/eli/reg_del/2025/2050/oj/eng).
 - Exit on official RFC vectors including Unicode and numbers, browser/Node byte identity,
   DSSE negative cases, legacy verification, exact boundary digests, expiry/revocation and
   a public view containing no ciphertext, private content or reviewer identifiers.
@@ -769,6 +798,25 @@ done only when the named consumer path and exit tests pass together.
 - Exit when idempotent large imports reproduce the exact root/count; conflicting IDs are
   rejected or explicitly versioned; missing/extra rows block freeze; and the full sample
   recomputes offline without reading mutable provider state.
+
+Implementation semantics are deliberately narrower than the first draft. The first layer
+is a **content-moderation decision**, not necessarily a moderation measure. It records
+`measureTaken`; the measure identifier is present if and only if a measure was taken. The
+second layer contains one immutable automated-means evaluation per decision and reportable
+system/version. A no-action decision and every contributing system output stay in the
+reference frame without inflating the official decision, measure or notice count.
+`solely_automated`, `partially_automated` and `not_automated` remain distinct because the
+official template asks for “not processed by automated means,” not “not solely.” A
+not-automated decision has no system evaluations; solely or partially automated decisions
+must reconcile to at least one. The frozen independent inventory includes unobserved
+systems as typed zero-observation gaps.
+
+The timing contract is also explicit: `populationFrozenAt` closes the ended reporting
+period; `sourceFrozenAt` identifies the repeatable-read source snapshot; `committedAt` is
+captured from the database wall clock immediately before the commitment write. A deferred
+database constraint rechecks at transaction commit that the selected beacon will remain
+unavailable for at least five minutes. Application timestamps and transaction-start time
+are not substitutes for either database clock.
 
 ### 3.3–3.4 — authorized panel and DSA blinding
 
@@ -796,6 +844,22 @@ done only when the named consumer path and exit tests pass together.
 - Exit when an offline verifier exactly reproduces every published cell; missing
   dimensions, small/empty cells and incomplete support become gaps; and confidential and
   public packet projections have deterministic, separately signed digests.
+
+Persist these foundations in ordered migrations after `0170`: an independent frozen
+classifier inventory; notice-processing facts and typed incomplete-processing gaps; a
+count contract bound to exact decision, measure and notice census witnesses plus audit
+and attestation heads; reference labels bound to selected decision-system evaluations;
+and immutable report IDs, versions, corrections, stored bytes, publication state and
+five-year retention. The publication route may expose only bytes whose stored digest an
+offline verifier reproduces from those authoritative rows.
+
+The exporter must transform a checked-in byte-exact copy of the Commission CSV template,
+whose fetched source digest on 31 July 2026 is
+`sha256:1a687f468468b25b214f505c4a6cb906d6ee8cc80d20f5a60eca383cc1bea71d`.
+It recomputes official measure and notice counts from the complete frozen decision facts,
+re-verifies every referenced population/sample/estimate artifact, and emits canonical
+context JSON without internal identifiers or spreadsheet formulas. Caller-supplied totals
+or self-asserted digests are never evidence.
 
 ### 3.6–3.7 — external decision and network validation
 

@@ -570,14 +570,14 @@ provision.
 
 ## Deferred, with reasons
 
-**The switched-off marketplace.** Both paid lanes require a hash-bound activation
-reference nobody has issued; the unpaid invited lane is unconditionally on. The
-research that would settle what to do — whether a contracted external reviewer acting
-under a deployer's authority can satisfy the mandates, and how audit independence,
-clinical monitoring boards and moderation outsourcing resolve the same tension — did
-not complete. **Do not act on this until it does.** It is the question that decides
-whether the network lane is a product or a dead limb, and guessing is worse than
-waiting.
+**The default-off reviewer network.** Both paid lanes require a hash-bound activation
+reference nobody has issued; the unpaid invited lane remains available. The governing
+decision is now explicit: use a named, customer-authorized private panel for the DSA
+pilot; retain the network only for a separately reported public-safe benchmark; keep
+hybrid unavailable; and forbid browsing, case self-selection, rankings, streaks and
+dynamic bonuses. Platform-work, privacy, payments, worker-appeal and operational gates
+still apply. The network becomes a release candidate only after a precommitted benchmark
+experiment demonstrates demand or evidence value beyond the named panel.
 
 **A workspace-level read-only role.** There is no central authorisation module;
 membership SQL is re-implemented in more than fifteen places. Adding a role means

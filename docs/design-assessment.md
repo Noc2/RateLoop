@@ -163,18 +163,20 @@ SOC 2, ISO or HIPAA attestation. That last one is smaller than it sounds: a Type
 runs roughly $12–40K over three to eight months, and the customary bridge is a
 written commitment to Type 2 by a date, plus a completed questionnaire.
 
-### 2. Half the design is switched off, and one half assumes the other
+### 2. Reviewer supply is retained, closed and deliberately unreleased
 
-The paid marketplace is fully implemented and gated behind a five-way evidence lock.
+The paid reviewer supply machinery is substantial but not a finished marketplace. It is
+gated behind an evidence lock, and the network lane additionally requires a benchmark-
+specific activation record that does not exist.
 The reviewer surface offers eligibility, earnings, a payout wallet and identity
 assurance, all inert. The landing statistics for verified humans and amounts paid are
 zero — and are **never rendered**, because the social-proof projection filters out
 zero values and omits the strip entirely, which a test pins.
 
 So the product is not a two-sided marketplace today; it is a single-sided workflow
-tool for a team reviewing its own agent's output. That is a coherent product — but
-the mechanism design, the scoring, the timelock commit–reveal and the fund core all
-exist to serve the half that is off.
+and evidence product for a team or named authorized panel reviewing an agent's output.
+That is coherent. The network machinery is retained for a separately measured public-safe
+benchmark, not exposed as browseable work and not used to rescue a private DSA sample.
 
 **The hard half was built first.** Whether that was the right order is the open
 strategic question in the whole picture.
@@ -388,9 +390,12 @@ the refund collision at the storage layer.
    unnamed by analysts, and not yet triggered. The strongest datapoint in favour
    comes from a different regulation than the one the product leads with.
 
-3. **Can the reviewer marketplace be both independent and compliant?** Independence
+3. **Can the closed reviewer network produce useful external evidence while remaining
+   compliant?** Reviewer separation
    is the deepest moat — every incumbent's reviewer is the customer's own employee
    scoring their employer's system on a mutable record. But every legal mandate
    requires the deployer's own authorised person. **The two properties that make the
    network lane valuable and the properties that make it compliant are in direct
-   tension**, and the resolution is probably to stop selling them as one product.
+   tension**. The current resolution is to separate the provider-authorized private panel,
+   the audit organisation's statutory authority and the default-off public-safe benchmark
+   experiment, then test each claim independently.
