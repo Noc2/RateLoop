@@ -94,6 +94,14 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
       "0168_dsa_population_ledger.sql",
       "0169_dsa_part8_source_facts.sql",
       "0170_dsa_reference_sampling_epochs.sql",
+      "0171_dsa_part8_inventory_and_notices.sql",
+      "0172_dsa_part8_count_contracts.sql",
+      "0173_dsa_reference_label_sets.sql",
+      "0174_dsa_part8_report_versions.sql",
+      "0175_project_window_compliance_shares.sql",
+      "0176_benchmark_research_persistence.sql",
+      "0177_network_benchmark_activation.sql",
+      "0178_dsa_reference_network_provenance.sql",
     ].includes(file) &&
     (/\bDO \$\$/u.test(statement) ||
       /\bCREATE OR REPLACE FUNCTION\b/u.test(statement) ||
@@ -261,6 +269,32 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
     // migration tests exercise the same exact v4 source partition.
     return statement.replace(/\s+AND NOT \(\s*"expertise_requirements_json"::jsonb @\? '[^']+'\s*\)/u, "");
   }
+  if (
+    file === "0174_dsa_part8_report_versions.sql" &&
+    /^CREATE TABLE "tokenless_dsa_part8_report_cells"/u.test(statement)
+  ) {
+    // pg-mem does not implement PostgreSQL's case-insensitive regular-expression
+    // operator. Production keeps the public-cell identifier leak guard, and the
+    // migration source/service tests pin the same denylist.
+    return statement.replace(
+      /\s+AND NOT \(concat_ws\(E'\\n',"applicability","service","reporting_period","section","indicator",\s*"scope","value","context_json"\)\s*~\* '[^']+'\)/u,
+      "",
+    );
+  }
+  if (file === "0174_dsa_part8_report_versions.sql" && /!?~\*/u.test(statement)) {
+    return statement.replace(/\s+AND "public_path" !~\* 'latest'/u, "").replaceAll("~*", "~");
+  }
+  if (
+    file === "0177_network_benchmark_activation.sql" &&
+    /^CREATE TABLE "tokenless_network_benchmark_activations"/u.test(statement)
+  ) {
+    // pg-mem cannot parse PostgreSQL's named make_interval argument. The
+    // production duration equality is source-tested and exercised in Postgres.
+    return statement.replace(
+      /\s+AND "authorization_expires_at" = "activated_at" \+ make_interval\(secs => "authorization_duration_seconds"\)/u,
+      "",
+    );
+  }
   if (file !== "0058_human_review_binding_backfill.sql") return statement;
 
   // The in-memory test database applies migrations to a guaranteed-empty schema.
@@ -328,6 +362,12 @@ export function createMemoryDatabaseResources(
     args: [DataType.bytea, DataType.text],
     returns: DataType.bytea,
     implementation: (value, algorithm) => createHash(algorithm).update(value).digest(),
+  });
+  memoryDb.public.registerFunction({
+    name: "octet_length",
+    args: [DataType.bytea],
+    returns: DataType.integer,
+    implementation: value => value.byteLength,
   });
   memoryDb.public.registerFunction({
     name: "encode",
@@ -409,6 +449,12 @@ export function createMemoryDatabaseResources(
         return false;
       }
     },
+  });
+  memoryDb.public.registerFunction({
+    name: "transaction_timestamp",
+    args: [],
+    returns: DataType.timestamptz,
+    implementation: () => new Date((options.transactionTimestamp ?? (() => new Date()))().getTime()),
   });
   memoryDb.public.registerFunction({
     name: "tokenless_dsa_evidence_transaction_timestamp",
