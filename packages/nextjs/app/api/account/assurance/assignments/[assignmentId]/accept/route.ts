@@ -64,6 +64,12 @@ export async function POST(request: NextRequest, context: Context) {
     if (request.nextUrl.searchParams.get("includeTask") !== "1") {
       return NextResponse.json(acceptance, { headers: { "Cache-Control": "private, no-store, max-age=0" } });
     }
+    if ("requiresDsaReferencePanelAcceptance" in acceptance && acceptance.requiresDsaReferencePanelAcceptance) {
+      return NextResponse.json(
+        { acceptance, task: null, nextAction: "accept_dsa_reference_panel" },
+        { headers: { "Cache-Control": "private, no-store, max-age=0" } },
+      );
+    }
     const task = directAssignment
       ? await getDirectPrivateReviewTask({
           assignmentId,

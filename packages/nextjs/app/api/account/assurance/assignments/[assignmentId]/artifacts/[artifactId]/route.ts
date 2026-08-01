@@ -7,6 +7,7 @@ import {
   assertAssuranceAssignmentSettlementAvailable,
   assertMatchingPrivateGroupSnapshot,
 } from "~~/lib/tokenless/audienceAssignments";
+import { readDsaNamedPanelArtifactIfExists } from "~~/lib/tokenless/dsaNamedReferencePanel";
 import {
   directPrivateArtifactAccess,
   isDirectPrivateReviewAssignmentId,
@@ -35,10 +36,20 @@ export async function GET(request: NextRequest, context: Context) {
           artifactId,
         })
       : null;
+    const namedPanelArtifact = directAccess
+      ? null
+      : await readDsaNamedPanelArtifactIfExists({
+          accountAddress: session.principalId,
+          assignmentId,
+          artifactId,
+          requestReference: request.headers.get("x-request-id") ?? undefined,
+        });
     const result = directAccess
       ? null
-      : await dbClient.execute({
-          sql: `SELECT a.workspace_id, a.project_id, a.source, a.paid_assignment,
+      : namedPanelArtifact
+        ? null
+        : await dbClient.execute({
+            sql: `SELECT a.workspace_id, a.project_id, a.source, a.paid_assignment,
                    a.private_group_id, a.private_group_policy_version, a.private_group_policy_hash,
                    sp.private_group_id AS subpanel_private_group_id,
                    sp.private_group_policy_version AS subpanel_private_group_policy_version,
@@ -51,15 +62,15 @@ export async function GET(request: NextRequest, context: Context) {
               ON ap.policy_id = r.audience_policy_id AND ap.version = r.audience_policy_version
             WHERE a.assignment_id = ? AND a.reviewer_account_address = ? AND a.status = 'accepted'
               AND a.confidentiality_accepted_at IS NOT NULL AND a.assignment_expires_at > ? LIMIT 1`,
-          args: [assignmentId, session.principalId.toLowerCase(), new Date()],
-        });
+            args: [assignmentId, session.principalId.toLowerCase(), new Date()],
+          });
     const assignment = result?.rows[0] as QueryRow | undefined;
     const workspaceId = directAccess?.workspaceId ?? rowString(assignment, "workspace_id");
     const projectId = directAccess?.projectId ?? rowString(assignment, "project_id");
-    if (!workspaceId || !projectId) {
+    if (!namedPanelArtifact && (!workspaceId || !projectId)) {
       throw new TokenlessServiceError("Artifact not found.", 404, "artifact_not_found");
     }
-    if (!directAccess) {
+    if (!directAccess && !namedPanelArtifact) {
       assertMatchingPrivateGroupSnapshot(assignment!);
       assertAssuranceAssignmentSettlementAvailable({
         paidAssignment: assignment?.paid_assignment === true,
@@ -67,15 +78,17 @@ export async function GET(request: NextRequest, context: Context) {
         source: rowString(assignment, "source") as "customer_invited" | "rateloop_network",
       });
     }
-    const artifact = await readEncryptedArtifact({
-      accountAddress: session.principalId,
-      artifactId,
-      leaseId: request.nextUrl.searchParams.get("leaseId") ?? undefined,
-      projectId,
-      purpose: "preview",
-      requestReference: request.headers.get("x-request-id") ?? undefined,
-      workspaceId,
-    });
+    const artifact =
+      namedPanelArtifact ??
+      (await readEncryptedArtifact({
+        accountAddress: session.principalId,
+        artifactId,
+        leaseId: request.nextUrl.searchParams.get("leaseId") ?? undefined,
+        projectId: projectId!,
+        purpose: "preview",
+        requestReference: request.headers.get("x-request-id") ?? undefined,
+        workspaceId: workspaceId!,
+      }));
     return new NextResponse(Buffer.from(artifact.bytes), {
       headers: {
         "Cache-Control": "private, no-store, max-age=0",

@@ -180,6 +180,28 @@ test("uncertain is retained as a coverage gap and requires adjudication", () => 
   );
 });
 
+test("a sampled nonresponse gap stays uncertain and cannot become an accuracy label", () => {
+  const gapLabels: readonly DsaReferenceLabelInput[] = [
+    labels[0]!,
+    {
+      unitId: labels[1]!.unitId,
+      referenceLabel: "uncertain",
+      agreementState: "gap",
+      adjudicationEvidenceDigest: digest("8"),
+      gapReason: "reviewer_nonresponse",
+    },
+  ];
+  const evidence = build({ labels: gapLabels });
+  assert.equal(evidence.labels[1]?.referenceLabel, "uncertain");
+  assert.equal(evidence.labels[1]?.agreementState, "gap");
+  assert.equal(evidence.labels[1]?.gapReason, "reviewer_nonresponse");
+  assert.equal(evidence.set.coverageGap, "uncertain_reference_labels");
+  assert.throws(
+    () => build({ labels: [{ ...gapLabels[0]! }, { ...gapLabels[1]!, referenceLabel: "pass" }] }),
+    /valid adjudication evidence/u,
+  );
+});
+
 test("label evidence has no adaptive promotion or operational use state", () => {
   const serialized = canonicalizeRfc8785(build()).toLowerCase();
   assert.doesNotMatch(serialized, /adaptive|promotion|operational[_-]?(?:use|state)/u);

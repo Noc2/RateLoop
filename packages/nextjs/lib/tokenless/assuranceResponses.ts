@@ -407,11 +407,12 @@ function buildResponseRecord(input: {
 async function verifyReplay(input: {
   assignment: QueryRow;
   client: PoolClient;
-  expected: Array<{ caseId: string; responseDigest: string }>;
+  expected: Array<{ caseId: string; responseDigest: string; canonicalChoice: string }>;
   reviewerKey: string;
 }) {
   const result = await input.client.query(
-    `SELECT response_id, case_id, response_digest, validity, settlement_reference
+    `SELECT response_id,case_id,reviewer_key,reviewer_source,response_digest,validity,choice,submitted_at,
+            settlement_reference
      FROM tokenless_assurance_responses WHERE run_id = $1 AND reviewer_key = $2 ORDER BY case_id`,
     [rowString(input.assignment, "run_id"), input.reviewerKey],
   );
@@ -419,16 +420,120 @@ async function verifyReplay(input: {
   if (result.rowCount !== input.expected.length) {
     serviceError("This assignment contains an incomplete prior response.", "assurance_response_conflict", 409);
   }
-  const expected = new Map(input.expected.map(value => [value.caseId, value.responseDigest]));
+  const expected = new Map(input.expected.map(value => [value.caseId, value]));
   if (
     result.rows.some(value => {
       const row = value as QueryRow;
-      return expected.get(rowString(row, "case_id") ?? "") !== rowString(row, "response_digest");
+      const match = expected.get(rowString(row, "case_id") ?? "");
+      return (
+        match?.responseDigest !== rowString(row, "response_digest") ||
+        match.canonicalChoice !== rowString(row, "choice")
+      );
     })
   ) {
     serviceError("This assignment already contains a different response.", "assurance_response_conflict", 409);
   }
   return result.rows as QueryRow[];
+}
+
+async function preserveDsaNamedPanelResponseBinding(input: {
+  assignment: QueryRow;
+  client: PoolClient;
+  response: {
+    responseId: string;
+    caseId: string;
+    reviewerKey: string;
+    reviewerSource: string;
+    responseDigest: string;
+    validity: string;
+    choice: string;
+    submittedAt: Date;
+  };
+  allowInsert: boolean;
+}) {
+  const unitId = rowString(input.assignment, "dsa_binding_unit_id");
+  if (!unitId) return;
+  const panelDeadline = new Date(String(input.assignment.dsa_binding_panel_deadline));
+  if (!Number.isFinite(panelDeadline.getTime()) || input.response.submittedAt > panelDeadline) {
+    serviceError("The DSA named-panel response missed its frozen deadline.", "assurance_response_conflict", 409);
+  }
+  const values = [
+    rowString(input.assignment, "dsa_binding_workspace_id"),
+    rowString(input.assignment, "dsa_binding_project_id"),
+    rowString(input.assignment, "dsa_binding_epoch_id"),
+    unitId,
+    rowString(input.assignment, "run_id"),
+    input.response.caseId,
+    rowString(input.assignment, "assignment_id"),
+    rowString(input.assignment, "reviewer_account_address"),
+    rowBoolean(input.assignment, "dsa_response_binding_required"),
+    panelDeadline,
+    input.response.responseId,
+    input.response.reviewerKey,
+    input.response.reviewerSource,
+    input.response.responseDigest,
+    input.response.validity,
+    input.response.choice,
+    input.response.submittedAt,
+  ];
+  if (input.allowInsert) {
+    await input.client.query(
+      `INSERT INTO tokenless_dsa_named_panel_assignment_response_bindings
+       (workspace_id,project_id,epoch_id,unit_id,run_id,case_id,assignment_id,reviewer_principal_id,
+        response_binding_required,panel_deadline,response_id,reviewer_key,reviewer_source,response_digest,
+        response_validity,response_choice,response_submitted_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+       ON CONFLICT (workspace_id,epoch_id,unit_id,assignment_id,case_id) DO NOTHING`,
+      values,
+    );
+  }
+  const stored = await input.client.query(
+    `SELECT workspace_id,project_id,epoch_id,unit_id,run_id,case_id,assignment_id,reviewer_principal_id,
+            response_binding_required,panel_deadline,response_id,reviewer_key,reviewer_source,response_digest,
+            response_validity,response_choice,response_submitted_at,bound_at
+     FROM tokenless_dsa_named_panel_assignment_response_bindings
+     WHERE workspace_id=$1 AND epoch_id=$3 AND unit_id=$4 AND assignment_id=$7 AND case_id=$6`,
+    values,
+  );
+  const row = stored.rows[0] as QueryRow | undefined;
+  const actual = row
+    ? [
+        rowString(row, "workspace_id"),
+        rowString(row, "project_id"),
+        rowString(row, "epoch_id"),
+        rowString(row, "unit_id"),
+        rowString(row, "run_id"),
+        rowString(row, "case_id"),
+        rowString(row, "assignment_id"),
+        rowString(row, "reviewer_principal_id"),
+        rowBoolean(row, "response_binding_required"),
+        new Date(String(row.panel_deadline)).toISOString(),
+        rowString(row, "response_id"),
+        rowString(row, "reviewer_key"),
+        rowString(row, "reviewer_source"),
+        rowString(row, "response_digest"),
+        rowString(row, "response_validity"),
+        rowString(row, "response_choice"),
+        new Date(String(row.response_submitted_at)).toISOString(),
+      ]
+    : null;
+  const expected = [
+    ...values.slice(0, 9),
+    panelDeadline.toISOString(),
+    ...values.slice(10, 16),
+    input.response.submittedAt.toISOString(),
+  ];
+  const boundAt = row ? new Date(String(row.bound_at)) : null;
+  const exactBindingTime = rowBoolean(input.assignment, "dsa_response_binding_required")
+    ? boundAt?.getTime() === input.response.submittedAt.getTime()
+    : Boolean(boundAt && boundAt >= input.response.submittedAt);
+  if (stored.rowCount !== 1 || JSON.stringify(actual) !== JSON.stringify(expected) || !exactBindingTime) {
+    serviceError(
+      "The DSA named-panel response binding conflicts with immutable evidence.",
+      "assurance_response_conflict",
+      409,
+    );
+  }
 }
 
 export async function submitAssuranceResponses(input: SubmitAssuranceResponsesInput) {
@@ -439,11 +544,35 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
   const principalId = input.baseAccountAddress.trim();
   if (!principalId) serviceError("A valid signed-in account is required.", "invalid_account", 401);
   const responses = validateResponseBatch(input.responses);
-  const now = input.now ?? new Date();
+  let now = input.now ?? new Date();
   const keyrings = getAssuranceResponseKeyrings();
   const client = serializePoolClientQueries(await dbPool.connect());
   try {
     await client.query("BEGIN");
+    const namedPanelLocationResult = await client.query(
+      `SELECT workspace_id,project_id,epoch_id,unit_id
+       FROM tokenless_dsa_named_panel_selections
+       WHERE assignment_id=$1`,
+      [assignmentId],
+    );
+    if ((namedPanelLocationResult.rowCount ?? 0) > 1)
+      serviceError("The assignment has more than one DSA named-panel selection.", "assurance_response_conflict", 409);
+    const namedPanelLocation = namedPanelLocationResult.rows[0] as QueryRow | undefined;
+    if (namedPanelLocation) {
+      const lockedUnit = await client.query(
+        `SELECT 1 FROM tokenless_dsa_named_panel_units
+         WHERE workspace_id=$1 AND project_id=$2 AND epoch_id=$3 AND unit_id=$4
+         FOR UPDATE`,
+        [
+          rowString(namedPanelLocation, "workspace_id"),
+          rowString(namedPanelLocation, "project_id"),
+          rowString(namedPanelLocation, "epoch_id"),
+          rowString(namedPanelLocation, "unit_id"),
+        ],
+      );
+      if (lockedUnit.rowCount !== 1)
+        serviceError("The exact DSA named-panel unit is unavailable.", "assurance_response_conflict", 409);
+    }
     await client.query(
       "SELECT assignment_id FROM tokenless_assurance_assignments WHERE assignment_id = $1 FOR UPDATE",
       [assignmentId],
@@ -455,7 +584,12 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
               sp.private_group_id AS subpanel_private_group_id,
               sp.private_group_policy_version AS subpanel_private_group_policy_version,
               sp.private_group_policy_hash AS subpanel_private_group_policy_hash,
-              ap.policy_hash AS frozen_policy_hash, ap.policy_json AS frozen_policy_json
+              ap.policy_hash AS frozen_policy_hash, ap.policy_json AS frozen_policy_json,
+              named_selection.workspace_id AS dsa_binding_workspace_id,
+              named_selection.project_id AS dsa_binding_project_id,
+              named_selection.epoch_id AS dsa_binding_epoch_id,named_selection.unit_id AS dsa_binding_unit_id,
+              named_selection.panel_deadline AS dsa_binding_panel_deadline,
+              named_selection.response_binding_required AS dsa_response_binding_required
        FROM tokenless_assurance_assignments a
        JOIN tokenless_assurance_runs r ON r.run_id = a.run_id AND r.project_id = a.project_id
        JOIN tokenless_assurance_suites s ON s.suite_id = r.suite_id AND s.version = r.suite_version
@@ -463,14 +597,37 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
        LEFT JOIN tokenless_rater_profiles owner_profile ON owner_profile.rater_id = a.rater_id
        JOIN tokenless_assurance_audience_policies ap
          ON ap.policy_id = r.audience_policy_id AND ap.version = r.audience_policy_version
+       LEFT JOIN tokenless_dsa_named_panel_selections named_selection
+         ON named_selection.workspace_id=a.workspace_id AND named_selection.project_id=a.project_id
+        AND named_selection.run_id=a.run_id AND named_selection.assignment_id=a.assignment_id
+        AND named_selection.reviewer_principal_id=a.reviewer_account_address
        WHERE a.assignment_id = $1
          AND ((a.rater_id IS NOT NULL AND owner_profile.principal_id = $2)
-           OR (a.rater_id IS NULL AND a.reviewer_account_address = $2))
-       LIMIT 1`,
+           OR (a.rater_id IS NULL AND a.reviewer_account_address = $2))`,
       [assignmentId, principalId],
     );
+    if ((assignmentResult.rowCount ?? 0) > 1) {
+      serviceError("The assignment has more than one DSA named-panel selection.", "assurance_response_conflict", 409);
+    }
     const assignment = assignmentResult.rows[0] as QueryRow | undefined;
     if (!assignment) serviceError("Assignment not found.", "assignment_not_found", 404);
+    const actualNamedPanelUnitId = rowString(assignment, "dsa_binding_unit_id");
+    if (
+      Boolean(namedPanelLocation) !== Boolean(actualNamedPanelUnitId) ||
+      (namedPanelLocation &&
+        (rowString(namedPanelLocation, "workspace_id") !== rowString(assignment, "dsa_binding_workspace_id") ||
+          rowString(namedPanelLocation, "project_id") !== rowString(assignment, "dsa_binding_project_id") ||
+          rowString(namedPanelLocation, "epoch_id") !== rowString(assignment, "dsa_binding_epoch_id") ||
+          rowString(namedPanelLocation, "unit_id") !== actualNamedPanelUnitId))
+    ) {
+      serviceError("The DSA named-panel selection changed while locking.", "assurance_response_conflict", 409);
+    }
+    if (actualNamedPanelUnitId) {
+      const databaseClock = await client.query(
+        "SELECT date_trunc('milliseconds',transaction_timestamp()) AS response_submitted_at",
+      );
+      now = new Date(String(databaseClock.rows[0]?.response_submitted_at));
+    }
     const networkCases = await client.query(
       "SELECT COUNT(*) AS case_count FROM tokenless_assurance_run_cases WHERE run_id=$1",
       [rowString(assignment, "run_id")],
@@ -623,6 +780,23 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
     });
     const existing = await verifyReplay({ assignment, client, expected: records, reviewerKey: pseudonym });
     if (existing) {
+      for (const response of existing) {
+        await preserveDsaNamedPanelResponseBinding({
+          assignment,
+          client,
+          response: {
+            responseId: rowString(response, "response_id")!,
+            caseId: rowString(response, "case_id")!,
+            reviewerKey: rowString(response, "reviewer_key")!,
+            reviewerSource: rowString(response, "reviewer_source")!,
+            responseDigest: rowString(response, "response_digest")!,
+            validity: rowString(response, "validity")!,
+            choice: rowString(response, "choice")!,
+            submittedAt: new Date(String(response.submitted_at)),
+          },
+          allowInsert: !rowBoolean(assignment, "dsa_response_binding_required"),
+        });
+      }
       await client.query("COMMIT");
       return {
         assignmentId,
@@ -640,6 +814,7 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
     }
     for (const record of records) {
       const terminalSettlement = terminalNetworkByCase.get(record.caseId);
+      const responseId = `hares_${randomUUID().replaceAll("-", "")}`;
       await client.query(
         `INSERT INTO tokenless_assurance_responses
          (response_id, run_id, case_id, reviewer_key, reviewer_source, choice,
@@ -648,7 +823,7 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
           settlement_reference,settlement_evidence_hash,validity,submitted_at,updated_at)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$17)`,
         [
-          `hares_${randomUUID().replaceAll("-", "")}`,
+          responseId,
           rowString(assignment, "run_id"),
           record.caseId,
           pseudonym,
@@ -667,6 +842,21 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
           now,
         ],
       );
+      await preserveDsaNamedPanelResponseBinding({
+        assignment,
+        client,
+        response: {
+          responseId,
+          caseId: record.caseId,
+          reviewerKey: pseudonym,
+          reviewerSource: rowString(assignment, "source")!,
+          responseDigest: record.responseDigest,
+          validity: "valid",
+          choice: record.canonicalChoice,
+          submittedAt: now,
+        },
+        allowInsert: true,
+      });
     }
     await recordGoldOutcomesForResponseBatch(client, {
       runId: rowString(assignment, "run_id")!,

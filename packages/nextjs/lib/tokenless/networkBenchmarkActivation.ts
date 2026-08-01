@@ -3,26 +3,43 @@ import { createHash } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import "server-only";
 import { dbPool } from "~~/lib/db";
+import { type AuditEventInput, appendAuditEvent } from "~~/lib/privacy/audit";
+import { PUBLIC_NETWORK_LEGAL_RESIDENCE_POLICY } from "~~/lib/tokenless/publicNetworkLegalResidence";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/u;
-const DEPLOYMENT_KEY = /^tokenless-v4:[A-Za-z0-9:._-]{1,239}$/u;
+const DEPLOYMENT_KEY = /^tokenless-v4:84532:[A-Za-z0-9:._-]{1,233}$/u;
 const DIGEST = /^sha256:[0-9a-f]{64}$/u;
 const MAX_ACTIVATION_SECONDS = 30 * 24 * 60 * 60;
+
+export const NETWORK_BENCHMARK_ACTIVATION_SCOPE = "testnet_network_benchmark_exercise" as const;
 
 type PoolLike = Pick<Pool, "connect">;
 type Row = Record<string, unknown>;
 
-export type NetworkBenchmarkEvidenceType =
-  | "audit_partner_method_acceptance"
-  | "provider_pilot_acceptance"
-  | "hosted_end_to_end_exercise"
-  | "keeper_recovery_exercise"
-  | "indexer_recovery_exercise"
-  | "paid_eligibility_payout_tax_dac7_readiness"
-  | "sanctions_screening_readiness"
-  | "reviewer_contract_worker_information_appeal_readiness"
-  | "worker_data_privacy_governance_readiness";
+export const NETWORK_BENCHMARK_EVIDENCE_TYPES = [
+  "audit_partner_method_acceptance",
+  "provider_pilot_acceptance",
+  "network_supply_demand_confirmation",
+  "hosted_paid_core_testnet_exercise",
+  "keeper_recovery_exercise",
+  "indexer_recovery_exercise",
+  "paid_eligibility_payout_tax_dac7_readiness",
+  "sanctions_screening_readiness",
+  "reviewer_contract_worker_information_appeal_readiness",
+  "algorithmic_management_human_review_readiness",
+  "private_worker_communication_readiness",
+  "worker_data_privacy_governance_readiness",
+] as const;
+
+export type NetworkBenchmarkEvidenceType = (typeof NETWORK_BENCHMARK_EVIDENCE_TYPES)[number];
+
+export const NETWORK_BENCHMARK_DEACTIVATION_REASONS = [
+  "manual_deactivation",
+  "release_gate_failure",
+  "superseded",
+] as const;
+export type NetworkBenchmarkDeactivationReason = (typeof NETWORK_BENCHMARK_DEACTIVATION_REASONS)[number];
 
 export type NetworkBenchmarkEvidence = Readonly<{
   workspaceId: string;
@@ -57,6 +74,8 @@ export type NetworkBenchmarkActivationBoundary = Readonly<{
   evidenceWindowEnd: string;
   methodVersion: string;
   deploymentKey: string;
+  activationScope: typeof NETWORK_BENCHMARK_ACTIVATION_SCOPE;
+  permittedWorkerJurisdictions: readonly string[];
 }>;
 
 export type BuiltNetworkBenchmarkActivation = ReturnType<typeof buildNetworkBenchmarkActivation>;
@@ -70,13 +89,93 @@ function identifier(value: string, field: string) {
   return value;
 }
 
+function operatorKeyVersion(value: string) {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u.test(value)) {
+    invalid("Compliance operator key version is invalid.", "complianceOperatorKeyVersion");
+  }
+  return value;
+}
+
+function activationAuditInput(input: {
+  activation: BuiltNetworkBenchmarkActivation;
+  workspaceManagerReferencePrincipalId: string;
+  operatorKeyVersion: string;
+  occurredAt: Date;
+}): AuditEventInput {
+  const keyVersion = operatorKeyVersion(input.operatorKeyVersion);
+  return {
+    workspaceId: input.activation.workspaceId,
+    actorKind: "operator",
+    actorReference: `tokenless_compliance_operator:${keyVersion}`,
+    assuranceMethod: "dedicated_compliance_operator_bearer",
+    action: "network_benchmark_activated",
+    targetKind: "network_benchmark_activation",
+    targetId: input.activation.activationReference,
+    purpose: "closed_public_safe_network_benchmark_release_control",
+    reason: "operator_attested_release_evidence_with_active_workspace_manager_reference",
+    requestCorrelation: input.activation.activationReference,
+    result: "success",
+    occurredAt: input.occurredAt,
+    idempotencyKey: `network-benchmark-activation:${input.activation.activationHash.slice("sha256:".length)}`,
+    metadata: {
+      activationHash: input.activation.activationHash,
+      authorityKind: "compliance_operator_shared_secret",
+      evidenceManifestRoot: input.activation.evidenceManifestRoot,
+      workspaceManagerReferencePrincipalId: input.workspaceManagerReferencePrincipalId,
+      opportunityManifestRoot: input.activation.opportunityManifestRoot,
+      operatorKeyVersion: keyVersion,
+      activationScope: input.activation.activationScope,
+      permittedWorkerJurisdictionsHash: input.activation.permittedWorkerJurisdictionsHash,
+    },
+  };
+}
+
+function deactivationAuditInput(input: {
+  workspaceId: string;
+  activationReference: string;
+  activationHash: string;
+  deactivationHash: string;
+  workspaceManagerReferencePrincipalId: string;
+  operatorKeyVersion: string;
+  occurredAt: Date;
+  reason: NetworkBenchmarkDeactivationReason;
+  supersededByActivationReference: string | null;
+}): AuditEventInput {
+  const keyVersion = operatorKeyVersion(input.operatorKeyVersion);
+  return {
+    workspaceId: input.workspaceId,
+    actorKind: "operator",
+    actorReference: `tokenless_compliance_operator:${keyVersion}`,
+    assuranceMethod: "dedicated_compliance_operator_bearer",
+    action: "network_benchmark_deactivated",
+    targetKind: "network_benchmark_activation",
+    targetId: input.activationReference,
+    purpose: "closed_public_safe_network_benchmark_release_control",
+    reason: input.reason,
+    requestCorrelation: input.activationReference,
+    result: "success",
+    occurredAt: input.occurredAt,
+    idempotencyKey: `network-benchmark-deactivation:${input.deactivationHash.slice("sha256:".length)}`,
+    metadata: {
+      activationHash: input.activationHash,
+      authorityKind: "compliance_operator_shared_secret",
+      deactivationHash: input.deactivationHash,
+      workspaceManagerReferencePrincipalId: input.workspaceManagerReferencePrincipalId,
+      operatorKeyVersion: keyVersion,
+      supersededByActivationReference: input.supersededByActivationReference,
+    },
+  };
+}
+
 function digest(value: string, field: string) {
   if (!DIGEST.test(value)) invalid(`${field} is invalid.`, field);
   return value as `sha256:${string}`;
 }
 
 function deploymentKey(value: string) {
-  if (!DEPLOYMENT_KEY.test(value)) invalid("Deployment key must be a complete tokenless-v4 key.", "deploymentKey");
+  if (!DEPLOYMENT_KEY.test(value)) {
+    invalid("Deployment key must be a complete tokenless-v4 Base Sepolia key.", "deploymentKey");
+  }
   return value;
 }
 
@@ -94,10 +193,40 @@ function codeUnitCompare(left: string, right: string) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
-function outcomeFor(type: NetworkBenchmarkEvidenceType) {
-  if (type === "audit_partner_method_acceptance" || type === "provider_pilot_acceptance") return "accepted" as const;
+function exactPermittedWorkerJurisdictions(value: readonly string[]) {
+  const supported = new Set<string>(PUBLIC_NETWORK_LEGAL_RESIDENCE_POLICY.supportedCountryCodes);
+  if (!Array.isArray(value) || value.length < 1 || value.length > supported.size) {
+    invalid("At least one supported worker jurisdiction is required.", "permittedWorkerJurisdictions");
+  }
+  const jurisdictions = [...value];
   if (
-    type === "hosted_end_to_end_exercise" ||
+    jurisdictions.some((country, index) => {
+      return (
+        typeof country !== "string" ||
+        !/^[A-Z]{2}$/u.test(country) ||
+        !supported.has(country) ||
+        (index > 0 && codeUnitCompare(jurisdictions[index - 1]!, country) >= 0)
+      );
+    })
+  ) {
+    invalid(
+      "Permitted worker jurisdictions must be a nonempty, unique, bytewise-sorted set of supported ISO alpha-2 codes.",
+      "permittedWorkerJurisdictions",
+    );
+  }
+  return Object.freeze(jurisdictions);
+}
+
+function outcomeFor(type: NetworkBenchmarkEvidenceType) {
+  if (
+    type === "audit_partner_method_acceptance" ||
+    type === "provider_pilot_acceptance" ||
+    type === "network_supply_demand_confirmation"
+  ) {
+    return "accepted" as const;
+  }
+  if (
+    type === "hosted_paid_core_testnet_exercise" ||
     type === "keeper_recovery_exercise" ||
     type === "indexer_recovery_exercise"
   ) {
@@ -112,6 +241,11 @@ function exactBoundary(input: NetworkBenchmarkActivationBoundary) {
   if (evidenceWindowEnd <= evidenceWindowStart) {
     invalid("Evidence window end must follow its start.", "evidenceWindowEnd");
   }
+  if (input.activationScope !== NETWORK_BENCHMARK_ACTIVATION_SCOPE) {
+    invalid("Activation scope is restricted to the testnet network benchmark exercise.", "activationScope");
+  }
+  const permittedWorkerJurisdictions = exactPermittedWorkerJurisdictions(input.permittedWorkerJurisdictions);
+  const permittedWorkerJurisdictionsJson = canonicalizeRfc8785(permittedWorkerJurisdictions);
   return {
     workspaceId: identifier(input.workspaceId, "workspaceId"),
     projectId: identifier(input.projectId, "projectId"),
@@ -121,6 +255,9 @@ function exactBoundary(input: NetworkBenchmarkActivationBoundary) {
     evidenceWindowEnd: evidenceWindowEnd.toISOString(),
     methodVersion: identifier(input.methodVersion, "methodVersion"),
     deploymentKey: deploymentKey(input.deploymentKey),
+    activationScope: NETWORK_BENCHMARK_ACTIVATION_SCOPE,
+    permittedWorkerJurisdictions,
+    permittedWorkerJurisdictionsHash: rawSha256(permittedWorkerJurisdictionsJson),
   };
 }
 
@@ -153,11 +290,19 @@ function assertEvidenceBoundary(
   if (instant(evidence.completedAt, "completedAt") > activatedAt) {
     invalid("Activation evidence cannot complete in the future.", "completedAt");
   }
+  const completedAt = instant(evidence.completedAt, "completedAt");
+  if (
+    completedAt < instant(boundary.evidenceWindowStart, "evidenceWindowStart") ||
+    completedAt > instant(boundary.evidenceWindowEnd, "evidenceWindowEnd")
+  ) {
+    invalid("Activation evidence must complete inside the closed evidence window.", "completedAt");
+  }
 }
 
 export function buildNetworkBenchmarkActivation(
   input: NetworkBenchmarkActivationBoundary & {
-    activatedBy: string;
+    workspaceManagerReferencePrincipalId: string;
+    complianceOperatorKeyVersion: string;
     activatedAt: string;
     authorizationDurationSeconds: number;
     evidence: readonly NetworkBenchmarkEvidence[];
@@ -166,6 +311,9 @@ export function buildNetworkBenchmarkActivation(
 ) {
   const boundary = exactBoundary(input);
   const activatedAt = instant(input.activatedAt, "activatedAt");
+  if (instant(boundary.evidenceWindowEnd, "evidenceWindowEnd") > activatedAt) {
+    invalid("The evidence window must be closed before activation.", "evidenceWindowEnd");
+  }
   if (
     !Number.isSafeInteger(input.authorizationDurationSeconds) ||
     input.authorizationDurationSeconds < 1 ||
@@ -178,6 +326,9 @@ export function buildNetworkBenchmarkActivation(
   }
   const evidenceIds = new Set<string>();
   for (const item of input.evidence) {
+    if (!(NETWORK_BENCHMARK_EVIDENCE_TYPES as readonly string[]).includes(item.evidenceType)) {
+      invalid("Activation evidence type is unsupported.", "evidenceType");
+    }
     identifier(item.evidenceId, "evidenceId");
     digest(item.counterpartyReferenceHash, "counterpartyReferenceHash");
     digest(item.artifactDigest, "artifactDigest");
@@ -192,23 +343,45 @@ export function buildNetworkBenchmarkActivation(
       .filter(item => item.evidenceType === "provider_pilot_acceptance")
       .map(item => item.counterpartyReferenceHash),
   );
+  const demandCounterparties = new Set(
+    input.evidence
+      .filter(item => item.evidenceType === "network_supply_demand_confirmation")
+      .map(item => item.counterpartyReferenceHash),
+  );
+  const auditCounterparties = new Set(
+    input.evidence
+      .filter(item => item.evidenceType === "audit_partner_method_acceptance")
+      .map(item => item.counterpartyReferenceHash),
+  );
   if (
-    (counts.get("audit_partner_method_acceptance") ?? 0) < 1 ||
+    auditCounterparties.size !== 1 ||
+    [...auditCounterparties].some(
+      counterparty => providerCounterparties.has(counterparty) || demandCounterparties.has(counterparty),
+    ) ||
     providerCounterparties.size < 2 ||
-    (counts.get("hosted_end_to_end_exercise") ?? 0) < 1 ||
+    demandCounterparties.size < 2 ||
+    [...demandCounterparties].some(counterparty => !providerCounterparties.has(counterparty)) ||
+    (counts.get("hosted_paid_core_testnet_exercise") ?? 0) < 1 ||
     (counts.get("keeper_recovery_exercise") ?? 0) < 1 ||
     (counts.get("indexer_recovery_exercise") ?? 0) < 1 ||
     (counts.get("paid_eligibility_payout_tax_dac7_readiness") ?? 0) < 1 ||
     (counts.get("sanctions_screening_readiness") ?? 0) < 1 ||
     (counts.get("reviewer_contract_worker_information_appeal_readiness") ?? 0) < 1 ||
+    (counts.get("algorithmic_management_human_review_readiness") ?? 0) < 1 ||
+    (counts.get("private_worker_communication_readiness") ?? 0) < 1 ||
     (counts.get("worker_data_privacy_governance_readiness") ?? 0) < 1
   ) {
     invalid(
-      "Activation requires audit acceptance, two distinct accepted provider pilots, hosted recovery exercises, and every paid-work legal-readiness evidence type.",
+      "Activation requires one distinct method-review counterparty, two distinct accepted provider pilots, network-supply demand confirmation from two of those providers, a hosted paid-core Base Sepolia exercise, hosted recovery exercises, algorithmic-management human-review readiness, a private unmonitored worker-communication channel, and every other paid-work legal-readiness evidence type.",
       "evidence",
     );
   }
-  const recordedBy = identifier(input.activatedBy, "activatedBy");
+  const workspaceManagerReferencePrincipalId = identifier(
+    input.workspaceManagerReferencePrincipalId,
+    "workspaceManagerReferencePrincipalId",
+  );
+  const complianceOperatorKeyVersion = operatorKeyVersion(input.complianceOperatorKeyVersion);
+  const attestedBy = `tokenless_compliance_operator:${complianceOperatorKeyVersion}` as const;
   const recordedAt = activatedAt.toISOString();
   const evidenceEntries = [...input.evidence]
     .sort((left, right) =>
@@ -216,7 +389,7 @@ export function buildNetworkBenchmarkActivation(
     )
     .map((item, index) => {
       const artifact = {
-        schemaVersion: "rateloop.network-benchmark-activation-evidence.v1",
+        schemaVersion: "rateloop.network-benchmark-activation-evidence.v2",
         ...boundary,
         evidenceId: item.evidenceId,
         evidenceType: item.evidenceType,
@@ -224,7 +397,9 @@ export function buildNetworkBenchmarkActivation(
         counterpartyReferenceHash: item.counterpartyReferenceHash,
         artifactDigest: item.artifactDigest,
         completedAt: instant(item.completedAt, "completedAt").toISOString(),
-        recordedBy,
+        attestedBy,
+        complianceOperatorKeyVersion,
+        workspaceManagerReferencePrincipalId,
         recordedAt,
       } as const;
       const evidenceJson = canonicalizeRfc8785(artifact);
@@ -252,7 +427,7 @@ export function buildNetworkBenchmarkActivation(
       }
       opportunityIds.add(item.opportunityId);
       const authorization = {
-        schemaVersion: "rateloop.network-benchmark-opportunity-authorization.v1",
+        schemaVersion: "rateloop.network-benchmark-opportunity-authorization.v2",
         ...boundary,
         opportunityId: item.opportunityId,
         requestProfileId: item.requestProfileId,
@@ -260,6 +435,9 @@ export function buildNetworkBenchmarkActivation(
         requestProfileHash: item.requestProfileHash,
         sourceEvidenceHash: item.sourceEvidenceHash,
         suggestionCommitment: item.suggestionCommitment,
+        attestedBy,
+        complianceOperatorKeyVersion,
+        workspaceManagerReferencePrincipalId,
       } as const;
       const authorizationJson = canonicalizeRfc8785(authorization);
       return {
@@ -281,10 +459,9 @@ export function buildNetworkBenchmarkActivation(
   );
   const authorizationExpiresAt = new Date(activatedAt.getTime() + input.authorizationDurationSeconds * 1_000);
   const artifact = {
-    schemaVersion: "rateloop.network-benchmark-activation.v1",
+    schemaVersion: "rateloop.network-benchmark-activation.v2",
     ...boundary,
     status: "active",
-    activationScope: "exact_public_safe_benchmark_network_execution",
     publicSafeOnly: true,
     unrelatedOpportunityAuthority: "none",
     expectedEvidenceCount: evidenceEntries.length,
@@ -294,7 +471,9 @@ export function buildNetworkBenchmarkActivation(
     authorizationDurationSeconds: input.authorizationDurationSeconds,
     authorizationNotBefore: activatedAt.toISOString(),
     authorizationExpiresAt: authorizationExpiresAt.toISOString(),
-    activatedBy: recordedBy,
+    attestedBy,
+    complianceOperatorKeyVersion,
+    workspaceManagerReferencePrincipalId,
     activatedAt: activatedAt.toISOString(),
   } as const;
   const activationJson = canonicalizeRfc8785(artifact);
@@ -315,6 +494,8 @@ export function evaluateNetworkBenchmarkExecutionAuthorization(input: {
     | "benchmarkId"
     | "methodVersion"
     | "deploymentKey"
+    | "activationScope"
+    | "permittedWorkerJurisdictions"
     | "authorizationNotBefore"
     | "authorizationExpiresAt"
     | "opportunities"
@@ -325,6 +506,7 @@ export function evaluateNetworkBenchmarkExecutionAuthorization(input: {
   methodVersion: string;
   deploymentKey: string;
   opportunityId: string;
+  residenceCountry: string;
   now: string;
   deactivated: boolean;
 }) {
@@ -341,14 +523,45 @@ export function evaluateNetworkBenchmarkExecutionAuthorization(input: {
     input.projectId !== input.activation.projectId ||
     input.benchmarkId !== input.activation.benchmarkId ||
     input.methodVersion !== input.activation.methodVersion ||
-    input.deploymentKey !== input.activation.deploymentKey
+    input.deploymentKey !== input.activation.deploymentKey ||
+    input.activation.activationScope !== NETWORK_BENCHMARK_ACTIVATION_SCOPE
   ) {
     return { allowed: false as const, reason: "scope_mismatch" as const };
   }
   if (!input.activation.opportunities.some(item => item.opportunityId === input.opportunityId)) {
     return { allowed: false as const, reason: "opportunity_not_authorized" as const };
   }
+  if (!input.activation.permittedWorkerJurisdictions.includes(input.residenceCountry)) {
+    return { allowed: false as const, reason: "worker_jurisdiction_not_permitted" as const };
+  }
   return { allowed: true as const, reason: "authorized" as const };
+}
+
+export async function requireActiveNetworkBenchmarkAssignmentAcceptance(
+  client: Pick<PoolClient, "query">,
+  input: {
+    workspaceId: string;
+    projectId: string;
+    runId: string;
+    residenceCountry: string;
+  },
+) {
+  try {
+    const result = await client.query(
+      `SELECT tokenless_require_network_benchmark_assignment_acceptance($1,$2,$3,$4)
+              AS activation_reference`,
+      [input.workspaceId, input.projectId, input.runId, input.residenceCountry],
+    );
+    const activationReference = rowString((result.rows[0] as Row | undefined) ?? {}, "activation_reference");
+    if (result.rowCount !== 1 || !activationReference) throw new Error("Missing active network benchmark activation.");
+    return activationReference;
+  } catch {
+    throw new TokenlessServiceError(
+      "The testnet network benchmark activation is no longer accepting this worker jurisdiction.",
+      409,
+      "network_benchmark_assignment_acceptance_blocked",
+    );
+  }
 }
 
 function rowString(row: Row, field: string) {
@@ -365,29 +578,34 @@ async function transactionTime(client: PoolClient) {
   return parsed;
 }
 
-async function requireManager(
+async function requireWorkspaceManagerReference(
   client: PoolClient,
   input: {
-    authenticatedManagerPrincipalId: string;
+    workspaceManagerReferencePrincipalId: string;
     workspaceId: string;
     projectId: string;
   },
 ) {
   const result = await client.query(
-    `SELECT w.status AS workspace_status,p.status AS project_status,m.role,principal.status AS principal_status
+    `SELECT w.status AS workspace_status,p.status AS project_status,p.visibility AS project_visibility,
+            p.data_classification AS project_data_classification,p.material_kind AS project_material_kind,
+            m.role,principal.status AS principal_status
      FROM tokenless_workspaces w
      JOIN tokenless_assurance_projects p ON p.workspace_id=w.workspace_id AND p.project_id=$2
      JOIN tokenless_workspace_members m ON m.workspace_id=w.workspace_id AND m.account_address=$3
      JOIN tokenless_principals principal ON principal.principal_id=m.account_address
      WHERE w.workspace_id=$1
      FOR UPDATE OF w,p,m,principal`,
-    [input.workspaceId, input.projectId, input.authenticatedManagerPrincipalId],
+    [input.workspaceId, input.projectId, input.workspaceManagerReferencePrincipalId],
   );
   const row = result.rows[0] as Row | undefined;
   if (
     !row ||
     rowString(row, "workspace_status") !== "active" ||
     rowString(row, "project_status") !== "active" ||
+    rowString(row, "project_visibility") !== "public" ||
+    rowString(row, "project_data_classification") !== "public" ||
+    !["public", "synthetic", "redacted"].includes(rowString(row, "project_material_kind")) ||
     rowString(row, "principal_status") !== "active" ||
     !["owner", "admin"].includes(rowString(row, "role"))
   ) {
@@ -410,19 +628,24 @@ async function withSerializable<T>(pool: PoolLike, work: (client: PoolClient) =>
   }
 }
 
-export function createNetworkBenchmarkActivationService(input?: { pool?: PoolLike }) {
+export function createNetworkBenchmarkActivationService(input?: {
+  pool?: PoolLike;
+  appendAudit?: typeof appendAuditEvent;
+}) {
   const pool = input?.pool ?? dbPool;
+  const appendAudit = input?.appendAudit ?? appendAuditEvent;
   return {
     async activate(
       activationInput: NetworkBenchmarkActivationBoundary & {
-        authenticatedManagerPrincipalId: string;
+        workspaceManagerReferencePrincipalId: string;
+        complianceOperatorKeyVersion: string;
         authorizationDurationSeconds: number;
         evidence: readonly NetworkBenchmarkEvidence[];
         opportunityIds: readonly string[];
       },
     ) {
       return withSerializable(pool, async client => {
-        await requireManager(client, activationInput);
+        await requireWorkspaceManagerReference(client, activationInput);
         const activatedAt = await transactionTime(client);
         if (!activationInput.opportunityIds.length)
           invalid("At least one exact opportunity is required.", "opportunityIds");
@@ -431,11 +654,22 @@ export function createNetworkBenchmarkActivationService(input?: { pool?: PoolLik
           invalid("An opportunity may be authorized only once.", "opportunityIds");
         }
         const result = await client.query(
-          `SELECT opportunity_id,request_profile_id,request_profile_version,request_profile_hash,
-                  source_evidence_hash,suggestion_commitment,status
-           FROM tokenless_agent_review_opportunities
-           WHERE workspace_id=$1 AND opportunity_id=ANY($2::text[])
-           ORDER BY opportunity_id FOR SHARE`,
+          `SELECT opportunity.opportunity_id,opportunity.request_profile_id,opportunity.request_profile_version,
+                  opportunity.request_profile_hash,opportunity.source_evidence_hash,
+                  opportunity.suggestion_commitment,opportunity.status
+           FROM tokenless_agent_review_opportunities opportunity
+           JOIN tokenless_agent_review_request_profiles profile
+             ON profile.workspace_id=opportunity.workspace_id
+            AND profile.profile_id=opportunity.request_profile_id
+            AND profile.version=opportunity.request_profile_version
+            AND profile.profile_hash=opportunity.request_profile_hash
+            AND profile.audience='public_network'
+            AND profile.content_boundary='public_or_test'
+            AND profile.compensation_mode='usdc'
+            AND profile.configuration_status='ready'
+            AND profile.superseded_at IS NULL
+           WHERE opportunity.workspace_id=$1 AND opportunity.opportunity_id=ANY($2::text[])
+           ORDER BY opportunity.opportunity_id FOR SHARE OF opportunity,profile`,
           [activationInput.workspaceId, uniqueIds],
         );
         if (
@@ -458,7 +692,6 @@ export function createNetworkBenchmarkActivationService(input?: { pool?: PoolLik
         }));
         const built = buildNetworkBenchmarkActivation({
           ...activationInput,
-          activatedBy: activationInput.authenticatedManagerPrincipalId,
           activatedAt: activatedAt.toISOString(),
           opportunities,
         });
@@ -467,8 +700,10 @@ export function createNetworkBenchmarkActivationService(input?: { pool?: PoolLik
             `INSERT INTO tokenless_network_benchmark_activation_evidence
              (workspace_id,project_id,benchmark_id,activation_reference,evidence_window_start,evidence_window_end,method_version,
               deployment_key,evidence_id,evidence_type,evidence_outcome,counterparty_reference_hash,
-              artifact_digest,completed_at,evidence_json,evidence_hash,recorded_by,recorded_at)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+              artifact_digest,completed_at,evidence_json,evidence_hash,compliance_operator_key_version,
+              workspace_manager_reference_principal_id,activation_scope,permitted_worker_jurisdictions_json,
+              permitted_worker_jurisdictions_hash,recorded_at)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`,
             [
               evidence.workspaceId,
               evidence.projectId,
@@ -486,7 +721,11 @@ export function createNetworkBenchmarkActivationService(input?: { pool?: PoolLik
               evidence.completedAt,
               evidence.evidenceJson,
               evidence.evidenceHash,
-              evidence.recordedBy,
+              built.complianceOperatorKeyVersion,
+              built.workspaceManagerReferencePrincipalId,
+              built.activationScope,
+              canonicalizeRfc8785(built.permittedWorkerJurisdictions),
+              built.permittedWorkerJurisdictionsHash,
               evidence.recordedAt,
             ],
           );
@@ -497,9 +736,10 @@ export function createNetworkBenchmarkActivationService(input?: { pool?: PoolLik
             method_version,deployment_key,status,activation_scope,public_safe_only,unrelated_opportunity_authority,
             expected_evidence_count,evidence_manifest_root,expected_opportunity_count,opportunity_manifest_root,
             authorization_duration_seconds,authorization_not_before,authorization_expires_at,activation_json,
-            activation_hash,activated_by,activated_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'active','exact_public_safe_benchmark_network_execution',true,'none',
-                   $9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
+            activation_hash,compliance_operator_key_version,workspace_manager_reference_principal_id,
+            permitted_worker_jurisdictions_json,permitted_worker_jurisdictions_hash,activated_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'active','testnet_network_benchmark_exercise',true,'none',
+                   $9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`,
           [
             built.workspaceId,
             built.projectId,
@@ -518,7 +758,10 @@ export function createNetworkBenchmarkActivationService(input?: { pool?: PoolLik
             built.authorizationExpiresAt,
             built.activationJson,
             built.activationHash,
-            built.activatedBy,
+            built.complianceOperatorKeyVersion,
+            built.workspaceManagerReferencePrincipalId,
+            canonicalizeRfc8785(built.permittedWorkerJurisdictions),
+            built.permittedWorkerJurisdictionsHash,
             built.activatedAt,
           ],
         );
@@ -550,8 +793,10 @@ export function createNetworkBenchmarkActivationService(input?: { pool?: PoolLik
              (workspace_id,project_id,benchmark_id,activation_reference,evidence_window_start,evidence_window_end,
               method_version,deployment_key,manifest_position,opportunity_id,request_profile_id,
               request_profile_version,request_profile_hash,source_evidence_hash,suggestion_commitment,
-              authorization_json,authorization_hash)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
+              authorization_json,authorization_hash,compliance_operator_key_version,
+              workspace_manager_reference_principal_id,activation_scope,permitted_worker_jurisdictions_json,
+              permitted_worker_jurisdictions_hash)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`,
             [
               built.workspaceId,
               built.projectId,
@@ -570,23 +815,37 @@ export function createNetworkBenchmarkActivationService(input?: { pool?: PoolLik
               opportunity.suggestionCommitment,
               opportunity.authorizationJson,
               opportunity.authorizationHash,
+              built.complianceOperatorKeyVersion,
+              built.workspaceManagerReferencePrincipalId,
+              built.activationScope,
+              canonicalizeRfc8785(built.permittedWorkerJurisdictions),
+              built.permittedWorkerJurisdictionsHash,
             ],
           );
         }
+        await appendAudit(
+          activationAuditInput({
+            activation: built,
+            workspaceManagerReferencePrincipalId: activationInput.workspaceManagerReferencePrincipalId,
+            operatorKeyVersion: activationInput.complianceOperatorKeyVersion,
+            occurredAt: activatedAt,
+          }),
+          client,
+        );
         return built;
       });
     },
 
     async deactivate(deactivationInput: {
-      authenticatedManagerPrincipalId: string;
+      complianceOperatorKeyVersion: string;
       workspaceId: string;
       projectId: string;
       activationReference: string;
-      reason: "manual_deactivation" | "release_gate_failure" | "superseded";
+      reason: NetworkBenchmarkDeactivationReason;
       supersededByActivationReference?: string;
     }) {
       return withSerializable(pool, async client => {
-        await requireManager(client, deactivationInput);
+        const complianceOperatorKeyVersion = operatorKeyVersion(deactivationInput.complianceOperatorKeyVersion);
         const result = await client.query(
           `SELECT * FROM tokenless_network_benchmark_activations
            WHERE workspace_id=$1 AND project_id=$2 AND activation_reference=$3 FOR UPDATE`,
@@ -601,6 +860,13 @@ export function createNetworkBenchmarkActivationService(input?: { pool?: PoolLik
           );
         }
         const deactivatedAt = await transactionTime(client);
+        const workspaceManagerReferencePrincipalId = identifier(
+          String(row.workspace_manager_reference_principal_id ?? ""),
+          "workspaceManagerReferencePrincipalId",
+        );
+        if (!(NETWORK_BENCHMARK_DEACTIVATION_REASONS as readonly string[]).includes(deactivationInput.reason)) {
+          invalid("Deactivation reason is unsupported.", "reason");
+        }
         const replacement = deactivationInput.supersededByActivationReference
           ? identifier(deactivationInput.supersededByActivationReference, "supersededByActivationReference")
           : null;
@@ -608,18 +874,17 @@ export function createNetworkBenchmarkActivationService(input?: { pool?: PoolLik
           invalid("Supersession requires exactly one replacement activation.", "supersededByActivationReference");
         }
         const artifact = {
-          schemaVersion: "rateloop.network-benchmark-activation-deactivation.v1",
+          schemaVersion: "rateloop.network-benchmark-activation-deactivation.v2",
           workspaceId: rowString(row, "workspace_id"),
           projectId: rowString(row, "project_id"),
           benchmarkId: rowString(row, "benchmark_id"),
           activationReference: rowString(row, "activation_reference"),
           activationHash: rowString(row, "activation_hash"),
+          attestedBy: `tokenless_compliance_operator:${complianceOperatorKeyVersion}` as const,
+          complianceOperatorKeyVersion,
+          workspaceManagerReferencePrincipalId,
           reason: deactivationInput.reason,
           supersededByActivationReference: replacement,
-          deactivatedBy: identifier(
-            deactivationInput.authenticatedManagerPrincipalId,
-            "authenticatedManagerPrincipalId",
-          ),
           deactivatedAt: deactivatedAt.toISOString(),
         } as const;
         const deactivationJson = canonicalizeRfc8785(artifact);
@@ -628,8 +893,9 @@ export function createNetworkBenchmarkActivationService(input?: { pool?: PoolLik
           `INSERT INTO tokenless_network_benchmark_activation_deactivations
            (workspace_id,project_id,benchmark_id,activation_reference,evidence_window_start,evidence_window_end,
             method_version,deployment_key,activation_status,activation_hash,reason,
-            superseded_by_activation_reference,deactivation_json,deactivation_hash,deactivated_by,deactivated_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'active',$9,$10,$11,$12,$13,$14,$15)`,
+            superseded_by_activation_reference,deactivation_json,deactivation_hash,compliance_operator_key_version,
+            workspace_manager_reference_principal_id,deactivated_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'active',$9,$10,$11,$12,$13,$14,$15,$16)`,
           [
             artifact.workspaceId,
             artifact.projectId,
@@ -644,9 +910,24 @@ export function createNetworkBenchmarkActivationService(input?: { pool?: PoolLik
             artifact.supersededByActivationReference,
             deactivationJson,
             deactivationHash,
-            artifact.deactivatedBy,
+            complianceOperatorKeyVersion,
+            workspaceManagerReferencePrincipalId,
             artifact.deactivatedAt,
           ],
+        );
+        await appendAudit(
+          deactivationAuditInput({
+            workspaceId: artifact.workspaceId,
+            activationReference: artifact.activationReference,
+            activationHash: artifact.activationHash,
+            deactivationHash,
+            workspaceManagerReferencePrincipalId,
+            operatorKeyVersion: complianceOperatorKeyVersion,
+            occurredAt: deactivatedAt,
+            reason: artifact.reason,
+            supersededByActivationReference: artifact.supersededByActivationReference,
+          }),
+          client,
         );
         return { ...artifact, deactivationHash };
       });
@@ -668,7 +949,9 @@ export async function requireActiveNetworkBenchmarkForRunInTransaction(
 export const networkBenchmarkActivationService = createNetworkBenchmarkActivationService();
 
 export const __networkBenchmarkActivationTestUtils = {
+  activationAuditInput,
   codeUnitCompare,
   maxActivationSeconds: MAX_ACTIVATION_SECONDS,
   rawSha256,
+  deactivationAuditInput,
 };

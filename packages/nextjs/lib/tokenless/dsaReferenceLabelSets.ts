@@ -8,6 +8,7 @@ import { dsaEvidenceCommitTimestamp, dsaEvidenceTransactionTimestamp } from "~~/
 import {
   loadDsaNamedPanelLabelInputs,
   persistDsaNamedPanelLabelSetBridge,
+  requireDsaNamedPanelReferenceDefinition,
 } from "~~/lib/tokenless/dsaNamedReferencePanel";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -20,13 +21,7 @@ const UNIT_ID = /^rsu_[A-Za-z0-9_-]{22}$/u;
 const EVALUATION_ID = /^evaluation_[A-Za-z0-9][A-Za-z0-9_.:-]{7,159}$/u;
 const SHA256 = /^sha256:[0-9a-f]{64}$/u;
 const MAX_LABELS = 50_000;
-const FREEZE_KEYS = [
-  "accountAddress",
-  "epochId",
-  "referenceDefinitionHash",
-  "referenceDefinitionVersion",
-  "workspaceId",
-] as const;
+const FREEZE_KEYS = ["accountAddress", "epochId", "workspaceId"] as const;
 const LOAD_KEYS = ["accountAddress", "epochId", "workspaceId"] as const;
 const BUILD_KEYS = [
   "commitmentDigest",
@@ -62,7 +57,11 @@ const LABEL_INPUT_KEYS = ["adjudicationEvidenceDigest", "agreementState", "refer
 
 type Row = Record<string, unknown>;
 export type DsaReferenceLabel = "pass" | "fail" | "uncertain";
-export type DsaReferenceLabelAgreement = "agreed" | "adjudicated";
+export type DsaReferenceLabelAgreement = "agreed" | "adjudicated" | "gap";
+export type DsaReferenceLabelGapReason =
+  | "reviewer_nonresponse"
+  | "content_self_identification"
+  | "adjudicator_nonresponse";
 
 export type DsaSelectedEvaluationUnit = Readonly<{
   unitId: string;
@@ -87,6 +86,7 @@ export type DsaReferenceLabelInput = Readonly<{
   agreementState: DsaReferenceLabelAgreement;
   adjudicationEvidenceDigest: `sha256:${string}`;
   adjudicatedBy?: string | null;
+  gapReason?: DsaReferenceLabelGapReason;
 }>;
 
 export type ImmutableDsaReferenceLabel = Readonly<
@@ -100,6 +100,7 @@ export type ImmutableDsaReferenceLabel = Readonly<
     agreementState: DsaReferenceLabelAgreement;
     adjudicationEvidenceDigest: `sha256:${string}`;
     adjudicatedBy: string | null;
+    gapReason?: DsaReferenceLabelGapReason;
     createdAt: string;
     labelJson: string;
     labelHash: `sha256:${string}`;
@@ -246,21 +247,32 @@ function normalizeLabels(input: readonly DsaReferenceLabelInput[], units: readon
   const labels = input.map(label => {
     exactKeys(
       label,
-      Object.hasOwn(label, "adjudicatedBy") ? [...LABEL_INPUT_KEYS, "adjudicatedBy"] : LABEL_INPUT_KEYS,
+      [
+        ...LABEL_INPUT_KEYS,
+        ...(Object.hasOwn(label, "adjudicatedBy") ? (["adjudicatedBy"] as const) : []),
+        ...(Object.hasOwn(label, "gapReason") ? (["gapReason"] as const) : []),
+      ],
       "labels",
     );
     if (
       !UNIT_ID.test(label.unitId) ||
       !unitIds.has(label.unitId) ||
       (label.referenceLabel !== "pass" && label.referenceLabel !== "fail" && label.referenceLabel !== "uncertain") ||
-      (label.agreementState !== "agreed" && label.agreementState !== "adjudicated") ||
+      !["agreed", "adjudicated", "gap"].includes(label.agreementState) ||
       !SHA256.test(label.adjudicationEvidenceDigest) ||
       (label.adjudicatedBy !== undefined &&
         label.adjudicatedBy !== null &&
         (typeof label.adjudicatedBy !== "string" ||
           label.adjudicatedBy.length < 1 ||
           label.adjudicatedBy.length > 200)) ||
-      (label.referenceLabel === "uncertain" && label.agreementState !== "adjudicated")
+      (label.agreementState === "gap" &&
+        (label.referenceLabel !== "uncertain" ||
+          !["reviewer_nonresponse", "content_self_identification", "adjudicator_nonresponse"].includes(
+            label.gapReason ?? "",
+          ) ||
+          label.adjudicatedBy)) ||
+      (label.agreementState !== "gap" && label.gapReason !== undefined) ||
+      (label.referenceLabel === "uncertain" && !["adjudicated", "gap"].includes(label.agreementState))
     ) {
       invalid("Each label must bind one selected unit and valid adjudication evidence.", "labels");
     }
@@ -324,6 +336,7 @@ export function buildDsaReferenceLabelSetEvidence(input: BuildInput): DsaReferen
       agreementState: label.agreementState,
       adjudicationEvidenceDigest: label.adjudicationEvidenceDigest,
       adjudicatedBy: label.agreementState === "adjudicated" ? (label.adjudicatedBy ?? input.createdBy) : null,
+      ...(label.agreementState === "gap" ? { gapReason: label.gapReason! } : {}),
       createdAt: frozenAt,
     };
     return {
@@ -410,6 +423,7 @@ export function verifyDsaReferenceLabelSetEvidence(input: {
         referenceLabel: label.referenceLabel,
         agreementState: label.agreementState,
         adjudicationEvidenceDigest: label.adjudicationEvidenceDigest,
+        ...(label.agreementState === "gap" ? { gapReason: label.gapReason! } : {}),
         ...(label.agreementState === "adjudicated" && label.adjudicatedBy !== input.set.createdBy
           ? { adjudicatedBy: label.adjudicatedBy }
           : {}),
@@ -589,6 +603,7 @@ function labelFromRow(row: Row): ImmutableDsaReferenceLabel {
     agreementState: text(row, "agreement_state") as DsaReferenceLabelAgreement,
     adjudicationEvidenceDigest: text(row, "adjudication_evidence_digest") as `sha256:${string}`,
     adjudicatedBy: text(row, "adjudicated_by"),
+    ...(text(row, "gap_reason") ? { gapReason: text(row, "gap_reason") as DsaReferenceLabelGapReason } : {}),
     createdAt: timestamp(row, "created_at"),
     labelJson: text(row, "label_json")!,
     labelHash: text(row, "label_hash") as `sha256:${string}`,
@@ -601,7 +616,7 @@ async function loadStoredLabels(client: PoolClient, workspaceId: string, labelSe
             source_decision_binding,source_evaluation_binding,source_evaluation_hash,system_identity,system_id,
             system_version,automated_outcome,evaluation_hash,
             evaluation_projection_hash,manifest_row_hash,manifest_selected,reference_label,agreement_state,
-            adjudication_evidence_digest,adjudicated_by,created_at,label_json,label_hash
+            adjudication_evidence_digest,adjudicated_by,gap_reason,created_at,label_json,label_hash
      FROM tokenless_dsa_reference_labels
      WHERE workspace_id=$1 AND label_set_id=$2
      ORDER BY encode(convert_to(unit_id,'UTF8'),'hex')`,
@@ -615,7 +630,7 @@ async function insertLabels(client: PoolClient, labels: readonly ImmutableDsaRef
     const batch = labels.slice(start, start + 200);
     const values: unknown[] = [];
     const tuples = batch.map((label, index) => {
-      const offset = index * 25;
+      const offset = index * 26;
       values.push(
         label.workspaceId,
         label.labelSetId,
@@ -641,16 +656,17 @@ async function insertLabels(client: PoolClient, labels: readonly ImmutableDsaRef
         label.labelJson,
         label.labelHash,
         label.adjudicatedBy,
+        label.gapReason ?? null,
         label.createdAt,
       );
-      return `(${Array.from({ length: 25 }, (_, column) => `$${offset + column + 1}`).join(",")})`;
+      return `(${Array.from({ length: 26 }, (_, column) => `$${offset + column + 1}`).join(",")})`;
     });
     await client.query(
       `INSERT INTO tokenless_dsa_reference_labels
        (workspace_id,label_set_id,epoch_id,unit_id,evaluation_id,provider_decision_id,decision_version,
         manifest_selected,source_decision_binding,source_evaluation_binding,source_evaluation_hash,system_identity,
         system_id,system_version,automated_outcome,evaluation_hash,evaluation_projection_hash,manifest_row_hash,
-        reference_label,agreement_state,adjudication_evidence_digest,label_json,label_hash,adjudicated_by,created_at)
+        reference_label,agreement_state,adjudication_evidence_digest,label_json,label_hash,adjudicated_by,gap_reason,created_at)
        VALUES ${tuples.join(",")}`,
       values,
     );
@@ -661,8 +677,6 @@ export async function freezeDsaReferenceLabelSet(input: {
   accountAddress: string;
   workspaceId: string;
   epochId: string;
-  referenceDefinitionVersion: string;
-  referenceDefinitionHash: `sha256:${string}`;
 }) {
   exactKeys(input, FREEZE_KEYS, "reference-label freeze");
   if (!SIMPLE_IDENTIFIER.test(input.workspaceId) || !EPOCH_ID.test(input.epochId)) {
@@ -681,11 +695,12 @@ export async function freezeDsaReferenceLabelSet(input: {
     if (!sample) {
       throw new TokenlessServiceError("Reference sample not found.", 404, "dsa_reference_sample_not_found");
     }
+    const referenceDefinition = await requireDsaNamedPanelReferenceDefinition(client, input);
     const selectedUnits = await loadSelectedUnits(client, input.workspaceId, input.epochId);
     const namedPanelLabels = await loadDsaNamedPanelLabelInputs(client, input.workspaceId, input.epochId);
     if (!namedPanelLabels) {
       throw new TokenlessServiceError(
-        "Independent reference labels require exact persisted named-panel outcomes.",
+        "Role-separated reference labels require exact persisted named-panel outcomes.",
         409,
         "dsa_named_panel_outcomes_required",
       );
@@ -709,8 +724,8 @@ export async function freezeDsaReferenceLabelSet(input: {
           commitmentDigest: set.commitmentDigest,
           sampleDigest: set.sampleDigest,
           manifestRoot: set.manifestRoot,
-          referenceDefinitionVersion: input.referenceDefinitionVersion,
-          referenceDefinitionHash: input.referenceDefinitionHash,
+          referenceDefinitionVersion: referenceDefinition.referenceDefinitionVersion,
+          referenceDefinitionHash: referenceDefinition.referenceDefinitionHash,
           selectedUnits,
           labels: labelsForFreeze,
           sourceFrozenAt: set.sourceFrozenAt,
@@ -740,8 +755,8 @@ export async function freezeDsaReferenceLabelSet(input: {
       commitmentDigest: text(sample, "commitment_digest") as `sha256:${string}`,
       sampleDigest: text(sample, "sample_digest") as `sha256:${string}`,
       manifestRoot: text(sample, "manifest_root") as `sha256:${string}`,
-      referenceDefinitionVersion: input.referenceDefinitionVersion,
-      referenceDefinitionHash: input.referenceDefinitionHash,
+      referenceDefinitionVersion: referenceDefinition.referenceDefinitionVersion,
+      referenceDefinitionHash: referenceDefinition.referenceDefinitionHash,
       selectedUnits,
       labels: labelsForFreeze,
       sourceFrozenAt: sourceFrozenAt.toISOString(),
@@ -754,8 +769,8 @@ export async function freezeDsaReferenceLabelSet(input: {
        (workspace_id,label_set_id,epoch_id,schema_version,commitment_digest,sample_digest,manifest_root,
         reference_definition_version,reference_definition_hash,expected_selected_count,selected_manifest_root,
         label_root,adjudication_evidence_root,pass_label_count,fail_label_count,uncertain_label_count,coverage_gap,
-        set_json,set_hash,source_frozen_at,frozen_at,created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`,
+        set_json,set_hash,source_frozen_at,frozen_at,created_by,derivation_source)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,'independent_reference_panel')`,
       [
         set.workspaceId,
         set.labelSetId,

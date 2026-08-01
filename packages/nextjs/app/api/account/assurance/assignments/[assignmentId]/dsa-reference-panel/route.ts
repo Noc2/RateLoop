@@ -22,7 +22,7 @@ export async function POST(request: NextRequest, context: Context) {
       throw new TokenlessServiceError("Panel acceptance must be valid JSON.", 400, "invalid_dsa_named_panel_action");
     }
     const actual = Object.keys(body).sort();
-    const expected = ["conflictDeclaration", "epochId", "unitId", "workspaceId"].sort();
+    const expected = ["conflictDeclaration"];
     if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index]))
       throw new TokenlessServiceError(
         "Panel acceptance contains unsupported fields.",
@@ -32,9 +32,6 @@ export async function POST(request: NextRequest, context: Context) {
     const result = await acceptDsaNamedPanelAssignment({
       accountAddress: session.principalId,
       assignmentId,
-      workspaceId: typeof body.workspaceId === "string" ? body.workspaceId : "",
-      epochId: typeof body.epochId === "string" ? body.epochId : "",
-      unitId: typeof body.unitId === "string" ? body.unitId : "",
       conflictDeclaration: body.conflictDeclaration as { hasConflict: boolean; relationships: readonly string[] },
     });
     return NextResponse.json(result, { status: 201, headers: { "Cache-Control": "private, no-store, max-age=0" } });

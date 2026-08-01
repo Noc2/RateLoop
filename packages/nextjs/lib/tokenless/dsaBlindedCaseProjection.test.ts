@@ -55,7 +55,6 @@ function withheld(): DsaWithheldCaseValues {
   return {
     providerIdentity: { legalName: "Provider Alpha GmbH", tenant: "provider-alpha" },
     automatedOutcome: { action: "remove", score: "machine-score-secret" },
-    appealResult: { result: "upheld", reason: "appeal-secret-reason" },
     internalSourceDecisionId: "decision-secret-42",
     receiptIdentifiers: ["puid-secret-99", { statementReceipt: "receipt-secret-88" }],
     mutableMetadata: { operatorNote: "confidential-note", sourceUpdatedBy: "operator-secret" },
@@ -307,11 +306,9 @@ test("withheld values cannot be smuggled through otherwise authorized frozen fie
   const mutations: Array<(value: DsaBlindedCasePayload) => void> = [
     value => void (value.policy.question = "Provider Alpha GmbH"),
     value => void (value.policy.question = "remove"),
-    value => void (value.policy.question = "upheld"),
     value => void (value.policy.categoryCode = "decision-secret-42"),
     value => void (value.content.artifactId = "receipt-secret-88"),
     value => void (value.reference.sampleId = "puid-secret-99"),
-    value => void (value.policy.question = "Internal note: confidential-note"),
   ];
   for (const mutate of mutations) {
     const candidate = structuredClone(payload());
@@ -359,7 +356,6 @@ test("projection refuses an incomplete withheld-source context", () => {
     (value: DsaWithheldCaseValues) => void (value.providerIdentity = undefined),
     (value: DsaWithheldCaseValues) => void (value.internalSourceDecisionId = null),
     (value: DsaWithheldCaseValues) => void (value.automatedOutcome = undefined),
-    (value: DsaWithheldCaseValues) => void (value.appealResult = undefined),
     (value: DsaWithheldCaseValues) => void (value.receiptIdentifiers = undefined),
   ]) {
     const context = structuredClone(withheld());

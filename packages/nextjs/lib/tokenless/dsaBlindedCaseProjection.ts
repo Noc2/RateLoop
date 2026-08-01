@@ -54,7 +54,6 @@ export type DsaBlindedCaseMapping = Readonly<
 export type DsaWithheldCaseValues = {
   providerIdentity: unknown;
   automatedOutcome: unknown;
-  appealResult: unknown;
   internalSourceDecisionId: unknown;
   receiptIdentifiers: unknown;
   mutableMetadata?: unknown;
@@ -207,7 +206,6 @@ function assertWithheldContext(withheld: DsaWithheldCaseValues) {
     providerIdentity.size === 0 ||
     internalSourceDecisionId.size === 0 ||
     withheld.automatedOutcome === undefined ||
-    withheld.appealResult === undefined ||
     withheld.receiptIdentifiers === undefined
   ) {
     projectionError("The withheld source context is incomplete.", "dsa_blinded_withheld_context_invalid", 400);
@@ -217,7 +215,6 @@ function assertWithheldContext(withheld: DsaWithheldCaseValues) {
 function assertNoWithheldValues(payload: unknown, withheld: DsaWithheldCaseValues) {
   const exact = new Set<string>();
   collectStrings(withheld.automatedOutcome, exact);
-  collectStrings(withheld.appealResult, exact);
 
   const identifying = new Set<string>();
   collectStrings(withheld.providerIdentity, identifying);

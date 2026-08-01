@@ -425,7 +425,13 @@ test("one-time invitations store only token hashes and bind redemption to the in
     projectId: project.projectId,
     cohortId: cohort.cohortId,
     intendedAccountAddress: REVIEWER,
-    qualificationProvenance: [qualification("support_experience", true, now)],
+    qualificationProvenance: [
+      {
+        ...qualification("support_experience", true, now),
+        evidenceReferenceHash: `sha256:${"a".repeat(64)}`,
+        evidenceVersion: "customer-evidence-v1",
+      },
+    ],
     expiresAt: new Date(now.getTime() + 3_600_000),
   });
   const stored = await dbClient.execute({
@@ -461,6 +467,12 @@ test("one-time invitations store only token hashes and bind redemption to the in
     ),
     ["customer_invitation", "support_experience"],
   );
+  const storedReviewerProvenance = JSON.parse(
+    String(reviewer.rows[0]?.qualification_provenance_json),
+  ) as Array<QualificationProvenance>;
+  const supported = storedReviewerProvenance.find(value => value.key === "support_experience");
+  assert.equal(supported?.evidenceVersion, "customer-evidence-v1");
+  assert.equal(supported?.evidenceReferenceHash, `sha256:${"a".repeat(64)}`);
   await assert.rejects(
     () =>
       createReviewerInvitation({

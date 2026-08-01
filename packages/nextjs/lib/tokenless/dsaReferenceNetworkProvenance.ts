@@ -10,6 +10,7 @@ import {
   type DsaSelectedEvaluationUnit,
   buildDsaReferenceLabelSetEvidence,
 } from "~~/lib/tokenless/dsaReferenceLabelSets";
+import { referenceOutcomeForStoredAssuranceChoice } from "~~/lib/tokenless/dsaReferenceOutcomes";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 export const DSA_REFERENCE_NETWORK_UNIT_SCHEMA_VERSION = "rateloop.dsa-reference-network-unit.v1" as const;
@@ -125,8 +126,8 @@ export function dsaReferenceNetworkRoot(domain: string, rows: readonly string[])
 }
 
 export function deriveDsaReferenceNetworkLabel(choice: DsaReferenceNetworkChoice): DsaReferenceLabel {
-  if (choice === "candidate") return "pass";
-  if (choice === "baseline") return "fail";
+  const stored = referenceOutcomeForStoredAssuranceChoice(choice);
+  if (stored) return stored;
   if (choice === "tie") return "uncertain";
   invalid("The response choice is not supported by the frozen network mapping.", "responseChoice");
 }

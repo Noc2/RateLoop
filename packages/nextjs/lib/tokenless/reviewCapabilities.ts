@@ -52,11 +52,13 @@ export type HumanReviewMutationCapability = {
  * readiness; it does not authorize an ordinary customer or agent configuration
  * to become a public-safe benchmark experiment.
  *
- * No persisted, benchmark-scoped activation record exists yet. Keep every
- * experiment false until one binds the workspace, project, benchmark, method,
- * export window, pilot evidence, recovery exercise, and deployment key. Crowd
- * Forecast and Surprisingly Popular are implicit network-round mechanics, so
- * keeping the network false also keeps them unreachable.
+ * Persisted, benchmark-scoped activation is available only through the
+ * evidence-gated network benchmark service. Ordinary customer configuration
+ * remains false even when one exact benchmark is active: its authorized
+ * opportunities are enforced separately in PostgreSQL. Crowd Forecast and
+ * Surprisingly Popular are implicit network-round mechanics, so keeping the
+ * ordinary network control false also keeps them unreachable outside that
+ * exact activation.
  */
 export const GOVERNED_REVIEWER_EXPERIMENTS = {
   publicNetwork: false,

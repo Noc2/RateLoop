@@ -622,7 +622,10 @@ export function createBenchmarkResearchPersistence(input?: {
              LEFT JOIN tokenless_dsa_named_panel_label_set_bridges panel
                ON panel.workspace_id=labels.workspace_id AND panel.label_set_id=labels.label_set_id
               AND labels.derivation_source='independent_reference_panel'
+             LEFT JOIN tokenless_dsa_reference_label_set_quarantines quarantine
+               ON quarantine.workspace_id=labels.workspace_id AND quarantine.label_set_id=labels.label_set_id
             WHERE labels.workspace_id=$1 AND labels.label_set_id=$2 AND labels.epoch_id=$3
+              AND (labels.derivation_source<>'independent_reference_panel' OR quarantine.label_set_id IS NULL)
             FOR SHARE OF labels`,
           [source.workspaceId, exportInput.labelSetId, exportInput.epochId],
         );
@@ -783,8 +786,13 @@ export function createBenchmarkResearchPersistence(input?: {
           } as const;
         }
         const scopedExport = await client.query(
-          `SELECT 1 FROM tokenless_benchmark_research_approved_exports
-            WHERE workspace_id=$1 AND project_id=$2 AND export_id=$3 FOR SHARE`,
+          `SELECT 1 FROM tokenless_benchmark_research_approved_exports export
+            LEFT JOIN tokenless_dsa_reference_label_set_quarantines quarantine
+              ON quarantine.workspace_id=export.workspace_id AND quarantine.label_set_id=export.label_set_id
+            WHERE export.workspace_id=$1 AND export.project_id=$2 AND export.export_id=$3
+              AND (export.reference_derivation_source<>'independent_reference_panel'
+                   OR quarantine.label_set_id IS NULL)
+            FOR SHARE OF export`,
           [grantInput.workspaceId, grantInput.projectId, grantInput.exportId],
         );
         if (scopedExport.rowCount !== 1) {
@@ -952,7 +960,10 @@ function createPostgresGrantWriteTransaction(
              ON m.workspace_id=x.workspace_id AND m.account_address=$1
            JOIN tokenless_principals manager ON manager.principal_id=m.account_address
            JOIN tokenless_principals recipient ON recipient.principal_id=a.recipient_principal_id
+           LEFT JOIN tokenless_dsa_reference_label_set_quarantines quarantine
+             ON quarantine.workspace_id=x.workspace_id AND quarantine.label_set_id=x.label_set_id
           WHERE x.export_id=$3
+            AND (x.reference_derivation_source<>'independent_reference_panel' OR quarantine.label_set_id IS NULL)
           ORDER BY a.accepted_at DESC,a.agreement_version DESC
           LIMIT 1
           FOR UPDATE OF x,b,a,w,p,m,manager,recipient`,
@@ -1152,7 +1163,10 @@ async function loadPostgresGrantAccessContext(
        JOIN tokenless_workspaces w ON w.workspace_id=g.workspace_id
        JOIN tokenless_assurance_projects p ON p.workspace_id=g.workspace_id AND p.project_id=g.project_id
        LEFT JOIN tokenless_benchmark_research_revocations r ON r.grant_id=g.grant_id
+       LEFT JOIN tokenless_dsa_reference_label_set_quarantines quarantine
+         ON quarantine.workspace_id=x.workspace_id AND quarantine.label_set_id=x.label_set_id
       WHERE g.grant_id=$1 AND g.recipient_principal_id=$2
+        AND (x.reference_derivation_source<>'independent_reference_panel' OR quarantine.label_set_id IS NULL)
         AND ($3::text IS NULL OR g.event_digest=$3)
         AND ($4::text IS NULL OR g.export_digest=$4)
         AND ($5::text IS NULL OR g.authorization_digest=$5)

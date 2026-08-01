@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { deriveDsaReferenceNetworkLabel } from "~~/lib/tokenless/dsaReferenceNetworkProvenance";
 import {
   classifyDsaConfusionCell,
   referenceOutcomeForNamedPanelPolicyChoice,
   referenceOutcomeForStoredAssuranceChoice,
+  storedAssuranceChoiceForReferenceOutcome,
 } from "~~/lib/tokenless/dsaReferenceOutcomes";
 
 test("named policy choices and stored assurance choices share the Part 8 positive-class polarity", () => {
@@ -12,8 +14,12 @@ test("named policy choices and stored assurance choices share the Part 8 positiv
 
   assert.equal(matches, "fail");
   assert.equal(doesNotMatch, "pass");
-  assert.equal(referenceOutcomeForStoredAssuranceChoice("candidate"), matches);
-  assert.equal(referenceOutcomeForStoredAssuranceChoice("baseline"), doesNotMatch);
+  assert.equal(storedAssuranceChoiceForReferenceOutcome(matches), "baseline");
+  assert.equal(storedAssuranceChoiceForReferenceOutcome(doesNotMatch), "candidate");
+  assert.equal(referenceOutcomeForStoredAssuranceChoice("baseline"), matches);
+  assert.equal(referenceOutcomeForStoredAssuranceChoice("candidate"), doesNotMatch);
+  assert.equal(deriveDsaReferenceNetworkLabel("baseline"), matches);
+  assert.equal(deriveDsaReferenceNetworkLabel("candidate"), doesNotMatch);
   assert.equal(referenceOutcomeForStoredAssuranceChoice("unsupported"), null);
 
   assert.equal(classifyDsaConfusionCell("fail", matches), "true_positive");

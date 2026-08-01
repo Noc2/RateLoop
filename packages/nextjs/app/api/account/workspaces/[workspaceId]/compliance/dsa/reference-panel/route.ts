@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
 import { readApiJsonRequestBody, rethrowApiRequestBodyBoundaryError } from "~~/lib/tokenless/apiRequestBody";
-import type { DsaBlindedCasePayload, DsaWithheldCaseValues } from "~~/lib/tokenless/dsaBlindedCaseProjection";
+import { declareDsaContentSelfIdentificationGap } from "~~/lib/tokenless/dsaContentSelfIdentification";
 import {
   adjudicateDsaNamedPanelDisagreement,
+  assignDsaNamedPanelAdjudicator,
+  declareDsaNamedPanelUnitGap,
   freezeDsaNamedPanelOutcome,
+  issueDsaNamedPanelAdjudicationArtifactLease,
+  registerDsaNamedPanelReferenceDefinition,
   registerDsaNamedPanelUnit,
 } from "~~/lib/tokenless/dsaNamedReferencePanel";
 import { freezeDsaReferenceLabelSet } from "~~/lib/tokenless/dsaReferenceLabelSets";
@@ -60,18 +64,38 @@ export async function POST(request: NextRequest, context: Context) {
       );
     }
     let result: unknown;
-    if (body.action === "register_unit") {
+    if (body.action === "register_definition") {
+      exact(body, [
+        "action",
+        "epochId",
+        "projectId",
+        "question",
+        "standardHash",
+        "standardId",
+        "standardVersion",
+        "version",
+      ]);
+      result = await registerDsaNamedPanelReferenceDefinition({
+        accountAddress: session.principalId,
+        workspaceId,
+        projectId: requiredString(body.projectId),
+        epochId: requiredString(body.epochId),
+        version: requiredNumber(body.version),
+        question: requiredString(body.question),
+        standardId: requiredString(body.standardId),
+        standardVersion: requiredString(body.standardVersion),
+        standardHash: requiredString(body.standardHash),
+      });
+    } else if (body.action === "register_unit") {
       exact(body, [
         "action",
         "caseId",
         "epochId",
-        "payload",
         "projectId",
         "requiredCefrLevel",
         "requiredReviewerCount",
         "runId",
         "unitId",
-        "withheld",
       ]);
       result = await registerDsaNamedPanelUnit({
         accountAddress: session.principalId,
@@ -81,10 +105,25 @@ export async function POST(request: NextRequest, context: Context) {
         unitId: requiredString(body.unitId),
         runId: requiredString(body.runId),
         caseId: requiredString(body.caseId),
-        payload: body.payload as DsaBlindedCasePayload,
-        withheld: body.withheld as DsaWithheldCaseValues,
         requiredCefrLevel: body.requiredCefrLevel as "B2" | "C1" | "C2",
         requiredReviewerCount: requiredNumber(body.requiredReviewerCount),
+      });
+    } else if (body.action === "assign_adjudicator") {
+      exact(body, ["action", "adjudicatorPrincipalId", "epochId", "unitId"]);
+      result = await assignDsaNamedPanelAdjudicator({
+        accountAddress: session.principalId,
+        workspaceId,
+        epochId: requiredString(body.epochId),
+        unitId: requiredString(body.unitId),
+        adjudicatorPrincipalId: requiredString(body.adjudicatorPrincipalId),
+      });
+    } else if (body.action === "open_adjudication_artifact") {
+      exact(body, ["action", "epochId", "unitId"]);
+      result = await issueDsaNamedPanelAdjudicationArtifactLease({
+        accountAddress: session.principalId,
+        workspaceId,
+        epochId: requiredString(body.epochId),
+        unitId: requiredString(body.unitId),
       });
     } else if (body.action === "adjudicate") {
       exact(body, ["action", "conflictDeclaration", "epochId", "rationale", "referenceLabel", "unitId"]);
@@ -97,6 +136,25 @@ export async function POST(request: NextRequest, context: Context) {
         rationale: requiredString(body.rationale),
         conflictDeclaration: body.conflictDeclaration as { hasConflict: boolean; relationships: readonly string[] },
       });
+    } else if (body.action === "declare_gap") {
+      exact(body, ["action", "epochId", "reason", "unitId"]);
+      const reason = requiredString(body.reason);
+      result =
+        reason === "content_self_identification"
+          ? await declareDsaContentSelfIdentificationGap({
+              accountAddress: session.principalId,
+              workspaceId,
+              epochId: requiredString(body.epochId),
+              unitId: requiredString(body.unitId),
+              reason,
+            })
+          : await declareDsaNamedPanelUnitGap({
+              accountAddress: session.principalId,
+              workspaceId,
+              epochId: requiredString(body.epochId),
+              unitId: requiredString(body.unitId),
+              reason: reason as "reviewer_nonresponse" | "adjudicator_nonresponse",
+            });
     } else if (body.action === "freeze_outcome") {
       exact(body, ["action", "epochId", "unitId"]);
       result = await freezeDsaNamedPanelOutcome({
@@ -106,13 +164,11 @@ export async function POST(request: NextRequest, context: Context) {
         unitId: requiredString(body.unitId),
       });
     } else if (body.action === "freeze_label_set") {
-      exact(body, ["action", "epochId", "referenceDefinitionHash", "referenceDefinitionVersion"]);
+      exact(body, ["action", "epochId"]);
       result = await freezeDsaReferenceLabelSet({
         accountAddress: session.principalId,
         workspaceId,
         epochId: requiredString(body.epochId),
-        referenceDefinitionVersion: requiredString(body.referenceDefinitionVersion),
-        referenceDefinitionHash: requiredString(body.referenceDefinitionHash) as `sha256:${string}`,
       });
     } else {
       throw new TokenlessServiceError("Reference-panel action is unsupported.", 400, "invalid_dsa_named_panel_action");

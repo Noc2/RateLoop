@@ -261,6 +261,123 @@ async function appendAccessLog(input: {
   });
 }
 
+async function appendDsaNamedPanelAdjudicationReadLog(input: {
+  accountAddress: string;
+  artifactId: string;
+  epochId: string;
+  leaseId: string;
+  projectId: string;
+  requestReference?: string | null;
+  runtime: ArtifactPrivacyRuntime;
+  unitId: string;
+  workspaceId: string;
+}) {
+  const normalizedActor = actorAddress(input.accountAddress);
+  const hashedActorReference = actorReference(input.runtime.commitmentKey!, normalizedActor);
+  const result = await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_access_logs
+          (log_id, workspace_id, project_id, artifact_id, lease_id, actor_kind, actor_reference,
+           action, purpose, request_reference, occurred_at)
+          SELECT ?, marker.workspace_id, marker.project_id, marker.artifact_id, marker.lease_id,
+                 'principal', ?, 'read', 'dsa_named_panel_adjudication', ?, CURRENT_TIMESTAMP
+          FROM tokenless_dsa_named_panel_adjudication_artifact_leases marker
+          JOIN tokenless_assurance_artifact_leases lease
+            ON lease.lease_id=marker.lease_id AND lease.artifact_id=marker.artifact_id
+           AND lease.workspace_id=marker.workspace_id AND lease.project_id=marker.project_id
+           AND lease.account_address=marker.adjudicator_principal_id
+           AND lease.assignment_id IS NULL AND lease.purpose='dsa_named_panel_adjudication'
+          JOIN tokenless_dsa_named_panel_units unit
+            ON unit.workspace_id=marker.workspace_id AND unit.project_id=marker.project_id
+           AND unit.epoch_id=marker.epoch_id AND unit.unit_id=marker.unit_id
+           AND unit.content_artifact_id=marker.artifact_id
+           AND unit.content_artifact_digest=marker.artifact_digest
+          WHERE marker.workspace_id=? AND marker.project_id=? AND marker.epoch_id=? AND marker.unit_id=?
+            AND marker.artifact_id=? AND marker.lease_id=? AND marker.adjudicator_principal_id=?
+            AND marker.issued_at<=CURRENT_TIMESTAMP AND marker.qualification_expires_at>CURRENT_TIMESTAMP
+            AND lease.created_at<=CURRENT_TIMESTAMP
+            AND lease.revoked_at IS NULL AND lease.expires_at>CURRENT_TIMESTAMP
+            AND EXISTS (
+              SELECT 1 FROM tokenless_principals principal
+              WHERE principal.principal_id=marker.adjudicator_principal_id AND principal.status='active'
+            )
+            AND EXISTS (
+              SELECT 1 FROM tokenless_workspace_reviewers reviewer
+              WHERE reviewer.workspace_id=marker.workspace_id
+                AND reviewer.principal_address=marker.adjudicator_principal_id
+                AND reviewer.status='active'
+            )
+            AND EXISTS (
+              SELECT 1 FROM tokenless_assurance_cohort_reviewers cohort_reviewer
+              WHERE cohort_reviewer.project_id=marker.project_id
+                AND cohort_reviewer.reviewer_account_address=marker.adjudicator_principal_id
+                AND cohort_reviewer.status='active'
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM tokenless_workspace_members member
+              WHERE member.workspace_id=marker.workspace_id
+                AND member.account_address=marker.adjudicator_principal_id
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM tokenless_project_access_assignments access
+              WHERE access.workspace_id=marker.workspace_id AND access.project_id=marker.project_id
+                AND access.subject_kind='principal'
+                AND access.subject_reference=marker.adjudicator_principal_id
+                AND access.status='active'
+                AND (access.expires_at IS NULL OR access.expires_at>CURRENT_TIMESTAMP)
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM tokenless_dsa_named_panel_reference_definitions definition
+              WHERE definition.workspace_id=marker.workspace_id AND definition.epoch_id=marker.epoch_id
+                AND definition.created_by=marker.adjudicator_principal_id
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM tokenless_dsa_named_panel_selections panel
+              WHERE panel.workspace_id=marker.workspace_id AND panel.epoch_id=marker.epoch_id
+                AND panel.unit_id=marker.unit_id
+                AND panel.reviewer_principal_id=marker.adjudicator_principal_id
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM tokenless_dsa_named_panel_adjudications adjudication
+              WHERE adjudication.workspace_id=marker.workspace_id AND adjudication.epoch_id=marker.epoch_id
+                AND adjudication.unit_id=marker.unit_id
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM tokenless_dsa_named_panel_unit_outcomes outcome
+              WHERE outcome.workspace_id=marker.workspace_id AND outcome.epoch_id=marker.epoch_id
+                AND outcome.unit_id=marker.unit_id
+            )`,
+    args: [
+      `log_${randomUUID().replaceAll("-", "")}`,
+      hashedActorReference,
+      input.requestReference ?? null,
+      input.workspaceId,
+      input.projectId,
+      input.epochId,
+      input.unitId,
+      input.artifactId,
+      input.leaseId,
+      normalizedActor,
+    ],
+  });
+  if (result.rowCount !== 1) {
+    throw new TokenlessServiceError("Artifact not found.", 404, "artifact_not_found");
+  }
+  await appendAuditEvent({
+    action: "artifact.read",
+    actorKind: "principal",
+    actorReference: hashedActorReference,
+    assuranceMethod: "rateloop_session",
+    metadata: { artifactId: input.artifactId, leaseId: input.leaseId },
+    purpose: "dsa_named_panel_adjudication",
+    reason: input.requestReference ?? "authorized_request",
+    requestCorrelation: input.requestReference,
+    result: "success",
+    targetId: input.artifactId,
+    targetKind: "artifact",
+    workspaceId: input.workspaceId,
+  });
+}
+
 export async function storeEncryptedArtifact(input: {
   accountAddress: string;
   bytes: Uint8Array;
@@ -688,9 +805,123 @@ export async function issueArtifactLease(input: {
   return { leaseId, expiresAt: input.expiresAt.toISOString() };
 }
 
+async function assertDsaNamedPanelArtifactBoundary(input: {
+  accountAddress: string;
+  artifactId: string;
+  dsaNamedPanelAdjudication?: { epochId: string; unitId: string };
+  dsaNamedPanelAssignmentId?: string;
+  leaseId?: string;
+  now?: Date;
+  projectId: string;
+  workspaceId: string;
+}) {
+  const now = input.now ?? new Date();
+  const result = await dbClient.execute({
+    sql: `SELECT unit.unit_id,
+                 (panel.assignment_id IS NOT NULL) AS accepted_panel_assignment,
+                 (marker.lease_id IS NOT NULL
+                   AND lease.lease_id IS NOT NULL
+                   AND principal.principal_id IS NOT NULL
+                   AND reviewer.principal_address IS NOT NULL
+                   AND cohort_reviewer.reviewer_account_address IS NOT NULL
+                   AND blocked_member.account_address IS NULL
+                   AND blocked_access.assignment_id IS NULL
+                   AND blocked_definition.definition_hash IS NULL
+                   AND blocked_selection.assignment_id IS NULL
+                   AND blocked_adjudication.adjudication_id IS NULL
+                   AND blocked_outcome.unit_id IS NULL) AS accepted_adjudication_lease
+          FROM tokenless_dsa_named_panel_units unit
+          LEFT JOIN tokenless_assurance_assignments assignment
+            ON assignment.workspace_id=unit.workspace_id AND assignment.project_id=unit.project_id
+           AND assignment.run_id=unit.run_id AND assignment.reviewer_account_address=?
+           AND assignment.assignment_id=?
+          LEFT JOIN tokenless_dsa_named_panel_assignments panel
+            ON panel.workspace_id=unit.workspace_id AND panel.epoch_id=unit.epoch_id
+           AND panel.unit_id=unit.unit_id AND panel.assignment_id=assignment.assignment_id
+           AND panel.reviewer_principal_id=assignment.reviewer_account_address
+          LEFT JOIN tokenless_dsa_named_panel_adjudication_artifact_leases marker
+            ON marker.workspace_id=unit.workspace_id AND marker.project_id=unit.project_id
+           AND marker.epoch_id=unit.epoch_id AND marker.unit_id=unit.unit_id
+           AND marker.artifact_id=unit.content_artifact_id
+           AND marker.lease_id=? AND marker.adjudicator_principal_id=?
+           AND marker.qualification_expires_at>?
+          LEFT JOIN tokenless_assurance_artifact_leases lease
+            ON lease.lease_id=marker.lease_id AND lease.artifact_id=marker.artifact_id
+           AND lease.workspace_id=marker.workspace_id AND lease.project_id=marker.project_id
+           AND lease.account_address=marker.adjudicator_principal_id
+           AND lease.purpose='dsa_named_panel_adjudication'
+           AND lease.revoked_at IS NULL AND lease.expires_at>?
+          LEFT JOIN tokenless_principals principal
+            ON principal.principal_id=marker.adjudicator_principal_id AND principal.status='active'
+          LEFT JOIN tokenless_workspace_reviewers reviewer
+            ON reviewer.workspace_id=unit.workspace_id
+           AND reviewer.principal_address=marker.adjudicator_principal_id AND reviewer.status='active'
+          LEFT JOIN tokenless_assurance_cohort_reviewers cohort_reviewer
+            ON cohort_reviewer.project_id=unit.project_id
+           AND cohort_reviewer.reviewer_account_address=marker.adjudicator_principal_id
+           AND cohort_reviewer.status='active'
+          LEFT JOIN tokenless_workspace_members blocked_member
+            ON blocked_member.workspace_id=unit.workspace_id
+           AND blocked_member.account_address=marker.adjudicator_principal_id
+          LEFT JOIN tokenless_project_access_assignments blocked_access
+            ON blocked_access.workspace_id=unit.workspace_id AND blocked_access.project_id=unit.project_id
+           AND blocked_access.subject_kind='principal'
+           AND blocked_access.subject_reference=marker.adjudicator_principal_id
+           AND blocked_access.status='active'
+           AND (blocked_access.expires_at IS NULL OR blocked_access.expires_at>?)
+          LEFT JOIN tokenless_dsa_named_panel_reference_definitions blocked_definition
+            ON blocked_definition.workspace_id=unit.workspace_id AND blocked_definition.epoch_id=unit.epoch_id
+           AND blocked_definition.created_by=marker.adjudicator_principal_id
+          LEFT JOIN tokenless_dsa_named_panel_selections blocked_selection
+            ON blocked_selection.workspace_id=unit.workspace_id AND blocked_selection.epoch_id=unit.epoch_id
+           AND blocked_selection.unit_id=unit.unit_id
+           AND blocked_selection.reviewer_principal_id=marker.adjudicator_principal_id
+          LEFT JOIN tokenless_dsa_named_panel_adjudications blocked_adjudication
+            ON blocked_adjudication.workspace_id=unit.workspace_id
+           AND blocked_adjudication.epoch_id=unit.epoch_id AND blocked_adjudication.unit_id=unit.unit_id
+          LEFT JOIN tokenless_dsa_named_panel_unit_outcomes blocked_outcome
+            ON blocked_outcome.workspace_id=unit.workspace_id AND blocked_outcome.epoch_id=unit.epoch_id
+           AND blocked_outcome.unit_id=unit.unit_id
+          WHERE unit.content_artifact_id=? AND unit.workspace_id=? AND unit.project_id=?
+            AND (? IS NULL OR (unit.epoch_id=? AND unit.unit_id=?))`,
+    args: [
+      input.accountAddress,
+      input.dsaNamedPanelAssignmentId ?? "",
+      input.leaseId ?? "",
+      input.accountAddress,
+      now,
+      now,
+      now,
+      input.artifactId,
+      input.workspaceId,
+      input.projectId,
+      input.dsaNamedPanelAdjudication?.epochId ?? null,
+      input.dsaNamedPanelAdjudication?.epochId ?? "",
+      input.dsaNamedPanelAdjudication?.unitId ?? "",
+    ],
+  });
+  if (result.rowCount === 0) {
+    if (input.dsaNamedPanelAdjudication)
+      throw new TokenlessServiceError("Artifact not found.", 404, "artifact_not_found");
+    return;
+  }
+  if (
+    result.rows.some(row => {
+      const authorization = row as QueryRow;
+      return input.dsaNamedPanelAdjudication
+        ? authorization.accepted_adjudication_lease === true
+        : authorization.accepted_panel_assignment === true || authorization.accepted_adjudication_lease === true;
+    })
+  )
+    return;
+  throw new TokenlessServiceError("Artifact not found.", 404, "artifact_not_found");
+}
+
 export async function readEncryptedArtifact(input: {
   accountAddress: string;
   artifactId: string;
+  dsaNamedPanelAdjudication?: { epochId: string; unitId: string };
+  dsaNamedPanelAssignmentId?: string;
   leaseId?: string;
   projectId: string;
   purpose?: "preview" | "read" | "export";
@@ -699,6 +930,17 @@ export async function readEncryptedArtifact(input: {
   now?: Date;
 }) {
   const address = actorAddress(input.accountAddress);
+  const now = input.now ?? new Date();
+  await assertDsaNamedPanelArtifactBoundary({
+    accountAddress: address,
+    artifactId: input.artifactId,
+    dsaNamedPanelAdjudication: input.dsaNamedPanelAdjudication,
+    dsaNamedPanelAssignmentId: input.dsaNamedPanelAssignmentId,
+    leaseId: input.leaseId,
+    now,
+    projectId: input.projectId,
+    workspaceId: input.workspaceId,
+  });
   const subjectKind = isRateLoopPrincipalId(address) ? "principal" : "account";
   const action = input.purpose === "export" ? "export" : "read";
   const assigned = await authorizeProjectAccount({
@@ -726,14 +968,7 @@ export async function readEncryptedArtifact(input: {
       sql: `SELECT lease_id FROM tokenless_assurance_artifact_leases
             WHERE lease_id = ? AND artifact_id = ? AND workspace_id = ? AND project_id = ? AND account_address = ?
               AND revoked_at IS NULL AND expires_at > ? LIMIT 1`,
-      args: [
-        input.leaseId ?? "",
-        input.artifactId,
-        input.workspaceId,
-        input.projectId,
-        address,
-        input.now ?? new Date(),
-      ],
+      args: [input.leaseId ?? "", input.artifactId, input.workspaceId, input.projectId, address, now],
     });
     leaseId = rowString(leaseResult.rows[0] as QueryRow | undefined, "lease_id");
     if (!leaseId) throw new TokenlessServiceError("Artifact not found.", 404, "artifact_not_found");
@@ -757,11 +992,11 @@ export async function readEncryptedArtifact(input: {
     args: [
       subjectKind,
       address,
-      input.now ?? new Date(),
+      now,
       action === "export" ? ["admin", "auditor"] : ["admin", "contributor", "auditor"],
       leaseId ?? "",
       address,
-      input.now ?? new Date(),
+      now,
       input.artifactId,
       input.projectId,
       input.workspaceId,
@@ -793,17 +1028,40 @@ export async function readEncryptedArtifact(input: {
     rowString(row, "content_auth_tag")!,
     aad,
   );
-  await appendAccessLog({
-    action: input.purpose ?? "read",
-    accountAddress: address,
-    artifactId: input.artifactId,
-    leaseId,
-    projectId: input.projectId,
-    purpose: leaseId ? "assigned_review" : "workspace_access",
-    requestReference: input.requestReference,
-    workspaceId: input.workspaceId,
-    runtime,
-  });
+  if (input.dsaNamedPanelAdjudication) {
+    await assertDsaNamedPanelArtifactBoundary({
+      accountAddress: address,
+      artifactId: input.artifactId,
+      dsaNamedPanelAdjudication: input.dsaNamedPanelAdjudication,
+      leaseId: leaseId ?? undefined,
+      now: new Date(),
+      projectId: input.projectId,
+      workspaceId: input.workspaceId,
+    });
+    await appendDsaNamedPanelAdjudicationReadLog({
+      accountAddress: address,
+      artifactId: input.artifactId,
+      epochId: input.dsaNamedPanelAdjudication.epochId,
+      leaseId: leaseId ?? input.leaseId ?? "",
+      projectId: input.projectId,
+      requestReference: input.requestReference,
+      runtime,
+      unitId: input.dsaNamedPanelAdjudication.unitId,
+      workspaceId: input.workspaceId,
+    });
+  } else {
+    await appendAccessLog({
+      action: input.purpose ?? "read",
+      accountAddress: address,
+      artifactId: input.artifactId,
+      leaseId,
+      projectId: input.projectId,
+      purpose: leaseId ? "assigned_review" : "workspace_access",
+      requestReference: input.requestReference,
+      workspaceId: input.workspaceId,
+      runtime,
+    });
+  }
   return {
     bytes: new Uint8Array(bytes),
     contentType: rowString(row, "content_type")!,
@@ -1291,4 +1549,9 @@ export function registerArtifactManagedKeyProvider(provider: KeyWrappingProvider
   configuredKeyProvider = provider;
 }
 
-export const __artifactPrivacyTestUtils = { decodeMasterKey, getRuntime };
+export const __artifactPrivacyTestUtils = {
+  appendDsaNamedPanelAdjudicationReadLog,
+  assertDsaNamedPanelArtifactBoundary,
+  decodeMasterKey,
+  getRuntime,
+};

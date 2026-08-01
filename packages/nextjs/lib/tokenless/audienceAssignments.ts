@@ -11,12 +11,15 @@ import { dbClient, dbPool } from "~~/lib/db";
 import { evaluateFrozenAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { issueArtifactLease } from "~~/lib/tokenless/artifactPrivacy";
 import { isForecastAssignmentRestricted, networkForecastSubject } from "~~/lib/tokenless/crowdForecastPersistence";
+import { assertDsaNamedPanelPrincipalEligible } from "~~/lib/tokenless/dsaNamedPanelEligibility";
+import { freezeDsaNamedPanelSelectionAtReservation } from "~~/lib/tokenless/dsaNamedPanelSelections";
 import { selectDiversifiedIntegrityPanel } from "~~/lib/tokenless/integrityAssignment";
 import { integrityReviewerLookup } from "~~/lib/tokenless/integrityEpochs";
 import {
   bindSelectedNetworkAssignment,
   loadExactNetworkRoundBindings,
 } from "~~/lib/tokenless/networkAssignmentSettlement";
+import { requireActiveNetworkBenchmarkAssignmentAcceptance } from "~~/lib/tokenless/networkBenchmarkActivation";
 import { requirePaidLaneComplianceApproval } from "~~/lib/tokenless/paidLaneCompliance";
 import { requirePaidReviewEligibilityInTransaction } from "~~/lib/tokenless/paidReviewEligibilityPreflight";
 import {
@@ -40,6 +43,8 @@ export type QualificationProvenance = {
   assertedBy: string;
   verifiedAt: string;
   expiresAt?: string;
+  evidenceReferenceHash?: string;
+  evidenceVersion?: string;
 };
 
 const COHORT_SOURCE_SET = new Set<CohortSource>(["customer_invited", "rateloop_network"]);
@@ -199,6 +204,30 @@ function validateProvenance(values: QualificationProvenance[], now = new Date())
         "invalid_qualifications",
       );
     }
+    const hasEvidenceReferenceHash = Object.hasOwn(value, "evidenceReferenceHash");
+    const hasEvidenceVersion = Object.hasOwn(value, "evidenceVersion");
+    if (
+      hasEvidenceReferenceHash !== hasEvidenceVersion ||
+      (hasEvidenceReferenceHash &&
+        (typeof value.evidenceReferenceHash !== "string" || typeof value.evidenceVersion !== "string"))
+    ) {
+      throw new TokenlessServiceError(
+        "Qualification evidence version and reference hash must be supplied together.",
+        400,
+        "invalid_qualifications",
+      );
+    }
+    const evidenceReferenceHash =
+      typeof value.evidenceReferenceHash === "string"
+        ? requiredText(value.evidenceReferenceHash, "qualification evidence reference hash", 71)
+        : null;
+    const evidenceVersion =
+      typeof value.evidenceVersion === "string"
+        ? requiredText(value.evidenceVersion, "qualification evidence version", 80)
+        : null;
+    if (evidenceReferenceHash !== null && !HASH_PATTERN.test(evidenceReferenceHash)) {
+      throw new TokenlessServiceError("Qualification evidence hash is invalid.", 400, "invalid_qualifications");
+    }
     return {
       key,
       value: value.value,
@@ -206,6 +235,7 @@ function validateProvenance(values: QualificationProvenance[], now = new Date())
       assertedBy: requiredText(value.assertedBy, "qualification provenance issuer", 160),
       verifiedAt: verifiedAt.toISOString(),
       ...(expiresAt ? { expiresAt: expiresAt.toISOString() } : {}),
+      ...(evidenceReferenceHash && evidenceVersion ? { evidenceReferenceHash, evidenceVersion } : {}),
     };
   });
 }
@@ -791,7 +821,7 @@ export async function prepareRunAudience(input: {
          LEFT JOIN tokenless_private_groups g ON g.group_id = c.private_group_id
          LEFT JOIN tokenless_private_group_policy_versions gp
            ON gp.group_id = g.group_id AND gp.version = g.current_policy_version
-         WHERE c.project_id = $1 AND c.cohort_id = $2 AND c.status = 'active' LIMIT 1 FOR UPDATE`,
+         WHERE c.project_id = $1 AND c.cohort_id = $2 AND c.status = 'active' LIMIT 1 FOR UPDATE OF c`,
         [input.projectId, requested.cohortId],
       );
       const cohort = cohortResult.rows[0] as QueryRow | undefined;
@@ -1999,13 +2029,16 @@ export async function reserveAudienceAssignment(input: {
     await client.query("BEGIN");
     const subpanelResult = await client.query(
       `SELECT sp.*, r.status AS run_status, r.manifest_hash AS current_run_manifest_hash,
-              r.policy_hash AS current_policy_hash, p.policy_json
+              r.policy_hash AS current_policy_hash, p.policy_json,named_unit.epoch_id AS dsa_named_panel_epoch_id
        FROM tokenless_assurance_run_subpanels sp
        JOIN tokenless_assurance_runs r ON r.run_id = sp.run_id AND r.project_id = sp.project_id
        JOIN tokenless_assurance_audience_policies p
          ON p.policy_id = sp.policy_id AND p.version = sp.policy_version
+       LEFT JOIN tokenless_dsa_named_panel_units named_unit
+         ON named_unit.workspace_id=sp.workspace_id AND named_unit.project_id=sp.project_id
+        AND named_unit.run_id=sp.run_id
        WHERE sp.subpanel_id = $1 AND sp.run_id = $2 AND sp.project_id = $3 AND sp.workspace_id = $4
-       LIMIT 1 FOR UPDATE`,
+       LIMIT 1 FOR UPDATE OF sp`,
       [input.subpanelId, input.runId, input.projectId, input.workspaceId],
     );
     const subpanel = subpanelResult.rows[0] as QueryRow | undefined;
@@ -2100,9 +2133,27 @@ export async function reserveAudienceAssignment(input: {
       provenance: QualificationProvenance[];
       paidEligibility: Awaited<ReturnType<typeof paidEligibility>> | null;
     }> = [];
+    const namedPanelEpochId = rowString(subpanel, "dsa_named_panel_epoch_id");
     for (const value of reviewerResult.rows) {
       const reviewer = value as QueryRow;
       if (alreadyAssigned.has(rowString(reviewer, "reviewer_account_address"))) continue;
+      if (namedPanelEpochId) {
+        try {
+          await assertDsaNamedPanelPrincipalEligible(client, {
+            workspaceId: input.workspaceId,
+            projectId: input.projectId,
+            epochId: namedPanelEpochId,
+            principalId: rowString(reviewer, "reviewer_account_address")!,
+            now,
+          });
+        } catch (error) {
+          if (namedReviewer) throw error;
+          if (error instanceof TokenlessServiceError && error.code === "dsa_named_panel_reviewer_access_conflict") {
+            continue;
+          }
+          throw error;
+        }
+      }
       const provenance = parseJson<QualificationProvenance[]>(
         reviewer.qualification_provenance_json,
         "qualification provenance",
@@ -2214,6 +2265,7 @@ export async function reserveAudienceAssignment(input: {
         now,
       ],
     );
+    await freezeDsaNamedPanelSelectionAtReservation(client, assignmentId);
     await client.query(
       "UPDATE tokenless_assurance_run_subpanels SET active_reservations = active_reservations + 1 WHERE subpanel_id = $1",
       [input.subpanelId],
@@ -2254,6 +2306,38 @@ export async function recoverExpiredAudienceAssignment(input: {
   if (!principalId) throw new TokenlessServiceError("Account is invalid.", 400, "invalid_account");
   const now = input.now ?? new Date();
   await expireAudienceAssignments(now);
+  const namedPanel = await dbClient.execute({
+    sql: `SELECT a.status,
+                 (panel.assignment_id IS NOT NULL) AS panel_accepted
+          FROM tokenless_assurance_assignments a
+          JOIN tokenless_dsa_named_panel_units unit
+            ON unit.workspace_id=a.workspace_id AND unit.project_id=a.project_id AND unit.run_id=a.run_id
+          LEFT JOIN tokenless_dsa_named_panel_assignments panel
+            ON panel.workspace_id=unit.workspace_id AND panel.epoch_id=unit.epoch_id AND panel.unit_id=unit.unit_id
+           AND panel.assignment_id=a.assignment_id AND panel.reviewer_principal_id=a.reviewer_account_address
+          LEFT JOIN tokenless_rater_profiles owner_profile ON owner_profile.rater_id=a.rater_id
+          WHERE a.assignment_id=?
+            AND ((a.rater_id IS NOT NULL AND owner_profile.principal_id=?)
+              OR (a.rater_id IS NULL AND a.reviewer_account_address=?))
+          LIMIT 1`,
+    args: [input.assignmentId, principalId, principalId],
+  });
+  const namedPanelRow = namedPanel.rows[0] as QueryRow | undefined;
+  if (namedPanelRow) {
+    if (rowString(namedPanelRow, "status") === "accepted") {
+      return {
+        assignmentId: input.assignmentId,
+        accepted: true as const,
+        leases: [],
+        requiresDsaReferencePanelAcceptance: namedPanelRow.panel_accepted !== true,
+      };
+    }
+    throw new TokenlessServiceError(
+      "DSA reference-panel access must be recovered through its exact acceptance flow.",
+      409,
+      "dsa_named_panel_recovery_required",
+    );
+  }
   const accepted = await dbClient.execute({
     sql: `SELECT a.assignment_id, a.reviewer_account_address
           FROM tokenless_assurance_assignments a
@@ -2421,7 +2505,8 @@ async function issueAssignmentArtifactLeases(
   assignmentId: string,
   now: Date,
   reviewerAccountAddress: string,
-  confidentialityTermsHash: string,
+  confidentialityTermsHash: string | undefined,
+  mode: "generic" | "dsa_named_panel" = "generic",
 ) {
   const result = await dbClient.execute({
     sql: `SELECT a.workspace_id, a.project_id, a.reviewer_account_address,
@@ -2434,17 +2519,44 @@ async function issueAssignmentArtifactLeases(
                  sp.private_group_id AS subpanel_private_group_id,
                  sp.private_group_policy_version AS subpanel_private_group_policy_version,
                  sp.private_group_policy_hash AS subpanel_private_group_policy_hash,
-                 ap.policy_json
+                 ap.policy_json,
+                 named_unit.unit_id AS dsa_named_panel_unit_id,
+                 named_unit.content_artifact_id AS dsa_named_panel_artifact_id,
+                 (named_assignment.assignment_id IS NOT NULL) AS dsa_named_panel_accepted
           FROM tokenless_assurance_assignments a
           JOIN tokenless_assurance_runs r ON r.run_id = a.run_id AND r.project_id = a.project_id
           JOIN tokenless_assurance_run_subpanels sp ON sp.subpanel_id = a.subpanel_id
           JOIN tokenless_assurance_audience_policies ap
             ON ap.policy_id = r.audience_policy_id AND ap.version = r.audience_policy_version
+          LEFT JOIN tokenless_dsa_named_panel_units named_unit
+            ON named_unit.workspace_id=a.workspace_id AND named_unit.project_id=a.project_id AND named_unit.run_id=a.run_id
+          LEFT JOIN tokenless_dsa_named_panel_assignments named_assignment
+            ON named_assignment.workspace_id=named_unit.workspace_id
+           AND named_assignment.epoch_id=named_unit.epoch_id AND named_assignment.unit_id=named_unit.unit_id
+           AND named_assignment.assignment_id=a.assignment_id
+           AND named_assignment.reviewer_principal_id=a.reviewer_account_address
           WHERE a.assignment_id = ? AND a.reviewer_account_address = ? AND a.status = 'accepted' LIMIT 1`,
     args: [assignmentId, reviewerAccountAddress],
   });
   const row = result.rows[0] as QueryRow | undefined;
   if (!row) throw new TokenlessServiceError("Assignment not found.", 404, "assignment_not_found");
+  const namedPanelArtifactId = rowString(row, "dsa_named_panel_artifact_id");
+  if (namedPanelArtifactId && mode !== "dsa_named_panel") {
+    throw new TokenlessServiceError(
+      "DSA reference-panel artifact access requires its exact acceptance flow.",
+      409,
+      "dsa_named_panel_acceptance_required",
+    );
+  }
+  if (!namedPanelArtifactId || (mode === "dsa_named_panel" && row.dsa_named_panel_accepted !== true)) {
+    if (mode === "dsa_named_panel") {
+      throw new TokenlessServiceError(
+        "DSA reference-panel assignment not found.",
+        404,
+        "dsa_named_panel_assignment_not_found",
+      );
+    }
+  }
   assertAssuranceAssignmentSettlementAvailable({
     paidAssignment: row.paid_assignment === true,
     policy: parseJson<HumanAssuranceAudiencePolicy>(row.policy_json, "audience policy"),
@@ -2457,7 +2569,7 @@ async function issueAssignmentArtifactLeases(
   }
   if (
     !rowDate(row, "confidentiality_accepted_at") ||
-    rowString(row, "confidentiality_terms_hash") !== confidentialityTermsHash
+    (mode === "generic" && rowString(row, "confidentiality_terms_hash") !== confidentialityTermsHash)
   ) {
     throw new TokenlessServiceError("Confidentiality terms changed.", 409, "confidentiality_terms_mismatch");
   }
@@ -2479,7 +2591,8 @@ async function issueAssignmentArtifactLeases(
   }
   const leases = [];
   try {
-    const artifactIds = await assignmentArtifactIds(assignmentId);
+    const artifactIds =
+      mode === "dsa_named_panel" ? [namedPanelArtifactId!] : await assignmentArtifactIds(assignmentId);
     const active = await dbClient.execute({
       sql: `SELECT lease_id, artifact_id, expires_at FROM tokenless_assurance_artifact_leases
             WHERE assignment_id = ? AND account_address = ? AND revoked_at IS NULL AND expires_at > ?
@@ -2530,6 +2643,28 @@ async function issueAssignmentArtifactLeases(
   }
 }
 
+export async function issueDsaNamedPanelArtifactLease(input: {
+  assignmentId: string;
+  reviewerAccountAddress: string;
+  now?: Date;
+}) {
+  const leases = await issueAssignmentArtifactLeases(
+    input.assignmentId,
+    input.now ?? new Date(),
+    input.reviewerAccountAddress,
+    undefined,
+    "dsa_named_panel",
+  );
+  if (leases.length !== 1) {
+    throw new TokenlessServiceError(
+      "The DSA reference-panel assignment does not have one exact artifact lease.",
+      409,
+      "dsa_named_panel_lease_invalid",
+    );
+  }
+  return leases[0]!;
+}
+
 export async function acceptAudienceAssignment(input: {
   baseAccountAddress: string;
   assignmentId: string;
@@ -2552,6 +2687,7 @@ export async function acceptAudienceAssignment(input: {
   }
   const client = await dbPool.connect();
   let replay = false;
+  let requiresDsaReferencePanelAcceptance = false;
   try {
     await client.query("BEGIN");
     await client.query(
@@ -2564,13 +2700,20 @@ export async function acceptAudienceAssignment(input: {
               sp.private_group_id AS subpanel_private_group_id,
               sp.private_group_policy_version AS subpanel_private_group_policy_version,
               sp.private_group_policy_hash AS subpanel_private_group_policy_hash,
-              ap.policy_json
+              ap.policy_json,named_unit.unit_id AS dsa_named_panel_unit_id,
+              named_selection.panel_deadline AS dsa_named_panel_deadline
        FROM tokenless_assurance_assignments a
        JOIN tokenless_assurance_runs r ON r.run_id = a.run_id AND r.project_id = a.project_id
        JOIN tokenless_assurance_run_subpanels sp ON sp.subpanel_id = a.subpanel_id
        LEFT JOIN tokenless_rater_profiles owner_profile ON owner_profile.rater_id = a.rater_id
        JOIN tokenless_assurance_audience_policies ap
          ON ap.policy_id = r.audience_policy_id AND ap.version = r.audience_policy_version
+       LEFT JOIN tokenless_dsa_named_panel_units named_unit
+         ON named_unit.workspace_id=a.workspace_id AND named_unit.project_id=a.project_id AND named_unit.run_id=a.run_id
+       LEFT JOIN tokenless_dsa_named_panel_selections named_selection
+         ON named_selection.workspace_id=named_unit.workspace_id AND named_selection.epoch_id=named_unit.epoch_id
+        AND named_selection.unit_id=named_unit.unit_id AND named_selection.assignment_id=a.assignment_id
+        AND named_selection.reviewer_principal_id=a.reviewer_account_address
        WHERE a.assignment_id = $1
          AND ((a.rater_id IS NOT NULL AND owner_profile.principal_id = $2)
            OR (a.rater_id IS NULL AND a.reviewer_account_address = $2))
@@ -2587,6 +2730,7 @@ export async function acceptAudienceAssignment(input: {
       throw new TokenlessServiceError("Assignment not found.", 404, "assignment_not_found");
     }
     const reviewer = rowString(row, "reviewer_account_address")!;
+    requiresDsaReferencePanelAcceptance = rowString(row, "dsa_named_panel_unit_id") !== null;
     assertAssuranceAssignmentSettlementAvailable({
       paidAssignment: row.paid_assignment === true,
       policy: parseJson<HumanAssuranceAudiencePolicy>(row.policy_json, "audience policy"),
@@ -2653,7 +2797,8 @@ export async function acceptAudienceAssignment(input: {
         });
         if (
           !currentEligibility.preflight.publicNetworkLegalResidence ||
-          currentEligibility.preflight.publicNetworkLegalResidence.policyHash !== frozenResidence.policyHash
+          currentEligibility.preflight.publicNetworkLegalResidence.policyHash !== frozenResidence.policyHash ||
+          currentEligibility.preflight.publicNetworkLegalResidence.countryCode !== frozenResidence.countryCode
         ) {
           throw new TokenlessServiceError(
             "A current, provider-verified EEA legal residence is required for RateLoop-network review work.",
@@ -2661,6 +2806,12 @@ export async function acceptAudienceAssignment(input: {
             "public_network_legal_residence_required",
           );
         }
+        await requireActiveNetworkBenchmarkAssignmentAcceptance(client, {
+          workspaceId: rowString(row, "workspace_id")!,
+          projectId: rowString(row, "project_id")!,
+          runId: rowString(row, "run_id")!,
+          residenceCountry: frozenResidence.countryCode,
+        });
       }
       let voucherMarker: string | null = null;
       if (row.paid_assignment === true && rowString(row, "source") !== "rateloop_network") {
@@ -2675,12 +2826,21 @@ export async function acceptAudienceAssignment(input: {
       } else if (rowString(row, "source") === "rateloop_network") {
         voucherMarker = rowString(row, "voucher_marker");
       }
+      const acceptedAssignmentExpiresAt = requiresDsaReferencePanelAcceptance
+        ? rowDate(row, "dsa_named_panel_deadline")
+        : new Date(now.getTime() + ACCEPTED_ASSIGNMENT_TTL_MS);
+      if (!acceptedAssignmentExpiresAt)
+        throw new TokenlessServiceError(
+          "DSA reference-panel selection evidence is incomplete.",
+          409,
+          "dsa_named_panel_selection_incomplete",
+        );
       await client.query(
         `UPDATE tokenless_assurance_assignments
          SET status = 'accepted', confidentiality_accepted_at = $1, accepted_at = $1,
              assignment_expires_at = $2, voucher_marker = $3, lease_state = 'pending', updated_at = $1
          WHERE assignment_id = $4 AND status = 'reserved'`,
-        [now, new Date(now.getTime() + ACCEPTED_ASSIGNMENT_TTL_MS), voucherMarker, input.assignmentId],
+        [now, acceptedAssignmentExpiresAt, voucherMarker, input.assignmentId],
       );
     }
     await client.query("COMMIT");
@@ -2701,13 +2861,16 @@ export async function acceptAudienceAssignment(input: {
   if (!reviewer || !assignmentExpiresAt) {
     throw new TokenlessServiceError("Assignment not found.", 404, "assignment_not_found");
   }
-  const leases = await issueAssignmentArtifactLeases(input.assignmentId, now, reviewer, input.confidentialityTermsHash);
+  const leases = requiresDsaReferencePanelAcceptance
+    ? []
+    : await issueAssignmentArtifactLeases(input.assignmentId, now, reviewer, input.confidentialityTermsHash);
   return {
     assignmentId: input.assignmentId,
     assignmentExpiresAt: assignmentExpiresAt.toISOString(),
     accepted: true,
     replay,
     leases,
+    requiresDsaReferencePanelAcceptance,
   };
 }
 
@@ -2723,7 +2886,8 @@ export async function getAssignmentOnlyTask(input: { baseAccountAddress: string;
                  sp.private_group_policy_hash AS subpanel_private_group_policy_hash,
                  s.manifest_json AS suite_manifest_json, ap.policy_json,
                  network_content.content_id AS public_content_id,
-                 network_content.content_json AS public_content_json
+                 network_content.content_json AS public_content_json,
+                 named_unit.unit_id AS dsa_named_panel_unit_id
           FROM tokenless_assurance_assignments a
           JOIN tokenless_assurance_runs r ON r.run_id = a.run_id AND r.project_id = a.project_id
           JOIN tokenless_assurance_run_subpanels sp ON sp.subpanel_id = a.subpanel_id
@@ -2731,6 +2895,8 @@ export async function getAssignmentOnlyTask(input: { baseAccountAddress: string;
           JOIN tokenless_assurance_suites s ON s.suite_id = r.suite_id AND s.version = r.suite_version
           JOIN tokenless_assurance_audience_policies ap
             ON ap.policy_id = r.audience_policy_id AND ap.version = r.audience_policy_version
+          LEFT JOIN tokenless_dsa_named_panel_units named_unit
+            ON named_unit.workspace_id=a.workspace_id AND named_unit.project_id=a.project_id AND named_unit.run_id=a.run_id
           LEFT JOIN tokenless_public_network_review_bindings reachability
             ON reachability.run_id=a.run_id AND reachability.state='audience_ready'
           LEFT JOIN tokenless_ask_ownership network_ownership
@@ -2759,6 +2925,13 @@ export async function getAssignmentOnlyTask(input: { baseAccountAddress: string;
     rowString(assignment, "policy_hash") !== rowString(assignment, "current_policy_hash")
   ) {
     throw new TokenlessServiceError("Assignment not found.", 404, "assignment_not_found");
+  }
+  if (rowString(assignment, "dsa_named_panel_unit_id") !== null) {
+    throw new TokenlessServiceError(
+      "Accept the DSA reference-panel terms before opening this assignment.",
+      409,
+      "dsa_named_panel_acceptance_required",
+    );
   }
   const reviewer = rowString(assignment, "reviewer_account_address")!;
   assertAssuranceAssignmentSettlementAvailable({

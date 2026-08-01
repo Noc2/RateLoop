@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
 import { readApiJsonRequestBody, rethrowApiRequestBodyBoundaryError } from "~~/lib/tokenless/apiRequestBody";
 import { type AssuranceCaseResponseInput, submitAssuranceResponses } from "~~/lib/tokenless/assuranceResponses";
+import { submitDsaContentSelfIdentificationReportIfExists } from "~~/lib/tokenless/dsaContentSelfIdentification";
 import { submitDsaNamedPanelResponseIfExists } from "~~/lib/tokenless/dsaNamedReferencePanel";
 import {
   isDirectPrivateReviewAssignmentId,
@@ -26,6 +27,7 @@ export async function POST(request: NextRequest, context: Context) {
       idempotencyKey?: string;
       responses?: AssuranceCaseResponseInput[];
       dsaResponse?: { choice: "policy_matches" | "policy_does_not_match"; rationale: string };
+      dsaGapReport?: { reason: "content_self_identification" };
     };
     try {
       body = (await readAssuranceResponseBatchBody(request)) as typeof body;
@@ -41,6 +43,34 @@ export async function POST(request: NextRequest, context: Context) {
         idempotencyKey: body.idempotencyKey ?? "",
         responses: body.responses ?? [],
       });
+    } else if (body.dsaGapReport !== undefined) {
+      const bodyKeys = Object.keys(body).sort();
+      const reportKeys =
+        body.dsaGapReport && typeof body.dsaGapReport === "object" && !Array.isArray(body.dsaGapReport)
+          ? Object.keys(body.dsaGapReport).sort()
+          : [];
+      if (
+        bodyKeys.length !== 1 ||
+        bodyKeys[0] !== "dsaGapReport" ||
+        reportKeys.length !== 1 ||
+        reportKeys[0] !== "reason"
+      )
+        throw new TokenlessServiceError(
+          "Content self-identification report contains unsupported fields.",
+          400,
+          "invalid_dsa_named_panel_content_self_identification_report",
+        );
+      result = await submitDsaContentSelfIdentificationReportIfExists({
+        assignmentId,
+        accountAddress: session.principalId,
+        reason: body.dsaGapReport.reason,
+      });
+      if (!result)
+        throw new TokenlessServiceError(
+          "DSA reference-panel assignment not found.",
+          404,
+          "dsa_named_panel_assignment_not_found",
+        );
     } else {
       result =
         (await submitDsaNamedPanelResponseIfExists({

@@ -24,6 +24,7 @@ const tokenlessTestOperationalSecrets = () => ({
   TOKENLESS_MCP_RATE_LIMIT_SECRET: "m".repeat(32),
   CRON_SECRET: "c".repeat(32),
   TOKENLESS_COMPLIANCE_OPERATOR_SECRET: "o".repeat(32),
+  TOKENLESS_COMPLIANCE_OPERATOR_KEY_VERSION: "compliance-v1",
   TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY: encodedKey(10),
   TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY_VERSION: "forecast-v1",
   TOKENLESS_WALLET_SCREENING_PROVIDER_ID: "wallet-screening:v1",
@@ -631,6 +632,13 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
       new RegExp(`${name} must contain at least 32 characters`),
     );
   }
+  assert.match(
+    validateTokenlessProductionReadiness({
+      env: { ...env, TOKENLESS_COMPLIANCE_OPERATOR_KEY_VERSION: "bad version" },
+      activeRegistry: tokenlessTestRegistry(),
+    }).join("\n"),
+    /TOKENLESS_COMPLIANCE_OPERATOR_KEY_VERSION must be a stable version label/,
+  );
   for (const name of ["TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY", "TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY_VERSION"]) {
     const missingSecret = { ...env };
     delete missingSecret[name];

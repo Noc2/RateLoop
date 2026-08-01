@@ -8,7 +8,13 @@ export function referenceOutcomeForNamedPanelPolicyChoice(choice: DsaNamedPanelP
 }
 
 export function referenceOutcomeForStoredAssuranceChoice(choice: string): DsaReferenceOutcome | null {
-  return choice === "candidate" ? "fail" : choice === "baseline" ? "pass" : null;
+  return choice === "candidate" ? "pass" : choice === "baseline" ? "fail" : null;
+}
+
+export function storedAssuranceChoiceForReferenceOutcome(
+  referenceOutcome: DsaReferenceOutcome,
+): DsaStoredAssuranceChoice {
+  return referenceOutcome === "fail" ? "baseline" : "candidate";
 }
 
 export function classifyDsaConfusionCell(

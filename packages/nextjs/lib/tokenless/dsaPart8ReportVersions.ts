@@ -901,10 +901,17 @@ export async function createDsaPart8ReportVersion(input: {
         `SELECT 1 FROM tokenless_dsa_reference_samples sample
          JOIN tokenless_dsa_reference_label_sets labels
            ON labels.workspace_id=sample.workspace_id AND labels.epoch_id=sample.epoch_id
+         JOIN tokenless_dsa_named_panel_label_set_bridges bridge
+           ON bridge.workspace_id=labels.workspace_id AND bridge.label_set_id=labels.label_set_id
+          AND bridge.epoch_id=labels.epoch_id AND bridge.label_root=labels.label_root
+          AND bridge.label_set_hash=labels.set_hash
+         LEFT JOIN tokenless_dsa_reference_label_set_quarantines quarantine
+           ON quarantine.workspace_id=labels.workspace_id AND quarantine.label_set_id=labels.label_set_id
          WHERE sample.workspace_id=$1 AND sample.epoch_id=$2 AND sample.commitment_digest=$3
            AND sample.sample_digest=$4 AND sample.manifest_root=$5 AND labels.label_set_id=$6
            AND labels.label_root=$7 AND labels.set_hash=$8
-           AND labels.derivation_source='independent_reference_panel' FOR SHARE OF sample,labels`,
+           AND labels.derivation_source='independent_reference_panel'
+           AND quarantine.label_set_id IS NULL FOR SHARE OF sample,labels,bridge`,
         [
           input.build.workspaceId,
           input.build.reference.epochId,

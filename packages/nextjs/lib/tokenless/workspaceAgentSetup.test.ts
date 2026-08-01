@@ -870,66 +870,18 @@ test("atomic setup finalization rolls back its inserted invitation when completi
   assert.deepEqual(setup.rows[0], { status: "in_progress", people_invitation_id: null });
 });
 
-test("prepare-for-approval setup skips private people and preserves a safe null publishing grant", async () => {
+test("ordinary setup rejects network review and preserves a safe null publishing grant", async () => {
   const { workspaceId } = await connectedSetup();
   const connected = await getWorkspaceAgentSetup({ accountAddress: OWNER, workspaceId });
-  const confirmed = await confirmWorkspaceSetupAgent({
-    accountAddress: OWNER,
-    workspaceId,
-    revision: connected.revision,
-    agent: {
-      displayName: connected.agent!.displayName,
-      description: connected.agent!.description,
-      provider: connected.agent!.provider,
-      model: connected.agent!.model,
-      modelVersion: connected.agent!.modelVersion,
-      environment: "production",
-    },
-  });
-  const savedReview = await saveSetupReviewConfiguration({
-    workspaceId,
-    agentId: connected.agent!.agentId,
-    audience: "public_network",
-    authority: "prepare_for_approval",
-  });
-  const reviews = await configureWorkspaceSetupReviews({
-    accountAddress: OWNER,
-    workspaceId,
-    revision: confirmed.revision,
-    bindingRevision: savedReview.configuration.version,
-  });
-  assert.equal(reviews.review.requestProfile.privateGroupId, null);
   await assert.rejects(
-    configureWorkspaceSetupPeople({
-      accountAddress: OWNER,
+    saveSetupReviewConfiguration({
       workspaceId,
-      revision: reviews.revision,
-      decision: "later",
+      agentId: connected.agent!.agentId,
+      audience: "public_network",
+      authority: "prepare_for_approval",
     }),
-    (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_agent_setup_people",
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "human_review_experiment_unavailable",
   );
-  const people = await configureWorkspaceSetupPeople({
-    accountAddress: OWNER,
-    workspaceId,
-    revision: reviews.revision,
-    decision: "not_required",
-  });
-  assert.equal(people.groupId, null);
-  const completed = await completeWorkspaceAgentSetup({
-    accountAddress: OWNER,
-    workspaceId,
-    revision: people.revision,
-  });
-  assert.equal(completed.revision, people.revision + 1);
-  const stored = await dbClient.execute({
-    sql: "SELECT people_decision,private_group_id,status FROM tokenless_workspace_agent_setups WHERE workspace_id=?",
-    args: [workspaceId],
-  });
-  assert.deepEqual(stored.rows[0], {
-    people_decision: "not_required",
-    private_group_id: null,
-    status: "completed",
-  });
   const integration = await dbClient.execute({
     sql: `SELECT activation_mode,granted_scopes_json,publishing_policy_id,allowed_workflow_keys_json
           FROM tokenless_agent_integrations WHERE workspace_id=?`,
@@ -957,6 +909,13 @@ test("automatic setup atomically binds the exact owner-approved workflows and sp
       environment: "production",
     },
   });
+  const group = await createPrivateGroup({
+    accountAddress: OWNER,
+    workspaceId,
+    name: "Paid automatic reviewers",
+    purpose: "Review private workspace material for the configured bounty.",
+    policy: { defaultCompensation: "paid", dataClassifications: ["confidential"] },
+  });
   const publishing = await createAgentPublishingPolicy({
     accountAddress: OWNER,
     workspaceId,
@@ -970,9 +929,9 @@ test("automatic setup atomically binds the exact owner-approved workflows and sp
       maxBountyAtomic: "3000000",
       maxFeeBps: 2_000,
       maxAttemptReserveAtomic: "3000000",
-      allowedReviewerSources: ["rateloop_network"],
+      allowedReviewerSources: ["customer_invited"],
       allowedAdmissionPolicyHashes: [`0x${"a".repeat(64)}`],
-      allowedDataClassifications: ["public", "synthetic", "redacted"],
+      allowedDataClassifications: ["confidential"],
       onPolicyMiss: "deny",
     },
   });
@@ -996,10 +955,10 @@ test("automatic setup atomically binds the exact owner-approved workflows and sp
       positiveLabel: "Approve",
       negativeLabel: "Reject",
       rationaleMode: "required",
-      audience: "public_network",
-      contentBoundary: "public_or_test",
-      privateSensitivity: null,
-      privateGroupId: null,
+      audience: "private_invited",
+      contentBoundary: "private_workspace",
+      privateSensitivity: "confidential",
+      privateGroupId: group.groupId,
       responseWindowSeconds: 3_600,
       panelSize: 3,
       compensationMode: "usdc",
@@ -1013,7 +972,6 @@ test("automatic setup atomically binds the exact owner-approved workflows and sp
       allowedWorkflowKeys: ["general-assistance"],
     },
   };
-  await persistCurrentIntegrityEpochFixture("integrity:workspace-setup-automatic-test");
   const saved = await putHumanReviewConfigurationForOwner({
     accountAddress: OWNER,
     workspaceId,
@@ -1036,7 +994,7 @@ test("automatic setup atomically binds the exact owner-approved workflows and sp
     accountAddress: OWNER,
     workspaceId,
     revision: reviews.revision,
-    decision: "not_required",
+    decision: "later",
   });
   await completeWorkspaceAgentSetup({ accountAddress: OWNER, workspaceId, revision: people.revision });
 
@@ -1213,35 +1171,43 @@ test("unpaid private automatic review grants publishing without payment and reje
 
   const bodyWithoutGrant: Partial<typeof body> = { ...body };
   delete bodyWithoutGrant.publishingGrant;
-  for (const requestProfile of [
-    {
-      ...body.requestProfile,
-      compensationMode: "usdc",
-      bountyPerSeatAtomic: "1000000",
-    },
-    {
-      ...body.requestProfile,
-      feedbackBonusEnabled: true,
-      feedbackBonusPoolAtomic: "1000000",
-      feedbackBonusAwarderKind: "requester",
-      feedbackBonusAwarderAccount: null,
-      feedbackBonusAwardWindowSeconds: 86_400,
-    },
-  ]) {
-    await assert.rejects(
-      putHumanReviewConfigurationForOwner({
-        accountAddress: OWNER,
-        workspaceId,
-        agentId: connected.agent!.agentId,
-        body: {
-          ...bodyWithoutGrant,
-          expectedBindingVersion: saved.configuration.version,
-          requestProfile,
+  await assert.rejects(
+    putHumanReviewConfigurationForOwner({
+      accountAddress: OWNER,
+      workspaceId,
+      agentId: connected.agent!.agentId,
+      body: {
+        ...bodyWithoutGrant,
+        expectedBindingVersion: saved.configuration.version,
+        requestProfile: {
+          ...body.requestProfile,
+          compensationMode: "usdc",
+          bountyPerSeatAtomic: "1000000",
         },
-      }),
-      (error: unknown) => error instanceof TokenlessServiceError && error.code === "human_review_delegation_required",
-    );
-  }
+      },
+    }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "human_review_delegation_required",
+  );
+  await assert.rejects(
+    putHumanReviewConfigurationForOwner({
+      accountAddress: OWNER,
+      workspaceId,
+      agentId: connected.agent!.agentId,
+      body: {
+        ...bodyWithoutGrant,
+        expectedBindingVersion: saved.configuration.version,
+        requestProfile: {
+          ...body.requestProfile,
+          feedbackBonusEnabled: true,
+          feedbackBonusPoolAtomic: "1000000",
+          feedbackBonusAwarderKind: "requester",
+          feedbackBonusAwarderAccount: null,
+          feedbackBonusAwardWindowSeconds: 86_400,
+        },
+      },
+    }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "human_review_experiment_unavailable",
+  );
 });
 
 test("setup rejects future steps, stale revisions, and unsaved review configuration", async () => {
@@ -1271,7 +1237,7 @@ test("setup rejects future steps, stale revisions, and unsaved review configurat
   );
 });
 
-test("setup requires explicit question authority and isolates agent-written feedback configuration", async () => {
+test("setup requires explicit question authority and rejects experimental agent-written network feedback", async () => {
   const { workspaceId } = await connectedSetup();
   const connected = await getWorkspaceAgentSetup({ accountAddress: OWNER, workspaceId });
   const agentId = connected.agent!.agentId;
@@ -1307,21 +1273,16 @@ test("setup requires explicit question authority and isolates agent-written feed
     /Adaptive review requires one owner-fixed question/u,
   );
 
-  await saveSetupReviewConfiguration({
-    workspaceId,
-    agentId,
-    audience: "public_network",
-    mode: "always",
-    questionAuthority: "agent_per_request",
-  });
-  const view = await getHumanReviewConfigurationForOwner({ accountAddress: OWNER, workspaceId, agentId });
-  const profile = view.configuration!.requestProfile.value;
-  assert.equal(profile.questionAuthority, "agent_per_request");
-  assert.equal(profile.resultSemantics, "feedback");
-  assert.equal(profile.criterion, null);
-  assert.equal(profile.positiveLabel, null);
-  assert.equal(profile.negativeLabel, null);
-  assert.equal(profile.rationaleMode, "required");
+  await assert.rejects(
+    saveSetupReviewConfiguration({
+      workspaceId,
+      agentId,
+      audience: "public_network",
+      mode: "always",
+      questionAuthority: "agent_per_request",
+    }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "human_review_experiment_unavailable",
+  );
 });
 
 test("setup resumes a legacy v1 review choice as one unsaved v2 draft", async () => {

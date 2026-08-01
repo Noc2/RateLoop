@@ -30,10 +30,10 @@ afterEach(() => {
   else process.env.APP_URL = previousAppUrl;
 });
 
-function request(path: string, method = "GET", token?: string, origin?: string) {
+function request(path: string, method = "GET", token?: string, origin?: string, body: unknown = {}) {
   return new NextRequest(`${ORIGIN}${path}`, {
     method,
-    ...(method === "GET" ? {} : { body: "{}" }),
+    ...(method === "GET" ? {} : { body: JSON.stringify(body) }),
     headers: {
       ...(method === "GET" ? {} : { "content-type": "application/json" }),
       ...(token ? { cookie: `${AUTH_SESSION_COOKIE}=${token}` } : {}),
@@ -58,6 +58,77 @@ test("every account assignment handler imports and rejects an unauthenticated re
   assert.deepEqual(
     responses.map(response => response.status),
     [401, 401, 403, 401, 403, 403, 401],
+  );
+});
+
+test("an exact authenticated same-origin content self-identification report hides an unknown assignment", async () => {
+  const identity = await resolveBetterAuthPrincipal({
+    betterAuthUserId: "better_assignment_self_identification_route_test",
+    method: "passkey",
+  });
+  const session = await createAuthSession(identity);
+  const path = "/api/account/assurance/assignments/hpua_route_test/responses";
+  const exactReport = { dsaGapReport: { reason: "content_self_identification" } };
+
+  const exact = await submitResponse(request(path, "POST", session.token, ORIGIN, exactReport), assignmentContext);
+  assert.equal(exact.status, 404);
+  assert.equal(exact.headers.get("cache-control"), "private, no-store, max-age=0");
+  assert.deepEqual(await exact.json(), {
+    code: "dsa_named_panel_assignment_not_found",
+    message: "DSA reference-panel assignment not found.",
+    retryable: false,
+  });
+});
+
+test("content self-identification report boundaries reject cross-origin and inexact bodies", async () => {
+  const identity = await resolveBetterAuthPrincipal({
+    betterAuthUserId: "better_assignment_self_identification_boundary_test",
+    method: "passkey",
+  });
+  const session = await createAuthSession(identity);
+  const path = "/api/account/assurance/assignments/hpua_route_test/responses";
+  const exactReport = { dsaGapReport: { reason: "content_self_identification" } };
+
+  const crossOrigin = await submitResponse(
+    request(path, "POST", session.token, "https://attacker.example", exactReport),
+    assignmentContext,
+  );
+  assert.equal(crossOrigin.status, 403);
+  assert.equal(crossOrigin.headers.get("cache-control"), "private, no-store, max-age=0");
+
+  const invalidReports = await Promise.all([
+    submitResponse(
+      request(path, "POST", session.token, ORIGIN, {
+        dsaGapReport: { reason: "reviewer_preference" },
+      }),
+      assignmentContext,
+    ),
+    submitResponse(
+      request(path, "POST", session.token, ORIGIN, {
+        dsaGapReport: { reason: "content_self_identification", note: "unsupported" },
+      }),
+      assignmentContext,
+    ),
+    submitResponse(
+      request(path, "POST", session.token, ORIGIN, {
+        dsaGapReport: { reason: "content_self_identification" },
+        idempotencyKey: "unsupported_field",
+      }),
+      assignmentContext,
+    ),
+  ]);
+  assert.deepEqual(
+    invalidReports.map(response => response.status),
+    [400, 400, 400],
+  );
+  assert.ok(invalidReports.every(response => response.headers.get("cache-control") === "private, no-store, max-age=0"));
+  assert.deepEqual(
+    await Promise.all(invalidReports.map(async response => ((await response.json()) as { code: string }).code)),
+    [
+      "dsa_named_panel_invalid",
+      "invalid_dsa_named_panel_content_self_identification_report",
+      "invalid_dsa_named_panel_content_self_identification_report",
+    ],
   );
 });
 

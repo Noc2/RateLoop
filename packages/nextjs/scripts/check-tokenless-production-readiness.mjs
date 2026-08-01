@@ -150,6 +150,7 @@ export const REQUIRED_TOKENLESS_PRODUCTION_VARIABLES = [
   "TOKENLESS_PIPELINE_TOKEN",
   "CRON_SECRET",
   "TOKENLESS_COMPLIANCE_OPERATOR_SECRET",
+  "TOKENLESS_COMPLIANCE_OPERATOR_KEY_VERSION",
   "TOKENLESS_NOTIFICATION_UNSUBSCRIBE_SECRET",
   "TOKENLESS_PONDER_URL",
   "TOKENLESS_WEBHOOK_ENCRYPTION_KEY",
@@ -649,6 +650,9 @@ function validateTokenlessTestDeployment(env, { activeRegistry, deploymentSchema
       errors.push(`${name} must contain at least 32 characters.`);
     }
     if (secret) addSecretRole(testSecretRoles, name, Buffer.from(secret, "utf8"));
+  }
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u.test(value(env, "TOKENLESS_COMPLIANCE_OPERATOR_KEY_VERSION"))) {
+    errors.push("TOKENLESS_COMPLIANCE_OPERATOR_KEY_VERSION must be a stable version label of at most 64 characters.");
   }
   for (const name of ["TOKENLESS_PIPELINE_TOKEN", "TOKENLESS_NOTIFICATION_UNSUBSCRIBE_SECRET", "BETTER_AUTH_SECRET"]) {
     if (value(env, name)) addSecretRole(testSecretRoles, name, Buffer.from(value(env, name), "utf8"));
@@ -1161,6 +1165,9 @@ export function validateTokenlessProductionReadiness({
   ]) {
     if (value(env, name).length < 32) errors.push(`${name} must contain at least 32 characters.`);
     addSecretRole(secretRoles, name, Buffer.from(value(env, name), "utf8"));
+  }
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u.test(value(env, "TOKENLESS_COMPLIANCE_OPERATOR_KEY_VERSION"))) {
+    errors.push("TOKENLESS_COMPLIANCE_OPERATOR_KEY_VERSION must be a stable version label of at most 64 characters.");
   }
   if (value(env, "TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION").length > 80) {
     errors.push("TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION must not exceed 80 characters.");
