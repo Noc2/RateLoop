@@ -3,12 +3,28 @@ import type { PoolClient } from "pg";
 import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbPool } from "~~/lib/db";
+import { dsaEvidenceTransactionTimestamp } from "~~/lib/tokenless/dsaEvidenceClock";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
-export const DSA_PART8_SOURCE_FACT_SCHEMA_VERSION = "rateloop.dsa-part8-moderation-measure.v1" as const;
+export const DSA_PART8_DECISION_FACT_SCHEMA_VERSION = "rateloop.dsa-part8-content-moderation-decision.v3" as const;
+export const DSA_PART8_AUTOMATED_MEANS_EVALUATION_SCHEMA_VERSION =
+  "rateloop.dsa-part8-automated-means-evaluation.v1" as const;
+export const DSA_PART8_AUTOMATED_MEANS_EVALUATION_SET_SCHEMA_VERSION =
+  "rateloop.dsa-part8-automated-means-evaluation-set.v1" as const;
+export const DSA_PART8_EMPTY_AUTOMATED_MEANS_EVALUATION_SET_ROOT = sha256Rfc8785({
+  schemaVersion: DSA_PART8_AUTOMATED_MEANS_EVALUATION_SET_SCHEMA_VERSION,
+  evaluations: [],
+});
 
 export const DSA_PART8_ORIGINS = ["authority_order", "article16_notice", "own_initiative"] as const;
-export const DSA_PART8_AUTOMATION_PROCESSING = ["solely_automated", "not_solely_automated"] as const;
+export const DSA_PART8_SOLELY_AUTOMATED = "solely_automated" as const;
+export const DSA_PART8_PARTIALLY_AUTOMATED = "partially_automated" as const;
+export const DSA_PART8_NOT_AUTOMATED = "not_automated" as const;
+export const DSA_PART8_AUTOMATION_PROCESSING = [
+  DSA_PART8_SOLELY_AUTOMATED,
+  DSA_PART8_PARTIALLY_AUTOMATED,
+  DSA_PART8_NOT_AUTOMATED,
+] as const;
 export const DSA_PART8_NOTIFIER_CLASSES = ["trusted_flagger", "other"] as const;
 export const DSA_PART8_CLASSIFIER_MACHINE_CLASSES = [
   "text_classifier",
@@ -59,44 +75,61 @@ type DsaPart8NoLanguageReason = (typeof DSA_PART8_NO_LANGUAGE_REASONS)[number];
 type EuOfficialLanguageCode = (typeof EU_OFFICIAL_LANGUAGE_CODES)[number];
 type Row = Record<string, unknown>;
 
-export type DsaPart8SourceFactInput = {
-  moderationMeasureId: string;
+export type DsaPart8DecisionFactInput = {
+  measureTaken: boolean;
+  moderationMeasureId: string | null;
   origin: DsaPart8Origin;
   automationProcessing: DsaPart8AutomationProcessing;
+  expectedEvaluationCount: number;
+  evaluationSetRoot: `sha256:${string}`;
   article16NoticeId: string | null;
   notifierClass: DsaPart8NotifierClass | null;
-  automaticRemoval: boolean;
-  classifier: null | {
-    systemId: string;
-    version: string;
-    machineClass: DsaPart8ClassifierMachineClass;
-  };
   languageAttribution: {
     languageCodes: readonly EuOfficialLanguageCode[];
     noLanguageReason: DsaPart8NoLanguageReason | null;
   };
 };
 
+export type DsaPart8AutomatedMeansEvaluationInput = {
+  evaluationId: string;
+  systemId: string;
+  systemVersion: string;
+  machineClass: DsaPart8ClassifierMachineClass;
+  publicDesignation: string;
+  automatedOutcome: "pass" | "fail";
+};
+
 const EXACT_FACT_KEYS = [
   "article16NoticeId",
-  "automaticRemoval",
   "automationProcessing",
-  "classifier",
+  "evaluationSetRoot",
+  "expectedEvaluationCount",
   "languageAttribution",
+  "measureTaken",
   "moderationMeasureId",
   "notifierClass",
   "origin",
 ] as const;
-const EXACT_CLASSIFIER_KEYS = ["machineClass", "systemId", "version"] as const;
+const EXACT_EVALUATION_KEYS = [
+  "automatedOutcome",
+  "evaluationId",
+  "machineClass",
+  "publicDesignation",
+  "systemId",
+  "systemVersion",
+] as const;
 const EXACT_LANGUAGE_KEYS = ["languageCodes", "noLanguageReason"] as const;
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,159}$/u;
 const WORKSPACE_IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$/u;
 const MEASURE_IDENTIFIER = /^measure_[A-Za-z0-9][A-Za-z0-9_.:-]{7,159}$/u;
 const NOTICE_IDENTIFIER = /^notice_[A-Za-z0-9][A-Za-z0-9_.:-]{7,159}$/u;
-const CLASSIFIER_IDENTIFIER = /^classifier_[A-Za-z0-9][A-Za-z0-9_.:-]{2,159}$/u;
+const EVALUATION_IDENTIFIER = /^evaluation_[A-Za-z0-9][A-Za-z0-9_.:-]{7,159}$/u;
+const PUBLIC_DESIGNATION = /^[^\u0000-\u001f\u007f]{1,160}$/u;
+const FORMULA_PREFIX = /^[=+@-]/u;
+const SHA256 = /^sha256:[0-9a-f]{64}$/u;
 
 function invalid(message: string, field?: string): never {
-  throw new TokenlessServiceError(message, 400, "invalid_dsa_part8_source_fact", false, field);
+  throw new TokenlessServiceError(message, 400, "invalid_dsa_part8_decision_fact", false, field);
 }
 
 function exactKeys(value: unknown, expected: readonly string[], field: string) {
@@ -125,25 +158,45 @@ function normalizedActor(value: string) {
   }
 }
 
-function validNow(value: Date | undefined) {
-  const parsed = value ?? new Date();
-  if (!(parsed instanceof Date) || !Number.isFinite(parsed.getTime())) invalid("now must be a valid date.", "now");
-  return parsed;
-}
-
 function portableCompare(left: string, right: string) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
-export function normalizeDsaPart8SourceFact(input: DsaPart8SourceFactInput) {
+export function normalizeDsaPart8DecisionFact(input: DsaPart8DecisionFactInput) {
   exactKeys(input, EXACT_FACT_KEYS, "fact");
-  if (!MEASURE_IDENTIFIER.test(input.moderationMeasureId))
-    invalid("moderationMeasureId is invalid.", "moderationMeasureId");
+  if (typeof input.measureTaken !== "boolean") invalid("measureTaken must be boolean.", "measureTaken");
+  if (
+    (input.measureTaken &&
+      (typeof input.moderationMeasureId !== "string" || !MEASURE_IDENTIFIER.test(input.moderationMeasureId))) ||
+    (!input.measureTaken && input.moderationMeasureId !== null)
+  ) {
+    invalid("moderationMeasureId is required exactly when a measure was taken.", "moderationMeasureId");
+  }
   if (!DSA_PART8_ORIGINS.includes(input.origin)) invalid("origin is invalid.", "origin");
   if (!DSA_PART8_AUTOMATION_PROCESSING.includes(input.automationProcessing)) {
     invalid("automationProcessing is invalid.", "automationProcessing");
   }
-  if (typeof input.automaticRemoval !== "boolean") invalid("automaticRemoval must be boolean.", "automaticRemoval");
+  if (!Number.isSafeInteger(input.expectedEvaluationCount) || input.expectedEvaluationCount < 0) {
+    invalid("expectedEvaluationCount must be a non-negative safe integer.", "expectedEvaluationCount");
+  }
+  if (!SHA256.test(input.evaluationSetRoot)) {
+    invalid("evaluationSetRoot must be a canonical SHA-256 binding.", "evaluationSetRoot");
+  }
+  if (
+    (input.automationProcessing === DSA_PART8_NOT_AUTOMATED && input.expectedEvaluationCount !== 0) ||
+    (input.automationProcessing !== DSA_PART8_NOT_AUTOMATED && input.expectedEvaluationCount < 1)
+  ) {
+    invalid(
+      "Evaluation count must be zero for non-automated decisions and positive for automated decisions.",
+      "expectedEvaluationCount",
+    );
+  }
+  if (
+    input.expectedEvaluationCount === 0 &&
+    input.evaluationSetRoot !== DSA_PART8_EMPTY_AUTOMATED_MEANS_EVALUATION_SET_ROOT
+  ) {
+    invalid("An empty evaluation set must use the canonical empty-set root.", "evaluationSetRoot");
+  }
 
   if (input.origin === "article16_notice") {
     if (
@@ -156,22 +209,6 @@ export function normalizeDsaPart8SourceFact(input: DsaPart8SourceFactInput) {
     }
   } else if (input.article16NoticeId !== null || input.notifierClass !== null) {
     invalid("Notice fields are allowed only for Article 16 notice origin.", "article16NoticeId");
-  }
-
-  let classifier: DsaPart8SourceFactInput["classifier"] = null;
-  if (input.automationProcessing === "solely_automated") {
-    exactKeys(input.classifier, EXACT_CLASSIFIER_KEYS, "classifier");
-    if (
-      !input.classifier ||
-      !CLASSIFIER_IDENTIFIER.test(input.classifier.systemId) ||
-      !IDENTIFIER.test(input.classifier.version) ||
-      !DSA_PART8_CLASSIFIER_MACHINE_CLASSES.includes(input.classifier.machineClass)
-    ) {
-      invalid("Solely automated processing requires typed classifier facts.", "classifier");
-    }
-    classifier = { ...input.classifier };
-  } else if (input.classifier !== null) {
-    invalid("Classifier facts must be null when processing was not solely automated.", "classifier");
   }
 
   exactKeys(input.languageAttribution, EXACT_LANGUAGE_KEYS, "languageAttribution");
@@ -201,15 +238,72 @@ export function normalizeDsaPart8SourceFact(input: DsaPart8SourceFactInput) {
   }
 
   return {
-    schemaVersion: DSA_PART8_SOURCE_FACT_SCHEMA_VERSION,
+    schemaVersion: DSA_PART8_DECISION_FACT_SCHEMA_VERSION,
+    measureTaken: input.measureTaken,
     moderationMeasureId: input.moderationMeasureId,
     origin: input.origin,
     automationProcessing: input.automationProcessing,
+    expectedEvaluationCount: input.expectedEvaluationCount,
+    evaluationSetRoot: input.evaluationSetRoot,
     article16NoticeId: input.article16NoticeId,
     notifierClass: input.notifierClass,
-    automaticRemoval: input.automaticRemoval,
-    classifier,
     languageAttribution: { languageCodes, noLanguageReason },
+  } as const;
+}
+
+export function normalizeDsaPart8AutomatedMeansEvaluation(input: DsaPart8AutomatedMeansEvaluationInput) {
+  exactKeys(input, EXACT_EVALUATION_KEYS, "evaluation");
+  if (!EVALUATION_IDENTIFIER.test(input.evaluationId)) {
+    invalid("evaluationId is invalid.", "evaluationId");
+  }
+  if (!IDENTIFIER.test(input.systemId)) invalid("systemId is invalid.", "systemId");
+  if (!IDENTIFIER.test(input.systemVersion)) invalid("systemVersion is invalid.", "systemVersion");
+  if (!DSA_PART8_CLASSIFIER_MACHINE_CLASSES.includes(input.machineClass)) {
+    invalid("machineClass is invalid.", "machineClass");
+  }
+  if (
+    typeof input.publicDesignation !== "string" ||
+    input.publicDesignation !== input.publicDesignation.trim() ||
+    !PUBLIC_DESIGNATION.test(input.publicDesignation) ||
+    FORMULA_PREFIX.test(input.publicDesignation)
+  ) {
+    invalid("publicDesignation must be a short, canonical public label.", "publicDesignation");
+  }
+  if (input.automatedOutcome !== "pass" && input.automatedOutcome !== "fail") {
+    invalid("automatedOutcome is invalid.", "automatedOutcome");
+  }
+  return {
+    schemaVersion: DSA_PART8_AUTOMATED_MEANS_EVALUATION_SCHEMA_VERSION,
+    evaluationId: input.evaluationId,
+    systemId: input.systemId,
+    systemVersion: input.systemVersion,
+    machineClass: input.machineClass,
+    publicDesignation: input.publicDesignation,
+    automatedOutcome: input.automatedOutcome,
+  } as const;
+}
+
+export function normalizeDsaPart8AutomatedMeansEvaluationSet(inputs: readonly DsaPart8AutomatedMeansEvaluationInput[]) {
+  if (!Array.isArray(inputs)) invalid("evaluations must be an array.", "evaluations");
+  const evaluations = inputs
+    .map(normalizeDsaPart8AutomatedMeansEvaluation)
+    .sort((left, right) => portableCompare(left.evaluationId, right.evaluationId));
+  if (new Set(evaluations.map(evaluation => evaluation.evaluationId)).size !== evaluations.length) {
+    invalid("evaluationId values must be unique within a decision.", "evaluations");
+  }
+  if (
+    new Set(evaluations.map(evaluation => `${evaluation.systemId}\u0000${evaluation.systemVersion}`)).size !==
+    evaluations.length
+  ) {
+    invalid("Each systemId and systemVersion pair may occur only once per decision.", "evaluations");
+  }
+  return {
+    schemaVersion: DSA_PART8_AUTOMATED_MEANS_EVALUATION_SET_SCHEMA_VERSION,
+    evaluations,
+    evaluationSetRoot: sha256Rfc8785({
+      schemaVersion: DSA_PART8_AUTOMATED_MEANS_EVALUATION_SET_SCHEMA_VERSION,
+      evaluations,
+    }),
   } as const;
 }
 
@@ -242,38 +336,63 @@ async function inTransaction<T>(work: (client: PoolClient) => Promise<T>) {
   }
 }
 
-export async function recordDsaPart8SourceFact(input: {
+export async function recordDsaPart8DecisionFact(input: {
   accountAddress: string;
   workspaceId: string;
   providerDecisionId: string;
   decisionVersion: number;
-  fact: DsaPart8SourceFactInput;
-  now?: Date;
+  fact: DsaPart8DecisionFactInput;
+  evaluations: readonly DsaPart8AutomatedMeansEvaluationInput[];
 }) {
   if (!WORKSPACE_IDENTIFIER.test(input.workspaceId) || !IDENTIFIER.test(input.providerDecisionId)) {
     invalid("Decision scope is invalid.");
   }
   const decisionVersion = positiveInteger(input.decisionVersion, "decisionVersion");
-  const fact = normalizeDsaPart8SourceFact(input.fact);
+  const fact = normalizeDsaPart8DecisionFact(input.fact);
+  const evaluationSet = normalizeDsaPart8AutomatedMeansEvaluationSet(input.evaluations);
+  if (
+    evaluationSet.evaluations.length !== fact.expectedEvaluationCount ||
+    evaluationSet.evaluationSetRoot !== fact.evaluationSetRoot
+  ) {
+    invalid("The complete evaluation set does not match the decision fact binding.", "evaluations");
+  }
   const factJson = canonicalizeRfc8785(fact);
   const factHash = sha256Rfc8785(fact);
-  const now = validNow(input.now);
-
+  const evaluationRows = evaluationSet.evaluations.map(evaluation => ({
+    evaluation,
+    evaluationJson: canonicalizeRfc8785(evaluation),
+    evaluationHash: sha256Rfc8785(evaluation),
+  }));
   return inTransaction(async client => {
+    const now = await dsaEvidenceTransactionTimestamp(client);
     const actor = await requireManager(client, input.accountAddress, input.workspaceId);
     const decision = await client.query(
-      `SELECT 1 FROM tokenless_dsa_source_decision_versions
+      `SELECT sor_applicability,non_required_basis FROM tokenless_dsa_source_decision_versions
        WHERE workspace_id=$1 AND provider_decision_id=$2 AND decision_version=$3 FOR SHARE`,
       [input.workspaceId, input.providerDecisionId, decisionVersion],
     );
     if (decision.rowCount !== 1) {
       throw new TokenlessServiceError("Source decision not found.", 404, "dsa_source_decision_not_found");
     }
+    const sourceDecision = decision.rows[0] as Row;
+    if (
+      !fact.measureTaken &&
+      (text(sourceDecision, "sor_applicability") === "required" ||
+        text(sourceDecision, "non_required_basis") !== text(sourceDecision, "sor_applicability"))
+    ) {
+      throw new TokenlessServiceError(
+        "A no-measure evaluation requires a coded non-required statement-of-reasons basis.",
+        409,
+        "dsa_no_measure_requires_non_required_basis",
+      );
+    }
     const existing = await client.query(
-      `SELECT provider_decision_id,decision_version,moderation_measure_id,fact_json,fact_hash,created_at
-       FROM tokenless_dsa_moderation_measure_facts
+      `SELECT provider_decision_id,decision_version,measure_taken,moderation_measure_id,expected_evaluation_count,
+              evaluation_set_root,fact_json,fact_hash,created_at
+       FROM tokenless_dsa_content_moderation_decision_facts
        WHERE workspace_id=$1
-         AND ((provider_decision_id=$2 AND decision_version=$3) OR moderation_measure_id=$4)
+         AND ((provider_decision_id=$2 AND decision_version=$3)
+              OR ($4 IS NOT NULL AND moderation_measure_id=$4))
        FOR UPDATE`,
       [input.workspaceId, input.providerDecisionId, decisionVersion, fact.moderationMeasureId],
     );
@@ -284,16 +403,48 @@ export async function recordDsaPart8SourceFact(input: {
     );
     if (exact) {
       if (
+        Boolean(exact.measure_taken) === fact.measureTaken &&
         text(exact, "moderation_measure_id") === fact.moderationMeasureId &&
+        Number(exact.expected_evaluation_count) === fact.expectedEvaluationCount &&
+        text(exact, "evaluation_set_root") === fact.evaluationSetRoot &&
         text(exact, "fact_json") === factJson &&
         text(exact, "fact_hash") === factHash
       ) {
-        return { ...fact, factHash, createdAt: new Date(String(exact.created_at)).toISOString(), idempotent: true };
+        const persistedEvaluations = await client.query(
+          `SELECT evaluation_id,evaluation_json,evaluation_hash
+           FROM tokenless_dsa_automated_means_evaluations
+           WHERE workspace_id=$1 AND provider_decision_id=$2 AND decision_version=$3
+           ORDER BY evaluation_id
+           FOR SHARE`,
+          [input.workspaceId, input.providerDecisionId, decisionVersion],
+        );
+        const completeRetry =
+          persistedEvaluations.rowCount === evaluationRows.length &&
+          (persistedEvaluations.rows as Row[]).every(
+            (row, index) =>
+              text(row, "evaluation_id") === evaluationRows[index]?.evaluation.evaluationId &&
+              text(row, "evaluation_json") === evaluationRows[index]?.evaluationJson &&
+              text(row, "evaluation_hash") === evaluationRows[index]?.evaluationHash,
+          );
+        if (!completeRetry) {
+          throw new TokenlessServiceError(
+            "The persisted evaluation set does not match its immutable decision binding.",
+            409,
+            "dsa_part8_evaluation_set_conflict",
+          );
+        }
+        return {
+          ...fact,
+          evaluations: evaluationSet.evaluations,
+          factHash,
+          createdAt: new Date(String(exact.created_at)).toISOString(),
+          idempotent: true,
+        };
       }
       throw new TokenlessServiceError(
         "This source decision already has different immutable Part 8 facts.",
         409,
-        "dsa_part8_source_fact_conflict",
+        "dsa_part8_decision_fact_conflict",
       );
     }
     if ((existing.rowCount ?? 0) > 0) {
@@ -305,26 +456,24 @@ export async function recordDsaPart8SourceFact(input: {
     }
     try {
       await client.query(
-        `INSERT INTO tokenless_dsa_moderation_measure_facts
-         (workspace_id,provider_decision_id,decision_version,schema_version,moderation_measure_id,origin,
-          automation_processing,article16_notice_id,notifier_class,automatic_removal,classifier_system_id,
-          classifier_version,classifier_machine_class,language_codes_json,no_language_reason,fact_json,fact_hash,
-          created_by,created_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
+        `INSERT INTO tokenless_dsa_content_moderation_decision_facts
+         (workspace_id,provider_decision_id,decision_version,schema_version,measure_taken,moderation_measure_id,origin,
+          automation_processing,expected_evaluation_count,evaluation_set_root,article16_notice_id,notifier_class,
+          language_codes_json,no_language_reason,fact_json,fact_hash,created_by,created_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
         [
           input.workspaceId,
           input.providerDecisionId,
           decisionVersion,
-          DSA_PART8_SOURCE_FACT_SCHEMA_VERSION,
+          DSA_PART8_DECISION_FACT_SCHEMA_VERSION,
+          fact.measureTaken,
           fact.moderationMeasureId,
           fact.origin,
           fact.automationProcessing,
+          fact.expectedEvaluationCount,
+          fact.evaluationSetRoot,
           fact.article16NoticeId,
           fact.notifierClass,
-          fact.automaticRemoval,
-          fact.classifier?.systemId ?? null,
-          fact.classifier?.version ?? null,
-          fact.classifier?.machineClass ?? null,
           canonicalizeRfc8785(fact.languageAttribution.languageCodes),
           fact.languageAttribution.noLanguageReason,
           factJson,
@@ -333,16 +482,46 @@ export async function recordDsaPart8SourceFact(input: {
           now,
         ],
       );
+      for (const row of evaluationRows) {
+        await client.query(
+          `INSERT INTO tokenless_dsa_automated_means_evaluations
+           (workspace_id,provider_decision_id,decision_version,evaluation_id,schema_version,system_id,system_version,
+            machine_class,public_designation,automated_outcome,evaluation_json,evaluation_hash,created_by,created_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+          [
+            input.workspaceId,
+            input.providerDecisionId,
+            decisionVersion,
+            row.evaluation.evaluationId,
+            DSA_PART8_AUTOMATED_MEANS_EVALUATION_SCHEMA_VERSION,
+            row.evaluation.systemId,
+            row.evaluation.systemVersion,
+            row.evaluation.machineClass,
+            row.evaluation.publicDesignation,
+            row.evaluation.automatedOutcome,
+            row.evaluationJson,
+            row.evaluationHash,
+            actor,
+            now,
+          ],
+        );
+      }
     } catch (error) {
       if (error && typeof error === "object" && "code" in error && error.code === "23505") {
         throw new TokenlessServiceError(
           "The decision or moderation measure was recorded concurrently with different facts.",
           409,
-          "dsa_part8_source_fact_conflict",
+          "dsa_part8_decision_fact_conflict",
         );
       }
       throw error;
     }
-    return { ...fact, factHash, createdAt: now.toISOString(), idempotent: false };
+    return {
+      ...fact,
+      evaluations: evaluationSet.evaluations,
+      factHash,
+      createdAt: now.toISOString(),
+      idempotent: false,
+    };
   });
 }

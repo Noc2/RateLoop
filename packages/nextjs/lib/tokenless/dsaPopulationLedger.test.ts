@@ -20,8 +20,14 @@ const OUTSIDER = "0x3333333333333333333333333333333333333333";
 const NOW = new Date("2026-07-31T12:00:00.000Z");
 const PERIOD_START = new Date("2026-01-01T00:00:00.000Z");
 const PERIOD_END = new Date("2026-07-01T00:00:00.000Z");
+let databaseNow = NOW;
 
-beforeEach(() => __setDatabaseResourcesForTests(createMemoryDatabaseResources()));
+beforeEach(() => {
+  databaseNow = NOW;
+  __setDatabaseResourcesForTests(
+    createMemoryDatabaseResources({ transactionTimestamp: () => new Date(databaseNow.getTime()) }),
+  );
+});
 afterEach(() => __setDatabaseResourcesForTests(null));
 
 async function workspace(ownerAddress = OWNER, name = "DSA population") {
@@ -85,7 +91,6 @@ async function declarePopulation(input: {
     ).map(index => ({ providerDecisionId: populationRow(index).providerDecisionId, decisionVersion: 1 })),
     expectedRowCount: input.expectedRowCount,
     expectedPageCount: input.expectedPageCount,
-    now: NOW,
   });
 }
 
@@ -108,7 +113,6 @@ test("ingests and freezes more than 5k rows in idempotent pages independent of t
       pageNumber,
       idempotencyKey: `population-page-${String(pageNumber).padStart(3, "0")}`,
       rows,
-      now: NOW,
     });
     assert.equal(ingested.rowCount, rows.length);
     assert.equal(ingested.idempotent, false);
@@ -121,7 +125,6 @@ test("ingests and freezes more than 5k rows in idempotent pages independent of t
         pageNumber,
         idempotencyKey: "population-page-001",
         rows: [...rows].reverse(),
-        now: NOW,
       });
       assert.equal(retry.idempotent, true);
       assert.equal(retry.pageRoot, ingested.pageRoot);
@@ -133,7 +136,6 @@ test("ingests and freezes more than 5k rows in idempotent pages independent of t
     workspaceId,
     populationId,
     populationVersion: 1,
-    now: NOW,
   });
   assert.equal(frozen.status, "frozen");
   assert.equal(frozen.computedRowCount, rowCount);
@@ -143,7 +145,6 @@ test("ingests and freezes more than 5k rows in idempotent pages independent of t
     workspaceId,
     populationId,
     populationVersion: 1,
-    now: NOW,
   });
   assert.equal(replay.idempotent, true);
   assert.equal(replay.computedRoot, frozen.computedRoot);
@@ -157,6 +158,35 @@ test("ingests and freezes more than 5k rows in idempotent pages independent of t
   assert.equal(contract.rowCount, rowCount);
   assert.deepEqual(contract.sourceTotals, { "moderation-api": rowCount });
   assert.equal(JSON.stringify(contract).includes("coverage-export"), false);
+});
+
+test("rejects an irreversible freeze before period end and accepts the exact boundary", async () => {
+  const workspaceId = await workspace();
+  const populationId = "population-period-boundary";
+  await declarePopulation({ workspaceId, populationId, expectedRowCount: 1, expectedPageCount: 1, de: 1, en: 0 });
+  await ingestDsaPopulationPage({
+    accountAddress: OWNER,
+    workspaceId,
+    populationId,
+    populationVersion: 1,
+    pageNumber: 1,
+    idempotencyKey: "population-period-boundary-page",
+    rows: [populationRow(0)],
+  });
+  databaseNow = new Date(PERIOD_END.getTime() - 1);
+  await assert.rejects(
+    () =>
+      reconcileAndFreezeDsaPopulation({ accountAddress: OWNER, workspaceId, populationId, populationVersion: 1 }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "dsa_population_period_incomplete",
+  );
+  databaseNow = new Date(PERIOD_END);
+  const frozen = await reconcileAndFreezeDsaPopulation({
+    accountAddress: OWNER,
+    workspaceId,
+    populationId,
+    populationVersion: 1,
+  });
+  assert.equal(frozen.status, "frozen");
 });
 
 test("rejects conflicting provider decision IDs unless the caller creates an explicit new version", async () => {
@@ -179,7 +209,6 @@ test("rejects conflicting provider decision IDs unless the caller creates an exp
     pageNumber: 1,
     idempotencyKey: "source-one-page",
     rows: [original],
-    now: NOW,
   });
 
   await declarePopulation({ workspaceId, populationId: "source-two", expectedRowCount: 1, expectedPageCount: 1 });
@@ -193,7 +222,6 @@ test("rejects conflicting provider decision IDs unless the caller creates an exp
         pageNumber: 1,
         idempotencyKey: "source-two-conflict",
         rows: [populationRow(1, { engagementId: "engagement-new", automatedSystemVersion: "classifier-changed" })],
-        now: NOW,
       }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "dsa_source_decision_version_conflict",
   );
@@ -211,7 +239,6 @@ test("rejects conflicting provider decision IDs unless the caller creates an exp
         automatedSystemVersion: "classifier-changed",
       }),
     ],
-    now: NOW,
   });
   assert.equal(versioned.idempotent, false);
 
@@ -234,7 +261,6 @@ test("rejects conflicting provider decision IDs unless the caller creates an exp
         ],
         expectedRowCount: 2,
         expectedPageCount: 1,
-        now: NOW,
       }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "dsa_population_version_conflict",
   );
@@ -264,7 +290,6 @@ test("rejects one engagement ID under multiple versions within and across ingest
           populationRow(30, { engagementId: "shared-engagement", engagementVersion: 1 }),
           populationRow(31, { engagementId: "shared-engagement", engagementVersion: 2 }),
         ],
-        now: NOW,
       }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "dsa_population_duplicate_row",
   );
@@ -286,7 +311,6 @@ test("rejects one engagement ID under multiple versions within and across ingest
     pageNumber: 1,
     idempotencyKey: "engagement-cross-page-one",
     rows: [populationRow(30, { engagementId: "shared-engagement", engagementVersion: 1 })],
-    now: NOW,
   });
   await assert.rejects(
     () =>
@@ -298,7 +322,6 @@ test("rejects one engagement ID under multiple versions within and across ingest
         pageNumber: 2,
         idempotencyKey: "engagement-cross-page-two",
         rows: [populationRow(31, { engagementId: "shared-engagement", engagementVersion: 2 })],
-        now: NOW,
       }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "dsa_population_duplicate_row",
   );
@@ -323,7 +346,6 @@ test("rejects conflicting global engagement versions across populations", async 
     pageNumber: 1,
     idempotencyKey: "global-engagement-one",
     rows: [populationRow(40, { engagementId: "global-engagement" })],
-    now: NOW,
   });
   await declarePopulation({
     workspaceId,
@@ -344,7 +366,6 @@ test("rejects conflicting global engagement versions across populations", async 
         pageNumber: 1,
         idempotencyKey: "global-engagement-two",
         rows: [populationRow(41, { engagementId: "global-engagement" })],
-        now: NOW,
       }),
     (error: unknown) =>
       error instanceof TokenlessServiceError && error.code === "dsa_source_engagement_version_conflict",
@@ -384,7 +405,6 @@ test("freezes against the payload version bound to the population instead of a l
     pageNumber: 1,
     idempotencyKey: "payload-binding-one",
     rows: [required],
-    now: NOW,
   });
   await recordDsaTransparencyDeliveryResult({
     accountAddress: OWNER,
@@ -423,14 +443,12 @@ test("freezes against the payload version bound to the population instead of a l
     pageNumber: 1,
     idempotencyKey: "payload-binding-two",
     rows: [{ ...required, transparency: { ...required.transparency!, payloadVersion: 2 } }],
-    now: NOW,
   });
   const frozen = await reconcileAndFreezeDsaPopulation({
     accountAddress: OWNER,
     workspaceId,
     populationId: "payload-binding-one",
     populationVersion: 1,
-    now: NOW,
   });
   assert.equal(frozen.status, "frozen");
   assert.deepEqual(frozen.blockers, []);
@@ -472,7 +490,6 @@ test("blocks personal data outbound and requires a complete 201 receipt before f
         pageNumber: 1,
         idempotencyKey: "required-page-private",
         rows: [required],
-        now: NOW,
       }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "dsa_transparency_preflight_failed",
   );
@@ -494,14 +511,12 @@ test("blocks personal data outbound and requires a complete 201 receipt before f
     pageNumber: 1,
     idempotencyKey: "required-page-valid",
     rows: [required],
-    now: NOW,
   });
   const blocked = await reconcileAndFreezeDsaPopulation({
     accountAddress: OWNER,
     workspaceId,
     populationId,
     populationVersion: 1,
-    now: NOW,
   });
   assert.equal(blocked.status, "blocked");
   assert.deepEqual(blocked.blockers, [{ code: "missing_transparency_receipt", count: 1 }]);
@@ -591,7 +606,6 @@ test("blocks personal data outbound and requires a complete 201 receipt before f
     workspaceId,
     populationId,
     populationVersion: 1,
-    now: NOW,
   });
   assert.equal(frozen.status, "frozen");
   const ledger = await dbClient.execute(
@@ -650,7 +664,6 @@ test("recovers an ambiguous submission from an official 302 PUID lookup without 
     pageNumber: 1,
     idempotencyKey: "lookup-recovery-page",
     rows: [row],
-    now: NOW,
   });
   assert.ok(ingest.transparencyPayloads);
   const puid = ingest.transparencyPayloads[0]?.puid;
@@ -687,7 +700,6 @@ test("recovers an ambiguous submission from an official 302 PUID lookup without 
     workspaceId,
     populationId: "lookup-recovery",
     populationVersion: 1,
-    now: NOW,
   });
   assert.equal(frozen.status, "frozen");
   const receipt = await dbClient.execute({
@@ -715,14 +727,12 @@ test("blocks freeze on missing pages and totals, and tenant authorization never 
     pageNumber: 1,
     idempotencyKey: "incomplete-page-001",
     rows: [populationRow(100, { partitionValues: { language: "de" } })],
-    now: NOW,
   });
   const blocked = await reconcileAndFreezeDsaPopulation({
     accountAddress: OWNER,
     workspaceId,
     populationId: "incomplete",
     populationVersion: 1,
-    now: NOW,
   });
   assert.equal(blocked.status, "blocked");
   assert.ok(blocked.blockers.some(item => item.code === "missing_pages"));

@@ -93,6 +93,7 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
       "0167_reviewer_engagement_events.sql",
       "0168_dsa_population_ledger.sql",
       "0169_dsa_part8_source_facts.sql",
+      "0170_dsa_reference_sampling_epochs.sql",
     ].includes(file) &&
     (/\bDO \$\$/u.test(statement) ||
       /\bCREATE OR REPLACE FUNCTION\b/u.test(statement) ||
@@ -290,7 +291,9 @@ function createDatabaseClient(pool: Pool): DatabaseClient {
  * Tests for rollback atomicity, CHECK enforcement, or partial/conditional uniqueness belong in
  * `scripts/test-postgres-invariants.mjs`, which CI runs against migrated PostgreSQL.
  */
-export function createMemoryDatabaseResources(): DatabaseResources {
+export function createMemoryDatabaseResources(
+  options: { transactionTimestamp?: () => Date; commitTimestamp?: () => Date } = {},
+): DatabaseResources {
   const migrationDirectory = getMigrationDirectory();
   const memoryDb = newDb();
   memoryDb.public.registerFunction({
@@ -406,6 +409,19 @@ export function createMemoryDatabaseResources(): DatabaseResources {
         return false;
       }
     },
+  });
+  memoryDb.public.registerFunction({
+    name: "tokenless_dsa_evidence_transaction_timestamp",
+    args: [],
+    returns: DataType.timestamptz,
+    implementation: () => new Date((options.transactionTimestamp ?? (() => new Date()))().getTime()),
+  });
+  memoryDb.public.registerFunction({
+    name: "tokenless_dsa_evidence_commit_timestamp",
+    args: [],
+    returns: DataType.timestamptz,
+    implementation: () =>
+      new Date((options.commitTimestamp ?? options.transactionTimestamp ?? (() => new Date()))().getTime()),
   });
   memoryDb.public.registerFunction({
     name: "jsonb_build_object",

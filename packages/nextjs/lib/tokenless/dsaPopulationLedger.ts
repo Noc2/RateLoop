@@ -4,6 +4,7 @@ import type { PoolClient } from "pg";
 import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbPool } from "~~/lib/db";
+import { dsaEvidenceTransactionTimestamp } from "~~/lib/tokenless/dsaEvidenceClock";
 import {
   DSA_SOR_APPLICABILITY,
   DSA_TRANSPARENCY_DATABASE_SCHEMA_VERSION,
@@ -146,10 +147,6 @@ function normalizedActor(value: string) {
   } catch {
     throw new TokenlessServiceError("A valid signed-in account is required.", 401, "invalid_account");
   }
-}
-
-function validNow(value: Date | undefined) {
-  return date(value ?? new Date(), "now");
 }
 
 function parseStoredJson(value: string | null, field: string): unknown {
@@ -369,7 +366,6 @@ export async function createDsaPopulationVersion(input: {
   expectedSourceManifest: readonly DsaSourceManifestUnit[];
   expectedRowCount: number;
   expectedPageCount: number;
-  now?: Date;
 }) {
   if (!SIMPLE_IDENTIFIER.test(input.workspaceId) || !SIMPLE_IDENTIFIER.test(input.populationId)) {
     throw new TokenlessServiceError("Population scope is invalid.", 400, "invalid_dsa_population");
@@ -431,8 +427,8 @@ export async function createDsaPopulationVersion(input: {
     expectedPageCount,
   };
   const declaredContractHash = sha256Rfc8785(contract);
-  const now = validNow(input.now);
   return inTransaction(async client => {
+    const now = await dsaEvidenceTransactionTimestamp(client);
     const actor = await requireManager(client, input.accountAddress, input.workspaceId);
     const existing = await client.query(
       `SELECT declared_contract_hash,status,created_at FROM tokenless_dsa_population_versions
@@ -650,7 +646,6 @@ export async function ingestDsaPopulationPage(input: {
   pageNumber: number;
   idempotencyKey: string;
   rows: readonly DsaPopulationRowInput[];
-  now?: Date;
 }) {
   if (
     !SIMPLE_IDENTIFIER.test(input.workspaceId) ||
@@ -663,8 +658,8 @@ export async function ingestDsaPopulationPage(input: {
   }
   const populationVersion = positiveInteger(input.populationVersion, "populationVersion");
   const pageNumber = positiveInteger(input.pageNumber, "pageNumber");
-  const now = validNow(input.now);
   return inTransaction(async client => {
+    const now = await dsaEvidenceTransactionTimestamp(client);
     await requireManager(client, input.accountAddress, input.workspaceId);
     const populationResult = await client.query(
       `SELECT * FROM tokenless_dsa_population_versions
@@ -1019,11 +1014,10 @@ export async function reconcileAndFreezeDsaPopulation(input: {
   workspaceId: string;
   populationId: string;
   populationVersion: number;
-  now?: Date;
 }) {
   const populationVersion = positiveInteger(input.populationVersion, "populationVersion");
-  const now = validNow(input.now);
   return inTransaction(async client => {
+    const now = await dsaEvidenceTransactionTimestamp(client);
     const actor = await requireManager(client, input.accountAddress, input.workspaceId);
     const populationResult = await client.query(
       `SELECT * FROM tokenless_dsa_population_versions
@@ -1041,6 +1035,14 @@ export async function reconcileAndFreezeDsaPopulation(input: {
         blockers: [] as DsaReconciliationBlocker[],
         idempotent: true,
       };
+    }
+    const periodEnd = date(population.period_end, "stored period end");
+    if (now < periodEnd) {
+      throw new TokenlessServiceError(
+        "A DSA population cannot be frozen before its reporting period ends.",
+        409,
+        "dsa_population_period_incomplete",
+      );
     }
     const blockers: DsaReconciliationBlocker[] = [];
     const expectedRowCount = integer(population, "expected_row_count", 1);

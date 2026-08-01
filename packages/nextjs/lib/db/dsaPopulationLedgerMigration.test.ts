@@ -8,6 +8,8 @@ const journal = JSON.parse(readFileSync(new URL("../../drizzle/meta/_journal.jso
 };
 
 test("0168 persists a versioned population contract, raw decisions, engagements, pages, and reconciliation", () => {
+  assert.match(migration, /tokenless_dsa_evidence_transaction_timestamp/u);
+  assert.match(migration, /SELECT transaction_timestamp\(\)/u);
   for (const table of [
     "tokenless_dsa_population_versions",
     "tokenless_dsa_source_decision_versions",
@@ -23,6 +25,8 @@ test("0168 persists a versioned population contract, raw decisions, engagements,
   assert.match(migration, /"declared_contract_hash" text NOT NULL/u);
   assert.match(migration, /"declared_source_manifest_root" text NOT NULL/u);
   assert.match(migration, /"frozen_root" text/u);
+  assert.match(migration, /"frozen_at" >= "period_end"/u);
+  assert.match(migration, /tokenless_dsa_engagement_versions_population_binding_unique/u);
   assert.match(migration, /UNIQUE \("workspace_id", "population_id", "population_version", "provider_decision_id"\)/u);
   assert.match(migration, /UNIQUE \("workspace_id", "population_id", "population_version", "idempotency_key_hash"\)/u);
   assert.match(migration, /rateloop\.dsa-population-reconciliation\.v1/u);

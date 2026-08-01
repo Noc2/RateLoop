@@ -1,3 +1,10 @@
+CREATE OR REPLACE FUNCTION tokenless_dsa_evidence_transaction_timestamp()
+RETURNS timestamp with time zone
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT transaction_timestamp()
+$$;--> statement-breakpoint
 CREATE TABLE "tokenless_dsa_population_versions" (
   "workspace_id" text NOT NULL,
   "population_id" text NOT NULL,
@@ -41,7 +48,8 @@ CREATE TABLE "tokenless_dsa_population_versions" (
       OR
       ("status" = 'frozen' AND "frozen_reconciliation_version" > 0
        AND "frozen_root" ~ '^sha256:[0-9a-f]{64}$'
-       AND "frozen_row_count" = "expected_row_count" AND "frozen_at" IS NOT NULL)
+       AND "frozen_row_count" = "expected_row_count" AND "frozen_at" IS NOT NULL
+       AND "frozen_at" >= "period_end")
     )
   )
 );--> statement-breakpoint
@@ -141,6 +149,9 @@ CREATE TABLE "tokenless_dsa_engagement_versions" (
     UNIQUE ("workspace_id", "population_id", "population_version", "provider_decision_id"),
   CONSTRAINT "tokenless_dsa_engagement_versions_engagement_unique"
     UNIQUE ("workspace_id", "population_id", "population_version", "engagement_id"),
+  CONSTRAINT "tokenless_dsa_engagement_versions_population_binding_unique"
+    UNIQUE ("workspace_id", "population_id", "population_version", "provider_decision_id", "decision_version",
+            "engagement_id", "engagement_version"),
   CONSTRAINT "tokenless_dsa_engagement_versions_id_check" CHECK (
     "engagement_id" ~ '^[A-Za-z0-9][A-Za-z0-9_.:-]{0,159}$'
     AND "engagement_version" > 0
