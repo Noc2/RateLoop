@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { GET, POST } from "~~/app/api/agent/v1/mcp/route";
+import { POST } from "~~/app/api/agent/v1/mcp/route";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { tokenlessMcpTools } from "~~/lib/mcp/protocol";
@@ -50,7 +50,6 @@ import {
 } from "~~/lib/tokenless/privateGroups";
 import { createAgentPublishingPolicy, createWorkspace } from "~~/lib/tokenless/productCore";
 import { seedReadyHumanReviewBinding } from "~~/lib/tokenless/testing/humanReviewBindingFixture";
-import { persistCurrentIntegrityEpochFixture } from "~~/lib/tokenless/testing/integrityEpochFixture";
 import {
   configureWorkspaceSetupReviews,
   confirmWorkspaceSetupAgent,
@@ -112,20 +111,6 @@ function request(value: unknown, token?: string, sessionId?: string, protocolVer
       "x-real-ip": "203.0.113.90",
       ...(token ? { authorization: `Bearer ${token}` } : {}),
       ...(sessionId ? { "mcp-session-id": sessionId } : {}),
-    },
-  });
-}
-
-function streamRequest(token: string, sessionId: string, protocolVersion: string, lastEventId?: string) {
-  return new NextRequest("https://rateloop-tokenless.vercel.app/api/agent/v1/mcp", {
-    method: "GET",
-    headers: {
-      accept: "text/event-stream",
-      authorization: `Bearer ${token}`,
-      "mcp-protocol-version": protocolVersion,
-      "mcp-session-id": sessionId,
-      "x-real-ip": "203.0.113.90",
-      ...(lastEventId ? { "last-event-id": lastEventId } : {}),
     },
   });
 }
@@ -1775,126 +1760,57 @@ test("OAuth keeps one stable tool list and fails closed for unavailable paid-net
   assert.equal(upgradedContext.safeAccess.canSpend, false);
   assert.equal(upgradedContext.safeAccess.canPublish, false);
 
-  await persistCurrentIntegrityEpochFixture("integrity:mcp-route-test");
-  const configured = await putHumanReviewConfigurationForOwner({
-    accountAddress: principalId,
-    workspaceId,
-    agentId: claim.connection.agentId,
-    body: {
-      expectedBindingVersion: null,
-      selection: {
-        mode: "fixed",
-        enforcementMode: "advisory",
-        agreementThresholdBps: 7_500,
-        productionFloorBps: 0,
-        fixedRateBps: 2_500,
-        maximumUnreviewedGap: 8,
-        requiredRiskTiers: ["high"],
-        criticalRiskTiers: ["critical"],
-        minimumConfidenceBps: 7_000,
-        maximumLatencyMs: 120_000,
+  await assert.rejects(
+    putHumanReviewConfigurationForOwner({
+      accountAddress: principalId,
+      workspaceId,
+      agentId: claim.connection.agentId,
+      body: {
+        expectedBindingVersion: null,
+        selection: {
+          mode: "fixed",
+          enforcementMode: "advisory",
+          agreementThresholdBps: 7_500,
+          productionFloorBps: 0,
+          fixedRateBps: 2_500,
+          maximumUnreviewedGap: 8,
+          requiredRiskTiers: ["high"],
+          criticalRiskTiers: ["critical"],
+          minimumConfidenceBps: 7_000,
+          maximumLatencyMs: 120_000,
+        },
+        requestProfile: {
+          questionAuthority: "owner_fixed",
+          criterion: "Is this output correct and safe to use?",
+          positiveLabel: "Approve",
+          negativeLabel: "Reject",
+          rationaleMode: "optional",
+          audience: "public_network",
+          contentBoundary: "public_or_test",
+          privateSensitivity: null,
+          privateGroupId: null,
+          requiredExpertiseKeys: ["code-review:security"],
+          responseWindowSeconds: 3_600,
+          panelSize: 5,
+          compensationMode: "usdc",
+          bountyPerSeatAtomic: "1000000",
+        },
+        authority: "ask_automatically",
+        publishingGrant: {
+          integrationId: claim.connection.integrationId,
+          publishingPolicyId: publishing.policyId,
+          publishingPolicyVersion: publishing.version,
+          allowedWorkflowKeys: ["general-assistance"],
+        },
       },
-      requestProfile: {
-        questionAuthority: "owner_fixed",
-        criterion: "Is this output correct and safe to use?",
-        positiveLabel: "Approve",
-        negativeLabel: "Reject",
-        rationaleMode: "optional",
-        audience: "public_network",
-        contentBoundary: "public_or_test",
-        privateSensitivity: null,
-        privateGroupId: null,
-        requiredExpertiseKeys: ["code-review:security"],
-        responseWindowSeconds: 3_600,
-        panelSize: 5,
-        compensationMode: "usdc",
-        bountyPerSeatAtomic: "1000000",
-      },
-      authority: "ask_automatically",
-      publishingGrant: {
-        integrationId: claim.connection.integrationId,
-        publishingPolicyId: publishing.policyId,
-        publishingPolicyVersion: publishing.version,
-        allowedWorkflowKeys: ["general-assistance"],
-      },
-    },
-  });
-  assert.equal(configured.configuration.authority, "ask_automatically");
-  const configuredContextResponse = await POST(
-    resumedRequest({
-      id: 1511,
-      jsonrpc: "2.0",
-      method: "tools/call",
-      params: { name: "rateloop_get_agent_context", arguments: {} },
     }),
+    (error: unknown) =>
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "human_review_experiment_unavailable" &&
+      "status" in error &&
+      error.status === 409,
   );
-  const configuredContext = (await configuredContextResponse.json()).result.structuredContent;
-  assert.equal(configuredContext.humanReview.binding.bindingId, configured.configuration.bindingId);
-  assert.deepEqual(configuredContext.humanReview.selection.frequency, {
-    mode: "fixed",
-    fixedRateBps: 2_500,
-    agreementThresholdBps: 7_500,
-    productionFloorBps: 0,
-    maximumUnreviewedGap: 8,
-  });
-  assert.equal(configuredContext.humanReview.requestProfile.audience.type, "public_network");
-  assert.equal(configuredContext.humanReview.requestProfile.audience.contentBoundary, "public_or_test");
-  assert.equal(configuredContext.humanReview.requestProfile.responseWindowSeconds, 3_600);
-  assert.equal(configuredContext.humanReview.requestProfile.panelSize, 5);
-  assert.deepEqual(configuredContext.humanReview.requestProfile.compensation, {
-    mode: "usdc",
-    bountyPerSeatAtomic: "1000000",
-  });
-  assert.equal(configuredContext.humanReview.authority, "ask_automatically");
-  assert.equal(configuredContext.capabilities.implementedLanes.privateInvitedUnpaid.available, true);
-  assert.equal(configuredContext.capabilities.implementedLanes.privateInvitedPaid.available, false);
-  assert.equal(configuredContext.capabilities.implementedLanes.publicPaidNetwork.available, false);
-  assert.equal(configuredContext.capabilities.implementedLanes.hybridPublicSafe.available, false);
-  assert.equal(configuredContext.capabilities.effectiveLane.lane, "public_paid_network");
-  assert.equal(configuredContext.publishingGrant.active, true);
-  assert.ok(configuredContext.publishingGrant.grantedScopes.includes("panel:publish"));
-  assert.ok(configuredContext.publishingGrant.grantedScopes.includes("payment:submit"));
-  assert.equal(configuredContext.safeAccess.canSpend, false);
-  assert.equal(configuredContext.safeAccess.canPublish, false);
-  const approvalConfigured = await putHumanReviewConfigurationForOwner({
-    accountAddress: principalId,
-    workspaceId,
-    agentId: claim.connection.agentId,
-    body: {
-      expectedBindingVersion: configured.configuration.version,
-      selection: {
-        mode: "fixed",
-        enforcementMode: "advisory",
-        agreementThresholdBps: 7_500,
-        productionFloorBps: 0,
-        fixedRateBps: 10_000,
-        maximumUnreviewedGap: 1,
-        requiredRiskTiers: ["high"],
-        criticalRiskTiers: ["critical"],
-        minimumConfidenceBps: 7_000,
-        maximumLatencyMs: 120_000,
-      },
-      requestProfile: {
-        questionAuthority: "owner_fixed",
-        criterion: "Is this output correct and safe to use?",
-        positiveLabel: "Approve",
-        negativeLabel: "Reject",
-        rationaleMode: "optional",
-        audience: "public_network",
-        contentBoundary: "public_or_test",
-        privateSensitivity: null,
-        privateGroupId: null,
-        requiredExpertiseKeys: ["code-review:security"],
-        responseWindowSeconds: 3_600,
-        panelSize: 5,
-        compensationMode: "usdc",
-        bountyPerSeatAtomic: "1000000",
-      },
-      authority: "prepare_for_approval",
-      publishingGrant: null,
-    },
-  });
-  assert.equal(approvalConfigured.configuration.authority, "prepare_for_approval");
   const upgradedInitialization = await POST(
     request(
       {
@@ -1975,108 +1891,7 @@ test("OAuth keeps one stable tool list and fails closed for unavailable paid-net
     ),
   );
   const stableContext = (await stableContextResponse.json()).result.structuredContent;
-  assert.equal(stableContext.humanReview.authority, "prepare_for_approval");
-  const sourcePayload = JSON.stringify({ source: "public fixture", revision: 1 });
-  const suggestionPayload = JSON.stringify({ answer: "candidate" });
-  const evaluated = await POST(
-    request(
-      {
-        id: 157,
-        jsonrpc: "2.0",
-        method: "tools/call",
-        params: {
-          name: "rateloop_evaluate_review_requirement",
-          arguments: {
-            externalOpportunityId: "mcp-elicitation-opportunity-0001",
-            workflowKey: "general-assistance",
-            riskTier: "high",
-            audiencePolicyHash: stableContext.reviewPolicy.audiencePolicyHash,
-            suggestionCommitment: `sha256:${createHash("sha256").update(suggestionPayload).digest("hex")}`,
-            sourceEvidence: {
-              reference: "case/mcp-elicitation-opportunity-0001/revision-1",
-              hash: `sha256:${createHash("sha256").update(sourcePayload).digest("hex")}`,
-            },
-            declaredConfidenceBps: 8_000,
-            criticalRisk: false,
-            metadataComplete: true,
-            execution: {
-              externalExecutionId: "execution-mcp-elicitation-0001",
-              status: "completed",
-              primarySpanId: "generation-primary",
-              generationSpans: [
-                {
-                  spanId: "generation-primary",
-                  role: "primary",
-                  provider: "OpenAI",
-                  requestedModel: "gpt-test",
-                  resolvedModel: "gpt-test-2026-07-01",
-                  reasoningEffort: "low",
-                  serviceTier: "default",
-                  inputTokens: 120,
-                  outputTokens: 30,
-                  reasoningOutputTokens: 8,
-                },
-              ],
-            },
-          },
-        },
-      },
-      tokens.access_token,
-      stableSessionId!,
-      "2025-06-18",
-    ),
-  );
-  const evaluation = (await evaluated.json()).result.structuredContent;
-  assert.equal(evaluation.decision, "required");
-  const prepared = await POST(
-    request(
-      {
-        id: 158,
-        jsonrpc: "2.0",
-        method: "tools/call",
-        params: {
-          name: "rateloop_request_review",
-          arguments: {
-            opportunityId: evaluation.opportunityId,
-            sourcePayload,
-            suggestionPayload,
-            material: {
-              kind: "public",
-              publication: {
-                visibility: "public",
-                dataClassification: "synthetic",
-                confirmedNoSensitiveData: true,
-              },
-            },
-          },
-        },
-      },
-      tokens.access_token,
-      stableSessionId!,
-      "2025-06-18",
-    ),
-  );
-  const preparedPayload = await prepared.json();
-  assert.ok(preparedPayload.result, JSON.stringify(preparedPayload));
-  const preparedResult = preparedPayload.result.structuredContent;
-  assert.equal(preparedResult.action, "blocked", JSON.stringify(preparedResult));
-  assert.equal(preparedResult.code, "lane_not_implemented");
-  assert.deepEqual(preparedResult.sideEffects, {
-    prepared: false,
-    published: false,
-    assigned: false,
-    fundsReserved: false,
-    spent: false,
-  });
-  const queued = await dbClient.execute({
-    sql: `SELECT request_id,state FROM tokenless_mcp_elicitation_requests WHERE session_hash=?`,
-    args: [`sha256:${createHash("sha256").update(stableSessionId!).digest("hex")}`],
-  });
-  assert.equal(queued.rowCount, 0);
-  const emptyStream = await GET(streamRequest(tokens.access_token, stableSessionId!, "2025-06-18"));
-  assert.equal(emptyStream.status, 200);
-  assert.match(emptyStream.headers.get("content-type") ?? "", /^text\/event-stream/u);
-  assert.match(await emptyStream.text(), /^retry: 15000\nid: poll-[A-Za-z0-9_-]{16}\ndata:\n\n$/u);
+  assert.equal(stableContext.humanReview.status, "configuration_required");
   await assert.rejects(
     () =>
       rotateAgentIntegration({

@@ -10,6 +10,7 @@ import {
 } from "~~/lib/tokenless/adaptiveReviewService";
 import { createWorkspaceAgent } from "~~/lib/tokenless/agentRegistry";
 import { saveHumanReviewConfiguration } from "~~/lib/tokenless/humanReviewConfiguration";
+import { createPrivateGroup } from "~~/lib/tokenless/privateGroups";
 import { createWorkspace, createWorkspaceApiKey } from "~~/lib/tokenless/productCore";
 import { type ReviewPolicyMode, createManagedReviewPolicy } from "~~/lib/tokenless/reviewPolicyManagement";
 import { createReviewRequestProfile } from "~~/lib/tokenless/reviewRequestProfiles";
@@ -49,6 +50,13 @@ async function configuredAgent(input: { mode: ReviewPolicyMode; index: number })
       environment: "production",
     },
   });
+  const group = await createPrivateGroup({
+    accountAddress: OWNER,
+    workspaceId,
+    name: `${input.mode} frequency reviewers`,
+    purpose: "Evaluate review-frequency modes with an invited private panel.",
+    policy: { defaultCompensation: "unpaid", dataClassifications: ["internal"] },
+  });
   const policy = await createManagedReviewPolicy({
     accountAddress: OWNER,
     workspaceId,
@@ -65,7 +73,7 @@ async function configuredAgent(input: { mode: ReviewPolicyMode; index: number })
       criticalRiskTiers: ["critical"],
       minimumConfidenceBps: input.mode === "rules" ? 7_000 : null,
       maximumLatencyMs: null,
-      audience: "public_network",
+      audience: "private_invited",
     },
   });
   const profile = await createReviewRequestProfile({
@@ -79,16 +87,16 @@ async function configuredAgent(input: { mode: ReviewPolicyMode; index: number })
       positiveLabel: "Approve",
       negativeLabel: "Reject",
       rationaleMode: "optional",
-      audience: "public_network",
-      contentBoundary: "public_or_test",
-      privateSensitivity: null,
-      privateGroupId: null,
-      privateGroupPolicyVersion: null,
-      privateGroupPolicyHash: null,
+      audience: "private_invited",
+      contentBoundary: "private_workspace",
+      privateSensitivity: "internal",
+      privateGroupId: group.groupId,
+      privateGroupPolicyVersion: 1,
+      privateGroupPolicyHash: group.policyHash,
       responseWindowSeconds: 3_600,
       panelSize: 3,
-      compensationMode: "usdc",
-      bountyPerSeatAtomic: "1000000",
+      compensationMode: "unpaid",
+      bountyPerSeatAtomic: null,
       feedbackBonusEnabled: false,
       feedbackBonusPoolAtomic: null,
       feedbackBonusAwarderKind: "requester",

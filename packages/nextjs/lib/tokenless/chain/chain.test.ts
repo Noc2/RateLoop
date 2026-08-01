@@ -61,6 +61,7 @@ const PAID_LANE_ENV_NAMES = [
   "TOKENLESS_PAID_LANES_DPIA_APPROVAL_REFERENCE",
   "TOKENLESS_PAID_LANES_TRANSFER_INVENTORY_APPROVAL_REFERENCE",
   "TOKENLESS_PAID_LANES_FUNDING_VALIDATION_REFERENCE",
+  "TOKENLESS_INVITED_PAID_ADULTHOOD_APPROVAL_REFERENCE",
   "TOKENLESS_PAID_LANES_COMPLIANCE_APPROVED_AT",
   "NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE",
   "WORLD_ID_APP_ID",
@@ -69,17 +70,18 @@ const PAID_LANE_ENV_NAMES = [
 ] as const;
 const originalPaidLaneEnv = new Map(PAID_LANE_ENV_NAMES.map(name => [name, process.env[name]]));
 
-function activateNetworkLane() {
+function activatePrivatePaidLane() {
   Object.assign(process.env, {
-    TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: "false",
-    TOKENLESS_NETWORK_PANELS_ENABLED: "true",
+    TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: "true",
+    TOKENLESS_NETWORK_PANELS_ENABLED: "false",
     TOKENLESS_HYBRID_REVIEWS_ENABLED: "false",
-    NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: "false",
-    NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED: "true",
+    NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: "true",
+    NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED: "false",
     NEXT_PUBLIC_TOKENLESS_HYBRID_REVIEWS_ENABLED: "false",
     TOKENLESS_PAID_LANES_DPIA_APPROVAL_REFERENCE: `sha256:${"a".repeat(64)}`,
     TOKENLESS_PAID_LANES_TRANSFER_INVENTORY_APPROVAL_REFERENCE: `sha256:${"b".repeat(64)}`,
     TOKENLESS_PAID_LANES_FUNDING_VALIDATION_REFERENCE: `sha256:${"c".repeat(64)}`,
+    TOKENLESS_INVITED_PAID_ADULTHOOD_APPROVAL_REFERENCE: `sha256:${"d".repeat(64)}`,
     TOKENLESS_PAID_LANES_COMPLIANCE_APPROVED_AT: "2026-07-01T00:00:00.000Z",
     WORLD_ID_APP_ID: "app_ratelooptest",
     WORLD_ID_RP_ID: "rp_ratelooptest",
@@ -181,7 +183,7 @@ function mockRuntime(
 }
 
 beforeEach(() => {
-  activateNetworkLane();
+  activatePrivatePaidLane();
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
 });
 
@@ -361,51 +363,6 @@ test("deployment validation rejects a relabeled panel with different mechanism c
   await assert.rejects(() => assertLiveTokenlessDeployment(config(), runtime), /mixed deployment bundle/);
 });
 
-function admissionPolicy() {
-  return {
-    schemaVersion: HUMAN_ASSURANCE_SCHEMA_VERSION,
-    policyId: "policy_chain_paid_network",
-    version: 1,
-    reviewerSource: "rateloop_network" as const,
-    integrity: {
-      schemaVersion: "rateloop.integrity-assignment.v1" as const,
-      epochId: "integrity:2026-07-13:001",
-      epochManifestHash: `sha256:${"a".repeat(64)}` as const,
-      maxClusterShareBps: 2_000,
-      allowedRiskBands: ["low", "medium"] as const,
-      recentCoassignmentWindowSeconds: 2_592_000,
-      maxRecentCoassignments: 1,
-      maxPerCustomer: 3,
-      onePerProviderSubject: true as const,
-    },
-    compensation: "paid" as const,
-    cohorts: [],
-    selection: "randomized" as const,
-    fallbacks: { allowed: false, sources: [] },
-    requiredQualifications: [],
-    assurance: {
-      requirements: [
-        ...["account_control", "live_human", "minimum_age"].map(capability => ({
-          capability: capability as "account_control" | "live_human" | "minimum_age",
-          reviewerSources: ["rateloop_network" as const],
-          allowedProviders: ["identity-production"],
-        })),
-        {
-          capability: "unique_human" as const,
-          reviewerSources: ["rateloop_network" as const],
-          allowedProviders: ["world:poh"],
-        },
-      ],
-    },
-    buyerPrivacy: {
-      visibleFields: ["reviewer_source" as const],
-      minimumAggregationSize: 10,
-      suppressSmallCells: true,
-    },
-    legalEligibilityRequired: true,
-  };
-}
-
 function invitedAdmissionPolicy() {
   return {
     schemaVersion: HUMAN_ASSURANCE_SCHEMA_VERSION,
@@ -506,14 +463,13 @@ async function walletAsk(
   options: {
     attemptReserveAtomic?: string;
     feeBps?: number;
-    invited?: boolean;
     stripAdmissionPolicy?: boolean;
     responseWindowSeconds?: unknown;
   } = {},
 ) {
   const { workspaceId } = await createWorkspace({ name: "Wallet team", ownerAddress: FUNDER });
   await activatePaidWorkspace(workspaceId);
-  const policy = options.invited ? invitedAdmissionPolicy() : admissionPolicy();
+  const policy = invitedAdmissionPolicy();
   const quote = await createTokenlessQuote({
     audience: {
       admissionPolicyHash: freezeAdmissionPolicy(policy).admissionPolicyHash,
@@ -770,7 +726,7 @@ test("wallet confirmation accepts only the exact quoted RoundCreated evidence an
 });
 
 test("an invited paid round is registered with its exact owning workspace", async () => {
-  const { operationKey, workspaceId } = await walletAsk({ invited: true });
+  const { operationKey, workspaceId } = await walletAsk();
   const runtime = mockRuntime();
   const expected = await prepareChainPayment(operationKey, { config: config(), runtime });
   const receiptRuntime = mockRuntime(
@@ -864,12 +820,13 @@ test("round reconciliation reads back and rejects altered non-event terms", asyn
 test("x402 used authorizations reconcile exact receipts or stop as possibly paid without retry", async () => {
   const { workspaceId } = await createWorkspace({ name: "x402 team", ownerAddress: FUNDER });
   await activatePaidWorkspace(workspaceId);
+  const policy = invitedAdmissionPolicy();
   const quote = await createTokenlessQuote({
     audience: {
-      admissionPolicyHash: freezeAdmissionPolicy(admissionPolicy()).admissionPolicyHash,
-      source: "rateloop_network",
+      admissionPolicyHash: freezeAdmissionPolicy(policy).admissionPolicyHash,
+      source: "customer_invited",
     },
-    audiencePolicy: admissionPolicy(),
+    audiencePolicy: policy,
     confirmedNoSensitiveData: true,
     dataClassification: "synthetic",
     budget: { attemptReserveAtomic: "20000000", bountyAtomic: "25000000", feeBps: 750 },

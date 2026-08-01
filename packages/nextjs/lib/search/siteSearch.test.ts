@@ -26,7 +26,7 @@ test("site search finds documentation by title and topic", () => {
 });
 
 test("site search includes canonical tasks and core pages", () => {
-  assert.equal(searchSite("questions")[0]?.href, "/human/review");
+  assert.equal(searchSite("assigned work")[0]?.href, "/human/review");
   assert.equal(searchSite("connect agent")[0]?.href, "/agents/connections");
   assert.equal(searchSite("invite reviewer")[0]?.href, "/agents/review-setup");
   assert.equal(searchSite("review settings")[0]?.href, "/agents/review-setup");
