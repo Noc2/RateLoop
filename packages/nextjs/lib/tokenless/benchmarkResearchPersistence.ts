@@ -4,6 +4,7 @@ import type { Pool, PoolClient } from "pg";
 import "server-only";
 import { isRateLoopPrincipalId } from "~~/lib/auth/accountSubject";
 import { dbPool } from "~~/lib/db";
+import { acquireTransactionAdvisoryLock } from "~~/lib/db/advisoryLocks";
 import { appendAuditEvent, appendSecurityAuditEvent } from "~~/lib/privacy/audit";
 import { canonicalAttestationJson, createAssuranceAttestationStatement } from "~~/lib/tokenless/assuranceAttestations";
 import {
@@ -739,7 +740,7 @@ export function createBenchmarkResearchPersistence(input?: {
             durationMs: grantInput.durationMs,
           },
         });
-        await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [issuance.idempotencyKeyDigest]);
+        await acquireTransactionAdvisoryLock(client, issuance.idempotencyKeyDigest);
         const existingResult = await client.query(
           `SELECT i.request_binding_hash,g.grant_json,g.event_digest,g.token_lookup_key_id
              FROM tokenless_benchmark_research_grant_issuances i

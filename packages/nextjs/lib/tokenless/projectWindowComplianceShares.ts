@@ -4,6 +4,7 @@ import type { Pool, PoolClient } from "pg";
 import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbPool } from "~~/lib/db";
+import { acquireTransactionAdvisoryLock } from "~~/lib/db/advisoryLocks";
 import { deriveCapabilityIssuanceIdempotency } from "~~/lib/tokenless/capabilityIssuanceIdempotency";
 import { verifyEvidenceExport } from "~~/lib/tokenless/evidencePackets";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -816,7 +817,7 @@ export async function issueProjectWindowComplianceShare(
         expiresAt: input.expiresAt.toISOString(),
       },
     });
-    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [issuance.idempotencyKeyDigest]);
+    await acquireTransactionAdvisoryLock(client, issuance.idempotencyKeyDigest);
     const existingResult = await client.query(
       `SELECT i.request_binding_hash,s.*
          FROM tokenless_project_window_compliance_share_issuances i
@@ -1356,7 +1357,7 @@ export async function accessProjectWindowComplianceShare(input: {
   };
   const requestBindingHash = sha256Rfc8785(requestBinding);
   const outcome = await withSerializable(async client => {
-    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [identity.accessId]);
+    await acquireTransactionAdvisoryLock(client, identity.accessId);
     const replayResult = await client.query(
       `SELECT s.*,e.event_json,e.event_hash AS audit_event_hash,e.access_id AS audit_access_id,
               e.idempotency_key AS audit_idempotency_key,e.request_binding_hash AS audit_request_binding_hash,

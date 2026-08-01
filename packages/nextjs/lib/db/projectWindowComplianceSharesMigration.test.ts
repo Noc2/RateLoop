@@ -62,7 +62,8 @@ test("0175 scopes replay by secret-derived identity and SQL forbids duplicate te
   assert.match(migration, /UNIQUE \("share_lookup_hash", "token_lookup_hash", "idempotency_key"\)/u);
   assert.doesNotMatch(migration, /"idempotency_key" text NOT NULL UNIQUE/u);
   assert.match(migration, /UNIQUE \("access_id"\)/u);
-  assert.match(service, /pg_advisory_xact_lock\(hashtextextended\(\$1,0\)\)/u);
+  assert.match(service, /from "~~\/lib\/db\/advisoryLocks"/u);
+  assert.match(service, /acquireTransactionAdvisoryLock\(client, identity\.accessId\)/u);
   assert.match(service, /sha256Rfc8785\(\{ shareLookupHash, tokenLookupHash, idempotencyKey:/u);
 });
 

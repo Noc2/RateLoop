@@ -172,7 +172,8 @@ test("grant issuance replay returns no second bearer token and request mismatch 
   const grantJson = canonicalizeRfc8785({ grantId: "brg_replayed_metadata" });
   const grantDigest = `sha256:${createHash("sha256").update(grantJson).digest("hex")}`;
   const database = fakePool(async text => {
-    if (text.startsWith("BEGIN") || text === "COMMIT" || text.includes("pg_advisory_xact_lock")) return { rows: [] };
+    if (text.includes("pg_try_advisory_xact_lock")) return { rows: [{ acquired: true }] };
+    if (text.startsWith("BEGIN") || text === "COMMIT") return { rows: [] };
     if (text.includes("FROM tokenless_workspaces w")) {
       return {
         rows: [{ workspace_status: "active", project_status: "active", role: "owner", principal_status: "active" }],
@@ -215,7 +216,8 @@ test("grant issuance replay returns no second bearer token and request mismatch 
   );
 
   const conflictDatabase = fakePool(async text => {
-    if (text.startsWith("BEGIN") || text === "ROLLBACK" || text.includes("pg_advisory_xact_lock")) {
+    if (text.includes("pg_try_advisory_xact_lock")) return { rows: [{ acquired: true }] };
+    if (text.startsWith("BEGIN") || text === "ROLLBACK") {
       return { rows: [] };
     }
     if (text.includes("FROM tokenless_workspaces w")) {

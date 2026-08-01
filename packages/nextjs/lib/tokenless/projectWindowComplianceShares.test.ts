@@ -219,14 +219,11 @@ test("share issuance replay returns no second bearer secret and mismatched reque
     const client = {
       async query(text: string) {
         queries.push(text);
-        if (
-          text.startsWith("BEGIN") ||
-          text === "COMMIT" ||
-          text === "ROLLBACK" ||
-          text.includes("set_config") ||
-          text.includes("pg_advisory_xact_lock")
-        ) {
+        if (text.startsWith("BEGIN") || text === "COMMIT" || text === "ROLLBACK" || text.includes("set_config")) {
           return { rows: [], rowCount: 0 };
+        }
+        if (text.includes("pg_try_advisory_xact_lock")) {
+          return { rows: [{ acquired: true }], rowCount: 1 };
         }
         if (text.includes("FROM tokenless_workspace_members m")) return { rows: [{}], rowCount: 1 };
         if (text.includes("tokenless_project_window_compliance_share_issuances i")) {

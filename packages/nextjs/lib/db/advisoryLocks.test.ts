@@ -15,8 +15,13 @@ import {
 import { DatabaseRollbackError } from "~~/lib/db/transactionCleanup";
 import { projectAssuranceLifecycleEvents } from "~~/lib/tokenless/assuranceEventStreaming";
 import { ingestAutomatedEvalReceipt } from "~~/lib/tokenless/automatedEvalReceipts";
+import { createBenchmarkResearchPersistence } from "~~/lib/tokenless/benchmarkResearchPersistence";
 import { ensureFeedbackBonusPool } from "~~/lib/tokenless/feedbackBonusPoolProjection";
 import { produceScheduledIntegrityEpoch } from "~~/lib/tokenless/integrityEpochProducer";
+import {
+  accessProjectWindowComplianceShare,
+  issueProjectWindowComplianceShare,
+} from "~~/lib/tokenless/projectWindowComplianceShares";
 import { reserveSurpriseBountyCapacity } from "~~/lib/tokenless/surpriseBountyService";
 
 type QueryResult = { rows: Record<string, unknown>[] };
@@ -41,7 +46,7 @@ function lockClient(results: QueryResult[]) {
 test("successful acquisition uses only non-blocking PostgreSQL primitives", async () => {
   const transaction = lockClient([{ rows: [{ acquired: true }] }]);
   await acquireTransactionAdvisoryLock(transaction.client, "transaction-key");
-  assert.equal(transaction.queries[0]?.sql, "SELECT pg_try_advisory_xact_lock(hashtext($1)) AS acquired");
+  assert.equal(transaction.queries[0]?.sql, "SELECT pg_try_advisory_xact_lock(hashtextextended($1,0)) AS acquired");
 });
 
 test("transaction acquisition fails immediately when coordination is busy", async () => {
@@ -54,7 +59,7 @@ test("transaction acquisition fails immediately when coordination is busy", asyn
       error.retryable &&
       error.status === 503,
   );
-  assert.equal(transaction.queries[0]?.sql, "SELECT pg_try_advisory_xact_lock(hashtext($1)) AS acquired");
+  assert.equal(transaction.queries[0]?.sql, "SELECT pg_try_advisory_xact_lock(hashtextextended($1,0)) AS acquired");
 });
 
 test("transaction coordination sorts and deduplicates locks on the operation client", async () => {
@@ -76,8 +81,8 @@ test("transaction coordination sorts and deduplicates locks on the operation cli
     connection.queries.map(query => [query.sql, query.values]),
     [
       ["BEGIN", []],
-      ["SELECT pg_try_advisory_xact_lock(hashtext($1)) AS acquired", ["a-key"]],
-      ["SELECT pg_try_advisory_xact_lock(hashtext($1)) AS acquired", ["z-key"]],
+      ["SELECT pg_try_advisory_xact_lock(hashtextextended($1,0)) AS acquired", ["a-key"]],
+      ["SELECT pg_try_advisory_xact_lock(hashtextextended($1,0)) AS acquired", ["z-key"]],
       ["SELECT 'same-client' AS value", []],
       ["COMMIT", []],
     ],
@@ -98,7 +103,7 @@ test("transaction coordination rolls back and returns the operation client after
   );
   assert.deepEqual(
     connection.queries.map(query => query.sql),
-    ["BEGIN", "SELECT pg_try_advisory_xact_lock(hashtext($1)) AS acquired", "ROLLBACK"],
+    ["BEGIN", "SELECT pg_try_advisory_xact_lock(hashtextextended($1,0)) AS acquired", "ROLLBACK"],
   );
   assert.deepEqual(connection.releases, [undefined]);
 });
@@ -129,8 +134,11 @@ test("all advisory-lock consumers share the fail-fast coordination boundary", ()
     processStripeWebhook,
     projectAssuranceLifecycleEvents,
     ingestAutomatedEvalReceipt,
+    createBenchmarkResearchPersistence,
     ensureFeedbackBonusPool,
     produceScheduledIntegrityEpoch,
+    issueProjectWindowComplianceShare,
+    accessProjectWindowComplianceShare,
     reserveSurpriseBountyCapacity,
   ];
   assert.ok(consumers.every(consumer => typeof consumer === "function"));
@@ -143,8 +151,10 @@ test("all advisory-lock consumers share the fail-fast coordination boundary", ()
     "lib/billing/webhooks.ts",
     "lib/tokenless/assuranceEventStreaming.ts",
     "lib/tokenless/automatedEvalReceipts.ts",
+    "lib/tokenless/benchmarkResearchPersistence.ts",
     "lib/tokenless/feedbackBonusPoolProjection.ts",
     "lib/tokenless/integrityEpochProducer.ts",
+    "lib/tokenless/projectWindowComplianceShares.ts",
     "lib/tokenless/surpriseBountyService.ts",
   ];
   for (const relativePath of expectedConsumerFiles) {
