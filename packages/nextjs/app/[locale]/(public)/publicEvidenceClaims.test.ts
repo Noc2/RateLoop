@@ -275,6 +275,7 @@ test("forbidden compliance and provenance claims cannot be enabled by capability
     ["Our evidence guarantees compliance.", "automatic_compliance"],
     ["RateLoop is ISO/IEC 42001-certified.", "unheld_certification"],
     ["RateLoop provides EU AI Act Article 14 human oversight.", "customer_human_oversight"],
+    ["Independent blinded panels review the output.", "independent_blinded_panel"],
     ["RateLoop verifies the actual model that produced the output.", "verified_model_provenance"],
   ] as const) {
     const violations = findPublicEvidenceClaimViolations(source, allEnabled);
@@ -283,6 +284,10 @@ test("forbidden compliance and provenance claims cannot be enabled by capability
   }
 
   assert.deepEqual(findPublicEvidenceClaimViolations("RateLoop does not make anyone compliant."), []);
+  assert.equal(
+    findPublicEvidenceClaimViolations("Unabhängige verblindete Prüfpanels beurteilen die Ausgabe.")[0]?.claimId,
+    "independent_blinded_panel",
+  );
   assert.deepEqual(findPublicEvidenceClaimViolations("RateLoop is not ISO/IEC 42001-certified."), []);
   assert.deepEqual(
     findPublicEvidenceClaimViolations(

@@ -54,7 +54,7 @@ test("evidence docs explain exact artifacts, checks, mappings, and boundaries", 
   );
   assert.match(html, /no available host currently provides verified delivery enforcement/i);
   assert.match(html, /per-output override records with required reasons/i);
-  assert.match(html, /Independent blinded review panels/i);
+  assert.match(html, /Blinded reviewer judgments/i);
   assert.match(html, /surfaced disagreement before the decision/i);
   assert.match(html, /attestation records — competence basis, training completed, authority granted/i);
   assert.match(html, /six-month floor for RateLoop review records/i);

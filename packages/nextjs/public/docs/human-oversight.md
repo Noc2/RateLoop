@@ -60,9 +60,9 @@ on what they show for your use case.
 
 Legal context: relevant where a provider addresses Article 14(4)(a) monitoring.
 
-### Collect independent judgments
+### Collect blinded judgments
 
-Independent blinded panels judge the output before your decision: sealed answers keep early judgments private, so
+Blinded reviewers record separate judgments before your decision: sealed answers keep early judgments private, so
 reviewers cannot anchor on each other. The decision prompt ships with no preselected choice, disagreement and
 calibration signals appear above the decision buttons, and the deciding person's own override-rate trend stays
 visible to them.

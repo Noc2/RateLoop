@@ -43,7 +43,7 @@ const OVERSIGHT_MATRIX = [
   {
     requirement: "Art 14(4)(b) · Automation bias",
     provides:
-      "Independent blinded review panels, decision prompts with no preselected choice, and override-rate visibility for the deciding person.",
+      "Blinded reviewer judgments, decision prompts with no preselected choice, and override-rate visibility for the deciding person.",
     yours: "Staying aware of the pull to over-rely on the system and keeping each decision a considered one.",
   },
   {

@@ -40,7 +40,7 @@ test("human-oversight docs lead with capabilities and keep legal context seconda
 
   for (const [title, requirement, capability, responsibility] of [
     ["See operation and exceptions", "Article 14\\(4\\)\\(a\\)", "oversight dashboard", "watching those surfaces"],
-    ["Collect independent judgments", "Article 14\\(4\\)\\(b\\)", "Independent blinded panels", "pull to over-rely"],
+    ["Collect blinded judgments", "Article 14\\(4\\)\\(b\\)", "Blinded reviewers", "pull to over-rely"],
     ["Put the output in context", "Article 14\\(4\\)\\(c\\)", "owner case view", "correctly interpreting the output"],
     [
       "Record the human decision",
@@ -123,7 +123,7 @@ test("machine human-oversight doc mirrors the page and is cross-linked with evid
   assert.match(oversight, /No host currently holds that tier/i);
   for (const heading of [
     "### See operation and exceptions",
-    "### Collect independent judgments",
+    "### Collect blinded judgments",
     "### Put the output in context",
     "### Record the human decision",
     "### Control intervention and stop",

@@ -24,8 +24,8 @@ const OVERSIGHT_SECTIONS = [
   },
   {
     id: "automation-bias",
-    title: "Collect independent judgments",
-    body: "Independent blinded panels judge the output before your decision: sealed answers keep early judgments private, so reviewers cannot anchor on each other. The decision prompt ships with no preselected choice, disagreement and calibration signals appear above the decision buttons, and the deciding person's own override-rate trend stays visible to them.",
+    title: "Collect blinded judgments",
+    body: "Blinded reviewers record separate judgments before your decision: sealed answers keep early judgments private, so reviewers cannot anchor on each other. The decision prompt ships with no preselected choice, disagreement and calibration signals appear above the decision buttons, and the deciding person's own override-rate trend stays visible to them.",
     responsibility:
       "You remain responsible for staying aware of the pull to over-rely on the system and keeping each decision a considered one.",
     legalContext: "Relevant where a provider addresses Article 14(4)(b) automation bias.",

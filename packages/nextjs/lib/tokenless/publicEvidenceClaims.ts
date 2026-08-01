@@ -243,6 +243,16 @@ export const PUBLIC_EVIDENCE_CLAIMS_MATRIX = [
     policy: "forbidden",
   },
   {
+    id: "independent_blinded_panel",
+    phrase: "Independent blinded panels",
+    patterns: [
+      /\bindependent(?:ly)? blinded (?:review )?panels?\b/iu,
+      /\bunabhängige? verblindete? (?:prüf)?panels?\b/iu,
+    ],
+    requiredCapabilities: [],
+    policy: "forbidden",
+  },
+  {
     id: "verified_model_provenance",
     phrase: "RateLoop verifies which model produced an output",
     patterns: [
