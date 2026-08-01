@@ -91,9 +91,11 @@ Next.js:
   records; no AWS/KMS/IAM/OIDC configuration
 - eligibility provider ID/public key/start URL/handoff secret, versioned vault keys, and DAC7 policy
 - `TOKENLESS_PIPELINE_TOKEN`, `CRON_SECRET`, `TOKENLESS_COMPLIANCE_OPERATOR_SECRET`,
+  `TOKENLESS_COMPLIANCE_OPERATOR_KEY_VERSION`,
   `TOKENLESS_NOTIFICATION_UNSUBSCRIBE_SECRET`,
   `TOKENLESS_WEBHOOK_ENCRYPTION_KEY`; use a distinct server-only secret of at least 32 random characters for signed
   email unsubscribe links, and a separate operator credential for sanctions, appeals, and verified workspace refunds
+  (the non-secret operator key-version label changes whenever that bearer credential rotates)
 - `TOKENLESS_MCP_RATE_LIMIT_SECRET` with at least 32 random characters and no public variant
 - dedicated `TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET` (32-byte base64url or hex), distinct from every signing,
   encryption, rate-limit, and session key, server-only, with no `NEXT_PUBLIC_` variant

@@ -68,7 +68,8 @@ Every customer-facing custody, privacy, identity, and settlement claim must matc
 ## Human Assurance Loop
 
 1. **Owner sets policy.** The owner chooses review rules, risk thresholds, reviewer audience, data boundaries,
-   publishing permissions, and spending limits.
+   publishing permissions, and spending limits. For DSA reference evidence, the owner chooses operational scope but
+   cannot author or change the epoch reference definition.
 2. **Agent submits work.** The connected agent provides the work, declared risk, confidence, completeness, suggestion
    commitment, and source evidence within that policy.
 3. **Humans judge.** Eligible reviewers answer independently. RateLoop returns the verdict, reasons, disagreement, and
@@ -123,7 +124,9 @@ only when their prerequisite exists and the user requests that capability.
 Workspace membership and reviewer access are independent. Owners manage workspace members and their administrative
 roles in **Workspace**. They manage reviewers, reviewer invitations, expertise, expiry, and assignment eligibility in
 **Reviews**. A workspace-member invitation never makes the recipient a reviewer, a reviewer invitation never grants
-workspace or project administration, and a person who needs both capabilities receives both grants explicitly.
+workspace or project administration, and a person who needs both capabilities ordinarily receives both grants
+explicitly. DSA named-panel reviewers and adjudicators are the exception: any workspace membership, active project
+access, or authorship of the epoch reference definition disqualifies them from that evidence lifecycle.
 
 A basic agent connection is deliberately safe: it may read its bound context and assurance state, verify connection
 health, and record an idempotent review-requirement decision under the owner policy. It cannot publish a review, spend,
@@ -214,14 +217,37 @@ Private customer-invited and individually named panels remain the ordinary revie
 work assigned to their authenticated principal through an invitation, named seat, or other policy-bound assignment.
 RateLoop does not expose an open reviewer marketplace, task browsing, self-selection, public rankings, or streaks.
 
-The ordinary DSA reference-label path is the append-only named panel introduced in migration `0179`. It binds each
-selected sampling unit to one exact run/case and blinded mapping; freezes reading-specific CEFR evidence,
-policy-category competence, evidence versions, expiry and conflicts for every named principal; records exact artifact
-access before the response; and requires independently qualified, conflict-cleared adjudication for disagreement. It
-stores only a digest of provider identity, machine outcome, appeal result and internal source identifiers. Migration
-`0180` then prevents network-derived labels from entering Part 8 inferential accuracy and requires any contractual
-research view to carry the exact named-panel or closed-network provenance bridge plus its non-population,
-non-operational and non-adaptive restrictions.
+The ordinary DSA reference-label path is the append-only named panel introduced in migration `0179` and hardened in
+migrations `0182` and `0184`–`0187`. Before a unit can be registered, an active project-auditor principal who is not a workspace member
+freezes one canonical, append-only reference definition for the epoch. This is an access-control separation fact, not
+an Article 37 organisational-independence finding. The workspace manager selects the already-frozen unit and run but
+cannot supply or rewrite the policy question, source decision, engagement, transparency payload, receipt, or withheld
+values. The service resolves those values from their authoritative versioned rows, verifies their canonical bytes and
+hashes, and binds their exact keys into the unit.
+
+Each selected sampling unit is then bound to one exact run/case, candidate artifact, blinded mapping, source-evidence
+set, and reference definition. The path freezes reading-specific CEFR evidence, policy-category competence, evidence
+versions, expiry, and conflicts for every named principal; records exact artifact access before the response; and
+requires a separately qualified, conflict-cleared adjudicator for disagreement. The blinded case exposes the content
+and frozen reference question while omitting system-supplied provider-identity metadata and committing only digests
+and opaque keys for the automated outcome, source-decision identifiers, and transparency receipt identifiers. Content
+may still self-identify through branding, text, links, or policy terminology. An authenticated selected reviewer who
+opened the exact artifact may report that condition without supplying a replacement label. The report immediately
+quarantines the whole unit, closes its unpaid assignments and leases, and preserves exact capacity-release receipts; the
+separated project auditor may then freeze the typed uncertain gap without redaction or replacement. Migration `0180` prevents network-derived
+labels from entering Part 8 inferential accuracy. Migration `0182` additionally rejects legacy named-panel units that
+cannot be rebound safely, quarantines legacy label sets carrying the historical `independent_reference_panel`
+provenance identifier without an exact named-panel bridge, and prevents
+Part 8 publication from consuming quarantined or mismatched evidence.
+
+Named-panel reviewers remain role-separated from workspace control throughout the live evidence lifecycle: any
+workspace membership, any active project-access role, or authorship of the epoch's reference definition makes a
+principal ineligible. The same rule is
+checked when selecting, accepting, opening, reading, responding, materializing labels, and adjudicating. Database
+triggers also reject reverse grants of workspace membership or active project access while that principal has a live
+named-panel assignment. Generic assignment and artifact routes cannot mint, recover, or read named-panel leases; the
+specialized path issues a short lease for only the exact bound candidate artifact. After decryption it conditionally
+records access only if the lease, eligibility and nonterminal boundary still hold at database time.
 
 This provider-side path prepares reproducible evidence; it is not the statutory Article 37 audit sample. When RateLoop
 works under a DSA audit, the auditing organisation must control the sampling method, seed, exclusions, replacements and
@@ -229,16 +255,39 @@ analysis and must remain free to reject or redraw the provider-side sample. The 
 expert roster, not a representative sample of a reviewer population. Only the frozen decision population and draw may
 support a representativeness claim, and only for their explicitly declared estimand.
 
-RateLoop-network implementation is retained but closed by default. It may be activated only for an exact public-safe
-benchmark through a persisted activation record that binds the workspace, project, benchmark, export window, method,
-accepted pilot evidence, recovery exercise, and complete deployment key. No such activation record exists in the
-current baseline. Hybrid supply is unavailable. Feedback Bonus, Surprisingly Popular, and Crowd Forecast are separate
+RateLoop-network implementation is retained but closed by default. The first two provider pilots use the named
+customer-invited lane; their accepted method and demonstrated demand are prerequisites, not outputs, of the network
+gate. The only current activation is an exact public-safe Base Sepolia test-asset benchmark exercise through v2
+persisted artifacts that bind the workspace, project, benchmark, already-closed evidence window, method, accepted pilot
+evidence, one method-review counterparty distinct from all pilot/demand providers, two distinct accepted pilot
+providers' network-supply demand confirmations, paid-core custody/voucher/settlement plus keeper/indexer recovery
+exercises, exact opportunities, permitted worker-country set and complete `tokenless-v4:84532` deployment key. The
+distinct counterparty check is not an Article 37 independence finding. Every evidence item must have completed inside
+the closed window. Each authorized opportunity must bind an exact non-superseded, ready `public_network` /
+`public_or_test` / USDC request profile. Separate activation evidence must bind algorithmic-management transparency and qualified human
+oversight/review, plus a private, secure worker/representative communication channel that RateLoop cannot access or
+monitor, whether the channel is in-product or equivalently effective and external. No such activation record exists in
+the current baseline. Activation is an internal compliance operation
+protected by the dedicated server-only operator credential; it also records and re-verifies one exact active workspace
+owner/admin solely as a non-participating reference, not as an approver or second actor.
+The canonical evidence, opportunity and activation artifacts identify the operator key version as attestor and the
+manager only as a non-participating, non-authorizing workspace reference; the immutable workspace audit chain binds
+the operator, that reference, and the activation hash. Tenant managers cannot self-attest release evidence. Emergency
+operator deactivation does not depend on that manager remaining active, and execution and acceptance fail closed while
+the activation is expired or deactivated, the workspace or project is inactive, the frozen reviewer residence is
+outside the activation's exact country set, or the material is outside the public/synthetic/owner-confirmed-redacted
+boundary. Already accepted or committed work keeps its paid terminal path. The endpoint accepts bounded
+exact JSON only. Hybrid supply is unavailable. Feedback Bonus, Surprisingly Popular, and Crowd Forecast are separate
 governed methods, remain default-off, and are unreachable from ordinary customer or agent configuration; activating
 one method never activates another.
 
-Any future activation also remains subject to the applicable external contract, privacy, eligibility, tax, sanctions,
-security, reviewer-appeal and recovery reviews, operational drills, and deployment-pinned end-to-end evidence. An
-activation record cannot waive those release gates.
+No real-money or mainnet network activation is implemented. A future live gate requires a new design decision, fresh
+country-specific legal evidence, explicit opportunity/assignment/funding caps, and a verified append-only result joining
+the preceding testnet activation and execution binding to assigned seats, acceptance, commit/reveal, settlement, claim,
+expiry and recovery with no unresolved incident. An activation record cannot waive external contract, privacy,
+eligibility, tax, sanctions, security, reviewer-appeal or recovery gates. Before paid EU supply, implement the
+country-specific declarations, algorithmic-management notice and review controls, DPIA/processing restrictions, and a
+private worker/representative communication channel that RateLoop cannot access or monitor.
 
 The mechanism reflects the evidence boundary rather than a marketplace-growth assumption. DSA audit sampling must
 minimize detection risk, remain representative and avoid audited-provider interference
@@ -251,12 +300,19 @@ to a closed paid network: the relevant algorithmic-management protections in
 platform work without an employment relationship. None of those constraints is satisfied merely by removing a public
 marketplace page.
 
+Current panel practice reinforces the boundary: Prolific's representative-sample mode uses stratified allocation and
+platform restrictions, while ordinary first-come recruitment does not guarantee the requested demographic distribution
+([official FAQ](https://researcher-help.prolific.com/en/articles/445162-using-representative-samples-on-prolific-faqs)).
+RateLoop therefore treats a frozen frame and controlled principal assignment as required experimental evidence, not as
+a reason to expose task browsing or call the resulting reviewer roster representative.
+
 RateLoop-issued contractual research grants are not formal DSA Article 40 access. A future statutory lane may start
 only from a project-specific vetted-researcher status and reasoned request issued by a competent Digital Services
 Coordinator under [Delegated Regulation (EU) 2025/2050](https://eur-lex.europa.eu/eli/reg_del/2025/2050/oj/eng). The
 request—not a RateLoop agreement—controls the data, duration, modality and restrictions. Any secure-processing mode must
 bind individually identified researchers to scoped access, identifiable logs, adequate compute and continuous control
-monitoring, and must not add provider restrictions beyond the reasoned request.
+monitoring, and must not add provider restrictions beyond the reasoned request. Intake must accommodate the regulation's
+normally 80-working-day DSC decision window and any justified extension; no product copy may promise immediate access.
 
 Migration `0181` gives the ordinary compliance-share and contractual-research issuance paths one hash-only retry
 invariant. The database binds an actor-scoped idempotency-key digest and exact request hash to the already-created
@@ -267,8 +323,10 @@ private manifests, policies, cases, reviewer data, chain/settlement evidence, re
 material never enter bearer response bytes. The response hash binds the exact committed projection independently from
 the undisclosed source-packet signature.
 
-Private artifacts are encrypted before storage and released only through workspace membership, project assignment, and
-short reviewer leases. Public, private, and sensitive-material decisions are separate policy dimensions. Each customer
+Private artifacts are encrypted before storage. Ordinary private access uses workspace or project authority; reviewer
+access uses an exact principal-bound assignment and short lease. DSA named-panel access additionally rejects workspace
+and project authority and permits only the bound candidate artifact after specialized acceptance. Public, private, and
+sensitive-material decisions are separate policy dimensions. Each customer
 artifact has a random data-encryption key. Hosted wrapping uses a versioned root keyring in Vercel's server-only secret
 store and HKDF-derived, tenant-scoped workspace/project wrapping keys with authenticated context for every artifact DEK.
 Authorized RateLoop workloads can therefore decrypt that tenant's artifacts within their application permissions:

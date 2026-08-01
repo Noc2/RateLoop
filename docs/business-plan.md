@@ -84,7 +84,7 @@ product has two of them at once:
   submission overwrites the first; the maintainers' own workaround leaves prior labels
   visible, so there is no blinded path. Its kappa compares two _score sources_, not
   multiple human raters.
-- **LangSmith collects genuinely blind independent labels and computes nothing from
+- **LangSmith collects genuinely separate blind labels and computes nothing from
   them.** Its "alignment score" is raw percentage match.
 - **Braintrust states outright that it does not support blind review**, and averages
   multiple scores together. Weave shows "has annotation" badges before you rate,

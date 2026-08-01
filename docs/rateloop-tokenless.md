@@ -67,9 +67,12 @@ both the setup path and the editor is **required**.
 lane**, because it owns the material. This is the lane the hosted end-to-end test
 exercises: a three-account, two-reviewer private journey.
 
-### Paid network — implemented, gated off
+### Paid network — Base Sepolia exercise only, gated off
 
-Accepts only public, synthetic or redacted content. Funding escrows USDC in the
+Accepts only public, synthetic or owner-confirmed redacted content under a short-lived
+operator authorization for exact preselected opportunities, exact permitted reviewer
+countries and the complete Base Sepolia deployment. It has no task browser or
+self-selection and cannot authorize mainnet or real-money release. Funding escrows test USDC in the
 fund contract. Reviewers must clear identity, residence, tax declaration, sanctions
 and wallet screening **before their first voucher**. A reviewer then generates an
 ephemeral vote key, payout key and salt **in their own browser**, timelock-encrypts
@@ -78,6 +81,11 @@ reveals, scores and settles.
 
 The workspace sees **aggregates only** — the per-response view refuses to open for
 network runs.
+
+Activation expiry or deactivation blocks reserved but unaccepted seats. Work already
+accepted or committed retains its settlement, compensation and claim path. A later live
+network would require a separate design decision and append-only result evidence from the
+testnet exercise; no such live path exists.
 
 Two further lanes exist in code: invited-paid, and a hybrid of both. Hybrid is
 hardcoded off and its adapter is unreachable.
@@ -228,10 +236,11 @@ while doing nothing**.
 ### The branch bypass, which contextualises everything else
 
 Tokenless and main are separate deployment lines. The tokenless readiness path permits a
-network-off hosted application without an active address bundle, but any network-enabled
-release requires one complete fresh deployment key shared by the app, Ponder and keeper.
-The canonical tokenless application is currently stale; a web-only release must fail
-closed until the empty v4 registry is regenerated from a fresh Base Sepolia deployment.
+network-off hosted application only when the ordinary network capability remains disabled;
+it does not waive the active address-bundle invariant. Every hosted release requires one
+complete fresh deployment key shared by the app, Ponder and keeper. The canonical tokenless
+application is currently stale; a web-only release must fail closed until the empty v4
+registry is regenerated from a fresh Base Sepolia deployment.
 
 The hosted release capability map is a frozen all-false set, and nothing in the
 repository ever passes a different one, so a `main` hosted release is currently
@@ -261,9 +270,10 @@ hides the interface.
 
 ### Partial, or silently absent
 
-Hybrid review is hardcoded off and unreachable. The surprise-bounty mechanism is
-code-complete with **no configuration gate at all** — a document calls it
-experimental and disabled for real money, but nothing in the code enforces that.
+Hybrid review is hardcoded off and unreachable. Surprisingly Popular is implemented as a
+network-round mechanic, but ordinary customer and agent configuration cannot reach it:
+the governed experiment and public-network controls are both default-off, and an exact
+closed-benchmark activation does not grant unrelated method or opportunity authority.
 
 Several subsystems fail _quietly_ rather than loudly when unconfigured: the
 integrity-epoch producer returns a disabled result that no health signal names;
@@ -364,8 +374,9 @@ packet generation loads an entire run — every case, every response, every over
 cohort size, or assignments per run.
 
 Migrations are hand-authored, hash-verified at deploy, and applied under an
-advisory lock; generation and push are both hard-disabled. The current journal has 170
-ordered entries and ends at `0170_dsa_reference_sampling_epochs`.
+advisory lock; generation and push are both hard-disabled. The checked-in journal is the
+only head of record; readiness and migration tests validate its current ordered entries
+and hashes instead of relying on a hard-coded historical head.
 
 ---
 
@@ -383,10 +394,9 @@ Recorded so the same drift is not reintroduced.
 | README advertises paid mechanisms plainly      | All of them are gated off                                                                                           |
 | Adaptive coverage pinned at 100%               | The ladder shipped                                                                                                  |
 | An agents `handoff` CLI command exists         | It does not; the real path is a media upload followed by an MCP tool call                                           |
-| 66 mapped tables, 219 total                    | 67 mapped, roughly 245 total                                                                                        |
+| Schema table counts are stable documentation   | They are intentionally partial and must be derived from the current migration journal                               |
 
 **Left deliberately unresolved**, because they are decisions rather than facts:
 whether the adaptive ladder shipped ahead of its safety gate or the register is
 merely stale; whether the single off-chain disclosure-round check is an accepted
-boundary or an open gap; and whether the surprise bounty's doc-only restriction
-should be enforced in code.
+boundary or an open gap.

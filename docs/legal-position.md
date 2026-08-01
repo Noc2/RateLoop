@@ -405,13 +405,13 @@ the money has already moved and cannot be recalled, this is material and asymmet
 2. **Your designated people can perform their Article 26(2) oversight through
    RateLoop** — the Act says natural persons, not employees, and expressly preserves
    the deployer's freedom to organise its resources.
-3. **Independent blinded panels are a strong control against automation bias**, which
-   Article 14(4)(b) names explicitly.
+3. **Separate blinded judgments are a testable control against automation bias**, which
+   Article 14(4)(b) names explicitly; effectiveness must be shown for the task and panel.
 4. **Under Article 25(4), providers need written agreements with third-party service
    suppliers — we are one.**
 5. **Annex III obligations now apply from 2 December 2027 — that is your runway.**
-6. **The public network is an independent quality signal, not your Article 26
-   oversight.** Honest, and it protects the customer from a costly mistake.
+6. **The closed testnet network can produce a separately reported quality signal; it is
+   not Article 26 oversight or proof of independence.**
 7. Records are retained for at least six months by default, which **supports but does
    not satisfy** your own retention duties.
 8. We do not claim launch-level GDPR compliance; here are the gates still open.
