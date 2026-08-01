@@ -214,6 +214,21 @@ Private customer-invited and individually named panels remain the ordinary revie
 work assigned to their authenticated principal through an invitation, named seat, or other policy-bound assignment.
 RateLoop does not expose an open reviewer marketplace, task browsing, self-selection, public rankings, or streaks.
 
+The ordinary DSA reference-label path is the append-only named panel introduced in migration `0179`. It binds each
+selected sampling unit to one exact run/case and blinded mapping; freezes reading-specific CEFR evidence,
+policy-category competence, evidence versions, expiry and conflicts for every named principal; records exact artifact
+access before the response; and requires independently qualified, conflict-cleared adjudication for disagreement. It
+stores only a digest of provider identity, machine outcome, appeal result and internal source identifiers. Migration
+`0180` then prevents network-derived labels from entering Part 8 inferential accuracy and requires any contractual
+research view to carry the exact named-panel or closed-network provenance bridge plus its non-population,
+non-operational and non-adaptive restrictions.
+
+This provider-side path prepares reproducible evidence; it is not the statutory Article 37 audit sample. When RateLoop
+works under a DSA audit, the auditing organisation must control the sampling method, seed, exclusions, replacements and
+analysis and must remain free to reject or redraw the provider-side sample. The invited reviewer panel is a purposive
+expert roster, not a representative sample of a reviewer population. Only the frozen decision population and draw may
+support a representativeness claim, and only for their explicitly declared estimand.
+
 RateLoop-network implementation is retained but closed by default. It may be activated only for an exact public-safe
 benchmark through a persisted activation record that binds the workspace, project, benchmark, export window, method,
 accepted pilot evidence, recovery exercise, and complete deployment key. No such activation record exists in the
@@ -224,6 +239,33 @@ one method never activates another.
 Any future activation also remains subject to the applicable external contract, privacy, eligibility, tax, sanctions,
 security, reviewer-appeal and recovery reviews, operational drills, and deployment-pinned end-to-end evidence. An
 activation record cannot waive those release gates.
+
+The mechanism reflects the evidence boundary rather than a marketplace-growth assumption. DSA audit sampling must
+minimize detection risk, remain representative and avoid audited-provider interference
+([Delegated Regulation (EU) 2024/436](https://eur-lex.europa.eu/eli/reg_del/2024/436/oj/eng)); annotator background can
+materially affect judgments ([Pei and Jurgens, 2023](https://aclanthology.org/2023.law-1.25/)); and adaptive task
+allocation can make completed crowd work unrepresentative
+([McAndrew et al., 2022](https://www.nature.com/articles/s41598-022-10794-9)). The platform-work analysis also applies
+to a closed paid network: the relevant algorithmic-management protections in
+[Directive (EU) 2024/2831](https://eur-lex.europa.eu/eli/dir/2024/2831/oj) extend in material part to people performing
+platform work without an employment relationship. None of those constraints is satisfied merely by removing a public
+marketplace page.
+
+RateLoop-issued contractual research grants are not formal DSA Article 40 access. A future statutory lane may start
+only from a project-specific vetted-researcher status and reasoned request issued by a competent Digital Services
+Coordinator under [Delegated Regulation (EU) 2025/2050](https://eur-lex.europa.eu/eli/reg_del/2025/2050/oj/eng). The
+request—not a RateLoop agreement—controls the data, duration, modality and restrictions. Any secure-processing mode must
+bind individually identified researchers to scoped access, identifiable logs, adequate compute and continuous control
+monitoring, and must not add provider restrictions beyond the reasoned request.
+
+Migration `0181` gives the ordinary compliance-share and contractual-research issuance paths one hash-only retry
+invariant. The database binds an actor-scoped idempotency-key digest and exact request hash to the already-created
+capability without storing the presented key or bearer secret. An exact retry returns public capability metadata and a
+null secret/token; a changed request conflicts and no second capability is inserted. Compliance-share access first
+verifies the private source packet and then commits only a canonical, threshold-safe positive-allowlist projection;
+private manifests, policies, cases, reviewer data, chain/settlement evidence, recomputation inputs, signatures and key
+material never enter bearer response bytes. The response hash binds the exact committed projection independently from
+the undisclosed source-packet signature.
 
 Private artifacts are encrypted before storage and released only through workspace membership, project assignment, and
 short reviewer leases. Public, private, and sensitive-material decisions are separate policy dimensions. Each customer

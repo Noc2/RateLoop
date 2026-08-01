@@ -1,6 +1,6 @@
 # RateLoop tokenless — implementation plan
 
-Rewritten and independently rechecked 31 July 2026 from six research passes into the
+Rewritten and independently rechecked 31 July 2026 from eight research passes into the
 question that matters: **what should this be, so that an enterprise wants it and can be
 made to need it?**
 
@@ -18,8 +18,10 @@ controls architecture, and the production-readiness register controls deployment
 The decisions after this second pass are explicit:
 
 1. Build the measurement and DSA evidence workflow before expanding reviewer supply.
-2. Run representative pilots through the private, customer-authorized lane with a small
-   RateLoop-recruited named panel.
+2. Run pilots on a representative decision sample through the private,
+   customer-authorized lane with a small purposive RateLoop-recruited named panel. The
+   selected decisions may represent a declared provider population; the invited panel
+   does not thereby represent any reviewer population.
 3. Retain the closed RateLoop-network lane, but test it only on a separately reported
    public-safe benchmark and keep it default-off.
 4. Do not build an open task marketplace or activate hybrid review.
@@ -224,12 +226,13 @@ quality, Trust & Safety or data-controls lead. The first adverse reader is the s
 auditing organisation; the Commission, relevant DSC and public receive the resulting
 reports or disclosures.
 
-Run the representative pilot with a small RateLoop-recruited, customer-authorized, named
-and language-qualified private panel. The initial scope is one automated-removal system,
-one policy category and one language. Use the RateLoop-network lane only for a separately
-reported stratum established as public, synthetic or safely redacted **before** sample
-selection. Post-selection redaction or lane switching changes the estimand and is
-forbidden.
+Run the pilot on a representative decision sample with a small RateLoop-recruited,
+customer-authorized, named and language-qualified private panel. That panel is a purposive
+expert roster, not a representative sample of reviewers. The initial scope is one
+automated-removal system, one policy category and one language. Use the RateLoop-network
+lane only for a separately reported stratum established as public, synthetic or safely
+redacted **before** sample selection. Post-selection redaction or lane switching changes
+the estimand and is forbidden.
 
 The product is not validated until one audit-organisation design partner accepts the
 method and packet as usable evidence, two provider pilots reproduce the calculation, and
@@ -426,11 +429,11 @@ The concrete draw protocol is:
 | 2.2  | Future-beacon verification and domain-separated seed derivation | 3–4          | Shared verified core implemented; hosted exercise remains a release gate   |
 | 2.3  | Reviewer/scope override detector with employment-data gate      | 2–3          | Implemented                                                                |
 | 2.4  | Auditable engagement events with aggregate-only mode            | 3–4          | Implemented                                                                |
-| 2.5  | Separate reference-sampling channel for automated pass and fail | 7–8          | Sampling foundation implemented; assignment/label consumer remains open    |
+| 2.5  | Separate reference-sampling channel for automated pass and fail | 7–8          | Named-panel and closed-network provenance consumers implemented; hosted pilot remains |
 | 2.8  | Typed packet schema on DSSE + RFC 8785 canonicalisation         | 5            | Implemented for new evidence packets with immutable legacy verification    |
 | 2.6  | Bind audit/coverage heads to the existing attestation pipeline  | 2            | Implemented                                                                |
-| 2.7  | Least-privileged compliance evidence share and bounded view     | 5            | Existing share foundation; bounded project/window consumer remains open    |
-| 2.9  | Contractual public-safe benchmark research grant                | 3–5          | Pure commit-gated contract implemented; persistence and route remain open  |
+| 2.7  | Least-privileged compliance evidence share and bounded view     | 5            | Durable share, strict threshold-safe projection and hash-only retry binding implemented; hosted exercise remains |
+| 2.9  | Contractual public-safe benchmark research grant                | 3–5          | Durable derivation-bound grant, exact-byte access and hash-only retry binding implemented; hosted exercise remains |
 | 2.10 | Statutory Article 40 vetted-researcher access                   | External + 5 | Not implemented; requires DSC-vetted request workflow                      |
 
 **2.3 and 2.4 are the Uber and Cigna findings turned into features, but the foundation is
@@ -478,12 +481,31 @@ and [reputation filters can improve observed quality](https://pubmed.ncbi.nlm.ni
 while changing the represented worker population; neither effect may be hidden behind
 one headline accuracy number.
 
+That design is also the conservative conclusion of the final independent research pass:
+
+- the DSA audit methodology requires sampling without audited-provider interference and
+  a representative, justified sample, so post-outcome browsing, replacement and adaptive
+  assignment cannot support the external-evidence claim
+  ([Delegated Regulation (EU) 2024/436, Articles 11–12](https://eur-lex.europa.eu/eli/reg_del/2024/436/oj/eng));
+- annotator background can materially change judgments, so a named panel records the
+  exact language activity, CEFR level, policy-category competence, evidence version,
+  expiry and conflict declaration rather than treating reviewers as interchangeable
+  ([Pei and Jurgens, 2023](https://aclanthology.org/2023.law-1.25/));
+- CEFR is bound to the actual activity—reading for text cases—not stored as an unqualified
+  language badge. CEFR supplies descriptors, not a universal certification; evidence
+  version and expiry are product controls rather than CEFR requirements
+  ([Council of Europe CEFR Companion Volume](https://www.coe.int/en/web/common-european-framework-reference-languages/cefr-companion-volume-and-its-language-versions)); and
+- a closed paid network is not a labour-law shortcut. The EU Platform Work Directive's
+  algorithmic-management protections extend in material part to people performing
+  platform work without an employment relationship, including systems affecting access
+  to tasks and earnings ([Directive (EU) 2024/2831](https://eur-lex.europa.eu/eli/dir/2024/2831/oj)).
+
 The four lanes have different decisions:
 
 | Lane                     | Decision now                                               | Reason                                                                                                                                                                                          |
 | ------------------------ | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Private customer-invited | Keep and use for the representative DSA pilot              | It supports encrypted private artifacts, explicit project authorization and short leases. “Customer-invited” is the authorization model; RateLoop may recruit and contract the named reviewers. |
-| Named RateLoop panel     | Pilot as a curated roster through the private lane         | Real moderation populations commonly include removed/private content, complaint records and personal or sensitive context.                                                                      |
+| Private customer-invited | Keep and use on the representative decision sample         | It supports encrypted private artifacts, explicit project authorization and short leases. “Customer-invited” is the authorization model; RateLoop may recruit and contract the named reviewers. |
+| Named RateLoop panel     | Pilot as a purposive curated roster through the private lane | Real moderation populations commonly include removed/private content, complaint records and personal or sensitive context. The panel is not a sample of a reviewer population.                  |
 | Closed RateLoop network  | Preserve and test only on a separate public-safe benchmark | It accepts only public, synthetic or owner-confirmed redacted material. Excluding or redacting private cases after selection changes the estimand.                                              |
 | Hybrid                   | Keep reserved and unavailable                              | It lacks precommitted material strata, lane-specific estimation and complete child terminal/refund processing.                                                                                  |
 
@@ -500,10 +522,14 @@ The four lanes have different decisions:
 | 3.7 | Separately validate paid network assignment, settlement and recovery           | 5–7 + soak |
 
 The planning target for each first pilot is one system/category/language scope, a
-100–200-case sample sized with the audit partner, five named reviewers and three
-independent labels per case. Those numbers are a test configuration, not a prescribed
-DSA sampling rate. Compensation may be handled by the pilot contract so that evidence
-usability is tested before on-chain network settlement becomes a dependency.
+100–200-case sample sized with the audit partner, five named reviewers and three blind,
+overlapping independent labels per case. Run multiple predeclared benchmark repetitions
+across the relevant strata, preserve raw disagreement separately from adjudication, and
+freeze the task-specific agreement metric and threshold before review. One exact
+single-case run validates mechanics only; it cannot establish reliability or population
+coverage. These numbers are a test configuration, not a prescribed DSA sampling rate.
+Compensation may be handled by the pilot contract so that evidence usability is tested
+before on-chain network settlement becomes a dependency.
 
 Freeze who contracts and pays every pilot reviewer. A RateLoop-recruited named panel is
 not exempt from paid eligibility, tax, sanctions, payout, worker-information, appeal or
@@ -597,8 +623,8 @@ shipped native approve-and-resume.
 | 5     | 2.3, 2.4 — governance and engagement foundations                   | Done                                         |
 | 6     | 2.8, 2.6 — canonical v4 packets and witnessed audit heads          | Done                                         |
 | 7     | 3.1, 2.1, 2.2 — population and persisted witnessed draw foundation | Implemented; integration verification active |
-| 8     | 2.5, 3.2–3.5 — system evaluations, labels and durable reports      | 16–21                                        |
-| 9     | 2.7, 2.9 — persist separate compliance and research grants         | 7                                            |
+| 8     | 2.5, 3.2–3.5 — system evaluations, labels and durable reports      | Implemented through migration `0180`; external validation remains |
+| 9     | 2.7, 2.9 — persist separate compliance and research grants         | Implemented through migration `0181`; hosted exercise remains |
 | 10    | 3.6 — audit-partner review and two provider pilots                 | Release gate                                 |
 | 11    | 3.7 — separate paid-network hosted/testnet validation              | Release gate                                 |
 
@@ -610,9 +636,9 @@ has a market. Row eleven decides separately whether the closed network deserves 
 
 - **Reference and operational channels never share rollups.** Implement the exclusion in
   1.4 before 2.5 writes its first label.
-- **One migration in flight at a time.** `0170` is the sampling-epoch migration in this
-  implementation slice; the next available migration number is `0171`. Do not start it
-  until `0170` and its real-Postgres invariant suite are green.
+- **One migration in flight at a time.** The ordered journal now runs through `0181`; the
+  next available migration number is `0182`. Do not start it until the complete
+  `0000`–`0181` journal and its real-Postgres invariant suite are green.
 - **The claim-gate walker does not scan message catalogs.** Extend it to English and German
   JSON before adding estimator or DSA copy; editing a component alone can leave localized
   overclaims green.
@@ -693,6 +719,15 @@ this document should hold to the same standard.
   labels against a frozen policy and documented reference standard.
 - **Not that “independent panel” means Article 37 independence.** That term is reserved for
   an audit engagement that satisfies the DSA's organisational conditions.
+- **Not that a RateLoop research grant is Article 40 access.** Formal vetted-researcher
+  access is project-specific, begins with a Digital Services Coordinator's reasoned
+  request, and applies to data held by the designated VLOP/VLOSE. Its scope, duration,
+  modality and restrictions control; RateLoop cannot substitute its own contract or add
+  provider restrictions to that statutory request.
+- **Not that CEFR evidence proves certification, fluency or general language competence.**
+  The stored evidence is tied to a declared language, activity and level.
+- **Not that moderation guarantees reliability.** Independent adjudication and moderation
+  are preregistered mechanisms whose effect must be tested in the target task.
 - **Not that the complaint-control artifact proves full Article 20 compliance.** It
   evidences qualified human supervision and the non-solely-automated decision control.
 - **Not that the automated-means export is a complete DSA transparency report.** It is a
@@ -702,10 +737,11 @@ this document should hold to the same standard.
 - **Not that reviewer analytics are lawful because a switch exists.** Employment-data
   governance and, where applicable, a works-council agreement remain customer gates.
 - **Not that the DSA product is released.** Population reconciliation, content-moderation
-  decision facts, witnessed reference-draw foundations, single-case blinding, point
-  estimators and a typed Part 8 draft verifier exist. Durable report-version publication,
-  the complete authorized-panel consumer, external method acceptance, two provider pilots
-  and one synchronized hosted/testnet exercise remain release gates below.
+  decision facts, witnessed reference-draw foundations, principal-bound named-panel
+  evidence, derivation-safe consumers, point estimators, immutable Part 8 report versions,
+  publication, bounded compliance sharing and contractual public-safe research access
+  exist. External method acceptance, two provider pilots and one synchronized
+  hosted/testnet exercise remain release gates below.
 
 ---
 
@@ -764,21 +800,32 @@ done only when the named consumer path and exit tests pass together.
 
 ### 2.5 — reference-sampling channel
 
-- Consume the separate append-only reference sample produced by the persisted epoch; do
-  not turn it into an ordinary adaptive opportunity. Stratify automated `pass` and `fail`;
-  retain always-review for `uncertain`.
-- Exit when both strata are sampled reproducibly, labels are excluded from adaptive
-  promotion, disagreement can reset coverage, agreement cannot promote it, and exports
-  identify the reference stratum and method.
+- Migrations `0178`–`0180` consume the separate append-only reference sample without
+  turning it into an ordinary adaptive opportunity. The ordinary `0179` consumer binds
+  selected units to exact principal-bound assignments, blinded artifact access, qualified
+  responses, independent adjudication and the frozen label set. The `0178` consumer is a
+  separate closed-network experiment whose lifecycle and labels are descriptive-only,
+  non-population, non-operational and non-adaptive.
+- Part 8 inferential accuracy accepts only the named-panel derivation. Contractual
+  public-safe research may expose either derivation only with its exact provenance bridge
+  and restrictions. Exit from engineering is the complete `0000`–`0180` PostgreSQL and
+  route suite; release still requires the external method decision and pilots in §3.6.
 
 ### 2.8, then 2.6–2.7 — packet and adverse-reader path
 
 - New evidence packets use the shared RFC 8785 implementation and retain immutable legacy
   verification. Real `audit_export_head` checkpoints use one enqueue invariant in both
   standalone and database-transaction consumers.
-- Extend `evidenceShareGrants.ts` from a single packet to a bounded, revocable
-  project/window compliance share. Persist `benchmarkResearchGrants.ts` separately for
-  contractual public-safe research; it explicitly is not Article 40 access. A statutory
+- Migration `0175` and its authenticated/hash-only routes implement a bounded, revocable
+  project/window compliance share. The bearer response is a canonical positive-allowlist
+  projection of the verified private packet: small cells are suppressed, excluded source
+  fields never enter the response, and the committed response hash binds the exact bytes.
+  Migrations `0176` and `0180` persist contractual public-safe research agreements,
+  approved derivation-bound exports, grants, revocations, committed byte-exact access and
+  denial audits separately. Migration `0181` binds both issuance paths to actor-scoped,
+  hash-only idempotency records. Exact retries return capability metadata with a null
+  secret; changed requests conflict and cannot mint a second bearer credential. That
+  research path explicitly is not Article 40 access. A statutory
   Article 40 path may be built only around a DSC-vetted researcher and reasoned request
   under [Delegated Regulation 2025/2050](https://eur-lex.europa.eu/eli/reg_del/2025/2050/oj/eng).
 - Exit on official RFC vectors including Unicode and numbers, browser/Node byte identity,
@@ -820,14 +867,16 @@ are not substitutes for either database clock.
 
 ### 3.3–3.4 — authorized panel and DSA blinding
 
-- Reuse `workspaceReviewers.ts`, `reviewerExpertise.ts`, `artifactPrivacy.ts`, assignments
-  and short leases. Add structured language evidence, policy-category competence and
-  conflict declarations, frozen at assignment rather than resolved from a later profile.
-  A contractual CEFR threshold for this panel must not be described as Article 42
-  moderator-staffing compliance.
-- Add a single-case reviewer projection that withholds provider identity, machine outcome
-  and appeal result. Randomized baseline/candidate swap in `assuranceRunOrchestration.ts`
-  is not sufficient, and `directPrivateReviewEvidence.ts` currently fixes `swap:false`.
+- The `0179` named-panel path reuses workspace reviewers, qualification provenance,
+  assignments, exact short artifact leases and private assurance responses. It freezes
+  reading-specific CEFR evidence, policy-category competence, evidence versions and
+  expiries, conflict declarations, response order and independent adjudication rather
+  than resolving them from a later profile. A contractual CEFR threshold for this panel
+  is not Article 42 moderator-staffing compliance.
+- Its single-case projection persists only a digest of the withheld provider identity,
+  machine outcome, appeal result and internal source identifiers. The reviewer receives
+  the exact committed blinded mapping and policy question; neither the task nor public
+  label artifacts contain withheld values or reviewer principals.
 - Exit when only authorized private reviewers receive the exact frozen content; artifact
   and metadata leakage tests find none of the withheld fields; qualification expiry and
   conflicts fail closed; and the authorized reveal reproduces the committed mapping.
