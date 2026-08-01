@@ -1205,6 +1205,13 @@
       "when": 1785268800000,
       "tag": "0172_dsa_part8_count_contracts",
       "breakpoints": true
+    },
+    {
+      "idx": 173,
+      "version": "7",
+      "when": 1785272400000,
+      "tag": "0173_dsa_reference_label_sets",
+      "breakpoints": true
     }
   ]
 }
