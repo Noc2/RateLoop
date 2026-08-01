@@ -27,7 +27,9 @@ type AbiEntry = {
 };
 
 const deployment = tokenlessHistoricalDeployments[84532];
+const activeDeployment = tokenlessDeployedContracts[84532];
 const nonZeroAddress = /^0x(?!0{40}$)[0-9a-f]{40}$/u;
+const checksummedNonZeroAddress = /^0x(?!0{40}$)[0-9a-f]{40}$/iu;
 
 function names(abi: readonly AbiEntry[], type: string) {
   return new Set(
@@ -57,14 +59,32 @@ function tupleComponentNames(
   return new Set(parameter.components?.map((component) => component.name));
 }
 
-test("fails closed until a fresh v4 deployment replaces the historical registries", () => {
+test("publishes one exact fresh v4 deployment without rewriting historical evidence", () => {
   assert.equal(tokenlessDeploymentSchema, "rateloop-tokenless-deployment-v4");
   assert.deepEqual(tokenlessDeploymentStatus, {
     schemaVersion: "rateloop-tokenless-deployment-v4",
-    status: "unreleased",
-    reason: "fresh_deployment_required",
+    status: "released",
+    chainId: 84532,
+    deploymentKey: activeDeployment.deploymentKey,
   });
-  assert.deepEqual(Object.keys(tokenlessDeployedContracts), []);
+  assert.deepEqual(Object.keys(tokenlessDeployedContracts), ["84532"]);
+  assert.equal(activeDeployment.schemaVersion, tokenlessDeploymentSchema);
+  assert.equal(activeDeployment.deploymentComplete, true);
+  assert.equal(activeDeployment.deploymentProfile, "test");
+  assert.equal(activeDeployment.networkName, "baseSepolia");
+  assert.equal(activeDeployment.chainId, 84532);
+  assert.match(activeDeployment.feeRecipient, checksummedNonZeroAddress);
+  assert.deepEqual(Object.keys(activeDeployment.contracts).sort(), [
+    "CredentialIssuer",
+    "TestUSDC",
+    "TokenlessFeedbackBonus",
+    "TokenlessPanel",
+    "X402PanelSubmitter",
+  ]);
+  for (const contract of Object.values(activeDeployment.contracts)) {
+    assert.match(contract.address, nonZeroAddress);
+    assert.ok(contract.deployedOnBlock >= activeDeployment.deploymentBlockNumber);
+  }
   assert.equal(
     tokenlessHistoricalDeploymentSchema,
     "rateloop-tokenless-deployment-v2",
