@@ -20,15 +20,15 @@ Bayesian Truth Serum, Surprisingly Popular incentives, and permissionless settle
 The isolated tokenless application is at <https://rateloop-tokenless.vercel.app>. Its supporting Ponder and keeper
 services are also isolated from the legacy RateLoop deployment.
 
-The checked-in Base Sepolia deployment is `tokenless-v3`, deployed at block `44132668`:
+The active disposable Base Sepolia test deployment is `tokenless-v4`, deployed from block `44915850`:
 
 ```text
-tokenless-v3:84532:0xf97d28e02f7301b4f6cb19160e1176eaf3e4f19a:0x67a89f76ae9a89866a0e62785d7999efe1c5e592:0x8a9b7af03f3cf362ba98180700bc92fbb72fcbc9
+tokenless-v4:84532:0x0b2a1dbb8723583e5e0d4bfa9df0ed94a69b708b:0x09ea70d6de57fdfb5072f9e215f58e29976d7ee4:0xf4fa3259589f77a140c7fd82ffdf9e00a3e5402c:0xd6e6c750f5e465d2d43e6ae20d8b196f200b42e4
 ```
 
 Hosted releases use the same persisted workflow as production. Release checks fail closed until the configured chain,
 database, regional resources, signing roles, private storage, and operational evidence all match the approved
-deployment manifest. The release record is maintained outside this repository.
+deployment manifest. The currency is an unrestricted mock token; this is not a real-value deployment.
 
 ## Identity and privacy
 

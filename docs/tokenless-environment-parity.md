@@ -13,21 +13,20 @@ Every live tokenless component is isolated from the legacy RateLoop deployment.
   `PONDER_RPC_FALLBACK_URLS_84532`, or `RPC_URL` + `RPC_FALLBACK_URLS`
 - Deployment schema target: `rateloop-tokenless-deployment-v4`
 - Deployment key target: `tokenless-v4:<chainId>:<panel>:<issuer>:<adapter-or-zero>:<feedback-bonus>`
-- Current v4 release status: `unreleased`; fresh deployment required
-- Historical stale Base Sepolia deployment block: `44390557`
-- Historical stale Base Sepolia deployment key:
-  `tokenless-v4:84532:0x377f8631030a06e997cee78bdf649106a90bba46:0xe7f214be85002a6776874e6b624f7cfee98b89d9:0xa33f747ca2e83b12cb67ca407aa4999bf7e68dcc:0xa0c1f730aad6b7cb78eaeaca39743f6430dc57b0`
+- Current v4 release status: `released` test profile
+- Active Base Sepolia deployment block: `44915850`
+- Active Base Sepolia deployment key:
+  `tokenless-v4:84532:0x0b2a1dbb8723583e5e0d4bfa9df0ed94a69b708b:0x09ea70d6de57fdfb5072f9e215f58e29976d7ee4:0xf4fa3259589f77a140c7fd82ffdf9e00a3e5402c:0xd6e6c750f5e465d2d43e6ae20d8b196f200b42e4`
 
-The active v4 registry is empty. The checked-in v4 artifact records an older runtime-evidenced bundle but is incomplete
-for the current fund core and must not configure a service. A fresh deployment must bind the experimental in-repo
+The active v4 registry contains exactly that complete runtime-evidenced bundle. It binds the experimental in-repo
 `QuicknetTBeaconVerifier`, TokenlessPanel, CredentialIssuer, x402 adapter, and TokenlessFeedbackBonus. The deployment
 script always deploys that exact verifier; it does not accept a verifier address from the
 environment. Deployment export compares its observed runtime code hash with the compiled artifact and fails closed on
 any difference. Hosted app, Ponder, and keeper configuration consume the resulting pinned address as
 `TOKENLESS_BEACON_VERIFIER_ADDRESS` or their package-prefixed equivalent. The verifier remains unaudited, and this
 deployment binding does not remove the independent-review release gate.
-Historical v1-v4 artifacts, including the
-v3 test bundle deployed at block `44132668`, must not be relabelled or used by a v4 app, Ponder, or keeper process.
+Other historical v1-v4 artifacts, including the v3 test bundle deployed at block `44132668`, must not be relabelled or
+used by a v4 app, Ponder, or keeper process.
 
 The isolated Vercel app, Ponder, and keeper must all be pinned to the same complete key and deployment block before any
 service is promoted. This remains a test-profile bundle, not a production

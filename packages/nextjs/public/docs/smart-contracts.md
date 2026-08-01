@@ -3,9 +3,8 @@
 This is a reference for the separately gated fund-backed architecture. The current hosted invited-review path does not
 activate these contracts.
 
-The tokenless v4 target keeps customer-funded settlement in four narrow contracts. No current Base Sepolia deployment
-matches the fund core in this source tree. The checked-in bundle at block `44390557` is historical and stale; the app,
-indexer, and keeper must remain fail-closed until a fresh complete deployment key replaces it.
+The tokenless v4 target keeps customer-funded settlement in four narrow contracts. The active disposable Base Sepolia
+test bundle begins at block `44915850`; the app, indexer, and keeper must match its complete deployment key exactly.
 
 <a id="tokenless-panel"></a>
 

@@ -8,10 +8,9 @@ This package contains the disposable Base Sepolia tokenless protocol:
 - `TokenlessFeedbackBonus`: an optional feedback-bonus pool that escrows a funder's USDC award and returns the unawarded remainder, with no protocol fund authority.
 - `MockERC20`: unrestricted test currency used only by the isolated test deployment.
 
-Every checked-in deployment artifact is historical and must not be used as a live compatibility target.
-`deployments/tokenless-v4/84532.json` records the most recent Base Sepolia test bundle at block `44390557`, but it
-predates current mandatory fund-core fields and is not an active release. A fresh deployment must regenerate one
-complete `tokenless-v4:*` identity before the app, indexer, or keeper can be promoted.
+`deployments/tokenless-v4/84532.json` is the active disposable Base Sepolia test bundle beginning at block `44915850`.
+It publishes one complete `tokenless-v4:*` identity that the app, indexer, and keeper must match exactly. Other
+checked-in deployment artifacts are historical evidence and never live compatibility targets.
 
 ## Commands
 

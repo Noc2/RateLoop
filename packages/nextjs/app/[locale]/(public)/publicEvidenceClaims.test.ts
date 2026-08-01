@@ -24,6 +24,9 @@ const REPOSITORY_DIRECTORY = path.resolve(NEXTJS_DIRECTORY, "../..");
 const PLUGINS_DIRECTORY = path.join(REPOSITORY_DIRECTORY, "plugins");
 
 const TOKENLESS_DEPLOYMENT_CLAIM_FILES = [
+  path.join(REPOSITORY_DIRECTORY, "README.md"),
+  path.join(REPOSITORY_DIRECTORY, "docs/implementation-plan.md"),
+  path.join(REPOSITORY_DIRECTORY, "docs/rateloop-tokenless.md"),
   path.join(REPOSITORY_DIRECTORY, "docs/tokenless-immutable-implementation-plan-2026-07.md"),
   path.join(REPOSITORY_DIRECTORY, "docs/tokenless-environment-parity.md"),
   path.join(REPOSITORY_DIRECTORY, "packages/contracts/README.md"),
@@ -93,22 +96,32 @@ function claimSources(file: string) {
   return file.endsWith(".json") ? jsonMessageValues(JSON.parse(source) as unknown) : [source];
 }
 
-test("the unreleased deployment registry and every deployment claim fail closed together", () => {
+test("the released deployment registry and every deployment claim share one exact identity", () => {
+  const deployment = tokenlessDeployedContracts[84532];
   assert.deepEqual(tokenlessDeploymentStatus, {
     schemaVersion: "rateloop-tokenless-deployment-v4",
-    status: "unreleased",
-    reason: "fresh_deployment_required",
+    status: "released",
+    chainId: 84532,
+    deploymentKey: deployment.deploymentKey,
   });
-  assert.deepEqual(Object.keys(tokenlessDeployedContracts), []);
+  assert.deepEqual(Object.keys(tokenlessDeployedContracts), ["84532"]);
 
   for (const file of TOKENLESS_DEPLOYMENT_CLAIM_FILES) {
     const source = readFileSync(file, "utf8");
-    assert.match(
+    assert.ok(source.includes(String(deployment.deploymentBlockNumber)), file);
+    assert.doesNotMatch(
       source,
-      /fresh (?:Base Sepolia )?(?:test-profile )?(?:complete )?deployment|fresh deployment required/iu,
+      /44390557|0x377f8631030a06e997cee78bdf649106a90bba46|fresh_deployment_required|release status:\s*`unreleased`/iu,
       file,
     );
-    assert.doesNotMatch(source, /active disposable Base Sepolia|release status:\s*`released`/iu, file);
+  }
+
+  for (const file of [
+    path.join(REPOSITORY_DIRECTORY, "README.md"),
+    path.join(REPOSITORY_DIRECTORY, "docs/tokenless-immutable-implementation-plan-2026-07.md"),
+    path.join(REPOSITORY_DIRECTORY, "docs/tokenless-environment-parity.md"),
+  ]) {
+    assert.ok(readFileSync(file, "utf8").includes(deployment.deploymentKey), file);
   }
 });
 

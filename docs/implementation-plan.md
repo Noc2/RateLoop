@@ -1052,9 +1052,9 @@ or self-asserted digests are never evidence.
   short-lived exact-opportunity test-asset network exercise. Exercise deactivation,
   country-set denial, keeper outage, retry, reorg, beacon failure, expiry and old-key
   rejection. This is not a real-money or mainnet release.
-- The current active v4 registry is intentionally empty and the canonical tokenless app
-  is stale. A fresh Base Sepolia deployment and synchronized Vercel/Railway bundle are a
-  hard prerequisite; a web-only deployment must fail closed.
+- The active v4 registry publishes the complete Base Sepolia test bundle beginning at
+  block `44915850`. A synchronized Vercel/Railway bundle remains a hard prerequisite;
+  every service must fail closed on an older or mixed deployment identity.
 - Neither task enables the closed network automatically. Activation still requires the
   legal/privacy/payment gates in §7 and explicit evidence of demand beyond the named
   panel.
