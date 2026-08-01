@@ -301,6 +301,49 @@ async function dsaBeaconUsesLateCommitClock(client) {
   }
 }
 
+async function projectWindowAccessRequiresTerminalSnapshot(client) {
+  const now = new Date("2026-07-31T12:00:00.000Z");
+  const eventId = `pwae_${"a".repeat(22)}`;
+  const accessId = `pwca_${"b".repeat(22)}`;
+  const digest = `sha256:${"c".repeat(64)}`;
+  const event = {
+    text: `INSERT INTO tokenless_project_window_compliance_share_access_events
+      (event_id,access_id,idempotency_key,request_binding_hash,share_lookup_hash,token_lookup_hash,
+       result,denial_reason,occurred_at,event_json,event_hash)
+     VALUES ($1,$2,'pg-invariant-denial',$3,$3,$3,'denied','not_found',$4,'{}',$3)`,
+    values: [eventId, accessId, digest, now],
+  };
+
+  await client.query("BEGIN");
+  try {
+    await client.query(event);
+    await expectPostgresError(
+      client,
+      "SET CONSTRAINTS tokenless_project_window_access_terminal_at_commit IMMEDIATE",
+      "23514",
+    );
+  } finally {
+    await client.query("ROLLBACK").catch(() => undefined);
+  }
+
+  await client.query("BEGIN");
+  try {
+    await client.query(event);
+    await client.query(
+      `INSERT INTO tokenless_project_window_compliance_share_access_snapshots
+        (access_id,idempotency_key,share_lookup_hash,token_lookup_hash,request_binding_hash,
+         event_id,event_hash,result,denial_reason,response_json,response_hash,occurred_at)
+       VALUES ($1,'pg-invariant-denial',$2,$2,$2,$3,$2,'denied','not_found',NULL,NULL,$4)`,
+      [accessId, digest, eventId, now],
+    );
+    await client.query(
+      "SET CONSTRAINTS tokenless_project_window_access_terminal_at_commit, tokenless_project_window_access_exact_at_commit IMMEDIATE",
+    );
+  } finally {
+    await client.query("ROLLBACK");
+  }
+}
+
 export async function runPostgresInvariantTests(databaseUrl = process.env.DATABASE_URL) {
   const pool = new Pool({
     connectionString: localTestDatabaseUrl(databaseUrl),
@@ -314,6 +357,7 @@ export async function runPostgresInvariantTests(databaseUrl = process.env.DATABA
     await signingLedgerTerminalPartialUniqueness(client);
     await dsaNullableDisjunctionChecks(client);
     await dsaBeaconUsesLateCommitClock(client);
+    await projectWindowAccessRequiresTerminalSnapshot(client);
   } finally {
     client.release();
     await pool.end();
