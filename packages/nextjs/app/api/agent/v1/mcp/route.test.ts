@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { POST } from "~~/app/api/agent/v1/mcp/route";
+import { GET, POST } from "~~/app/api/agent/v1/mcp/route";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { tokenlessMcpTools } from "~~/lib/mcp/protocol";
@@ -485,6 +485,46 @@ test("one preferred OAuth tool connects a fresh workspace without reflecting the
   assert.equal(Number(state.rows[0]?.agents ?? 0), 1);
   assert.equal(Number(state.rows[0]?.integrations ?? 0), 1);
   assert.equal(Number(state.rows[0]?.connected_events ?? 0), 1);
+});
+
+test("authenticated OAuth SSE polling preserves the session and protocol on an empty queue", async () => {
+  const { tokens } = await setupOAuthConnectionIntent();
+  const initialized = await POST(
+    request(
+      {
+        id: 1,
+        jsonrpc: "2.0",
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-11-25",
+          capabilities: { elicitation: { form: {} } },
+          clientInfo: { name: "SSE polling client", version: "1.0.0" },
+        },
+      },
+      tokens.access_token,
+    ),
+  );
+  const sessionId = initialized.headers.get("mcp-session-id");
+  assert.ok(sessionId);
+
+  const response = await GET(
+    new NextRequest("https://rateloop-tokenless.vercel.app/api/agent/v1/mcp", {
+      method: "GET",
+      headers: {
+        accept: "text/event-stream",
+        authorization: `Bearer ${tokens.access_token}`,
+        "last-event-id": "poll-previous",
+        "mcp-protocol-version": "2025-11-25",
+        "mcp-session-id": sessionId,
+        "x-real-ip": "203.0.113.90",
+      },
+    }),
+  );
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "private, no-store, max-age=0");
+  assert.equal(response.headers.get("content-type"), "text/event-stream; charset=utf-8");
+  assert.equal(response.headers.get("mcp-session-id"), sessionId);
+  assert.match(await response.text(), /^retry: 15000\nid: poll-[A-Za-z0-9_-]+\ndata:\n\n$/u);
 });
 
 test("an active OAuth workspace conflict requests fresh authorization without moving the existing binding", async () => {
