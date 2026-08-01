@@ -95,6 +95,13 @@ export type ProjectWindowComplianceAccessDenialReason =
   | "unbound_artifact"
   | "artifact_invalid";
 
+const SAFE_LIMITATION_CODES = new Set([
+  "small_source_cells_suppressed",
+  "incomplete_or_invalid_work",
+  "no_onchain_settlement",
+  "chain_evidence_incomplete",
+]);
+
 function invalid(message: string, field?: string): never {
   throw new TokenlessServiceError(message, 400, "invalid_project_window_compliance_share", false, field);
 }
@@ -148,6 +155,154 @@ function storedInvalid(): never {
     500,
     "stored_project_window_compliance_share_invalid",
   );
+}
+
+function projectionRecord(value: unknown): Row {
+  if (!value || typeof value !== "object" || Array.isArray(value)) storedInvalid();
+  return value as Row;
+}
+
+function projectionString(record: Row, field: string) {
+  const value = record[field];
+  if (typeof value !== "string" || value.length === 0) storedInvalid();
+  return value;
+}
+
+function projectionInteger(record: Row, field: string) {
+  const value = record[field];
+  if (!Number.isSafeInteger(value) || Number(value) < 0) storedInvalid();
+  return Number(value);
+}
+
+function projectionBoolean(record: Row, field: string) {
+  const value = record[field];
+  if (typeof value !== "boolean") storedInvalid();
+  return value;
+}
+
+function projectionTimestamp(record: Row, field: string) {
+  const value = projectionString(record, field);
+  const parsed = new Date(value);
+  if (!Number.isFinite(parsed.getTime()) || parsed.toISOString() !== value) storedInvalid();
+  return value;
+}
+
+/**
+ * Audited derivation of a verified private source packet. This is deliberately not described as a
+ * signed packet: the source signature covers the undisclosed source, while the access snapshot and
+ * response hash bind these allowlisted bytes.
+ */
+export function projectProjectWindowEvidencePacket(value: unknown) {
+  const packet = projectionRecord(value);
+  const payload = projectionRecord(packet.payload);
+  const signing = projectionRecord(packet.signing);
+  const privacy = projectionRecord(payload.privacy);
+  const aggregation = projectionRecord(payload.aggregation);
+  const reviewerCoverage = projectionRecord(aggregation.reviewerCoverage);
+  const judgmentCoverage = projectionRecord(aggregation.judgmentCoverage);
+  const suite = projectionRecord(aggregation.suite);
+  const reviewContext = projectionRecord(payload.reviewContext);
+  const period = projectionRecord(reviewContext.period);
+  const minimumAggregationSize = projectionInteger(privacy, "minimumAggregationSize");
+  if (minimumAggregationSize < 1) storedInvalid();
+  const reviewerIdentitiesIncluded = projectionBoolean(privacy, "reviewerIdentitiesIncluded");
+  const rawRationaleIncluded = projectionBoolean(privacy, "rawRationaleIncluded");
+  const calibrationItemsIncludedInVerdict = projectionBoolean(privacy, "calibrationItemsIncludedInVerdict");
+  if (reviewerIdentitiesIncluded || rawRationaleIncluded || calibrationItemsIncludedInVerdict) storedInvalid();
+  const respondingReviewerCount = projectionInteger(reviewerCoverage, "respondingReviewerCount");
+  const validJudgmentCount = projectionInteger(judgmentCoverage, "validJudgmentCount");
+  const cases = aggregation.cases;
+  if (!Array.isArray(cases)) storedInvalid();
+  const thresholdMet =
+    cases.length > 0 &&
+    respondingReviewerCount >= minimumAggregationSize &&
+    validJudgmentCount >= minimumAggregationSize &&
+    cases.every(entry => projectionRecord(entry).suppressed === false);
+  const periodCoverage = projectionRecord(period.coverage);
+  const limitations = Array.isArray(payload.limitations)
+    ? payload.limitations
+        .map(entry => projectionRecord(entry))
+        .map(entry => entry.code)
+        .filter((code): code is string => typeof code === "string" && SAFE_LIMITATION_CODES.has(code))
+        .filter((code, index, all) => all.indexOf(code) === index)
+        .sort()
+    : [];
+  const packetDigest = projectionString(packet, "packetDigest");
+  if (!SHA256.test(packetDigest)) storedInvalid();
+  return {
+    schemaVersion: "rateloop.public-compliance-evidence-projection.v1" as const,
+    source: {
+      schemaVersion: projectionString(payload, "schemaVersion"),
+      packetId: projectionString(payload, "packetId"),
+      generatedAt: projectionTimestamp(payload, "generatedAt"),
+      provenancePacketDigest: packetDigest,
+    },
+    sourceVerification: {
+      status: "verified_before_projection" as const,
+      signingAlgorithm: projectionString(signing, "algorithm"),
+      signingKeyId: projectionString(signing, "keyId"),
+      signatureSemantics: "signature_over_undisclosed_source_packet" as const,
+    },
+    privacy: {
+      minimumAggregationSize,
+      reviewerIdentitiesIncluded,
+      rawRationaleIncluded,
+      calibrationItemsIncludedInVerdict,
+    },
+    period: {
+      startInclusive: projectionTimestamp(period, "startInclusive"),
+      endInclusive: projectionTimestamp(period, "endInclusive"),
+      durationMs: projectionInteger(period, "durationMs"),
+      ...(thresholdMet
+        ? {
+            coverage: {
+              caseCount: projectionInteger(periodCoverage, "caseCount"),
+              targetExpectedJudgmentCount: projectionInteger(periodCoverage, "targetExpectedJudgmentCount"),
+              submittedJudgmentCount: projectionInteger(periodCoverage, "submittedJudgmentCount"),
+              respondingReviewerCount: projectionInteger(periodCoverage, "respondingReviewerCount"),
+              targetReviewerCount: projectionInteger(periodCoverage, "targetReviewerCount"),
+            },
+          }
+        : {}),
+    },
+    result: thresholdMet
+      ? {
+          suppressed: false as const,
+          aggregationVersion: projectionString(aggregation, "aggregationVersion"),
+          method: projectionString(aggregation, "method"),
+          reviewerCoverage: {
+            targetReviewerCount: projectionInteger(reviewerCoverage, "targetReviewerCount"),
+            assignedReviewerCount: projectionInteger(reviewerCoverage, "assignedReviewerCount"),
+            respondingReviewerCount,
+            completeJudgmentSetReviewerCount: projectionInteger(reviewerCoverage, "completeJudgmentSetReviewerCount"),
+          },
+          judgmentCoverage: {
+            caseCount: projectionInteger(judgmentCoverage, "caseCount"),
+            targetExpectedJudgmentCount: projectionInteger(judgmentCoverage, "targetExpectedJudgmentCount"),
+            assignedExpectedJudgmentCount: projectionInteger(judgmentCoverage, "assignedExpectedJudgmentCount"),
+            submittedJudgmentCount: projectionInteger(judgmentCoverage, "submittedJudgmentCount"),
+            validJudgmentCount,
+            invalidJudgmentCount: projectionInteger(judgmentCoverage, "invalidJudgmentCount"),
+            pendingJudgmentCount: projectionInteger(judgmentCoverage, "pendingJudgmentCount"),
+            missingTargetJudgmentCount: projectionInteger(judgmentCoverage, "missingTargetJudgmentCount"),
+            missingAssignedJudgmentCount: projectionInteger(judgmentCoverage, "missingAssignedJudgmentCount"),
+          },
+          suite: {
+            method: projectionString(suite, "method"),
+            evaluatedCaseCount: projectionInteger(suite, "evaluatedCaseCount"),
+            passCaseCount: projectionInteger(suite, "passCaseCount"),
+            failCaseCount: projectionInteger(suite, "failCaseCount"),
+            insufficientCaseCount: projectionInteger(suite, "insufficientCaseCount"),
+            outcome: projectionString(suite, "outcome"),
+          },
+        }
+      : { suppressed: true as const, minimumAggregationSize },
+    limitations,
+    derivation: {
+      kind: "audited_allowlisted_projection" as const,
+      authentication: "access_snapshot_response_hash_not_source_signature" as const,
+    },
+  };
 }
 
 function verifyStoredShareGrant(row: Row) {
@@ -1117,8 +1272,9 @@ export async function accessProjectWindowComplianceShare(input: {
       }
       if (stringValue(replay, "result") === "denied") return { kind: "denied" as const, replayed: true };
       const responseJson = stringValue(replay, "response_json");
-      if (!responseJson) storedInvalid();
-      return { kind: "success" as const, replayed: true, responseJson };
+      const responseHash = stringValue(replay, "response_hash");
+      if (!responseJson || !responseHash) storedInvalid();
+      return { kind: "success" as const, replayed: true, responseJson, responseHash };
     }
     const now = await transactionTime(client);
     const deny = async (reason: string) => {
@@ -1247,7 +1403,7 @@ export async function accessProjectWindowComplianceShare(input: {
     if (!sourceRecord) return deny("artifact_invalid");
     if (artifact.artifactKind === "evidence_packet") {
       try {
-        source = await verifyBoundProjectWindowEvidencePacket({
+        const verified = await verifyBoundProjectWindowEvidencePacket({
           packetJson: sourceJson,
           packetId: stringValue((sourceResult.rows[0] as Row | undefined) ?? {}, "packet_id")!,
           runId: stringValue((sourceResult.rows[0] as Row | undefined) ?? {}, "run_id")!,
@@ -1256,6 +1412,7 @@ export async function accessProjectWindowComplianceShare(input: {
           signingKeyId: stringValue((sourceResult.rows[0] as Row | undefined) ?? {}, "signing_key_id")!,
           signingPublicKey: stringValue((sourceResult.rows[0] as Row | undefined) ?? {}, "signing_public_key")!,
         });
+        source = projectProjectWindowEvidencePacket(verified);
       } catch {
         return deny("artifact_invalid");
       }
@@ -1300,7 +1457,7 @@ export async function accessProjectWindowComplianceShare(input: {
       responseHash,
       artifact: { ...artifact, workspaceId, projectId, shareId: presentedShareId },
     });
-    return { kind: "success" as const, replayed: false, responseJson };
+    return { kind: "success" as const, replayed: false, responseJson, responseHash };
   });
   if (outcome.kind === "conflict") {
     throw new TokenlessServiceError(
@@ -1313,6 +1470,7 @@ export async function accessProjectWindowComplianceShare(input: {
   return {
     accessId: identity.accessId,
     replayed: outcome.replayed,
+    responseHash: outcome.responseHash as `sha256:${string}`,
     contentType: "application/json; charset=utf-8" as const,
     bytes: new TextEncoder().encode(outcome.responseJson),
   };

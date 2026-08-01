@@ -52,6 +52,7 @@ export function createComplianceShareAccessPost(
         headers: {
           ...COMPLIANCE_NO_STORE_HEADERS,
           "Content-Type": accessed.contentType,
+          "X-Content-SHA256": accessed.responseHash,
           "X-RateLoop-Access-Id": accessed.accessId,
           "X-RateLoop-Idempotent-Replay": String(accessed.replayed),
         },

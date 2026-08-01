@@ -246,6 +246,7 @@ test("compliance-share bearer access returns success and uniformly hides invalid
       return {
         accessId: "pwca_route_access",
         replayed: false,
+        responseHash: `sha256:${"8".repeat(64)}`,
         contentType: "application/json; charset=utf-8",
         bytes: payload,
       };
@@ -257,6 +258,7 @@ test("compliance-share bearer access returns success and uniformly hides invalid
   assert.deepEqual(new Uint8Array(await response.arrayBuffer()), payload);
   assert.equal(response.headers.get("cache-control"), NO_STORE);
   assert.equal(response.headers.get("x-rateloop-access-id"), "pwca_route_access");
+  assert.equal(response.headers.get("x-content-sha256"), `sha256:${"8".repeat(64)}`);
 });
 
 test("benchmark research access returns the exact committed bytes and preserves replay audit metadata", async () => {
@@ -308,4 +310,45 @@ test("benchmark research access returns the exact committed bytes and preserves 
   assert.equal(first.headers.get("x-rateloop-chain-head-digest"), `sha256:${"7".repeat(64)}`);
   assert.equal(first.headers.get("x-content-sha256"), `sha256:${createHash("sha256").update(bytes).digest("hex")}`);
   assert.equal(first.headers.get("cache-control"), NO_STORE);
+});
+
+test("benchmark research access rejects nested pagination fields before capability lookup", async () => {
+  let called = false;
+  const handler = createBenchmarkResearchAccessPost({
+    requireSession: signedIn,
+    readByToken: (async () => {
+      called = true;
+      throw new Error("must not run");
+    }) as BenchmarkResearchPersistence["readByToken"],
+  });
+  const response = await handler(
+    new NextRequest(`${ORIGIN}/api/account/benchmark-research/access`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer research_${"t".repeat(43)}`,
+        "content-type": "application/json",
+        "x-rateloop-benchmark-key-id": "research-route-v1",
+      },
+      body: JSON.stringify({
+        idempotencyKey: "research-route-access-0002",
+        page: { offset: 0, limit: 10, privateCursor: "must-not-pass" },
+      }),
+    }),
+  );
+  assert.equal(response.status, 400);
+  assert.equal(called, false);
+  assert.equal(response.headers.get("cache-control"), NO_STORE);
+});
+
+test("published Part 8 errors are never publicly cacheable", async () => {
+  const handler = createPublishedDsaPart8FileGet({
+    downloadFile: (async () => {
+      throw new TokenlessServiceError("Report not found.", 404, "dsa_part8_report_not_found");
+    }) as typeof downloadPublishedDsaPart8ReportVersion,
+  });
+  const response = await handler(new Request(`${ORIGIN}/rate/dsa/missing.csv`), {
+    params: Promise.resolve({ reportId: "missing_report", reportVersion: "1" }),
+  });
+  assert.equal(response.status, 404);
+  assert.equal(response.headers.get("cache-control"), NO_STORE);
 });

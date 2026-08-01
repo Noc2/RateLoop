@@ -46,6 +46,15 @@ export function createBenchmarkResearchAccessPost(
       if (body.page !== undefined && (!body.page || typeof body.page !== "object" || Array.isArray(body.page))) {
         throw new TokenlessServiceError("page is invalid.", 400, "invalid_compliance_request");
       }
+      if (body.page !== undefined) {
+        const page = exactBody(body.page as Record<string, unknown>, ["limit", "offset"], []);
+        if (
+          (page.offset !== undefined && (!Number.isSafeInteger(page.offset) || Number(page.offset) < 0)) ||
+          (page.limit !== undefined && (!Number.isSafeInteger(page.limit) || Number(page.limit) < 1))
+        ) {
+          throw new TokenlessServiceError("page is invalid.", 400, "invalid_compliance_request");
+        }
+      }
       const result = await dependencies.readByToken({
         accessId: accessId(session.principalId, token, body.idempotencyKey),
         idempotencyKey: body.idempotencyKey,

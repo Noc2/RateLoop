@@ -9,6 +9,11 @@ const PUBLIC_HEADERS = {
   "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
   "X-Content-Type-Options": "nosniff",
 } as const;
+const PUBLIC_ERROR_HEADERS = {
+  "Cache-Control": "private, no-store, max-age=0",
+  "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+  "X-Content-Type-Options": "nosniff",
+} as const;
 type Context = { params: Promise<{ reportId: string; reportVersion: string }> };
 
 export function createPublishedDsaPart8FileGet(
@@ -30,7 +35,7 @@ export function createPublishedDsaPart8FileGet(
       });
     } catch (error) {
       const response = tokenlessErrorResponse(error);
-      return NextResponse.json(response.body, { status: response.status, headers: PUBLIC_HEADERS });
+      return NextResponse.json(response.body, { status: response.status, headers: PUBLIC_ERROR_HEADERS });
     }
   };
 }

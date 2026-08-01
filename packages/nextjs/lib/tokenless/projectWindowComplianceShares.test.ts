@@ -15,6 +15,7 @@ import {
   __projectWindowComplianceSharesTestUtils,
   buildProjectWindowComplianceManifest,
   evaluateProjectWindowComplianceAccessPolicy,
+  projectProjectWindowEvidencePacket,
   verifyBoundProjectWindowEvidencePacket,
 } from "~~/lib/tokenless/projectWindowComplianceShares";
 
@@ -198,6 +199,227 @@ test("packet access verifies the pinned signing identity, digest, source IDs, an
         signingAlgorithm: signingMetadata.algorithm,
         signingKeyId: keyId,
         signingPublicKey: publicKey,
+      }),
+    /Stored project-window compliance-share evidence is invalid/u,
+  );
+});
+
+function complianceProjectionSource(validReviewerCount: number, canary = "PRIVATE_CANARY_DO_NOT_DISCLOSE") {
+  const minimumAggregationSize = 2;
+  const source = {
+    source: `customer_invited_${canary}`,
+    targetReviewerCount: validReviewerCount,
+    assignedReviewerCount: validReviewerCount,
+    paidReviewerCount: validReviewerCount,
+    respondingReviewerCount: validReviewerCount,
+    completeJudgmentSetReviewerCount: validReviewerCount,
+  };
+  const counts = {
+    source: `customer_invited_${canary}`,
+    targetReviewerCount: validReviewerCount,
+    assignedReviewerCount: validReviewerCount,
+    validReviewerCount,
+    invalidJudgmentCount: 0,
+    pendingJudgmentCount: 0,
+    ...(validReviewerCount >= minimumAggregationSize ? { candidate: validReviewerCount, baseline: 0, tie: 0 } : {}),
+  };
+  const aggregation = computeEvidenceAggregation(
+    {
+      reviewerSources: [source],
+      cases: [{ caseId: `case_${canary}`, overall: counts, sourceCounts: [counts] }],
+      caseLeaves: [`case_leaf_${canary}`],
+      responseLeaves: [`response_leaf_${canary}`],
+    },
+    minimumAggregationSize,
+    {
+      metric: "candidate_preference_share_bps",
+      operator: "gte",
+      thresholdBps: 5_000,
+      minimumValidResponses: minimumAggregationSize,
+    },
+  );
+  return {
+    payload: {
+      schemaVersion: "rateloop.human-assurance.evidence.v2",
+      packetId: "packet_compliance_projection",
+      runId: `run_${canary}`,
+      tenantCommitment: `tenant_${canary}`,
+      generatedAt: "2026-07-01T00:00:00.000Z",
+      privacy: {
+        classification: `classification_${canary}`,
+        minimumAggregationSize,
+        reviewerIdentitiesIncluded: false,
+        rawRationaleIncluded: false,
+        calibrationItemsIncludedInVerdict: false,
+      },
+      frozen: {
+        runManifestHash: digest("a"),
+        runManifest: { title: canary, instructions: canary, objective: canary },
+        suiteManifestHash: digest("b"),
+        suiteManifest: { artifact: canary },
+        policyHash: digest("c"),
+        policy: { privatePolicy: canary },
+      },
+      reviewContext: {
+        selectionTrigger: { reasonCodes: [canary] },
+        gate: { stopGateEvidenceReference: canary },
+        versions: { requestProfile: canary },
+        reviewerQualifications: { qualifications: [canary] },
+        period: {
+          startInclusive: START,
+          endInclusive: END,
+          durationMs: new Date(END).getTime() - new Date(START).getTime(),
+          coverage: {
+            caseCount: aggregation.judgmentCoverage.caseCount,
+            targetExpectedJudgmentCount: aggregation.judgmentCoverage.targetExpectedJudgmentCount,
+            submittedJudgmentCount: aggregation.judgmentCoverage.submittedJudgmentCount,
+            respondingReviewerCount: aggregation.reviewerCoverage.respondingReviewerCount,
+            targetReviewerCount: aggregation.reviewerCoverage.targetReviewerCount,
+          },
+          responseSubmissionLatencyFromPeriodStartMs: { median: canary },
+        },
+      },
+      roots: { caseRoot: digest("d"), responseRoot: digest("e") },
+      aggregation,
+      calibration: { calibrationItem: canary },
+      overrideDecisions: { overrideReason: canary },
+      failureTagCounts: [{ tag: canary, count: validReviewerCount }],
+      rationaleDigests: [{ rationaleDigest: digest("f"), canary }],
+      settlement: { payoutDestination: canary },
+      chainEvidence: { contentId: canary, roundId: canary },
+      limitations: [
+        { code: "small_source_cells_suppressed", message: canary },
+        { code: `private_${canary}`, message: canary },
+      ],
+      recomputation: {
+        reviewerPrincipalId: canary,
+        contentId: canary,
+        caseLeaves: [`case_leaf_${canary}`],
+        responseLeaves: [`response_leaf_${canary}`],
+      },
+    },
+    signing: { algorithm: "Ed25519", keyId: "evidence-key-v1", publicKey: canary },
+    packetDigest: digest("9"),
+    signature: canary,
+  };
+}
+
+test("compliance evidence projection is a strict allowlist with independently bound provenance", () => {
+  const canary = "PRIVATE_CANARY_DO_NOT_DISCLOSE";
+  const source = complianceProjectionSource(2, canary);
+  const projection = projectProjectWindowEvidencePacket(source);
+  assert.deepEqual(projection, {
+    schemaVersion: "rateloop.public-compliance-evidence-projection.v1",
+    source: {
+      schemaVersion: "rateloop.human-assurance.evidence.v2",
+      packetId: "packet_compliance_projection",
+      generatedAt: "2026-07-01T00:00:00.000Z",
+      provenancePacketDigest: digest("9"),
+    },
+    sourceVerification: {
+      status: "verified_before_projection",
+      signingAlgorithm: "Ed25519",
+      signingKeyId: "evidence-key-v1",
+      signatureSemantics: "signature_over_undisclosed_source_packet",
+    },
+    privacy: {
+      minimumAggregationSize: 2,
+      reviewerIdentitiesIncluded: false,
+      rawRationaleIncluded: false,
+      calibrationItemsIncludedInVerdict: false,
+    },
+    period: {
+      startInclusive: START,
+      endInclusive: END,
+      durationMs: new Date(END).getTime() - new Date(START).getTime(),
+      coverage: {
+        caseCount: 1,
+        targetExpectedJudgmentCount: 2,
+        submittedJudgmentCount: 2,
+        respondingReviewerCount: 2,
+        targetReviewerCount: 2,
+      },
+    },
+    result: {
+      suppressed: false,
+      aggregationVersion: "rateloop.descriptive-case-quorum.v2",
+      method: "descriptive_per_case",
+      reviewerCoverage: {
+        targetReviewerCount: 2,
+        assignedReviewerCount: 2,
+        respondingReviewerCount: 2,
+        completeJudgmentSetReviewerCount: 2,
+      },
+      judgmentCoverage: {
+        caseCount: 1,
+        targetExpectedJudgmentCount: 2,
+        assignedExpectedJudgmentCount: 2,
+        submittedJudgmentCount: 2,
+        validJudgmentCount: 2,
+        invalidJudgmentCount: 0,
+        pendingJudgmentCount: 0,
+        missingTargetJudgmentCount: 0,
+        missingAssignedJudgmentCount: 0,
+      },
+      suite: {
+        method: "all_cases_must_pass",
+        evaluatedCaseCount: 1,
+        passCaseCount: 1,
+        failCaseCount: 0,
+        insufficientCaseCount: 0,
+        outcome: "pass",
+      },
+    },
+    limitations: ["small_source_cells_suppressed"],
+    derivation: {
+      kind: "audited_allowlisted_projection",
+      authentication: "access_snapshot_response_hash_not_source_signature",
+    },
+  });
+  const serialized = canonicalizeRfc8785(projection);
+  assert.equal(serialized.includes(canary), false);
+  for (const forbidden of [
+    "runId",
+    "tenantCommitment",
+    "frozen",
+    "runManifest",
+    "suiteManifest",
+    "policy",
+    "caseId",
+    "sourceSubpanels",
+    "paidReviewerCount",
+    "reviewerQualifications",
+    "rationaleDigests",
+    "failureTagCounts",
+    "settlement",
+    "chainEvidence",
+    "recomputation",
+    "signature",
+    "publicKey",
+  ]) {
+    assert.equal(serialized.includes(`"${forbidden}":`), false, `${forbidden} escaped the allowlist`);
+  }
+  const reordered = {
+    ...source,
+    payload: { unrelatedPrivateField: { z: canary, a: canary }, ...source.payload },
+  };
+  assert.equal(canonicalizeRfc8785(projectProjectWindowEvidencePacket(reordered)), serialized);
+});
+
+test("compliance evidence projection suppresses the k-minus-one boundary", () => {
+  const projection = projectProjectWindowEvidencePacket(complianceProjectionSource(1));
+  assert.deepEqual(projection.result, { suppressed: true, minimumAggregationSize: 2 });
+  assert.equal("coverage" in projection.period, false);
+  assert.equal(canonicalizeRfc8785(projection).includes("case_PRIVATE_CANARY_DO_NOT_DISCLOSE"), false);
+});
+
+test("compliance evidence projection rejects source packets that declare private payload inclusion", () => {
+  const source = complianceProjectionSource(2);
+  assert.throws(
+    () =>
+      projectProjectWindowEvidencePacket({
+        ...source,
+        payload: { ...source.payload, privacy: { ...source.payload.privacy, rawRationaleIncluded: true } },
       }),
     /Stored project-window compliance-share evidence is invalid/u,
   );
