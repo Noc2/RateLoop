@@ -1233,6 +1233,13 @@
       "when": 1785283200000,
       "tag": "0176_benchmark_research_persistence",
       "breakpoints": true
+    },
+    {
+      "idx": 177,
+      "version": "7",
+      "when": 1785286800000,
+      "tag": "0177_network_benchmark_activation",
+      "breakpoints": true
     }
   ]
 }
