@@ -25,8 +25,16 @@ import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { EVM_TRANSACTION_FEE_POLICY } from "~~/lib/tokenless/chain/evmTransactionReplacement";
 import { derivePaidLaneActivationReference } from "~~/lib/tokenless/paidLaneActivation";
-import { attachProductAsk, createWorkspace, prepareProductAsk } from "~~/lib/tokenless/productCore";
-import { TokenlessServiceError, createTokenlessAsk, createTokenlessQuote } from "~~/lib/tokenless/server";
+import {
+  attachProductAsk,
+  createWorkspace,
+  prepareOpportunityBoundNetworkProductAsk,
+} from "~~/lib/tokenless/productCore";
+import {
+  TokenlessServiceError,
+  createOpportunityBoundNetworkAsk,
+  createOpportunityBoundNetworkQuote,
+} from "~~/lib/tokenless/server";
 import { verifyBusinessWorkspaceForTest } from "~~/test/helpers/verifiedBusinessWorkspace";
 
 const PANEL = getAddress("0x1111111111111111111111111111111111111111");
@@ -36,6 +44,7 @@ const USDC = getAddress("0x4444444444444444444444444444444444444444");
 const FEEDBACK_BONUS = getAddress("0x7777777777777777777777777777777777777777");
 const FUNDER = getAddress("0x5555555555555555555555555555555555555555");
 const FEE_RECIPIENT = getAddress("0x6666666666666666666666666666666666666666");
+const OPPORTUNITY_ID = "opportunity_chain_prepaid_network";
 const SURPRISE_BONUS_ACCOUNT = privateKeyToAccount(`0x${"77".repeat(32)}`);
 const PREPAID_ACCOUNT = privateKeyToAccount(`0x${"88".repeat(32)}`);
 const APPROVE_ABI = parseAbi(["function approve(address spender, uint256 amount) returns (bool)"]);
@@ -169,30 +178,40 @@ async function prepaidAsk() {
           VALUES (?, ?, ?, 'settled', 'manual_topup', ?, ?, ?)`,
     args: [`led_${randomUUID().replaceAll("-", "")}`, workspaceId, "1000000000", `topup:${workspaceId}`, now, now],
   });
-  const quote = await createTokenlessQuote({
-    audience: {
-      admissionPolicyHash: freezeAdmissionPolicy(admissionPolicy()).admissionPolicyHash,
-      source: "rateloop_network",
+  const quote = await createOpportunityBoundNetworkQuote(
+    {
+      audience: {
+        admissionPolicyHash: freezeAdmissionPolicy(admissionPolicy()).admissionPolicyHash,
+        source: "rateloop_network",
+      },
+      audiencePolicy: admissionPolicy(),
+      confirmedNoSensitiveData: true,
+      dataClassification: "synthetic",
+      budget: { attemptReserveAtomic: "20000000", bountyAtomic: "25000000", feeBps: 750 },
+      question: { kind: "binary" as const, prompt: "Ship this?", rationale: { mode: "optional" as const } },
+      requestedPanelSize: 15,
+      responseWindowSeconds: 7_200,
+      visibility: "public",
     },
-    audiencePolicy: admissionPolicy(),
-    confirmedNoSensitiveData: true,
-    dataClassification: "synthetic",
-    budget: { attemptReserveAtomic: "20000000", bountyAtomic: "25000000", feeBps: 750 },
-    question: { kind: "binary" as const, prompt: "Ship this?", rationale: { mode: "optional" as const } },
-    requestedPanelSize: 15,
-    responseWindowSeconds: 7_200,
-    visibility: "public",
-  });
+    OPPORTUNITY_ID,
+  );
   const request = {
     idempotencyKey: "chain:prepaid:12345678",
     payment: { mode: "prepaid" as const, workspaceId },
     quoteId: quote.quoteId,
   };
-  const prepared = await prepareProductAsk({
+  const prepared = await prepareOpportunityBoundNetworkProductAsk({
     principal: { kind: "session", accountAddress: FUNDER, walletAddress: FUNDER },
     request,
+    opportunityId: OPPORTUNITY_ID,
   });
-  const ask = await createTokenlessAsk(request, request.idempotencyKey, "https://tokenless.example");
+  const ask = await createOpportunityBoundNetworkAsk(
+    request,
+    request.idempotencyKey,
+    "https://tokenless.example",
+    prepared.idempotencyScope,
+    OPPORTUNITY_ID,
+  );
   await attachProductAsk(prepared, ask);
   await dbClient.execute("UPDATE tokenless_content_records SET moderation_status = 'approved'");
   await dbClient.execute("UPDATE tokenless_question_records SET moderation_status = 'approved'");
