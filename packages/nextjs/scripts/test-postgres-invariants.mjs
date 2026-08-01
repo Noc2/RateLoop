@@ -296,7 +296,7 @@ async function dsaBeaconUsesLateCommitClock(client) {
     await client.query("SELECT pg_sleep(0.4)");
     await expectPostgresError(client, "COMMIT", "23514");
   } finally {
-    await client.query("ROLLBACK").catch(() => undefined);
+    await client.query("ROLLBACK");
     await client.query("DROP TABLE IF EXISTS dsa_beacon_commit_clock_probe");
   }
 }
@@ -323,7 +323,7 @@ async function projectWindowAccessRequiresTerminalSnapshot(client) {
       "23514",
     );
   } finally {
-    await client.query("ROLLBACK").catch(() => undefined);
+    await client.query("ROLLBACK");
   }
 
   await client.query("BEGIN");
