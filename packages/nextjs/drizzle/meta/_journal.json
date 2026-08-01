@@ -1226,6 +1226,13 @@
       "when": 1785279600000,
       "tag": "0175_project_window_compliance_shares",
       "breakpoints": true
+    },
+    {
+      "idx": 176,
+      "version": "7",
+      "when": 1785283200000,
+      "tag": "0176_benchmark_research_persistence",
+      "breakpoints": true
     }
   ]
 }
