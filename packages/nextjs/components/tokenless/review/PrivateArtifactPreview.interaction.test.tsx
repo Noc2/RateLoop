@@ -45,6 +45,7 @@ test("expired preview access renews and refetches without losing the review page
   const previousFetch = globalThis.fetch;
   let reads = 0;
   let renewals = 0;
+  const availability: string[] = [];
   globalThis.fetch = async () => {
     reads += 1;
     return reads === 1
@@ -57,14 +58,17 @@ test("expired preview access renews and refetches without losing the review page
       <PrivateArtifactPreview
         artifactUrl="/private/renew"
         label="Source"
+        onAvailabilityChange={state => availability.push(state)}
         onRefreshAccess={async () => {
           renewals += 1;
         }}
       />,
     );
     await waitFor(() => assert.ok(view.getByRole("button", { name: "Refresh access" })));
+    assert.deepEqual(availability, ["loading", "unavailable"]);
     await userEvent.setup({ document }).click(view.getByRole("button", { name: "Refresh access" }));
     await waitFor(() => assert.ok(view.getByText("Restored exact content")));
+    assert.deepEqual(availability, ["loading", "unavailable", "loading", "ready"]);
     assert.equal(renewals, 1);
     assert.equal(reads, 2);
   } finally {

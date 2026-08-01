@@ -49,6 +49,14 @@ type ReviewCase = {
     source: ArtifactLease & { contentType: string | null };
     suggestion: ArtifactLease & { contentType: string | null };
   };
+  dsaReferencePanel?: {
+    artifactId: string;
+    contentHash: string;
+    contentType: string;
+    language: string;
+    mappingCommitment: string;
+    choices: readonly ["policy_matches", "policy_does_not_match"];
+  };
 };
 
 type AssignmentTaskBase = {
@@ -80,15 +88,135 @@ export type AssignmentTask = AssignmentTaskBase &
         forecastRequired: true;
         settlement: null;
       }
+    | {
+        taskKind: "dsa_reference_panel";
+        compensationMode?: never;
+        forecastRequired?: never;
+        settlement?: never;
+      }
   );
 
 const DIRECT_PRIVATE_ASSIGNMENT_PATTERN = /^hpua_[0-9a-f]{40}$/u;
+const SHA256_PATTERN = /^sha256:[0-9a-f]{64}$/u;
+const DSA_IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,159}$/u;
+const DSA_BLINDED_CASE_ID_PATTERN = /^dsa_case_[a-z0-9]{16,80}$/u;
+const DSA_CONTENT_TYPE_PATTERN = /^[a-z0-9][a-z0-9!#$&^_.+-]{0,126}\/[a-z0-9][a-z0-9!#$&^_.+-]{0,126}$/u;
+const DSA_LANGUAGE_PATTERN = /^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/u;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function validateDsaReferencePanelTask(task: Record<string, unknown>): AssignmentTask {
+  const reviewCase = task.case;
+  const responseContract = task.responseContract;
+  if (!isRecord(reviewCase) || !isRecord(responseContract)) {
+    throw new Error("The DSA reference-panel task is incomplete.");
+  }
+  const content = reviewCase.content;
+  const policy = reviewCase.policy;
+  const reference = reviewCase.reference;
+  const rationale = responseContract.rationale;
+  if (
+    typeof task.assignmentId !== "string" ||
+    !DSA_IDENTIFIER_PATTERN.test(task.assignmentId) ||
+    reviewCase.schemaVersion !== "rateloop.dsa-blinded-case.v1" ||
+    typeof reviewCase.blindedCaseId !== "string" ||
+    !DSA_BLINDED_CASE_ID_PATTERN.test(reviewCase.blindedCaseId) ||
+    !isRecord(content) ||
+    typeof content.artifactId !== "string" ||
+    !DSA_IDENTIFIER_PATTERN.test(content.artifactId) ||
+    !Number.isSafeInteger(content.artifactVersion) ||
+    Number(content.artifactVersion) <= 0 ||
+    typeof content.contentHash !== "string" ||
+    !SHA256_PATTERN.test(content.contentHash) ||
+    typeof content.contentType !== "string" ||
+    !DSA_CONTENT_TYPE_PATTERN.test(content.contentType) ||
+    typeof content.language !== "string" ||
+    !DSA_LANGUAGE_PATTERN.test(content.language) ||
+    !isRecord(policy) ||
+    typeof policy.categoryCode !== "string" ||
+    !DSA_IDENTIFIER_PATTERN.test(policy.categoryCode) ||
+    typeof policy.policyHash !== "string" ||
+    !SHA256_PATTERN.test(policy.policyHash) ||
+    !Number.isSafeInteger(policy.policyVersion) ||
+    Number(policy.policyVersion) <= 0 ||
+    typeof policy.question !== "string" ||
+    !policy.question.trim() ||
+    policy.question.length > 2_000 ||
+    !isRecord(reference) ||
+    typeof reference.populationId !== "string" ||
+    !DSA_IDENTIFIER_PATTERN.test(reference.populationId) ||
+    !Number.isSafeInteger(reference.populationVersion) ||
+    Number(reference.populationVersion) <= 0 ||
+    typeof reference.frameId !== "string" ||
+    !DSA_IDENTIFIER_PATTERN.test(reference.frameId) ||
+    !Number.isSafeInteger(reference.frameVersion) ||
+    Number(reference.frameVersion) <= 0 ||
+    typeof reference.sampleId !== "string" ||
+    !DSA_IDENTIFIER_PATTERN.test(reference.sampleId) ||
+    !Number.isSafeInteger(reference.sampleVersion) ||
+    Number(reference.sampleVersion) <= 0 ||
+    !Number.isSafeInteger(reference.position) ||
+    Number(reference.position) < 0 ||
+    typeof reviewCase.mappingCommitment !== "string" ||
+    !SHA256_PATTERN.test(reviewCase.mappingCommitment) ||
+    responseContract.schemaVersion !== "rateloop.dsa-named-panel-response.v1" ||
+    typeof responseContract.caseId !== "string" ||
+    !DSA_IDENTIFIER_PATTERN.test(responseContract.caseId) ||
+    !Array.isArray(responseContract.choices) ||
+    responseContract.choices.length !== 2 ||
+    responseContract.choices[0] !== "policy_matches" ||
+    responseContract.choices[1] !== "policy_does_not_match" ||
+    !isRecord(rationale) ||
+    rationale.required !== true ||
+    !Number.isSafeInteger(rationale.maximumLength) ||
+    Number(rationale.maximumLength) <= 0 ||
+    Number(rationale.maximumLength) > 2_000
+  ) {
+    throw new Error("The DSA reference-panel task is incomplete.");
+  }
+  return {
+    assignmentId: task.assignmentId,
+    runId: reviewCase.blindedCaseId,
+    source: "customer_invited",
+    runManifestHash: reviewCase.mappingCommitment,
+    policyHash: policy.policyHash,
+    qualificationProvenance: [],
+    rubric: {
+      prompt: policy.question,
+      failureTags: [],
+      rationale: { mode: "required", minLength: 1, maxLength: Number(rationale.maximumLength) },
+    },
+    cases: [
+      {
+        caseId: responseContract.caseId,
+        position: 0,
+        title: "",
+        instructions: "",
+        options: [],
+        context: [],
+        objectiveReference: null,
+        dsaReferencePanel: {
+          artifactId: content.artifactId,
+          contentHash: content.contentHash,
+          contentType: content.contentType,
+          language: content.language,
+          mappingCommitment: reviewCase.mappingCommitment,
+          choices: ["policy_matches", "policy_does_not_match"],
+        },
+      },
+    ],
+    taskKind: "dsa_reference_panel",
+  };
+}
 
 export function validateLoadedAssignmentTask(value: unknown): AssignmentTask {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("The private assignment task is incomplete.");
   }
   const task = value as Record<string, unknown>;
+  if ("case" in task || "responseContract" in task) return validateDsaReferencePanelTask(task);
   if (
     typeof task.assignmentId !== "string" ||
     typeof task.runId !== "string" ||
@@ -147,9 +275,10 @@ export type AssuranceServerAcceptance = {
   accepted: true;
   replay: boolean;
   responseCount: number;
-  compensation: "unpaid";
-  settlementStatus: "not_applicable";
-};
+} & (
+  | { compensation: "unpaid"; settlementStatus: "not_applicable" }
+  | { compensation: "paid"; settlementStatus: "pending" }
+);
 
 function isAssuranceServerAcceptance(value: unknown): value is AssuranceServerAcceptance {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
@@ -158,8 +287,8 @@ function isAssuranceServerAcceptance(value: unknown): value is AssuranceServerAc
     acceptance.accepted === true &&
     typeof acceptance.replay === "boolean" &&
     Number.isSafeInteger(acceptance.responseCount) &&
-    acceptance.compensation === "unpaid" &&
-    acceptance.settlementStatus === "not_applicable"
+    ((acceptance.compensation === "unpaid" && acceptance.settlementStatus === "not_applicable") ||
+      (acceptance.compensation === "paid" && acceptance.settlementStatus === "pending"))
   );
 }
 
@@ -241,6 +370,12 @@ function artifactUrl(assignmentId: string, artifact: ArtifactLease) {
   )}?leaseId=${encodeURIComponent(artifact.leaseId)}`;
 }
 
+function dsaArtifactUrl(assignmentId: string, artifactId: string) {
+  return `/api/account/assurance/assignments/${encodeURIComponent(assignmentId)}/artifacts/${encodeURIComponent(
+    artifactId,
+  )}`;
+}
+
 function emptyDrafts(cases: ReviewCase[]) {
   return Object.fromEntries(
     cases.map(reviewCase => [
@@ -251,12 +386,20 @@ function emptyDrafts(cases: ReviewCase[]) {
 }
 
 function requiredRationaleLength(task: AssignmentTask) {
+  if (task.taskKind === "dsa_reference_panel") return 1;
   return task.rubric.rationale.mode === "required" ? Math.max(10, task.rubric.rationale.minLength ?? 0) : 0;
 }
 
-function caseCompletionIssue(task: AssignmentTask, draft: ReviewDraft | undefined) {
+function caseCompletionIssue(task: AssignmentTask, draft: ReviewDraft | undefined, dsaArtifactReady = true) {
+  if (task.taskKind === "dsa_reference_panel" && !dsaArtifactReady) {
+    return "Wait for the content under review to load before submitting.";
+  }
   if (!draft?.selectedOption)
-    return task.taskKind === "binary_review" ? "Choose Approve or Reject." : "Choose an answer.";
+    return task.taskKind === "binary_review"
+      ? "Choose Approve or Reject."
+      : task.taskKind === "dsa_reference_panel"
+        ? "Choose whether the content matches the policy."
+        : "Choose an answer.";
   if (
     task.taskKind === "binary_review" &&
     task.forecastRequired &&
@@ -280,7 +423,9 @@ function localizedCaseCompletionIssue(
   translate: (key: string, values?: Record<string, number>) => string,
 ) {
   if (!issue) return null;
+  if (issue === "Wait for the content under review to load before submitting.") return translate("dsaArtifactRequired");
   if (issue === "Choose Approve or Reject.") return translate("chooseBinary");
+  if (issue === "Choose whether the content matches the policy.") return translate("chooseDsaPolicy");
   if (issue === "Choose an answer.") return translate("chooseAnswer");
   if (issue === "Enter a crowd forecast from 1% to 99%.") return translate("forecastRange");
 
@@ -363,6 +508,12 @@ export function HumanAssuranceRaterClient({
   const [activePrincipalId, setActivePrincipalId] = useState(principalId);
   const [sessionCheckError, setSessionCheckError] = useState<string | null>(null);
   const [autoOpenRequested, setAutoOpenRequested] = useState(false);
+  const [pendingDsaAcceptance, setPendingDsaAcceptance] = useState(false);
+  const [dsaConflictConfirmed, setDsaConflictConfirmed] = useState(
+    validatedInitialTask?.taskKind === "dsa_reference_panel",
+  );
+  const [dsaLeaseExpiresAt, setDsaLeaseExpiresAt] = useState<string | null>(null);
+  const [dsaArtifactReady, setDsaArtifactReady] = useState(false);
   const rationaleRef = useRef<HTMLTextAreaElement>(null);
   const activePrincipalRef = useRef(principalId);
   const taskRef = useRef(task);
@@ -373,9 +524,14 @@ export function HumanAssuranceRaterClient({
 
   useEffect(() => {
     if (!task || !activePrincipalId || serverAcceptance) return;
-    const receipt = loadReviewReceipt("private", task.assignmentId, isAssuranceServerAcceptance, {
-      principalId: activePrincipalId,
-    });
+    const receipt = loadReviewReceipt(
+      "private",
+      task.assignmentId,
+      (value): value is AssuranceServerAcceptance =>
+        isAssuranceServerAcceptance(value) &&
+        (task.taskKind === "dsa_reference_panel" || value.compensation === "unpaid"),
+      { principalId: activePrincipalId },
+    );
     if (receipt) setServerAcceptance(receipt);
   }, [activePrincipalId, serverAcceptance, task]);
 
@@ -417,6 +573,10 @@ export function HumanAssuranceRaterClient({
           setAssignmentUnavailable(false);
           setTermsRequired(null);
           setAssignmentTerms(null);
+          setPendingDsaAcceptance(false);
+          setDsaConflictConfirmed(false);
+          setDsaLeaseExpiresAt(null);
+          setDsaArtifactReady(false);
           setBusyAction(null);
           setConfidentialityAccepted(false);
           setError(null);
@@ -496,6 +656,7 @@ export function HumanAssuranceRaterClient({
   }, [activePrincipalId, assignmentId, presentation, privateReviewJsonOptions, t, task, termsHash]);
 
   const leaseDeadline = useMemo(() => {
+    if (task?.taskKind === "dsa_reference_panel") return dsaLeaseExpiresAt;
     const values = task?.cases.flatMap(reviewCase => {
       const binaryArtifacts = reviewCase.binaryReview
         ? [reviewCase.binaryReview.source.expiresAt, reviewCase.binaryReview.suggestion.expiresAt]
@@ -508,7 +669,7 @@ export function HumanAssuranceRaterClient({
     });
     if (!values?.length) return null;
     return values.sort((left, right) => new Date(left).getTime() - new Date(right).getTime())[0] ?? null;
-  }, [task]);
+  }, [dsaLeaseExpiresAt, task]);
   const privateDraftStorage = useMemo(
     () => ({ principalId: activePrincipalId, expiresAt: draftExpiresAt }),
     [activePrincipalId, draftExpiresAt],
@@ -516,10 +677,12 @@ export function HumanAssuranceRaterClient({
   const privateDraftKey = activePrincipalId && task ? `${activePrincipalId}:${task.assignmentId}` : null;
 
   const completeDraft = Boolean(
-    task?.cases.length && task.cases.every(reviewCase => caseCompletionIssue(task, drafts[reviewCase.caseId]) === null),
+    task?.cases.length &&
+      task.cases.every(reviewCase => caseCompletionIssue(task, drafts[reviewCase.caseId], dsaArtifactReady) === null),
   );
   const activeCase = task?.cases[activeCaseIndex] ?? null;
-  const activeCaseIssue = task && activeCase ? caseCompletionIssue(task, drafts[activeCase.caseId]) : t("unavailable");
+  const activeCaseIssue =
+    task && activeCase ? caseCompletionIssue(task, drafts[activeCase.caseId], dsaArtifactReady) : t("unavailable");
   const activeCaseComplete = activeCaseIssue === null;
 
   useEffect(() => {
@@ -545,6 +708,10 @@ export function HumanAssuranceRaterClient({
     const refreshingCurrentTask = taskRef.current?.assignmentId === nextTask.assignmentId;
     taskRef.current = nextTask;
     setTask(nextTask);
+    setPendingDsaAcceptance(false);
+    setDsaConflictConfirmed(nextTask.taskKind === "dsa_reference_panel");
+    setDsaArtifactReady(false);
+    if (nextTask.taskKind !== "dsa_reference_panel") setDsaLeaseExpiresAt(null);
     if (!refreshingCurrentTask) {
       setDrafts(emptyDrafts(nextTask.cases));
       setActiveCaseIndex(0);
@@ -567,6 +734,49 @@ export function HumanAssuranceRaterClient({
     );
     if (privateStateEpoch !== privateStateEpochRef.current) return;
     applyLoadedTask(body);
+  }
+
+  async function acceptDsaReferencePanel(id: string, privateStateEpoch: number) {
+    const accepted = await readJson(
+      await fetch(`/api/account/assurance/assignments/${encodeURIComponent(id)}/dsa-reference-panel`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conflictDeclaration: { hasConflict: false, relationships: [] } }),
+      }),
+      privateReviewJsonOptions,
+    );
+    if (privateStateEpoch !== privateStateEpochRef.current) return;
+    if (
+      typeof accepted.assignmentId !== "string" ||
+      accepted.assignmentId !== id ||
+      typeof accepted.leaseExpiresAt !== "string" ||
+      !Number.isFinite(Date.parse(accepted.leaseExpiresAt))
+    ) {
+      throw new Error("The DSA reference-panel acceptance was incomplete.");
+    }
+    setDsaLeaseExpiresAt(accepted.leaseExpiresAt);
+    setDsaConflictConfirmed(true);
+    setPendingDsaAcceptance(false);
+    await loadAssignment(id);
+  }
+
+  async function confirmDsaReferencePanel() {
+    if (!pendingDsaAcceptance || !dsaConflictConfirmed) return;
+    const id = assignmentId.trim();
+    const privateStateEpoch = privateStateEpochRef.current;
+    setBusyAction("assignment");
+    setError(null);
+    try {
+      await acceptDsaReferencePanel(id, privateStateEpoch);
+      if (privateStateEpoch !== privateStateEpochRef.current) return;
+      persistReviewerAssignment(id, termsHash.trim());
+    } catch {
+      if (privateStateEpoch !== privateStateEpochRef.current) return;
+      setError(t("dsaAcceptFailed"));
+    } finally {
+      if (privateStateEpoch === privateStateEpochRef.current) setBusyAction(null);
+    }
   }
 
   async function openAssignment(event?: FormEvent<HTMLFormElement>, afterRecovery = false) {
@@ -598,8 +808,18 @@ export function HumanAssuranceRaterClient({
       ) {
         setDraftExpiresAt((opened.acceptance as Record<string, unknown>).assignmentExpiresAt as string);
       }
-      if (opened.task && typeof opened.task === "object") applyLoadedTask(opened.task);
-      else await loadAssignment(id);
+      if (opened.nextAction === "accept_dsa_reference_panel") {
+        if (!dsaConflictConfirmed) {
+          setPendingDsaAcceptance(true);
+          persistReviewerAssignment(id, termsHash.trim());
+          return;
+        }
+        await acceptDsaReferencePanel(id, privateStateEpoch);
+      } else if (opened.task && typeof opened.task === "object") {
+        applyLoadedTask(opened.task);
+      } else {
+        await loadAssignment(id);
+      }
       if (privateStateEpoch !== privateStateEpochRef.current) return;
       persistReviewerAssignment(id, termsHash.trim());
     } catch (cause) {
@@ -614,6 +834,7 @@ export function HumanAssuranceRaterClient({
       setCanRecover(recoverable);
       setAssignmentClosed(closed);
       setAssignmentUnavailable(false);
+      setPendingDsaAcceptance(false);
       setError(t("openFailed"));
     } finally {
       if (privateStateEpoch === privateStateEpochRef.current) setBusyAction(null);
@@ -688,54 +909,69 @@ export function HumanAssuranceRaterClient({
     setBusyAction("response");
     setError(null);
     try {
+      const dsaCase = task.taskKind === "dsa_reference_panel" ? task.cases[0] : null;
+      const dsaDraft = dsaCase ? drafts[dsaCase.caseId] : null;
+      const dsaChoice =
+        dsaDraft?.selectedOption === "A"
+          ? dsaCase?.dsaReferencePanel?.choices[0]
+          : dsaDraft?.selectedOption === "B"
+            ? dsaCase?.dsaReferencePanel?.choices[1]
+            : null;
+      if (task.taskKind === "dsa_reference_panel" && !dsaChoice) throw new Error(t("optionUnavailable"));
+      const requestBody =
+        task.taskKind === "dsa_reference_panel"
+          ? {
+              idempotencyKey: `response:web:${task.assignmentId.slice(-96)}:${task.runManifestHash.slice(-16)}`,
+              dsaResponse: {
+                choice: dsaChoice,
+                rationale: dsaDraft?.rationale ?? "",
+              },
+            }
+          : {
+              idempotencyKey: `response:web:${task.assignmentId.slice(-96)}:${task.runManifestHash.slice(-16)}`,
+              responses: task.cases.map(reviewCase => {
+                const draft = drafts[reviewCase.caseId]!;
+                const option = reviewCase.options.find(value => value.key === draft.selectedOption);
+                const selectedArtifactId = reviewCase.binaryReview?.suggestion.artifactId ?? option?.artifactId;
+                if (!selectedArtifactId || !draft.selectedOption) {
+                  throw new Error(t("optionUnavailable"));
+                }
+                return {
+                  caseId: reviewCase.caseId,
+                  displayedOption: draft.selectedOption,
+                  selectedArtifactId,
+                  predictedPositiveBps:
+                    task.taskKind === "binary_review" && task.forecastRequired && draft.predictionPercent !== null
+                      ? draft.predictionPercent * 100
+                      : undefined,
+                  failureTagKeys: draft.failureTags,
+                  rationale: draft.rationale,
+                };
+              }),
+            };
       const body = await readJson(
         await fetch(`/api/account/assurance/assignments/${encodeURIComponent(task.assignmentId)}/responses`, {
           method: "POST",
           credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            idempotencyKey: `response:web:${task.assignmentId.slice(-96)}:${task.runManifestHash.slice(-16)}`,
-            responses: task.cases.map(reviewCase => {
-              const draft = drafts[reviewCase.caseId]!;
-              const option = reviewCase.options.find(value => value.key === draft.selectedOption);
-              const selectedArtifactId = reviewCase.binaryReview?.suggestion.artifactId ?? option?.artifactId;
-              if (!selectedArtifactId || !draft.selectedOption) {
-                throw new Error(t("optionUnavailable"));
-              }
-              return {
-                caseId: reviewCase.caseId,
-                displayedOption: draft.selectedOption,
-                selectedArtifactId,
-                predictedPositiveBps:
-                  task.taskKind === "binary_review" && task.forecastRequired && draft.predictionPercent !== null
-                    ? draft.predictionPercent * 100
-                    : undefined,
-                failureTagKeys: draft.failureTags,
-                rationale: draft.rationale,
-              };
-            }),
-          }),
+          body: JSON.stringify(requestBody),
         }),
         privateReviewJsonOptions,
       );
       if (privateStateEpoch !== privateStateEpochRef.current) return;
       if (
-        body.accepted !== true ||
-        typeof body.replay !== "boolean" ||
-        typeof body.responseCount !== "number" ||
-        !Number.isSafeInteger(body.responseCount) ||
-        body.compensation !== "unpaid" ||
-        body.settlementStatus !== "not_applicable"
+        !isAssuranceServerAcceptance(body) ||
+        (task.taskKind !== "dsa_reference_panel" && body.compensation !== "unpaid")
       ) {
         throw new Error(t("acceptanceIncomplete"));
       }
-      const acceptance = body as AssuranceServerAcceptance;
+      const acceptance = body;
       saveReviewReceipt("private", task.assignmentId, acceptance, { principalId: activePrincipalId! });
       setServerAcceptance(acceptance);
       clearReviewDraft("private", task.assignmentId, privateDraftStorage);
     } catch {
       if (privateStateEpoch !== privateStateEpochRef.current) return;
-      setError(t("submitFailed"));
+      setError(task.taskKind === "dsa_reference_panel" ? t("dsaSubmitFailed") : t("submitFailed"));
     } finally {
       if (privateStateEpoch === privateStateEpochRef.current) setBusyAction(null);
     }
@@ -776,7 +1012,9 @@ export function HumanAssuranceRaterClient({
             task
               ? task.taskKind === "binary_review"
                 ? t("binaryDescription")
-                : t("comparisonDescription")
+                : task.taskKind === "dsa_reference_panel"
+                  ? t("dsaDescription")
+                  : t("comparisonDescription")
               : t("invitationDescription")
           }
         />
@@ -785,7 +1023,53 @@ export function HumanAssuranceRaterClient({
       <div className={presentation === "embedded" ? "" : "mt-8"}>
         <div className="space-y-6">
           {!task ? (
-            presentation === "embedded" ? (
+            pendingDsaAcceptance ? (
+              <Card as="section" className="rounded-2xl p-5 sm:p-7" aria-labelledby="dsa-conflict-title">
+                <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-green)]">
+                  {t("dsaLane")}
+                </p>
+                <h2 id="dsa-conflict-title" className="mt-2 text-2xl font-semibold">
+                  {t("dsaConflictTitle")}
+                </h2>
+                <p className="mt-3 text-sm leading-6 text-base-content/65">{t("dsaConflictDescription")}</p>
+                <DeadlineChip deadline={draftExpiresAt} label={t("submitDeadline")} />
+                <label
+                  htmlFor="dsa-reference-panel-conflict-confirmation"
+                  className="mt-5 flex items-start gap-3 rounded-lg border border-base-content/10 p-4 text-sm leading-6 text-base-content/70"
+                >
+                  <ChoiceInput
+                    id="dsa-reference-panel-conflict-confirmation"
+                    type="checkbox"
+                    className="checkbox checkbox-sm mt-1"
+                    checked={dsaConflictConfirmed}
+                    onChange={event => setDsaConflictConfirmed(event.target.checked)}
+                  />
+                  <span>{t("dsaConflictConfirmation")}</span>
+                </label>
+                <Button
+                  type="button"
+                  className="mt-5 w-full px-6 sm:w-auto"
+                  disabled={!dsaConflictConfirmed || busyAction !== null}
+                  onClick={() => void confirmDsaReferencePanel()}
+                >
+                  {busyAction === "assignment" ? t("dsaOpening") : t("dsaOpen")}
+                </Button>
+                {onContinue ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="mt-3 w-full sm:ml-3 sm:w-auto"
+                    onClick={onContinue}
+                  >
+                    {t("returnQueue")}
+                  </Button>
+                ) : (
+                  <Link href="/human/review" className="mt-4 block text-sm font-semibold underline underline-offset-4">
+                    {t("returnQueue")}
+                  </Link>
+                )}
+              </Card>
+            ) : presentation === "embedded" ? (
               <Card as="article" className="rounded-2xl p-5 sm:p-6">
                 <form onSubmit={openAssignment}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1037,7 +1321,10 @@ export function HumanAssuranceRaterClient({
           ) : (
             <ReviewerShell
               advanceDisabled={
-                busyAction !== null || serverAcceptance !== null || (reviewingResponses ? !completeDraft : false)
+                busyAction !== null ||
+                serverAcceptance !== null ||
+                (task.taskKind === "dsa_reference_panel" && !dsaArtifactReady) ||
+                (reviewingResponses ? !completeDraft : false)
               }
               advanceHint={serverAcceptance || reviewingResponses ? null : activeCaseIssue}
               advanceLabel={
@@ -1058,7 +1345,11 @@ export function HumanAssuranceRaterClient({
               laneHeader={
                 <>
                   <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-green)]">
-                    {task.taskKind === "binary_review" ? t("binaryLane") : t("comparisonLane")}
+                    {task.taskKind === "binary_review"
+                      ? t("binaryLane")
+                      : task.taskKind === "dsa_reference_panel"
+                        ? t("dsaLane")
+                        : t("comparisonLane")}
                   </p>
                   <p className="mt-1 text-sm font-semibold">{resolvedAssignmentTitle}</p>
                   <DeadlineChip deadline={draftExpiresAt} label={t("submitDeadline")} />
@@ -1134,7 +1425,9 @@ export function HumanAssuranceRaterClient({
                       <p className="font-mono text-xs uppercase tracking-widest text-base-content/55">
                         {t("caseLabel", { current: String(activeCaseIndex + 1).padStart(2, "0") })}
                       </p>
-                      <h2 className="mt-2 text-2xl font-semibold">{reviewCase.title}</h2>
+                      <h2 className="mt-2 text-2xl font-semibold">
+                        {reviewCase.dsaReferencePanel ? t("dsaCaseTitle") : reviewCase.title}
+                      </h2>
                       {reviewCase.instructions.trim() &&
                       reviewCase.instructions.trim() !== task.rubric.prompt.trim() ? (
                         <p className="mt-3 text-sm leading-6 text-base-content/60">{reviewCase.instructions}</p>
@@ -1144,7 +1437,53 @@ export function HumanAssuranceRaterClient({
                           {t("objectiveReference", { reference: reviewCase.objectiveReference })}
                         </p>
                       ) : null}
-                      {reviewCase.binaryReview ? (
+                      {reviewCase.dsaReferencePanel ? (
+                        <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_17.25rem]">
+                          <PrivateArtifactPreview
+                            label={t("dsaContent")}
+                            artifactUrl={dsaArtifactUrl(task.assignmentId, reviewCase.dsaReferencePanel.artifactId)}
+                            onAvailabilityChange={availability => setDsaArtifactReady(availability === "ready")}
+                            onRefreshAccess={() => openAssignmentRef.current()}
+                          />
+                          <fieldset className="lg:sticky lg:top-4 lg:self-start">
+                            <legend className="text-sm font-semibold">{task.rubric.prompt}</legend>
+                            <p className="mt-1 text-xs leading-5 text-base-content/55">{t("dsaRatingPrivacy")}</p>
+                            <div className="mt-3 grid gap-3">
+                              {(
+                                [
+                                  ["A", t("dsaPolicyMatches")],
+                                  ["B", t("dsaPolicyDoesNotMatch")],
+                                ] as const
+                              ).map(([key, label]) => (
+                                <label
+                                  key={key}
+                                  htmlFor={`choice-${reviewCase.caseId}-${key}`}
+                                  className={`cursor-pointer rounded-lg border p-4 transition-colors ${
+                                    draft.selectedOption === key
+                                      ? "border-[var(--rateloop-green)] bg-success/10"
+                                      : "border-base-content/10 bg-base-content/[0.03] hover:border-base-content/25"
+                                  }`}
+                                >
+                                  <span className="flex items-center gap-3 font-semibold">
+                                    <ChoiceInput
+                                      id={`choice-${reviewCase.caseId}-${key}`}
+                                      aria-label={label}
+                                      type="radio"
+                                      name={`choice-${reviewCase.caseId}`}
+                                      value={key}
+                                      checked={draft.selectedOption === key}
+                                      disabled={serverAcceptance !== null}
+                                      onClick={() => updateDraft(reviewCase.caseId, { selectedOption: key })}
+                                      onChange={() => updateDraft(reviewCase.caseId, { selectedOption: key })}
+                                    />
+                                    {label}
+                                  </span>
+                                </label>
+                              ))}
+                            </div>
+                          </fieldset>
+                        </div>
+                      ) : reviewCase.binaryReview ? (
                         <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_17.25rem]">
                           <div className="space-y-3">
                             {(
@@ -1282,7 +1621,11 @@ export function HumanAssuranceRaterClient({
                           maxLength={Math.min(2_000, task.rubric.rationale.maxLength)}
                           disabled={serverAcceptance !== null}
                           placeholder={
-                            task.taskKind === "binary_review" ? t("binaryRationale") : t("comparisonRationale")
+                            task.taskKind === "binary_review"
+                              ? t("binaryRationale")
+                              : task.taskKind === "dsa_reference_panel"
+                                ? t("dsaRationale")
+                                : t("comparisonRationale")
                           }
                           required={task.rubric.rationale.mode === "required"}
                         />
@@ -1295,7 +1638,8 @@ export function HumanAssuranceRaterClient({
               {serverAcceptance ? (
                 <Card className="rounded-2xl p-5 sm:p-7" aria-label={t("receipt")}>
                   <p role="status" className="rounded-lg bg-success/10 p-3 text-sm leading-6 text-success">
-                    {serverAcceptance.replay ? t("alreadyRecorded") : t("submitted")} {t("privateClosed")}
+                    {serverAcceptance.replay ? t("alreadyRecorded") : t("submitted")}{" "}
+                    {serverAcceptance.compensation === "paid" ? t("paidPrivateClosed") : t("privateClosed")}
                   </p>
                   <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
                     <div>
@@ -1308,7 +1652,9 @@ export function HumanAssuranceRaterClient({
                     </div>
                     <div>
                       <dt className="text-base-content/55">{t("compensation")}</dt>
-                      <dd className="mt-1">{t("unpaidSettlement")}</dd>
+                      <dd className="mt-1">
+                        {serverAcceptance.compensation === "paid" ? t("paidSettlementPending") : t("unpaidSettlement")}
+                      </dd>
                     </div>
                   </dl>
                   {onContinue ? (

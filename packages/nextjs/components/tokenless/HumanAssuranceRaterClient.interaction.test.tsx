@@ -88,6 +88,43 @@ const binaryTask: AssignmentTask = {
   ],
 };
 
+const dsaTask = {
+  assignmentId: "haas_dsa_named_panel_browser",
+  case: {
+    schemaVersion: "rateloop.dsa-blinded-case.v1",
+    blindedCaseId: `dsa_case_${"a".repeat(40)}`,
+    content: {
+      artifactId: "artifact_dsa_candidate",
+      artifactVersion: 1,
+      contentHash: `sha256:${"3".repeat(64)}`,
+      contentType: "text/plain",
+      language: "en",
+    },
+    policy: {
+      categoryCode: "platform-integrity",
+      policyHash: `sha256:${"4".repeat(64)}`,
+      policyVersion: 1,
+      question: "Does this content violate the frozen platform-integrity policy?",
+    },
+    reference: {
+      populationId: "population_browser",
+      populationVersion: 1,
+      frameId: "frame_browser",
+      frameVersion: 1,
+      sampleId: "rse_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      sampleVersion: 1,
+      position: 0,
+    },
+    mappingCommitment: `sha256:${"5".repeat(64)}`,
+  },
+  responseContract: {
+    schemaVersion: "rateloop.dsa-named-panel-response.v1",
+    caseId: "hacase_dsa_browser",
+    choices: ["policy_matches", "policy_does_not_match"],
+    rationale: { required: true, maximumLength: 2_000 },
+  },
+};
+
 test("direct private tasks fail closed unless unpaid capabilities are explicit and unambiguous", async () => {
   const { validateLoadedAssignmentTask } = await import("./HumanAssuranceRaterClient");
   assert.equal(validateLoadedAssignmentTask(binaryTask).forecastRequired, true);
@@ -108,6 +145,40 @@ test("direct private tasks fail closed unless unpaid capabilities are explicit a
   );
 });
 
+test("DSA reference-panel tasks are normalized only from the exact blinded response contract", async () => {
+  const { validateLoadedAssignmentTask } = await import("./HumanAssuranceRaterClient");
+  const normalized = validateLoadedAssignmentTask(dsaTask);
+  assert.equal(normalized.taskKind, "dsa_reference_panel");
+  assert.equal(normalized.rubric.prompt, dsaTask.case.policy.question);
+  assert.equal(normalized.cases[0]?.dsaReferencePanel?.artifactId, dsaTask.case.content.artifactId);
+  assert.deepEqual(normalized.cases[0]?.dsaReferencePanel?.choices, ["policy_matches", "policy_does_not_match"]);
+
+  assert.throws(
+    () =>
+      validateLoadedAssignmentTask({
+        ...dsaTask,
+        responseContract: { ...dsaTask.responseContract, choices: ["policy_does_not_match", "policy_matches"] },
+      }),
+    /DSA reference-panel task is incomplete/u,
+  );
+  assert.throws(
+    () =>
+      validateLoadedAssignmentTask({
+        ...dsaTask,
+        case: { ...dsaTask.case, mappingCommitment: "not-a-digest" },
+      }),
+    /DSA reference-panel task is incomplete/u,
+  );
+  assert.throws(
+    () =>
+      validateLoadedAssignmentTask({
+        ...dsaTask,
+        case: { ...dsaTask.case, content: { ...dsaTask.case.content, contentType: "invalid" } },
+      }),
+    /DSA reference-panel task is incomplete/u,
+  );
+});
+
 function authenticatedSession(principalId: string) {
   return {
     authenticated: true,
@@ -123,13 +194,14 @@ function privateArtifactResponse(url: string) {
   const artifactText = new Map([
     ["artifact_binary_source", "User asked whether the deployment is ready."],
     ["artifact_binary_suggestion", "The agent answered that every required check passed."],
+    ["artifact_dsa_candidate", "Blinded candidate content for the policy decision."],
     ["haa_private_a", "Candidate A private content."],
     ["haa_private_b", "Candidate B private content."],
     ["haa_private_a_2", "Candidate A second private content."],
     ["haa_private_b_2", "Candidate B second private content."],
   ]).entries();
   for (const [artifactId, body] of artifactText) {
-    if (url.includes(`/artifacts/${artifactId}?`)) {
+    if (url.includes(`/artifacts/${artifactId}?`) || url.endsWith(`/artifacts/${artifactId}`)) {
       return new Response(body, { headers: { "Content-Type": "text/plain" } });
     }
   }
@@ -257,6 +329,142 @@ test("an unchanged private-group policy opens without asking for terms again", a
         termsHash,
       )}#review-queue`,
     );
+  } finally {
+    cleanup();
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});
+
+test("a DSA named-panel reviewer confirms conflicts, renews exact access, and submits the policy response", async () => {
+  const restoreDom = installTestDom();
+  const { cleanup, render: baseRender, waitFor } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
+  const userEvent = (await import("@testing-library/user-event")).default;
+  const { HumanAssuranceRaterClient } = await import("./HumanAssuranceRaterClient");
+  const previousFetch = globalThis.fetch;
+  const termsHash = `sha256:${"6".repeat(64)}`;
+  const genericAcceptBodies: Record<string, unknown>[] = [];
+  const panelAcceptBodies: Record<string, unknown>[] = [];
+  const submission: { current: Record<string, unknown> | null } = { current: null };
+  let artifactReads = 0;
+
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url === "/api/auth/session") return Response.json(authenticatedSession(PRINCIPAL_A));
+    if (url.endsWith("/accept?includeTask=1") && init?.method === "POST") {
+      genericAcceptBodies.push(JSON.parse(String(init.body)) as Record<string, unknown>);
+      return Response.json({
+        acceptance: {
+          assignmentId: dsaTask.assignmentId,
+          assignmentExpiresAt: "2030-01-02T00:00:00.000Z",
+          accepted: true,
+          replay: genericAcceptBodies.length > 1,
+          leases: [],
+          requiresDsaReferencePanelAcceptance: true,
+        },
+        task: null,
+        nextAction: "accept_dsa_reference_panel",
+      });
+    }
+    if (url.endsWith("/dsa-reference-panel") && init?.method === "POST") {
+      panelAcceptBodies.push(JSON.parse(String(init.body)) as Record<string, unknown>);
+      return Response.json({
+        assignmentId: dsaTask.assignmentId,
+        unitId: "rsu_browser_named_panel_1",
+        assignmentSnapshotHash: `sha256:${"7".repeat(64)}`,
+        idempotent: panelAcceptBodies.length > 1,
+        leaseExpiresAt: "2030-01-01T00:05:00.000Z",
+      });
+    }
+    if (url.endsWith("/task") && (!init?.method || init.method === "GET")) return Response.json(dsaTask);
+    if (url.endsWith(`/artifacts/${dsaTask.case.content.artifactId}`)) {
+      artifactReads += 1;
+      if (artifactReads === 1) return Response.json({ error: "expired" }, { status: 410 });
+      return new Response("Blinded candidate content for the policy decision.", {
+        headers: { "Content-Type": "text/plain" },
+      });
+    }
+    if (url.endsWith("/responses") && init?.method === "POST") {
+      submission.current = JSON.parse(String(init.body)) as Record<string, unknown>;
+      return Response.json({
+        accepted: true,
+        replay: false,
+        responseCount: 1,
+        compensation: "paid",
+        settlementStatus: "pending",
+      });
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  };
+
+  try {
+    const view = render(
+      <HumanAssuranceRaterClient
+        principalId={PRINCIPAL_A}
+        initialAssignmentId={dsaTask.assignmentId}
+        initialTermsHash={termsHash}
+      />,
+    );
+    const user = userEvent.setup({ document });
+    await user.click(
+      view.getByRole("checkbox", {
+        name: "I accept these confidentiality terms for this assigned private work.",
+      }),
+    );
+    await user.click(view.getByRole("button", { name: "Accept terms and open assignment" }));
+
+    await waitFor(() => assert.ok(view.getByRole("heading", { name: "Confirm no disqualifying conflict" })));
+    assert.equal(panelAcceptBodies.length, 0);
+    const confirmButton = view.getByRole("button", { name: "Confirm and open blinded case" });
+    assert.equal((confirmButton as HTMLButtonElement).disabled, true);
+    await user.click(
+      view.getByRole("checkbox", {
+        name: "I did not define the reference question, hold no workspace or project role, and have no relationship that could affect my judgment.",
+      }),
+    );
+    await user.click(confirmButton);
+
+    await waitFor(() => assert.ok(view.getByRole("heading", { name: "Blinded policy case" })));
+    assert.deepEqual(panelAcceptBodies[0], {
+      conflictDeclaration: { hasConflict: false, relationships: [] },
+    });
+    assert.ok(view.getByText(dsaTask.case.policy.question));
+    assert.ok(view.getByText(/Source and automated-outcome metadata are withheld/u));
+    await waitFor(() => assert.ok(view.getByRole("button", { name: "Refresh access" })));
+
+    await user.click(view.getByRole("radio", { name: "Content matches the policy condition" }));
+    const rationale = view.getByRole("textbox", { name: "Decision rationale" });
+    await user.type(rationale, "The content directly matches the frozen criterion.");
+    const submitButton = view.getByRole("button", { name: "Submit review" }) as HTMLButtonElement;
+    assert.equal(submitButton.disabled, true);
+    assert.equal(submission.current, null);
+    assert.ok(view.getByText("Wait for the content under review to load before submitting."));
+    await user.click(view.getByRole("button", { name: "Refresh access" }));
+
+    await waitFor(() => assert.equal(panelAcceptBodies.length, 2));
+    await waitFor(() => assert.ok(view.getByText("Blinded candidate content for the policy decision.")));
+    await waitFor(() => assert.equal(submitButton.disabled, false));
+    assert.equal(
+      (view.getByRole("radio", { name: "Content matches the policy condition" }) as HTMLInputElement).checked,
+      true,
+    );
+    assert.equal(
+      (view.getByRole("textbox", { name: "Decision rationale" }) as HTMLTextAreaElement).value,
+      "The content directly matches the frozen criterion.",
+    );
+
+    await user.click(view.getByRole("button", { name: "Submit review" }));
+    await waitFor(() => assert.ok(submission.current));
+    const submittedBody = submission.current as unknown as Record<string, unknown>;
+    assert.equal("responses" in submittedBody, false);
+    assert.deepEqual(submittedBody.dsaResponse, {
+      choice: "policy_matches",
+      rationale: "The content directly matches the frozen criterion.",
+    });
+    assert.equal(genericAcceptBodies[0]?.confidentialityTermsHash, termsHash);
+    assert.ok(view.getByRole("status").textContent?.includes("Settlement is pending"));
+    assert.ok(view.getByText("Paid · settlement pending"));
   } finally {
     cleanup();
     globalThis.fetch = previousFetch;

@@ -24,10 +24,12 @@ function displayText(contentType: string, raw: string) {
 export function PrivateArtifactPreview({
   artifactUrl,
   label,
+  onAvailabilityChange,
   onRefreshAccess,
 }: {
   artifactUrl: string;
   label: string;
+  onAvailabilityChange?: (availability: "loading" | "ready" | "unavailable") => void;
   onRefreshAccess: () => Promise<void> | void;
 }) {
   const t = useTranslations("review.artifact");
@@ -36,6 +38,7 @@ export function PrivateArtifactPreview({
   const dialogRef = useRef<HTMLDivElement>(null);
   const openerRef = useRef<HTMLButtonElement>(null);
   const textPreviewRef = useRef<HTMLPreElement>(null);
+  const availabilityChangeRef = useRef(onAvailabilityChange);
   const [preview, setPreview] = useState<PreviewValue | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -44,11 +47,16 @@ export function PrivateArtifactPreview({
   const [reloadGeneration, setReloadGeneration] = useState(0);
 
   useEffect(() => {
+    availabilityChangeRef.current = onAvailabilityChange;
+  }, [onAvailabilityChange]);
+
+  useEffect(() => {
     const controller = new AbortController();
     let objectUrl: string | null = null;
     setLoading(true);
     setError(null);
     setPreview(null);
+    availabilityChangeRef.current?.("loading");
     void (async () => {
       try {
         const response = await fetch(artifactUrl, {
@@ -71,9 +79,11 @@ export function PrivateArtifactPreview({
         } else {
           setPreview({ kind: "unsupported", contentType });
         }
+        availabilityChangeRef.current?.("ready");
       } catch {
         if (!controller.signal.aborted) {
           setError(t("unavailable"));
+          availabilityChangeRef.current?.("unavailable");
         }
       } finally {
         if (!controller.signal.aborted) setLoading(false);
