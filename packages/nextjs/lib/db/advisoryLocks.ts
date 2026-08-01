@@ -17,7 +17,7 @@ export class AdvisoryLockUnavailableError extends Error {
 }
 
 export async function acquireTransactionAdvisoryLock(client: AdvisoryLockClient, lockKey: string) {
-  const result = await client.query("SELECT pg_try_advisory_xact_lock(hashtextextended($1,0)) AS acquired", [lockKey]);
+  const result = await client.query("SELECT pg_try_advisory_xact_lock(hashtext($1)) AS acquired", [lockKey]);
   if (result.rows[0]?.acquired !== true) {
     throw new AdvisoryLockUnavailableError();
   }

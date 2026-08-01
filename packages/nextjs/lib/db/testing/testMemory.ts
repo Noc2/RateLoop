@@ -358,13 +358,6 @@ export function createMemoryDatabaseResources(
     implementation: value => [...value].reduce((hash, character) => (hash * 31 + character.charCodeAt(0)) | 0, 0),
   });
   memoryDb.public.registerFunction({
-    name: "hashtextextended",
-    args: [DataType.text, DataType.integer],
-    returns: DataType.bigint,
-    implementation: (value, seed) =>
-      [...value].reduce((hash, character) => (hash * 31 + character.charCodeAt(0)) | 0, seed),
-  });
-  memoryDb.public.registerFunction({
     name: "set_config",
     args: [DataType.text, DataType.text, DataType.bool],
     returns: DataType.text,
@@ -421,12 +414,6 @@ export function createMemoryDatabaseResources(
   memoryDb.public.registerFunction({
     name: "pg_try_advisory_xact_lock",
     args: [DataType.integer],
-    returns: DataType.bool,
-    implementation: () => true,
-  });
-  memoryDb.public.registerFunction({
-    name: "pg_try_advisory_xact_lock",
-    args: [DataType.bigint],
     returns: DataType.bool,
     implementation: () => true,
   });

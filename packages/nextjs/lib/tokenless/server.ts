@@ -18,6 +18,7 @@ import {
 import { and, eq } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
 import { db, dbClient } from "~~/lib/db";
+import { AdvisoryLockUnavailableError } from "~~/lib/db/advisoryLocks";
 import { tokenlessAgentAsks, tokenlessAgentQuotes } from "~~/lib/db/schema";
 import { assertDataIngressPolicy } from "~~/lib/privacy/dataPolicy";
 import {
@@ -835,13 +836,13 @@ export async function getTokenlessResult(operationKey: string): Promise<Tokenles
 }
 
 export function tokenlessErrorResponse(error: unknown) {
-  if (error instanceof TokenlessServiceError) {
+  if (error instanceof TokenlessServiceError || error instanceof AdvisoryLockUnavailableError) {
     return {
       body: {
         code: error.code,
         message: error.message,
         retryable: error.retryable,
-        ...(error.field ? { field: error.field } : {}),
+        ...(error instanceof TokenlessServiceError && error.field ? { field: error.field } : {}),
       },
       status: error.status,
     };

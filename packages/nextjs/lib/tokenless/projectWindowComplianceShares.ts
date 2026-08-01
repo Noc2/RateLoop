@@ -795,29 +795,30 @@ export async function issueProjectWindowComplianceShare(
   ) {
     invalid("A report version may be requested only once.", "reportVersions");
   }
+  const actor = normalizeActor(input.accountAddress);
+  const issuance = deriveCapabilityIssuanceIdempotency({
+    capabilityKind: "project_window_compliance_share",
+    actorPrincipalId: actor,
+    workspaceId: input.workspaceId,
+    projectId: input.projectId,
+    idempotencyKey: input.idempotencyKey,
+    request: {
+      evidenceWindowStart: input.evidenceWindowStart.toISOString(),
+      evidenceWindowEnd: input.evidenceWindowEnd.toISOString(),
+      evidencePacketIds: [...input.evidencePacketIds].sort(),
+      reportVersions: [...input.reportVersions].sort((left, right) =>
+        left.reportId === right.reportId
+          ? left.reportVersion - right.reportVersion
+          : left.reportId < right.reportId
+            ? -1
+            : 1,
+      ),
+      expiresAt: input.expiresAt.toISOString(),
+    },
+  });
   return withSerializable(async client => {
-    const actor = await requireManagerProject(client, input);
-    const issuance = deriveCapabilityIssuanceIdempotency({
-      capabilityKind: "project_window_compliance_share",
-      actorPrincipalId: actor,
-      workspaceId: input.workspaceId,
-      projectId: input.projectId,
-      idempotencyKey: input.idempotencyKey,
-      request: {
-        evidenceWindowStart: input.evidenceWindowStart.toISOString(),
-        evidenceWindowEnd: input.evidenceWindowEnd.toISOString(),
-        evidencePacketIds: [...input.evidencePacketIds].sort(),
-        reportVersions: [...input.reportVersions].sort((left, right) =>
-          left.reportId === right.reportId
-            ? left.reportVersion - right.reportVersion
-            : left.reportId < right.reportId
-              ? -1
-              : 1,
-        ),
-        expiresAt: input.expiresAt.toISOString(),
-      },
-    });
     await acquireTransactionAdvisoryLock(client, issuance.idempotencyKeyDigest);
+    await requireManagerProject(client, input);
     const existingResult = await client.query(
       `SELECT i.request_binding_hash,s.*
          FROM tokenless_project_window_compliance_share_issuances i

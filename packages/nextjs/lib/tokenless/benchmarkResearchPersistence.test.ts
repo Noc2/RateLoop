@@ -214,6 +214,10 @@ test("grant issuance replay returns no second bearer token and request mismatch 
     database.queries.some(query => query.text === "COMMIT"),
     true,
   );
+  assert.ok(
+    database.queries.findIndex(query => query.text.includes("pg_try_advisory_xact_lock")) <
+      database.queries.findIndex(query => query.text.includes("FROM tokenless_workspaces w")),
+  );
 
   const conflictDatabase = fakePool(async text => {
     if (text.includes("pg_try_advisory_xact_lock")) return { rows: [{ acquired: true }] };

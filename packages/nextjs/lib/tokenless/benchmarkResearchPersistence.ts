@@ -725,22 +725,29 @@ export function createBenchmarkResearchPersistence(input?: {
       tokenLookupKeyId: string;
       recipientBindingKeyId: string;
     }) {
+      if (!isRateLoopPrincipalId(grantInput.authenticatedManagerPrincipalId)) {
+        throw new TokenlessServiceError(
+          "Benchmark research project not found.",
+          404,
+          "benchmark_research_project_not_found",
+        );
+      }
+      const issuance = deriveCapabilityIssuanceIdempotency({
+        capabilityKind: "benchmark_research_grant",
+        actorPrincipalId: grantInput.authenticatedManagerPrincipalId,
+        workspaceId: grantInput.workspaceId,
+        projectId: grantInput.projectId,
+        idempotencyKey: grantInput.idempotencyKey,
+        request: {
+          recipientPrincipalId: grantInput.recipientPrincipalId,
+          exportId: grantInput.exportId,
+          purpose: grantInput.purpose,
+          durationMs: grantInput.durationMs,
+        },
+      });
       return withSerializable(pool, async client => {
-        await requireActiveManager(client, grantInput);
-        const issuance = deriveCapabilityIssuanceIdempotency({
-          capabilityKind: "benchmark_research_grant",
-          actorPrincipalId: grantInput.authenticatedManagerPrincipalId,
-          workspaceId: grantInput.workspaceId,
-          projectId: grantInput.projectId,
-          idempotencyKey: grantInput.idempotencyKey,
-          request: {
-            recipientPrincipalId: grantInput.recipientPrincipalId,
-            exportId: grantInput.exportId,
-            purpose: grantInput.purpose,
-            durationMs: grantInput.durationMs,
-          },
-        });
         await acquireTransactionAdvisoryLock(client, issuance.idempotencyKeyDigest);
+        await requireActiveManager(client, grantInput);
         const existingResult = await client.query(
           `SELECT i.request_binding_hash,g.grant_json,g.event_digest,g.token_lookup_key_id
              FROM tokenless_benchmark_research_grant_issuances i

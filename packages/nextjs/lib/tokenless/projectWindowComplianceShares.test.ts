@@ -253,6 +253,10 @@ test("share issuance replay returns no second bearer secret and mismatched reque
     false,
   );
   assert.equal(replayDatabase.queries.includes("COMMIT"), true);
+  assert.ok(
+    replayDatabase.queries.findIndex(query => query.includes("pg_try_advisory_xact_lock")) <
+      replayDatabase.queries.findIndex(query => query.includes("FROM tokenless_workspace_members m")),
+  );
 
   const conflictDatabase = fakePool(digest("0"));
   await assert.rejects(
