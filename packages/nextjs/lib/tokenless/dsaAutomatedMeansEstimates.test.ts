@@ -12,6 +12,7 @@ import {
   type ReferenceFrameSourceBinding,
   type ReferenceFrameUnit,
   createReferenceFrameCommitment,
+  deriveReferenceSystemIdentity,
   freezeReferenceSample,
 } from "~~/lib/tokenless/referenceSampling";
 
@@ -40,20 +41,23 @@ const source: ReferenceFrameSourceBinding = {
   benchmarkId: "benchmark_public_safe_1",
   activationReference: "activation_public_safe_1",
   deploymentKey: "deployment_tokenless_1",
+  contextAuthority: "workspace_manager_asserted_context",
   populationId: "population_reference_1",
   populationVersion: 1,
   populationContractHash: `sha256:${"0".repeat(64)}`,
   populationRoot: `sha256:${"1".repeat(64)}`,
+  populationFrozenAt: "2023-07-01T00:00:00.000Z",
   reportingWindow: { startInclusive: "2023-06-01T00:00:00.000Z", endExclusive: "2023-07-01T00:00:00.000Z" },
   populationCount: 7,
   eligibleDrawUnitCount: 5,
-  uncertainAlwaysReviewCount: 1,
-  excludedUnitCount: 1,
+  evaluatedDecisionCount: 5,
+  notAutomatedDecisionCount: 1,
+  excludedDecisionCount: 1,
 };
 const witness = {
   kind: "database_transaction_and_attestation" as const,
   witnessId: "witness_frame_commit_1",
-  sourceFrozenAt: "2023-07-01T00:00:00.000Z",
+  sourceFrozenAt: "2023-07-01T00:00:01.000Z",
   committedAt: "2023-07-01T00:00:01.000Z",
   auditHeadDigest: `sha256:${"2".repeat(64)}` as const,
 };
@@ -63,13 +67,29 @@ const frozenWitness = {
   frozenAt: "2023-07-14T00:00:00.000Z",
   auditHeadDigest: `sha256:${"3".repeat(64)}` as const,
 };
-const classifier = { systemId: "classifier_safety", version: "v1", machineClass: "text_classifier" } as const;
+const classifier = {
+  systemId: "classifier_safety",
+  systemVersion: "v1",
+  machineClass: "text_classifier",
+  publicDesignation: "Safety text classifier",
+} as const;
+const unobservedClassifier = {
+  systemId: "classifier_unobserved",
+  systemVersion: "v1",
+  machineClass: "multimodal_classifier",
+  publicDesignation: "Safety media classifier",
+} as const;
 
 function unit(character: string, automatedOutcome: "pass" | "fail", day: number): ReferenceFrameUnit {
   return {
     unitId: `rsu_${character.repeat(22)}`,
     sourceDecisionBinding: `sha256:${character.repeat(64)}` as `sha256:${string}`,
+    sourceEvaluationBinding: digest(character.charCodeAt(0)),
+    sourceEvaluationHash: digest(character.charCodeAt(0) + 100),
     decidedAt: `2023-06-${String(day).padStart(2, "0")}T12:00:00.000Z`,
+    automationProcessing: day % 2 === 0 ? "partially_automated" : "solely_automated",
+    systemIdentity: deriveReferenceSystemIdentity(classifier),
+    ...classifier,
     automatedOutcome,
     referenceLabelState: "unlabeled",
   };
@@ -88,7 +108,9 @@ const commitment = createReferenceFrameCommitment({
   source,
   witness,
   units,
-  sampleSizes: { automated_pass: 2, automated_fail: 1 },
+  sampleSizes: [
+    { systemId: classifier.systemId, systemVersion: classifier.systemVersion, automatedPass: 2, automatedFail: 1 },
+  ],
   sampleSizePlanId: "sample_plan_pilot_1",
   sampleSizePlanVersion: 1,
   beaconNetwork: "quicknet-t",
@@ -108,7 +130,13 @@ function facts(
     >
   > = {},
 ) {
-  const references: Record<string, "pass" | "fail"> = { a: "pass", c: "fail", d: "fail" };
+  const references: Record<string, "pass" | "fail"> = {
+    a: "pass",
+    b: "pass",
+    c: "fail",
+    d: "fail",
+    e: "fail",
+  };
   const origins: Record<string, Pick<DsaAutomatedMeansReferenceFact, "origin" | "notifierClass">> = {
     a: { origin: "own_initiative", notifierClass: null },
     b: { origin: "own_initiative", notifierClass: null },
@@ -123,8 +151,10 @@ function facts(
     return {
       unitId: frameUnit.unitId,
       sourceDecisionBinding: frameUnit.sourceDecisionBinding,
-      sourceFactHash: digest(index + 10),
-      classifier,
+      sourceEvaluationBinding: frameUnit.sourceEvaluationBinding,
+      sourceEvaluationHash: frameUnit.sourceEvaluationHash,
+      system: classifier,
+      automationProcessing: frameUnit.automationProcessing,
       languageCodes: ["en"] as const,
       ...origins[character]!,
       referenceOutcome,
@@ -137,6 +167,7 @@ function facts(
 function input(overrides: Partial<DsaAutomatedMeansEstimateInput> = {}): DsaAutomatedMeansEstimateInput {
   return {
     providerType: "vlop",
+    systemInventory: [classifier],
     commitment,
     frameUnits: units,
     sample,
@@ -149,14 +180,22 @@ function input(overrides: Partial<DsaAutomatedMeansEstimateInput> = {}): DsaAuto
 
 test("computes exact witnessed point estimates while keeping publication blocked", () => {
   const result = estimateDsaAutomatedMeansMetrics(input({ providerType: "intermediary_service" }));
+  assert.deepEqual(
+    {
+      evaluated: result.frame.source.evaluatedDecisionCount,
+      notAutomated: result.frame.source.notAutomatedDecisionCount,
+      contextAuthority: result.frame.source.contextAuthority,
+    },
+    { evaluated: 5, notAutomated: 1, contextAuthority: "workspace_manager_asserted_context" },
+  );
   const cells = Object.fromEntries(
     result.cells.filter(cell => cell.scope === "Total number").map(cell => [cell.metric, cell]),
   );
   assert.deepEqual(cells.accuracy?.result, {
     status: "internal_point_estimate",
-    exactNumerator: "7",
-    exactDenominator: "10",
-    decimal: "0.7",
+    exactNumerator: "1",
+    exactDenominator: "1",
+    decimal: "1",
     interval: null,
     publicationEligible: false,
   });
@@ -170,17 +209,17 @@ test("computes exact witnessed point estimates while keeping publication blocked
   });
   assert.deepEqual(cells.recall?.result, {
     status: "internal_point_estimate",
-    exactNumerator: "4",
-    exactDenominator: "7",
-    decimal: "0.57142857",
+    exactNumerator: "1",
+    exactDenominator: "1",
+    decimal: "1",
     interval: null,
     publicationEligible: false,
   });
   assert.deepEqual(cells.accuracy?.weightedConfusion, {
     truePositive: "2/1",
     falsePositive: "0/1",
-    trueNegative: "3/2",
-    falseNegative: "3/2",
+    trueNegative: "3/1",
+    falseNegative: "0/1",
   });
   assert.deepEqual(result.publication, {
     eligible: false,
@@ -195,6 +234,17 @@ test("computes exact witnessed point estimates while keeping publication blocked
   });
   assert.equal(result.frame.sampleSizePlan.methodReviewStatus, "pending_external_method_review");
   assert.deepEqual(result.cells[0]?.limitations, REFERENCE_SAMPLE_PLAN_LIMITATIONS);
+});
+
+test("emits empty-scope gaps for every scope of a complete but unobserved classifier", () => {
+  const result = estimateDsaAutomatedMeansMetrics(input({ systemInventory: [classifier, unobservedClassifier] }));
+  const unobserved = result.cells.filter(cell => cell.system.systemId === unobservedClassifier.systemId);
+  assert.equal(unobserved.length, 28 * 3);
+  assert.ok(
+    unobserved.every(
+      cell => cell.populationCount === 0 && cell.result.status === "coverage_gap" && cell.result.code === "empty_scope",
+    ),
+  );
 });
 
 test("emits only the official scopes applicable to each provider type", () => {
@@ -274,40 +324,40 @@ test("assigns origin, notice, trusted-flagger, multi-language, and no-language u
       "Total number": {
         population: 5,
         selected: 3,
-        confusion: { truePositive: "2/1", falsePositive: "0/1", trueNegative: "3/2", falseNegative: "3/2" },
+        confusion: { truePositive: "2/1", falsePositive: "0/1", trueNegative: "3/1", falseNegative: "0/1" },
       },
       "Own-initiative": {
         population: 2,
-        selected: 1,
-        confusion: { truePositive: "0/1", falsePositive: "0/1", trueNegative: "3/2", falseNegative: "0/1" },
+        selected: 2,
+        confusion: { truePositive: "0/1", falsePositive: "0/1", trueNegative: "3/1", falseNegative: "0/1" },
       },
       "NAM Total": {
         population: 2,
-        selected: 2,
-        confusion: { truePositive: "2/1", falsePositive: "0/1", trueNegative: "0/1", falseNegative: "3/2" },
+        selected: 1,
+        confusion: { truePositive: "2/1", falsePositive: "0/1", trueNegative: "0/1", falseNegative: "0/1" },
       },
       "NAM Trusted Flagger": {
         population: 1,
-        selected: 1,
-        confusion: { truePositive: "0/1", falsePositive: "0/1", trueNegative: "0/1", falseNegative: "3/2" },
+        selected: 0,
+        confusion: { truePositive: "0/1", falsePositive: "0/1", trueNegative: "0/1", falseNegative: "0/1" },
       },
       de: {
         population: 3,
-        selected: 1,
-        confusion: { truePositive: "0/1", falsePositive: "0/1", trueNegative: "3/2", falseNegative: "0/1" },
+        selected: 2,
+        confusion: { truePositive: "0/1", falsePositive: "0/1", trueNegative: "3/1", falseNegative: "0/1" },
       },
       en: {
         population: 2,
-        selected: 2,
-        confusion: { truePositive: "0/1", falsePositive: "0/1", trueNegative: "3/2", falseNegative: "3/2" },
+        selected: 1,
+        confusion: { truePositive: "0/1", falsePositive: "0/1", trueNegative: "3/2", falseNegative: "0/1" },
       },
     },
   );
   assert.deepEqual(accuracy.de?.result, {
     status: "internal_point_estimate",
     exactNumerator: "1",
-    exactDenominator: "2",
-    decimal: "0.5",
+    exactDenominator: "1",
+    decimal: "1",
     interval: null,
     publicationEligible: false,
   });
@@ -318,10 +368,10 @@ test("returns typed gaps for unsampled, unfinished, empty, and zero-denominator 
     input({
       facts: facts({
         a: { languageCodes: [] },
-        b: { languageCodes: ["de"] },
+        b: { languageCodes: [] },
         c: { languageCodes: [] },
         d: { languageCodes: [] },
-        e: { languageCodes: [] },
+        e: { languageCodes: ["de"] },
       }),
     }),
   );
@@ -339,13 +389,13 @@ test("returns typed gaps for unsampled, unfinished, empty, and zero-denominator 
   });
 
   const unfinished = estimateDsaAutomatedMeansMetrics(
-    input({ facts: facts({ a: { referenceOutcome: "uncertain" } }) }),
+    input({ facts: facts({ b: { referenceOutcome: "uncertain" } }) }),
   );
   assert.deepEqual(
     unfinished.cells.find(cell => cell.scope === "Own-initiative" && cell.metric === "accuracy")?.result,
     {
       status: "coverage_gap",
-      code: "no_completed_reference_units",
+      code: "missing_selected_reference_outcome",
       value: null,
       publicationEligible: false,
     },
@@ -357,11 +407,9 @@ test("returns typed gaps for unsampled, unfinished, empty, and zero-denominator 
     publicationEligible: false,
   });
 
-  const noPredictedRemoval = estimateDsaAutomatedMeansMetrics(
-    input({ facts: facts({ d: { referenceOutcome: "pass" } }) }),
-  );
+  const noPredictedRemoval = estimateDsaAutomatedMeansMetrics(input());
   assert.deepEqual(
-    noPredictedRemoval.cells.find(cell => cell.scope === "NAM Trusted Flagger" && cell.metric === "precision")?.result,
+    noPredictedRemoval.cells.find(cell => cell.scope === "Own-initiative" && cell.metric === "recall")?.result,
     {
       status: "coverage_gap",
       code: "zero_denominator",
@@ -408,7 +456,7 @@ test("rejects sample, probability, membership, fact, and label substitutions", (
       estimateDsaAutomatedMeansMetrics(
         input({
           facts: facts().map((fact, index) =>
-            index === 0 ? { ...fact, classifier: { ...classifier, machineClass: "free_form" as never } } : fact,
+            index === 0 ? { ...fact, system: { ...classifier, machineClass: "free_form" as never } } : fact,
           ),
         }),
       ),
@@ -433,7 +481,9 @@ test("binds the complete label manifest and verifies a stable, replay-resistant 
     source,
     witness,
     units,
-    sampleSizes: { automated_pass: 2, automated_fail: 1 },
+    sampleSizes: [
+      { systemId: classifier.systemId, systemVersion: classifier.systemVersion, automatedPass: 2, automatedFail: 1 },
+    ],
     sampleSizePlanId: "sample_plan_dsa_pilot_1",
     sampleSizePlanVersion: 1,
     beaconNetwork: "quicknet-t",

@@ -4,6 +4,8 @@ import {
   DSA_PART8_CLASSIFIER_MACHINE_CLASSES,
   DSA_PART8_NOTIFIER_CLASSES,
   DSA_PART8_ORIGINS,
+  DSA_PART8_PARTIALLY_AUTOMATED,
+  DSA_PART8_SOLELY_AUTOMATED,
   EU_OFFICIAL_LANGUAGE_CODES,
 } from "~~/lib/tokenless/dsaPart8SourceFacts";
 import {
@@ -16,8 +18,9 @@ import {
 import type { TokenlessReferenceSampleBeacon } from "~~/lib/tokenless/referenceSamplingBeacon";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
-export const DSA_AUTOMATED_MEANS_ESTIMATE_SCHEMA_VERSION = "rateloop.dsa-part8-automated-means-estimate.v1" as const;
-export const DSA_AUTOMATED_MEANS_ESTIMATOR_VERSION = "horvitz-thompson-point-estimate-v1" as const;
+export const DSA_AUTOMATED_MEANS_ESTIMATE_SCHEMA_VERSION = "rateloop.dsa-part8-automated-means-estimate.v3" as const;
+export const DSA_AUTOMATED_MEANS_ESTIMATOR_VERSION = "horvitz-thompson-system-stratified-point-estimate-v3" as const;
+export const DSA_AUTOMATED_MEANS_MAX_CLASSIFIERS = 64 as const;
 
 const SHA256 = /^sha256:[0-9a-f]{64}$/u;
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,159}$/u;
@@ -41,14 +44,23 @@ export type DsaAutomatedMeansProviderType =
 export type DsaAutomatedMeansReferenceFact = Readonly<{
   unitId: string;
   sourceDecisionBinding: `sha256:${string}`;
-  sourceFactHash: `sha256:${string}`;
-  classifier: Readonly<{ systemId: string; version: string; machineClass: MachineClass }>;
+  sourceEvaluationBinding: `sha256:${string}`;
+  sourceEvaluationHash: `sha256:${string}`;
+  system: Readonly<{
+    systemId: string;
+    systemVersion: string;
+    machineClass: MachineClass;
+    publicDesignation: string;
+  }>;
+  automationProcessing: typeof DSA_PART8_SOLELY_AUTOMATED | typeof DSA_PART8_PARTIALLY_AUTOMATED;
   languageCodes: readonly EuLanguage[];
   origin: Origin;
   notifierClass: NotifierClass | null;
   referenceOutcome: "pass" | "fail" | "uncertain" | null;
   referenceLabelBinding: `sha256:${string}` | null;
 }>;
+
+export type DsaAutomatedMeansSystemInventoryEntry = DsaAutomatedMeansReferenceFact["system"];
 
 export type DsaAutomatedMeansMetric = "accuracy" | "precision" | "recall";
 export type DsaAutomatedMeansScope =
@@ -59,7 +71,7 @@ export type DsaAutomatedMeansScope =
   | EuLanguage;
 
 export type DsaAutomatedMeansEstimateCell = Readonly<{
-  system: Readonly<{ systemId: string; version: string; machineClass: MachineClass }>;
+  system: DsaAutomatedMeansSystemInventoryEntry;
   scope: DsaAutomatedMeansScope;
   metric: DsaAutomatedMeansMetric;
   populationCount: number;
@@ -97,6 +109,7 @@ export type DsaAutomatedMeansEstimateCell = Readonly<{
 
 export type DsaAutomatedMeansEstimateInput = Readonly<{
   providerType: DsaAutomatedMeansProviderType;
+  systemInventory: readonly DsaAutomatedMeansSystemInventoryEntry[];
   commitment: ReferenceFrameCommitment;
   frameUnits: readonly ReferenceFrameUnit[];
   sample: FrozenReferenceSample;
@@ -157,7 +170,59 @@ function rationalText(value: Rational) {
   return `${value.numerator}/${value.denominator}`;
 }
 
-function normalizeFacts(facts: readonly DsaAutomatedMeansReferenceFact[], sample: FrozenReferenceSample) {
+function classifierKey(classifier: DsaAutomatedMeansSystemInventoryEntry) {
+  return `${classifier.systemId}\u0000${classifier.systemVersion}\u0000${classifier.machineClass}`;
+}
+
+function classifierIdentity(classifier: DsaAutomatedMeansSystemInventoryEntry) {
+  return `${classifier.systemId}\u0000${classifier.systemVersion}`;
+}
+
+function normalizeSystemInventory(inventory: readonly DsaAutomatedMeansSystemInventoryEntry[]) {
+  if (!Array.isArray(inventory) || inventory.length === 0 || inventory.length > DSA_AUTOMATED_MEANS_MAX_CLASSIFIERS) {
+    invalid(
+      `systemInventory must contain between 1 and ${DSA_AUTOMATED_MEANS_MAX_CLASSIFIERS} systems.`,
+      "systemInventory",
+    );
+  }
+  const normalized = inventory.map((system, index) => {
+    if (
+      !system ||
+      typeof system !== "object" ||
+      !exactKeys(system, ["systemId", "systemVersion", "machineClass", "publicDesignation"]) ||
+      !IDENTIFIER.test(system.systemId) ||
+      !IDENTIFIER.test(system.systemVersion) ||
+      !DSA_PART8_CLASSIFIER_MACHINE_CLASSES.includes(system.machineClass) ||
+      typeof system.publicDesignation !== "string" ||
+      system.publicDesignation.trim() !== system.publicDesignation ||
+      system.publicDesignation.length === 0 ||
+      system.publicDesignation.length > 160 ||
+      /[\u0000-\u001f\u007f]/u.test(system.publicDesignation) ||
+      /^[=+@-]/u.test(system.publicDesignation)
+    ) {
+      invalid("systemInventory contains an invalid classifier.", `systemInventory[${index}]`);
+    }
+    return { ...system };
+  });
+  const keys = normalized.map(classifierKey);
+  const identities = normalized.map(classifierIdentity);
+  const designations = normalized.map(system => system.publicDesignation.toLocaleLowerCase("en-US"));
+  if (
+    new Set(keys).size !== keys.length ||
+    new Set(identities).size !== identities.length ||
+    new Set(designations).size !== designations.length ||
+    keys.some((key, index) => index > 0 && portableCompare(keys[index - 1]!, key) >= 0)
+  ) {
+    invalid("systemInventory must be canonical with unique system/version identities.", "systemInventory");
+  }
+  return normalized;
+}
+
+function normalizeFacts(
+  facts: readonly DsaAutomatedMeansReferenceFact[],
+  sample: FrozenReferenceSample,
+  inventory: readonly DsaAutomatedMeansSystemInventoryEntry[],
+) {
   if (
     !Array.isArray(facts) ||
     facts.length === 0 ||
@@ -173,8 +238,10 @@ function normalizeFacts(facts: readonly DsaAutomatedMeansReferenceFact[], sample
       !exactKeys(fact, [
         "unitId",
         "sourceDecisionBinding",
-        "sourceFactHash",
-        "classifier",
+        "sourceEvaluationBinding",
+        "sourceEvaluationHash",
+        "system",
+        "automationProcessing",
         "languageCodes",
         "origin",
         "notifierClass",
@@ -183,13 +250,17 @@ function normalizeFacts(facts: readonly DsaAutomatedMeansReferenceFact[], sample
       ]) ||
       !UNIT_ID.test(fact.unitId) ||
       !SHA256.test(fact.sourceDecisionBinding) ||
-      !SHA256.test(fact.sourceFactHash) ||
-      !fact.classifier ||
-      typeof fact.classifier !== "object" ||
-      !exactKeys(fact.classifier, ["systemId", "version", "machineClass"]) ||
-      !IDENTIFIER.test(fact.classifier.systemId) ||
-      !IDENTIFIER.test(fact.classifier.version) ||
-      !DSA_PART8_CLASSIFIER_MACHINE_CLASSES.includes(fact.classifier.machineClass) ||
+      !SHA256.test(fact.sourceEvaluationBinding) ||
+      !SHA256.test(fact.sourceEvaluationHash) ||
+      !fact.system ||
+      typeof fact.system !== "object" ||
+      !exactKeys(fact.system, ["systemId", "systemVersion", "machineClass", "publicDesignation"]) ||
+      !IDENTIFIER.test(fact.system.systemId) ||
+      !IDENTIFIER.test(fact.system.systemVersion) ||
+      !DSA_PART8_CLASSIFIER_MACHINE_CLASSES.includes(fact.system.machineClass) ||
+      typeof fact.system.publicDesignation !== "string" ||
+      (fact.automationProcessing !== DSA_PART8_SOLELY_AUTOMATED &&
+        fact.automationProcessing !== DSA_PART8_PARTIALLY_AUTOMATED) ||
       !Array.isArray(fact.languageCodes) ||
       fact.languageCodes.some((code: string) => !EU_LANGUAGES.has(code)) ||
       [...fact.languageCodes].sort(portableCompare).some((code, index) => code !== fact.languageCodes[index]) ||
@@ -211,11 +282,20 @@ function normalizeFacts(facts: readonly DsaAutomatedMeansReferenceFact[], sample
   normalized.sort((left, right) => portableCompare(left.unitId, right.unitId));
   if (
     new Set(normalized.map(fact => fact.unitId)).size !== normalized.length ||
-    new Set(normalized.map(fact => fact.sourceDecisionBinding)).size !== normalized.length ||
+    new Set(normalized.map(fact => fact.sourceEvaluationBinding)).size !== normalized.length ||
     new Set(normalized.filter(fact => fact.referenceLabelBinding !== null).map(fact => fact.referenceLabelBinding))
       .size !== normalized.filter(fact => fact.referenceLabelBinding !== null).length
   ) {
     invalid("Automated-means facts and reference labels must be unique.", "facts");
+  }
+  const inventoryByKey = new Map(inventory.map(system => [classifierKey(system), system]));
+  if (
+    normalized.some(fact => {
+      const system = inventoryByKey.get(classifierKey(fact.system));
+      return !system || canonicalizeRfc8785(system) !== canonicalizeRfc8785(fact.system);
+    })
+  ) {
+    invalid("A reference fact uses a classifier absent from the complete system inventory.", "facts");
   }
   normalized.forEach((fact, index) => {
     const manifest = sample.manifest[index];
@@ -223,16 +303,19 @@ function normalizeFacts(facts: readonly DsaAutomatedMeansReferenceFact[], sample
       !manifest ||
       manifest.unitId !== fact.unitId ||
       manifest.sourceDecisionBinding !== fact.sourceDecisionBinding ||
+      manifest.sourceEvaluationBinding !== fact.sourceEvaluationBinding ||
+      manifest.sourceEvaluationHash !== fact.sourceEvaluationHash ||
+      manifest.automationProcessing !== fact.automationProcessing ||
+      manifest.systemId !== fact.system.systemId ||
+      manifest.systemVersion !== fact.system.systemVersion ||
+      manifest.machineClass !== fact.system.machineClass ||
+      manifest.publicDesignation !== fact.system.publicDesignation ||
       (manifest.selected ? fact.referenceOutcome === null : fact.referenceOutcome !== null)
     ) {
       invalid("Automated-means facts must match every verified sample unit and selection.", "facts");
     }
   });
   return normalized;
-}
-
-function systemKey(fact: DsaAutomatedMeansReferenceFact) {
-  return canonicalizeRfc8785(fact.classifier);
 }
 
 function estimateMetric(
@@ -308,7 +391,16 @@ export function estimateDsaAutomatedMeansMetrics(input: DsaAutomatedMeansEstimat
   if (
     !input ||
     typeof input !== "object" ||
-    !exactKeys(input, ["providerType", "commitment", "frameUnits", "sample", "beacon", "frozenWitness", "facts"])
+    !exactKeys(input, [
+      "providerType",
+      "systemInventory",
+      "commitment",
+      "frameUnits",
+      "sample",
+      "beacon",
+      "frozenWitness",
+      "facts",
+    ])
   ) {
     invalid("Automated-means estimate input is invalid.");
   }
@@ -319,13 +411,13 @@ export function estimateDsaAutomatedMeansMetrics(input: DsaAutomatedMeansEstimat
     beacon: input.beacon,
     frozenWitness: input.frozenWitness,
   });
-  const facts = normalizeFacts(input.facts, sample);
+  const systemInventory = normalizeSystemInventory(input.systemInventory);
+  const facts = normalizeFacts(input.facts, sample, systemInventory);
   const manifestByUnit = new Map(sample.manifest.map(row => [row.unitId, row]));
-  const systems = new Map<string, DsaAutomatedMeansReferenceFact["classifier"]>();
-  facts.forEach(fact => systems.set(systemKey(fact), fact.classifier));
   const output: DsaAutomatedMeansEstimateCell[] = [];
-  for (const [key, system] of [...systems.entries()].sort(([left], [right]) => portableCompare(left, right))) {
-    const systemFacts = facts.filter(fact => systemKey(fact) === key);
+  for (const system of systemInventory) {
+    const key = classifierKey(system);
+    const systemFacts = facts.filter(fact => classifierKey(fact.system) === key);
     for (const scope of scopesFor(input.providerType)) {
       const population = systemFacts.filter(fact => inScope(fact, scope));
       for (const metric of ["accuracy", "precision", "recall"] as const) {
@@ -390,8 +482,10 @@ export function estimateDsaAutomatedMeansMetrics(input: DsaAutomatedMeansEstimat
     facts.map(fact => ({
       unitId: fact.unitId,
       sourceDecisionBinding: fact.sourceDecisionBinding,
-      sourceFactHash: fact.sourceFactHash,
-      classifier: fact.classifier,
+      sourceEvaluationBinding: fact.sourceEvaluationBinding,
+      sourceEvaluationHash: fact.sourceEvaluationHash,
+      system: fact.system,
+      automationProcessing: fact.automationProcessing,
       languageCodes: fact.languageCodes,
       origin: fact.origin,
       notifierClass: fact.notifierClass,
@@ -403,6 +497,10 @@ export function estimateDsaAutomatedMeansMetrics(input: DsaAutomatedMeansEstimat
     schemaVersion: DSA_AUTOMATED_MEANS_ESTIMATE_SCHEMA_VERSION,
     estimatorVersion: DSA_AUTOMATED_MEANS_ESTIMATOR_VERSION,
     providerType: input.providerType,
+    systemInventoryRoot: sha256Rfc8785({
+      systems: systemInventory,
+      systemCount: systemInventory.length,
+    }),
     frame: {
       frameId: input.commitment.frameId,
       commitmentDigest: input.commitment.commitmentDigest,
