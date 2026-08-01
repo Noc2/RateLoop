@@ -93,8 +93,10 @@ test("0170 freezes system-bound manifests and witnessed transitions append-only"
 });
 
 test("0170 follows the typed Part 8 source-fact migration", () => {
+  const sourceIndex = journal.entries.findIndex(entry => entry.tag === "0169_dsa_part8_source_facts");
+  assert.ok(sourceIndex >= 0);
   assert.deepEqual(
-    journal.entries.slice(-2).map(entry => ({ idx: entry.idx, tag: entry.tag })),
+    journal.entries.slice(sourceIndex, sourceIndex + 2).map(entry => ({ idx: entry.idx, tag: entry.tag })),
     [
       { idx: 169, tag: "0169_dsa_part8_source_facts" },
       { idx: 170, tag: "0170_dsa_reference_sampling_epochs" },
