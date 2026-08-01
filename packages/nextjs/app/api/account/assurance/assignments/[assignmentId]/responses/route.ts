@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
 import { readApiJsonRequestBody, rethrowApiRequestBodyBoundaryError } from "~~/lib/tokenless/apiRequestBody";
 import { type AssuranceCaseResponseInput, submitAssuranceResponses } from "~~/lib/tokenless/assuranceResponses";
+import { submitDsaNamedPanelResponseIfExists } from "~~/lib/tokenless/dsaNamedReferencePanel";
 import {
   isDirectPrivateReviewAssignmentId,
   submitDirectPrivateReviewResponse,
@@ -21,26 +22,40 @@ export async function POST(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
     const { assignmentId } = await context.params;
-    let body: { idempotencyKey?: string; responses?: AssuranceCaseResponseInput[] };
+    let body: {
+      idempotencyKey?: string;
+      responses?: AssuranceCaseResponseInput[];
+      dsaResponse?: { choice: "policy_matches" | "policy_does_not_match"; rationale: string };
+    };
     try {
       body = (await readAssuranceResponseBatchBody(request)) as typeof body;
     } catch (requestBodyError) {
       rethrowApiRequestBodyBoundaryError(requestBodyError);
       throw new TokenlessServiceError("Response batch must be valid JSON.", 400, "invalid_assurance_response");
     }
-    const result = isDirectPrivateReviewAssignmentId(assignmentId)
-      ? await submitDirectPrivateReviewResponse({
+    let result;
+    if (isDirectPrivateReviewAssignmentId(assignmentId)) {
+      result = await submitDirectPrivateReviewResponse({
+        assignmentId,
+        accountAddress: session.principalId,
+        idempotencyKey: body.idempotencyKey ?? "",
+        responses: body.responses ?? [],
+      });
+    } else {
+      result =
+        (await submitDsaNamedPanelResponseIfExists({
           assignmentId,
           accountAddress: session.principalId,
           idempotencyKey: body.idempotencyKey ?? "",
-          responses: body.responses ?? [],
-        })
-      : await submitAssuranceResponses({
+          response: body.dsaResponse,
+        })) ??
+        (await submitAssuranceResponses({
           assignmentId,
           baseAccountAddress: session.principalId,
           idempotencyKey: body.idempotencyKey ?? "",
           responses: body.responses ?? [],
-        });
+        }));
+    }
     return NextResponse.json(result, {
       status: result.replay ? 200 : 201,
       headers: { "Cache-Control": "private, no-store, max-age=0" },

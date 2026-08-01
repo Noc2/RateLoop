@@ -5,6 +5,10 @@ import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbPool } from "~~/lib/db";
 import { dsaEvidenceCommitTimestamp, dsaEvidenceTransactionTimestamp } from "~~/lib/tokenless/dsaEvidenceClock";
+import {
+  loadDsaNamedPanelLabelInputs,
+  persistDsaNamedPanelLabelSetBridge,
+} from "~~/lib/tokenless/dsaNamedReferencePanel";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 export const DSA_REFERENCE_LABEL_SET_SCHEMA_VERSION = "rateloop.dsa-reference-label-set.v1" as const;
@@ -19,7 +23,6 @@ const MAX_LABELS = 50_000;
 const FREEZE_KEYS = [
   "accountAddress",
   "epochId",
-  "labels",
   "referenceDefinitionHash",
   "referenceDefinitionVersion",
   "workspaceId",
@@ -83,6 +86,7 @@ export type DsaReferenceLabelInput = Readonly<{
   referenceLabel: DsaReferenceLabel;
   agreementState: DsaReferenceLabelAgreement;
   adjudicationEvidenceDigest: `sha256:${string}`;
+  adjudicatedBy?: string | null;
 }>;
 
 export type ImmutableDsaReferenceLabel = Readonly<
@@ -240,13 +244,22 @@ function normalizeLabels(input: readonly DsaReferenceLabelInput[], units: readon
   }
   const unitIds = new Set(units.map(unit => unit.unitId));
   const labels = input.map(label => {
-    exactKeys(label, LABEL_INPUT_KEYS, "labels");
+    exactKeys(
+      label,
+      Object.hasOwn(label, "adjudicatedBy") ? [...LABEL_INPUT_KEYS, "adjudicatedBy"] : LABEL_INPUT_KEYS,
+      "labels",
+    );
     if (
       !UNIT_ID.test(label.unitId) ||
       !unitIds.has(label.unitId) ||
       (label.referenceLabel !== "pass" && label.referenceLabel !== "fail" && label.referenceLabel !== "uncertain") ||
       (label.agreementState !== "agreed" && label.agreementState !== "adjudicated") ||
       !SHA256.test(label.adjudicationEvidenceDigest) ||
+      (label.adjudicatedBy !== undefined &&
+        label.adjudicatedBy !== null &&
+        (typeof label.adjudicatedBy !== "string" ||
+          label.adjudicatedBy.length < 1 ||
+          label.adjudicatedBy.length > 200)) ||
       (label.referenceLabel === "uncertain" && label.agreementState !== "adjudicated")
     ) {
       invalid("Each label must bind one selected unit and valid adjudication evidence.", "labels");
@@ -310,7 +323,7 @@ export function buildDsaReferenceLabelSetEvidence(input: BuildInput): DsaReferen
       referenceLabel: label.referenceLabel,
       agreementState: label.agreementState,
       adjudicationEvidenceDigest: label.adjudicationEvidenceDigest,
-      adjudicatedBy: label.agreementState === "adjudicated" ? input.createdBy : null,
+      adjudicatedBy: label.agreementState === "adjudicated" ? (label.adjudicatedBy ?? input.createdBy) : null,
       createdAt: frozenAt,
     };
     return {
@@ -397,6 +410,9 @@ export function verifyDsaReferenceLabelSetEvidence(input: {
         referenceLabel: label.referenceLabel,
         agreementState: label.agreementState,
         adjudicationEvidenceDigest: label.adjudicationEvidenceDigest,
+        ...(label.agreementState === "adjudicated" && label.adjudicatedBy !== input.set.createdBy
+          ? { adjudicatedBy: label.adjudicatedBy }
+          : {}),
       })),
       sourceFrozenAt: input.set.sourceFrozenAt,
       frozenAt: input.set.frozenAt,
@@ -647,7 +663,6 @@ export async function freezeDsaReferenceLabelSet(input: {
   epochId: string;
   referenceDefinitionVersion: string;
   referenceDefinitionHash: `sha256:${string}`;
-  labels: readonly DsaReferenceLabelInput[];
 }) {
   exactKeys(input, FREEZE_KEYS, "reference-label freeze");
   if (!SIMPLE_IDENTIFIER.test(input.workspaceId) || !EPOCH_ID.test(input.epochId)) {
@@ -667,6 +682,15 @@ export async function freezeDsaReferenceLabelSet(input: {
       throw new TokenlessServiceError("Reference sample not found.", 404, "dsa_reference_sample_not_found");
     }
     const selectedUnits = await loadSelectedUnits(client, input.workspaceId, input.epochId);
+    const namedPanelLabels = await loadDsaNamedPanelLabelInputs(client, input.workspaceId, input.epochId);
+    if (!namedPanelLabels) {
+      throw new TokenlessServiceError(
+        "Independent reference labels require exact persisted named-panel outcomes.",
+        409,
+        "dsa_named_panel_outcomes_required",
+      );
+    }
+    const labelsForFreeze = namedPanelLabels;
     const existingResult = await client.query(
       `SELECT * FROM tokenless_dsa_reference_label_sets
        WHERE workspace_id=$1 AND epoch_id=$2 FOR UPDATE`,
@@ -688,7 +712,7 @@ export async function freezeDsaReferenceLabelSet(input: {
           referenceDefinitionVersion: input.referenceDefinitionVersion,
           referenceDefinitionHash: input.referenceDefinitionHash,
           selectedUnits,
-          labels: input.labels,
+          labels: labelsForFreeze,
           sourceFrozenAt: set.sourceFrozenAt,
           frozenAt: set.frozenAt,
           createdBy: set.createdBy,
@@ -719,7 +743,7 @@ export async function freezeDsaReferenceLabelSet(input: {
       referenceDefinitionVersion: input.referenceDefinitionVersion,
       referenceDefinitionHash: input.referenceDefinitionHash,
       selectedUnits,
-      labels: input.labels,
+      labels: labelsForFreeze,
       sourceFrozenAt: sourceFrozenAt.toISOString(),
       frozenAt: frozenAt.toISOString(),
       createdBy: actor,
@@ -758,6 +782,15 @@ export async function freezeDsaReferenceLabelSet(input: {
       ],
     );
     await insertLabels(client, evidence.labels);
+    if (namedPanelLabels) {
+      await persistDsaNamedPanelLabelSetBridge(client, {
+        workspaceId: set.workspaceId,
+        labelSetId: set.labelSetId,
+        epochId: set.epochId,
+        labelRoot: set.labelRoot,
+        labelSetHash: set.setHash,
+      });
+    }
     return { ...evidence, idempotent: false };
   });
 }

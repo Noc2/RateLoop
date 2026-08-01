@@ -102,6 +102,7 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
       "0176_benchmark_research_persistence.sql",
       "0177_network_benchmark_activation.sql",
       "0178_dsa_reference_network_provenance.sql",
+      "0179_dsa_named_reference_panel.sql",
     ].includes(file) &&
     (/\bDO \$\$/u.test(statement) ||
       /\bCREATE OR REPLACE FUNCTION\b/u.test(statement) ||
