@@ -62,6 +62,24 @@ function applySqlStatements(sqlText: string, execute: (statement: string) => voi
 
 function memoryCompatibleMigrationStatement(file: string, statement: string): string | null {
   if (
+    file === "0179_dsa_named_reference_panel.sql" &&
+    /^CREATE TABLE "tokenless_dsa_named_panel_units"/u.test(statement)
+  ) {
+    // pg-mem cannot resolve PostgreSQL's jsonb #>> text[] operator. The real
+    // PostgreSQL suite and migration source tests pin these projection checks;
+    // service tests still need the table and every constraint pg-mem supports.
+    return statement.replace(/\n\s+AND "blinded_payload_json"::jsonb#>>'\{[^']+\}'=[^\n]+/gu, "");
+  }
+  if (
+    file === "0180_dsa_derivation_consumer_safety.sql" &&
+    /ADD CONSTRAINT "tokenless_benchmark_research_exports_reference_provenance_check"/u.test(statement)
+  ) {
+    // PostgreSQL 16 enforces IS JSON ... WITH UNIQUE KEYS and exact jsonb
+    // reconstruction here. pg-mem parses neither form; source and real-PG
+    // tests pin the production constraint while memory keeps the new columns.
+    return null;
+  }
+  if (
     [
       "0060_human_review_opportunity_transition_events.sql",
       "0063_human_review_result_observations.sql",

@@ -1,3 +1,4 @@
+import { createMemoryDatabaseResources } from "./testing/testMemory";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -117,4 +118,16 @@ test("authenticated routes reach every named-panel workflow stage with bounded s
   assert.match(acceptanceRoute, /readApiJsonRequestBody\(request, 32 \* 1_024\)/u);
   assert.match(managementRoute, /private, no-store/u);
   assert.match(acceptanceRoute, /private, no-store/u);
+});
+
+test("the memory harness applies the named-panel schema while PostgreSQL owns jsonb projection checks", async () => {
+  const resources = createMemoryDatabaseResources();
+  try {
+    const units = await resources.pool.query(
+      "SELECT workspace_id,epoch_id,unit_id,blinded_payload_json FROM tokenless_dsa_named_panel_units LIMIT 0",
+    );
+    assert.deepEqual(units.rows, []);
+  } finally {
+    await resources.pool.end();
+  }
 });
