@@ -1268,6 +1268,48 @@
       "when": 1785301200000,
       "tag": "0181_compliance_capability_issuance_idempotency",
       "breakpoints": true
+    },
+    {
+      "idx": 182,
+      "version": "7",
+      "when": 1785304800000,
+      "tag": "0182_dsa_named_panel_release_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 183,
+      "version": "7",
+      "when": 1785308400000,
+      "tag": "0183_network_benchmark_activation_v2",
+      "breakpoints": true
+    },
+    {
+      "idx": 184,
+      "version": "7",
+      "when": 1785312000000,
+      "tag": "0184_dsa_assignment_response_binding",
+      "breakpoints": true
+    },
+    {
+      "idx": 185,
+      "version": "7",
+      "when": 1785315600000,
+      "tag": "0185_dsa_content_self_identification_gaps",
+      "breakpoints": true
+    },
+    {
+      "idx": 186,
+      "version": "7",
+      "when": 1785319200000,
+      "tag": "0186_dsa_named_adjudicator_assignments",
+      "breakpoints": true
+    },
+    {
+      "idx": 187,
+      "version": "7",
+      "when": 1785322800000,
+      "tag": "0187_dsa_named_panel_materialization_retries",
+      "breakpoints": true
     }
   ]
 }

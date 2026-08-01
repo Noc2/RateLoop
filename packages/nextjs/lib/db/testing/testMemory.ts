@@ -9,6 +9,7 @@ import { type Pool } from "pg";
 import { DataType, newDb } from "pg-mem";
 
 const MIGRATION_BREAKPOINT = "--> statement-breakpoint";
+const patchedMemoryPgQueryTargets = new WeakSet<object>();
 
 function normalizeQuery(input: QueryInput) {
   const text = typeof input === "string" ? input : input.sql;
@@ -16,11 +17,36 @@ function normalizeQuery(input: QueryInput) {
 
   let placeholderIndex = 0;
   const parameterizedText = values.length > 0 ? text.replace(/\?/g, () => `$${++placeholderIndex}`) : text;
+  // pg-mem supports row locks but not PostgreSQL's joined-table lock target
+  // syntax. Service tests still exercise the transaction and real-PostgreSQL
+  // invariants pin the exact `FOR UPDATE OF ...` clauses.
+  const memoryCompatibleText = memoryCompatibleLockTargets(parameterizedText);
 
   return {
-    text: parameterizedText,
+    text: memoryCompatibleText,
     values,
   };
+}
+
+function memoryCompatibleLockTargets(text: string) {
+  return text
+    .replace(/date_trunc\('milliseconds',\s*transaction_timestamp\(\)\)/giu, "CURRENT_TIMESTAMP")
+    .replace(/FOR (UPDATE|SHARE) OF [a-z_][a-z0-9_,]*/giu, (_clause, strength: string) => `FOR ${strength}`)
+    .replace(/FOR UPDATE\s+FOR SHARE/giu, "FOR UPDATE");
+}
+
+function patchMemoryPgQueries<T extends { query: (...args: unknown[]) => unknown }>(target: T) {
+  if (patchedMemoryPgQueryTargets.has(target)) return target;
+  patchedMemoryPgQueryTargets.add(target);
+  const query = target.query.bind(target);
+  target.query = ((input: unknown, ...rest: unknown[]) => {
+    if (typeof input === "string") return query(memoryCompatibleLockTargets(input), ...rest);
+    if (input && typeof input === "object" && "text" in input && typeof input.text === "string") {
+      return query({ ...input, text: memoryCompatibleLockTargets(input.text) }, ...rest);
+    }
+    return query(input, ...rest);
+  }) as T["query"];
+  return target;
 }
 
 function getMigrationDirectory() {
@@ -61,6 +87,234 @@ function applySqlStatements(sqlText: string, execute: (statement: string) => voi
 }
 
 function memoryCompatibleMigrationStatement(file: string, statement: string): string | null {
+  if (
+    file === "0187_dsa_named_panel_materialization_retries.sql" &&
+    /^(?:CREATE OR REPLACE FUNCTION|CREATE TRIGGER) tokenless_(?:guard_)?dsa_named_panel_materialization_retry/u.test(
+      statement,
+    )
+  ) {
+    // PostgreSQL owns the database-authored operational timestamp trigger.
+    // pg-mem does not execute PL/pgSQL migration triggers.
+    return null;
+  }
+  if (
+    file === "0183_network_benchmark_activation_v2.sql" &&
+    /^DROP TRIGGER IF EXISTS tokenless_assurance_assignments_network_benchmark_guard/u.test(statement)
+  ) {
+    // pg-mem cannot parse PostgreSQL's DROP TRIGGER ... ON syntax. The memory
+    // harness does not execute migration triggers, so there is nothing to drop.
+    return null;
+  }
+  if (
+    file === "0186_dsa_named_adjudicator_assignments.sql" &&
+    /^CREATE TABLE "tokenless_dsa_named_panel_adjudicator_assignments"/u.test(statement)
+  ) {
+    // PostgreSQL owns the shared qualification predicate, SQL/JSON exactness,
+    // and millisecond transaction timestamp. The memory harness retains the
+    // assignment keys and relational shape used by service projections.
+    return statement
+      .replace("date_trunc('milliseconds',transaction_timestamp())", "CURRENT_TIMESTAMP")
+      .replace(/,\n\s+CHECK \([\s\S]*\)\n\);?$/u, "\n);");
+  }
+  if (
+    file === "0186_dsa_named_adjudicator_assignments.sql" &&
+    /^ALTER TABLE "tokenless_dsa_named_panel_(?:unit_gaps|unit_outcomes)"/u.test(statement)
+  ) {
+    return null;
+  }
+  if (
+    file === "0186_dsa_named_adjudicator_assignments.sql" &&
+    /^ALTER TABLE "tokenless_dsa_reference_labels"/u.test(statement)
+  ) {
+    return null;
+  }
+  if (
+    file === "0185_dsa_content_self_identification_gaps.sql" &&
+    /^CREATE TABLE "tokenless_dsa_named_panel_capacity_releases"/u.test(statement)
+  ) {
+    return statement.replace("date_trunc('milliseconds',transaction_timestamp())", "CURRENT_TIMESTAMP");
+  }
+  if (
+    file === "0185_dsa_content_self_identification_gaps.sql" &&
+    /^ALTER TABLE "tokenless_dsa_named_panel_unit_gaps"[\s\S]*ADD COLUMN "content_self_identification_report_count"/u.test(
+      statement,
+    )
+  ) {
+    return `ALTER TABLE "tokenless_dsa_named_panel_unit_gaps"
+      ADD COLUMN "content_self_identification_report_count" integer NOT NULL DEFAULT 0,
+      ADD COLUMN "content_self_identification_report_root" text`;
+  }
+  if (
+    file === "0185_dsa_content_self_identification_gaps.sql" &&
+    /^ALTER TABLE "tokenless_dsa_named_panel_unit_gaps"/u.test(statement)
+  ) {
+    // PostgreSQL replaces the exact v2 gap contract here. pg-mem assigned the
+    // prior inline check an implementation-specific name, so source and real
+    // PostgreSQL tests own that replacement.
+    return null;
+  }
+  if (
+    file === "0185_dsa_content_self_identification_gaps.sql" &&
+    /^ALTER TABLE "tokenless_dsa_reference_labels"/u.test(statement)
+  ) {
+    // PostgreSQL replaces the exact gap-reason contract. pg-mem assigned the
+    // prior inline check an implementation-specific name, so its structural
+    // harness retains that check while source and real-PG tests own v2.
+    return null;
+  }
+  if (
+    file === "0184_dsa_assignment_response_binding.sql" &&
+    /^CREATE TABLE "tokenless_dsa_named_panel_assignment_response_bindings"/u.test(statement)
+  ) {
+    // PostgreSQL records millisecond-normalized transaction time. pg-mem does
+    // not implement date_trunc(timestamptz), so its structural harness uses the
+    // equivalent current-time default without asserting timestamp precision.
+    return statement.replace("date_trunc('milliseconds',transaction_timestamp())", "CURRENT_TIMESTAMP");
+  }
+  if (
+    file === "0183_network_benchmark_activation_v2.sql" &&
+    /^ALTER TABLE "tokenless_network_benchmark_[^"]+"\s+RENAME CONSTRAINT/u.test(statement)
+  ) {
+    // PostgreSQL keeps the renamed foreign-key semantics. pg-mem does not
+    // implement constraint renames, so memory tests retain the legacy name.
+    return null;
+  }
+  if (
+    file === "0183_network_benchmark_activation_v2.sql" &&
+    /^ALTER TABLE "tokenless_network_benchmark_opportunity_authorizations"[\s\S]*v2_contract_check/u.test(statement)
+  ) {
+    return `ALTER TABLE "tokenless_network_benchmark_opportunity_authorizations"
+      ADD CONSTRAINT "tokenless_network_benchmark_opportunity_authorizations_v2_contract_check" CHECK (
+        "workspace_manager_reference_principal_id" IS NOT NULL
+        AND "activation_scope"='testnet_network_benchmark_exercise'
+        AND "permitted_worker_jurisdictions_hash" IS NOT NULL
+      )`;
+  }
+  if (
+    file === "0183_network_benchmark_activation_v2.sql" &&
+    /^ALTER TABLE "tokenless_network_benchmark_activation_evidence"[\s\S]*DROP CONSTRAINT/u.test(statement)
+  ) {
+    return `ALTER TABLE "tokenless_network_benchmark_activation_evidence"
+      DROP CONSTRAINT "tokenless_network_benchmark_activation_evidence_contract_check",
+      ADD CONSTRAINT "tokenless_network_benchmark_activation_evidence_contract_check" CHECK (
+        "completed_at" BETWEEN "evidence_window_start" AND "evidence_window_end"
+        AND "evidence_window_end" <= "recorded_at"
+        AND "evidence_type" IN (
+          'audit_partner_method_acceptance','provider_pilot_acceptance','network_supply_demand_confirmation',
+          'hosted_paid_core_testnet_exercise','keeper_recovery_exercise','indexer_recovery_exercise',
+          'paid_eligibility_payout_tax_dac7_readiness','sanctions_screening_readiness',
+          'reviewer_contract_worker_information_appeal_readiness',
+          'algorithmic_management_human_review_readiness','private_worker_communication_readiness',
+          'worker_data_privacy_governance_readiness'
+        )
+      )`;
+  }
+  if (
+    file === "0183_network_benchmark_activation_v2.sql" &&
+    /^ALTER TABLE "tokenless_network_benchmark_activations"[\s\S]*v2_contract_check/u.test(statement)
+  ) {
+    return `ALTER TABLE "tokenless_network_benchmark_activations"
+      DROP CONSTRAINT "tokenless_network_benchmark_activations_contract_check",
+      ADD CONSTRAINT "tokenless_network_benchmark_activations_v2_contract_check" CHECK (
+        "expected_evidence_count" >= 14
+        AND "evidence_window_end" <= "activated_at"
+        AND "activation_scope"='testnet_network_benchmark_exercise'
+        AND "permitted_worker_jurisdictions_hash" IS NOT NULL
+      )`;
+  }
+  if (
+    file === "0183_network_benchmark_activation_v2.sql" &&
+    /^ALTER TABLE "tokenless_network_benchmark_activation_deactivations"[\s\S]*v2_contract_check/u.test(statement)
+  ) {
+    return `ALTER TABLE "tokenless_network_benchmark_activation_deactivations"
+      ADD CONSTRAINT "tokenless_network_benchmark_deactivations_v2_contract_check" CHECK (
+        "workspace_manager_reference_principal_id" IS NOT NULL
+      )`;
+  }
+  if (
+    file === "0182_dsa_named_panel_release_guards.sql" &&
+    /^CREATE TABLE "tokenless_dsa_named_panel_reference_definitions"/u.test(statement)
+  ) {
+    // PostgreSQL 16 owns the unique-key JSON and exact jsonb reconstruction
+    // checks. pg-mem cannot parse either form, but can exercise the remaining
+    // table shape, hashes, foreign keys, and service behavior.
+    return statement
+      .replace(/\n\s+AND "definition_json" IS JSON OBJECT WITH UNIQUE KEYS/u, "")
+      .replace(/\n\s+AND "definition_json"::jsonb=jsonb_build_object\([\s\S]*?'createdBy',"created_by"\n\s+\)/u, "");
+  }
+  if (
+    file === "0182_dsa_named_panel_release_guards.sql" &&
+    /^CREATE TABLE "tokenless_dsa_named_panel_selections"/u.test(statement)
+  ) {
+    // PostgreSQL owns the unique-key JSON and exact snapshot reconstruction.
+    return statement
+      .replace(/\n\s+AND "panel_deadline"="selected_at"\+\("response_window_ms"\*interval '1 millisecond'\)/u, "")
+      .replace(/\n\s+AND "selection_snapshot_json" IS JSON OBJECT WITH UNIQUE KEYS/u, "")
+      .replace(
+        /\n\s+AND "selection_snapshot_json"::jsonb=jsonb_build_object\([\s\S]*?'selectedAt',to_char\("selected_at"[\s\S]*?\)\n\s+\)/u,
+        "",
+      );
+  }
+  if (
+    file === "0182_dsa_named_panel_release_guards.sql" &&
+    /^INSERT INTO "tokenless_dsa_reference_label_set_quarantines"/u.test(statement)
+  ) {
+    // The in-memory database is always empty at this append-only backfill, and
+    // pg-mem cannot resolve the correlated NOT EXISTS aliases used by PostgreSQL.
+    return null;
+  }
+  if (
+    file === "0182_dsa_named_panel_release_guards.sql" &&
+    /^ALTER TABLE "tokenless_dsa_named_panel_label_set_bridges"[\s\S]*unique_json_check/u.test(statement)
+  ) {
+    return null;
+  }
+  if (
+    file === "0182_dsa_named_panel_release_guards.sql" &&
+    /ALTER TABLE "tokenless_dsa_named_panel_units"[\s\S]*tokenless_dsa_named_panel_units_exact_json_check/u.test(
+      statement,
+    )
+  ) {
+    // Keep the exact reference-definition foreign key in memory. PostgreSQL 16
+    // owns the JSON unique-key predicates and nested jsonb reconstruction.
+    return statement.replace(
+      /,\n\s+ADD CONSTRAINT "tokenless_dsa_named_panel_units_exact_json_check" CHECK \([\s\S]*\)\s*;?$/u,
+      "",
+    );
+  }
+  if (
+    file === "0182_dsa_named_panel_release_guards.sql" &&
+    /^ALTER TABLE "tokenless_dsa_named_panel_unit_outcomes"/u.test(statement)
+  ) {
+    // pg-mem gives unnamed inline checks implementation-specific names. Real
+    // PostgreSQL owns the replacement check and exact gap FK.
+    return 'ALTER TABLE "tokenless_dsa_named_panel_unit_outcomes" ADD COLUMN "gap_evidence_id" text';
+  }
+  if (
+    file === "0182_dsa_named_panel_release_guards.sql" &&
+    /^ALTER TABLE "tokenless_dsa_named_panel_adjudications"/u.test(statement)
+  ) {
+    return statement.replace(
+      /,\n\s+ADD CONSTRAINT "tokenless_dsa_named_panel_adjudications_exact_json_check" CHECK \([\s\S]*\)\s*;?$/u,
+      "",
+    );
+  }
+  if (
+    ["0182_dsa_named_panel_release_guards.sql", "0184_dsa_assignment_response_binding.sql"].includes(file) &&
+    /^ALTER TABLE "tokenless_dsa_named_panel_(?:assignments|artifact_accesses|response_evidence)"[\s\S]*_exact_json_check/u.test(
+      statement,
+    )
+  ) {
+    // PostgreSQL owns exact unique-key JSON reconstruction for these immutable
+    // evidence rows. pg-mem cannot parse SQL/JSON predicates.
+    return null;
+  }
+  if (
+    file === "0182_dsa_named_panel_release_guards.sql" &&
+    /^ALTER TABLE "tokenless_dsa_reference_labels"/u.test(statement)
+  ) {
+    return 'ALTER TABLE "tokenless_dsa_reference_labels" ADD COLUMN "gap_reason" text';
+  }
   if (
     file === "0179_dsa_named_reference_panel.sql" &&
     /^CREATE TABLE "tokenless_dsa_named_panel_units"/u.test(statement)
@@ -123,6 +377,11 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
       "0179_dsa_named_reference_panel.sql",
       "0180_dsa_derivation_consumer_safety.sql",
       "0181_compliance_capability_issuance_idempotency.sql",
+      "0182_dsa_named_panel_release_guards.sql",
+      "0183_network_benchmark_activation_v2.sql",
+      "0184_dsa_assignment_response_binding.sql",
+      "0185_dsa_content_self_identification_gaps.sql",
+      "0186_dsa_named_adjudicator_assignments.sql",
     ].includes(file) &&
     (/\bDO \$\$/u.test(statement) ||
       /\bCREATE OR REPLACE FUNCTION\b/u.test(statement) ||
@@ -130,6 +389,12 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
   ) {
     // pg-mem does not implement PostgreSQL trigger functions. The production
     // migration installs the append-only guard; migration source tests cover it.
+    return null;
+  }
+  if (
+    file === "0183_network_benchmark_activation_v2.sql" &&
+    /^DROP TRIGGER IF EXISTS tokenless_assurance_assignments_network_benchmark_guard/u.test(statement)
+  ) {
     return null;
   }
   if (
@@ -370,6 +635,12 @@ export function createMemoryDatabaseResources(
     implementation: (left, right) => left % right,
   });
   memoryDb.public.registerFunction({
+    name: "mod",
+    args: [DataType.integer, DataType.integer],
+    returns: DataType.integer,
+    implementation: (left, right) => left % right,
+  });
+  memoryDb.public.registerFunction({
     name: "convert_to",
     args: [DataType.text, DataType.text],
     returns: DataType.bytea,
@@ -561,7 +832,9 @@ export function createMemoryDatabaseResources(
   }
 
   const adapter = memoryDb.adapters.createPg();
-  const pool = new adapter.Pool() as unknown as Pool;
+  const pool = patchMemoryPgQueries(new adapter.Pool()) as unknown as Pool;
+  const connect = pool.connect.bind(pool);
+  pool.connect = (async () => patchMemoryPgQueries(await connect())) as typeof pool.connect;
   const client = createDatabaseClient(pool);
   const database = drizzlePgProxy(
     async (query, params, method) => {
