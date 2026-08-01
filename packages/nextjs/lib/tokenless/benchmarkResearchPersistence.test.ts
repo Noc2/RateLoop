@@ -1,4 +1,6 @@
+import { canonicalizeRfc8785 } from "@rateloop/node-utils/jcs";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
 import type { Pool, PoolClient } from "pg";
 import type { BenchmarkResearchApprovedExport } from "~~/lib/tokenless/benchmarkResearchGrants";
@@ -8,6 +10,7 @@ import {
   createBenchmarkResearchPersistence,
   deriveBenchmarkResearchTokenLookupDigest,
 } from "~~/lib/tokenless/benchmarkResearchPersistence";
+import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type QueryRecord = { text: string; values?: unknown[] };
 
@@ -136,5 +139,115 @@ test("an unrelated audit event cannot witness export approval", async () => {
       exportWitness,
     ),
     /does not bind the exact approval/iu,
+  );
+});
+
+test("grant issuance replay returns no second bearer token and request mismatch rolls back", async () => {
+  const manager = `rlp_${"a".repeat(40)}`;
+  const request = {
+    authenticatedManagerPrincipalId: manager,
+    workspaceId: "workspace_replay",
+    projectId: "project_replay",
+    recipientPrincipalId: `rlp_${"b".repeat(40)}`,
+    exportId: "export_replay",
+    purpose: "methodology_validation" as const,
+    durationMs: 60_000,
+    idempotencyKey: "grant-issuance-replay-0001",
+    tokenLookupKeyId: "current-token-v2",
+    recipientBindingKeyId: "current-recipient-v2",
+  };
+  const binding = __benchmarkResearchPersistenceTestUtils.deriveCapabilityIssuanceIdempotency({
+    capabilityKind: "benchmark_research_grant",
+    actorPrincipalId: manager,
+    workspaceId: request.workspaceId,
+    projectId: request.projectId,
+    idempotencyKey: request.idempotencyKey,
+    request: {
+      recipientPrincipalId: request.recipientPrincipalId,
+      exportId: request.exportId,
+      purpose: request.purpose,
+      durationMs: request.durationMs,
+    },
+  });
+  const grantJson = canonicalizeRfc8785({ grantId: "brg_replayed_metadata" });
+  const grantDigest = `sha256:${createHash("sha256").update(grantJson).digest("hex")}`;
+  const database = fakePool(async text => {
+    if (text.startsWith("BEGIN") || text === "COMMIT" || text.includes("pg_advisory_xact_lock")) return { rows: [] };
+    if (text.includes("FROM tokenless_workspaces w")) {
+      return {
+        rows: [{ workspace_status: "active", project_status: "active", role: "owner", principal_status: "active" }],
+      };
+    }
+    if (text.includes("tokenless_benchmark_research_grant_issuances i")) {
+      return {
+        rows: [
+          {
+            request_binding_hash: binding.requestBindingHash,
+            grant_json: grantJson,
+            event_digest: grantDigest,
+            token_lookup_key_id: "original-token-v1",
+          },
+        ],
+      };
+    }
+    throw new Error(`Unexpected query: ${text}`);
+  });
+  const persistence = createBenchmarkResearchPersistence({ pool: database.pool });
+  const replay = await persistence.issueGrant(request);
+  assert.deepEqual(replay, {
+    grant: { grantId: "brg_replayed_metadata", eventDigest: grantDigest },
+    token: null,
+    tokenLookupKeyId: "original-token-v1",
+    idempotent: true,
+    recoveryRequired: true,
+  });
+  assert.equal(
+    database.queries.some(query => /INSERT INTO tokenless_benchmark_research_grants/u.test(query.text)),
+    false,
+  );
+  assert.equal(
+    database.queries.some(query => /INSERT INTO tokenless_benchmark_research_grant_issuances/u.test(query.text)),
+    false,
+  );
+  assert.equal(
+    database.queries.some(query => query.text === "COMMIT"),
+    true,
+  );
+
+  const conflictDatabase = fakePool(async text => {
+    if (text.startsWith("BEGIN") || text === "ROLLBACK" || text.includes("pg_advisory_xact_lock")) {
+      return { rows: [] };
+    }
+    if (text.includes("FROM tokenless_workspaces w")) {
+      return {
+        rows: [{ workspace_status: "active", project_status: "active", role: "owner", principal_status: "active" }],
+      };
+    }
+    if (text.includes("tokenless_benchmark_research_grant_issuances i")) {
+      return {
+        rows: [
+          {
+            request_binding_hash: `sha256:${"0".repeat(64)}`,
+            grant_json: grantJson,
+            event_digest: grantDigest,
+            token_lookup_key_id: "original-token-v1",
+          },
+        ],
+      };
+    }
+    throw new Error(`Unexpected query: ${text}`);
+  });
+  await assert.rejects(
+    createBenchmarkResearchPersistence({ pool: conflictDatabase.pool }).issueGrant(request),
+    (error: TokenlessServiceError) =>
+      error.status === 409 && error.code === "benchmark_research_grant_issuance_conflict",
+  );
+  assert.equal(
+    conflictDatabase.queries.some(query => query.text === "ROLLBACK"),
+    true,
+  );
+  assert.equal(
+    conflictDatabase.queries.some(query => query.text.startsWith("INSERT")),
+    false,
   );
 });

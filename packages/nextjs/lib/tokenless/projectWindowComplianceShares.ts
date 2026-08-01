@@ -1,9 +1,10 @@
 import { canonicalizeRfc8785, sha256Rfc8785 } from "@rateloop/node-utils/jcs";
 import { createHash, randomBytes } from "node:crypto";
-import type { PoolClient } from "pg";
+import type { Pool, PoolClient } from "pg";
 import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbPool } from "~~/lib/db";
+import { deriveCapabilityIssuanceIdempotency } from "~~/lib/tokenless/capabilityIssuanceIdempotency";
 import { verifyEvidenceExport } from "~~/lib/tokenless/evidencePackets";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -22,6 +23,7 @@ const ISSUE_KEYS = [
   "evidenceWindowEnd",
   "evidenceWindowStart",
   "expiresAt",
+  "idempotencyKey",
   "projectId",
   "reportVersions",
   "workspaceId",
@@ -41,6 +43,7 @@ const REPORT_KEYS = [
 ] as const;
 
 type Row = Record<string, unknown>;
+type PoolLike = Pick<Pool, "connect">;
 
 export type ProjectWindowPacketArtifact = Readonly<{
   artifactKind: "evidence_packet";
@@ -340,6 +343,35 @@ function verifyStoredShareGrant(row: Row) {
   }
 }
 
+function verifyStoredShareManifest(row: Row): ProjectWindowComplianceManifest {
+  const manifestJson = stringValue(row, "artifact_manifest_json");
+  try {
+    if (!manifestJson) storedInvalid();
+    const parsed = JSON.parse(manifestJson) as Row;
+    if (canonicalizeRfc8785(parsed) !== manifestJson || !Array.isArray(parsed.entries)) storedInvalid();
+    const manifest = buildProjectWindowComplianceManifest({
+      workspaceId: stringValue(row, "workspace_id")!,
+      projectId: stringValue(row, "project_id")!,
+      evidenceWindowStart: databaseTimestamp(row, "evidence_window_start"),
+      evidenceWindowEnd: databaseTimestamp(row, "evidence_window_end"),
+      artifacts: (parsed.entries as Row[]).map(entry => entry.source as ProjectWindowComplianceArtifact),
+    });
+    if (
+      manifest.manifestJson !== manifestJson ||
+      manifest.manifestRoot !== stringValue(row, "artifact_manifest_root") ||
+      manifest.entries.length !== integerValue(row, "expected_artifact_count") ||
+      manifest.packetCount !== integerValue(row, "expected_packet_count") ||
+      manifest.reportCount !== integerValue(row, "expected_report_count")
+    ) {
+      storedInvalid();
+    }
+    return manifest;
+  } catch (error) {
+    if (error instanceof TokenlessServiceError && error.status >= 500) throw error;
+    storedInvalid();
+  }
+}
+
 function digestRecords(domain: string, header: unknown, rows: readonly unknown[]) {
   const hash = createHash("sha256");
   hash.update(`${domain}\0${canonicalizeRfc8785(header)}\n`, "utf8");
@@ -583,8 +615,8 @@ export function evaluateProjectWindowComplianceAccessPolicy(input: {
   return inWindow ? { allowed: true, artifact } : { allowed: false, reason: "window_mismatch" };
 }
 
-async function withSerializable<T>(work: (client: PoolClient) => Promise<T>) {
-  const client = await dbPool.connect();
+async function withSerializable<T>(work: (client: PoolClient) => Promise<T>, pool: PoolLike = dbPool) {
+  const client = await pool.connect();
   try {
     await client.query("BEGIN ISOLATION LEVEL SERIALIZABLE");
     await client.query(
@@ -711,16 +743,20 @@ async function insertManifest(
   }
 }
 
-export async function issueProjectWindowComplianceShare(input: {
-  accountAddress: string;
-  workspaceId: string;
-  projectId: string;
-  evidenceWindowStart: Date;
-  evidenceWindowEnd: Date;
-  evidencePacketIds: readonly string[];
-  reportVersions: readonly Readonly<{ reportId: string; reportVersion: number }>[];
-  expiresAt: Date;
-}) {
+export async function issueProjectWindowComplianceShare(
+  input: {
+    accountAddress: string;
+    workspaceId: string;
+    projectId: string;
+    evidenceWindowStart: Date;
+    evidenceWindowEnd: Date;
+    evidencePacketIds: readonly string[];
+    reportVersions: readonly Readonly<{ reportId: string; reportVersion: number }>[];
+    expiresAt: Date;
+    idempotencyKey: string;
+  },
+  resources: { pool?: PoolLike } = {},
+) {
   exactKeys(input, ISSUE_KEYS, "project-window share issue");
   if (!SIMPLE_IDENTIFIER.test(input.workspaceId) || !IDENTIFIER.test(input.projectId)) {
     invalid("Project-window share scope is invalid.");
@@ -759,6 +795,58 @@ export async function issueProjectWindowComplianceShare(input: {
     invalid("A report version may be requested only once.", "reportVersions");
   }
   return withSerializable(async client => {
+    const actor = await requireManagerProject(client, input);
+    const issuance = deriveCapabilityIssuanceIdempotency({
+      capabilityKind: "project_window_compliance_share",
+      actorPrincipalId: actor,
+      workspaceId: input.workspaceId,
+      projectId: input.projectId,
+      idempotencyKey: input.idempotencyKey,
+      request: {
+        evidenceWindowStart: input.evidenceWindowStart.toISOString(),
+        evidenceWindowEnd: input.evidenceWindowEnd.toISOString(),
+        evidencePacketIds: [...input.evidencePacketIds].sort(),
+        reportVersions: [...input.reportVersions].sort((left, right) =>
+          left.reportId === right.reportId
+            ? left.reportVersion - right.reportVersion
+            : left.reportId < right.reportId
+              ? -1
+              : 1,
+        ),
+        expiresAt: input.expiresAt.toISOString(),
+      },
+    });
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [issuance.idempotencyKeyDigest]);
+    const existingResult = await client.query(
+      `SELECT i.request_binding_hash,s.*
+         FROM tokenless_project_window_compliance_share_issuances i
+         JOIN tokenless_project_window_compliance_shares s
+           ON s.workspace_id=i.workspace_id AND s.project_id=i.project_id AND s.share_id=i.share_id
+          AND s.grant_hash=i.grant_hash AND s.issued_by=i.issued_by AND s.issued_at=i.issued_at
+        WHERE i.workspace_id=$1 AND i.project_id=$2 AND i.issued_by=$3 AND i.idempotency_key_digest=$4
+        FOR UPDATE OF i,s`,
+      [input.workspaceId, input.projectId, actor, issuance.idempotencyKeyDigest],
+    );
+    const existing = existingResult.rows[0] as Row | undefined;
+    if (existing) {
+      if (stringValue(existing, "request_binding_hash") !== issuance.requestBindingHash) {
+        throw new TokenlessServiceError(
+          "This issuance idempotency key is already bound to a different request.",
+          409,
+          "project_window_compliance_share_issuance_conflict",
+        );
+      }
+      const grant = verifyStoredShareGrant(existing);
+      const manifest = verifyStoredShareManifest(existing);
+      return {
+        grant,
+        grantHash: stringValue(existing, "grant_hash") as `sha256:${string}`,
+        manifest,
+        bearerSecret: null,
+        idempotent: true,
+        recoveryRequired: true,
+      } as const;
+    }
     const now = await transactionTime(client);
     if (input.expiresAt <= now || input.expiresAt.getTime() - now.getTime() > MAX_SHARE_LIFETIME_MS) {
       throw new TokenlessServiceError(
@@ -769,7 +857,6 @@ export async function issueProjectWindowComplianceShare(input: {
         "expiresAt",
       );
     }
-    const actor = await requireManagerProject(client, input);
     const packetResult = await client.query(
       `SELECT ep.packet_id,ep.run_id,ep.packet_digest,ep.generated_at
        FROM tokenless_assurance_evidence_packets ep
@@ -888,8 +975,30 @@ export async function issueProjectWindowComplianceShare(input: {
       },
       manifest,
     );
-    return { grant: grantPayload, grantHash, manifest, bearerSecret };
-  });
+    await client.query(
+      `INSERT INTO tokenless_project_window_compliance_share_issuances
+       (workspace_id,project_id,issued_by,idempotency_key_digest,request_binding_hash,share_id,grant_hash,issued_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [
+        input.workspaceId,
+        input.projectId,
+        actor,
+        issuance.idempotencyKeyDigest,
+        issuance.requestBindingHash,
+        shareId,
+        grantHash,
+        now,
+      ],
+    );
+    return {
+      grant: grantPayload,
+      grantHash,
+      manifest,
+      bearerSecret,
+      idempotent: false,
+      recoveryRequired: false,
+    } as const;
+  }, resources.pool);
 }
 
 export async function revokeProjectWindowComplianceShare(input: {
@@ -1478,6 +1587,7 @@ export async function accessProjectWindowComplianceShare(input: {
 
 export const __projectWindowComplianceSharesTestUtils = {
   accessIdentity,
+  deriveCapabilityIssuanceIdempotency,
   maxArtifacts: MAX_ARTIFACTS,
   maxShareLifetimeMs: MAX_SHARE_LIFETIME_MS,
 };

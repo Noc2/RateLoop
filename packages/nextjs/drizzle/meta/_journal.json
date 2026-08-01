@@ -1261,6 +1261,13 @@
       "when": 1785297600000,
       "tag": "0180_dsa_derivation_consumer_safety",
       "breakpoints": true
+    },
+    {
+      "idx": 181,
+      "version": "7",
+      "when": 1785301200000,
+      "tag": "0181_compliance_capability_issuance_idempotency",
+      "breakpoints": true
     }
   ]
 }

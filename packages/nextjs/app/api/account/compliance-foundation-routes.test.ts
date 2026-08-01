@@ -2,8 +2,10 @@ import { NextRequest } from "next/server";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test, { after, before } from "node:test";
+import { benchmarkResearchApplication } from "~~/app/api/_support/complianceRoutes";
 import { createBenchmarkResearchAccessPost } from "~~/app/api/account/benchmark-research/access/route";
 import { createBenchmarkExportPost } from "~~/app/api/account/workspaces/[workspaceId]/assurance/projects/[projectId]/benchmark-research/exports/route";
+import { createBenchmarkResearchGrantPost } from "~~/app/api/account/workspaces/[workspaceId]/assurance/projects/[projectId]/benchmark-research/grants/route";
 import { createComplianceSharePost } from "~~/app/api/account/workspaces/[workspaceId]/assurance/projects/[projectId]/compliance-shares/route";
 import { createDsaPart8FileGet } from "~~/app/api/account/workspaces/[workspaceId]/compliance/dsa/part8/reports/[reportId]/versions/[reportVersion]/files/[fileKind]/route";
 import {
@@ -114,6 +116,7 @@ test("project-window share creation passes only authenticated path scope and can
       evidencePacketIds: ["packet_route"],
       reportVersions: [{ reportId: "report_route", reportVersion: 1 }],
       expiresAt: "2026-08-02T00:00:00.000Z",
+      idempotencyKey: "share-issuance-route-0001",
     }),
     { params: Promise.resolve({ workspaceId: "workspace_route", projectId: "project_route" }) },
   );
@@ -122,6 +125,7 @@ test("project-window share creation passes only authenticated path scope and can
   assert.equal(received.value?.projectId, "project_route");
   assert.equal(received.value?.accountAddress, `rlp_${"a".repeat(40)}`);
   assert.equal(received.value?.evidenceWindowStart.toISOString(), "2026-07-01T00:00:00.000Z");
+  assert.equal(received.value?.idempotencyKey, "share-issuance-route-0001");
   assert.equal(response.headers.get("referrer-policy"), "no-referrer");
 });
 
@@ -144,6 +148,51 @@ test("benchmark export approval hides a path/body tenant mismatch and performs n
   );
   assert.equal(response.status, 404);
   assert.equal(called, false);
+  assert.equal(response.headers.get("cache-control"), NO_STORE);
+});
+
+test("issuance retries return authenticated metadata without minting a second research token", async () => {
+  let calls = 0;
+  const persistedGrant = { grantId: "brg_route_recovery_0001" };
+  const handler = createBenchmarkResearchGrantPost({
+    requireSession: signedIn,
+    application: (() => ({
+      currentTokenLookupKeyId: "research-route-v1",
+      currentRecipientBindingKeyId: "recipient-route-v1",
+      persistence: {
+        issueGrant: async (input: Parameters<BenchmarkResearchPersistence["issueGrant"]>[0]) => {
+          calls += 1;
+          assert.equal(input.idempotencyKey, "grant-issuance-route-0001");
+          return {
+            grant: persistedGrant,
+            token: null,
+            tokenLookupKeyId: "research-original-v1",
+            idempotent: true,
+            recoveryRequired: true,
+          };
+        },
+      },
+    })) as unknown as typeof benchmarkResearchApplication,
+  });
+  const response = await handler(
+    request("/api/account/workspaces/workspace_route/assurance/projects/project_route/benchmark-research/grants", {
+      recipientPrincipalId: `rlp_${"b".repeat(40)}`,
+      exportId: "export_route",
+      purpose: "methodology_validation",
+      durationMs: 60_000,
+      idempotencyKey: "grant-issuance-route-0001",
+    }),
+    { params: Promise.resolve({ workspaceId: "workspace_route", projectId: "project_route" }) },
+  );
+  assert.equal(response.status, 200, await response.clone().text());
+  assert.equal(calls, 1);
+  assert.deepEqual(await response.json(), {
+    grant: persistedGrant,
+    token: null,
+    tokenLookupKeyId: "research-original-v1",
+    idempotent: true,
+    recoveryRequired: true,
+  });
   assert.equal(response.headers.get("cache-control"), NO_STORE);
 });
 

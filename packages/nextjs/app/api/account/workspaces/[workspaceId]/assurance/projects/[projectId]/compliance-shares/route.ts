@@ -49,8 +49,13 @@ export function createComplianceSharePost(
         "evidencePacketIds",
         "reportVersions",
         "expiresAt",
+        "idempotencyKey",
       ]);
-      if (!Array.isArray(body.evidencePacketIds) || !body.evidencePacketIds.every(value => typeof value === "string")) {
+      if (
+        typeof body.idempotencyKey !== "string" ||
+        !Array.isArray(body.evidencePacketIds) ||
+        !body.evidencePacketIds.every(value => typeof value === "string")
+      ) {
         throw new TokenlessServiceError("evidencePacketIds is invalid.", 400, "invalid_compliance_request");
       }
       if (!Array.isArray(body.reportVersions)) {
@@ -65,8 +70,9 @@ export function createComplianceSharePost(
         evidencePacketIds: body.evidencePacketIds as string[],
         reportVersions: body.reportVersions as Array<{ reportId: string; reportVersion: number }>,
         expiresAt: canonicalDate(body.expiresAt, "expiresAt"),
+        idempotencyKey: body.idempotencyKey,
       });
-      return complianceJson(created, 201);
+      return complianceJson(created, created.idempotent ? 200 : 201);
     } catch (error) {
       return complianceError(error);
     }

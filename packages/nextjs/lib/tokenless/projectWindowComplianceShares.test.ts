@@ -4,10 +4,11 @@ import {
   evidenceSigningKeyId,
   sha256LegacyEvidenceValue,
 } from "../../scripts/assurance-evidence-core.mjs";
-import { canonicalizeRfc8785 } from "@rateloop/node-utils/jcs";
+import { canonicalizeRfc8785, sha256Rfc8785 } from "@rateloop/node-utils/jcs";
 import assert from "node:assert/strict";
 import { createPublicKey, generateKeyPairSync, sign } from "node:crypto";
 import test from "node:test";
+import type { Pool, PoolClient } from "pg";
 import {
   type ProjectWindowComplianceArtifact,
   type ProjectWindowPacketArtifact,
@@ -15,9 +16,11 @@ import {
   __projectWindowComplianceSharesTestUtils,
   buildProjectWindowComplianceManifest,
   evaluateProjectWindowComplianceAccessPolicy,
+  issueProjectWindowComplianceShare,
   projectProjectWindowEvidencePacket,
   verifyBoundProjectWindowEvidencePacket,
 } from "~~/lib/tokenless/projectWindowComplianceShares";
+import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const digest = (character: string) => `sha256:${character.repeat(64)}` as const;
 const START = "2026-01-01T00:00:00.000Z";
@@ -142,6 +145,129 @@ test("same caller idempotency key cannot collide across shares or bearer secrets
   assert.notEqual(one.accessId, otherSecret.accessId);
   assert.equal(JSON.stringify([one, otherShare, otherSecret]).includes("a".repeat(43)), false);
   assert.match(one.accessId, /^pwca_[A-Za-z0-9_-]{22}$/u);
+});
+
+test("share issuance replay returns no second bearer secret and mismatched requests roll back", async () => {
+  const actor = `rlp_${"a".repeat(40)}`;
+  const shareId = `pwcs_${"S".repeat(22)}`;
+  const builtManifest = manifest();
+  const issuedAt = "2026-07-01T00:00:00.000Z";
+  const expiresAt = "2026-07-03T00:00:00.000Z";
+  const grant = {
+    schemaVersion: "rateloop.project-window-compliance-share.v1",
+    workspaceId: "workspace_compliance",
+    projectId: "project_compliance",
+    shareId,
+    evidenceWindow: { startInclusive: START, endExclusive: END },
+    artifactManifestRoot: builtManifest.manifestRoot,
+    expectedArtifactCount: builtManifest.entries.length,
+    expectedPacketCount: builtManifest.packetCount,
+    expectedReportCount: builtManifest.reportCount,
+    accessBasis: "bounded_project_window_compliance_evidence",
+    statutoryAccessStatus: "not_benchmark_research_or_article_40_access",
+    issuedBy: actor,
+    issuedAt,
+    expiresAt,
+  };
+  const grantJson = canonicalizeRfc8785(grant);
+  const grantHash = sha256Rfc8785(grant);
+  const request = {
+    accountAddress: actor,
+    workspaceId: "workspace_compliance",
+    projectId: "project_compliance",
+    evidenceWindowStart: new Date(START),
+    evidenceWindowEnd: new Date(END),
+    evidencePacketIds: ["packet_compliance_2026_01"],
+    reportVersions: [{ reportId: "dsa8r_report_2026_h1", reportVersion: 2 }],
+    expiresAt: new Date(expiresAt),
+    idempotencyKey: "share-issuance-replay-0001",
+  };
+  const binding = __projectWindowComplianceSharesTestUtils.deriveCapabilityIssuanceIdempotency({
+    capabilityKind: "project_window_compliance_share",
+    actorPrincipalId: actor,
+    workspaceId: request.workspaceId,
+    projectId: request.projectId,
+    idempotencyKey: request.idempotencyKey,
+    request: {
+      evidenceWindowStart: START,
+      evidenceWindowEnd: END,
+      evidencePacketIds: request.evidencePacketIds,
+      reportVersions: request.reportVersions,
+      expiresAt,
+    },
+  });
+  const row = {
+    request_binding_hash: binding.requestBindingHash,
+    workspace_id: request.workspaceId,
+    project_id: request.projectId,
+    share_id: shareId,
+    evidence_window_start: START,
+    evidence_window_end: END,
+    artifact_manifest_json: builtManifest.manifestJson,
+    artifact_manifest_root: builtManifest.manifestRoot,
+    expected_artifact_count: builtManifest.entries.length,
+    expected_packet_count: builtManifest.packetCount,
+    expected_report_count: builtManifest.reportCount,
+    grant_json: grantJson,
+    grant_hash: grantHash,
+    issued_by: actor,
+    issued_at: issuedAt,
+    expires_at: expiresAt,
+  };
+  const fakePool = (requestBindingHash: string) => {
+    const queries: string[] = [];
+    const client = {
+      async query(text: string) {
+        queries.push(text);
+        if (
+          text.startsWith("BEGIN") ||
+          text === "COMMIT" ||
+          text === "ROLLBACK" ||
+          text.includes("set_config") ||
+          text.includes("pg_advisory_xact_lock")
+        ) {
+          return { rows: [], rowCount: 0 };
+        }
+        if (text.includes("FROM tokenless_workspace_members m")) return { rows: [{}], rowCount: 1 };
+        if (text.includes("tokenless_project_window_compliance_share_issuances i")) {
+          return { rows: [{ ...row, request_binding_hash: requestBindingHash }], rowCount: 1 };
+        }
+        throw new Error(`Unexpected query: ${text}`);
+      },
+      release() {},
+    } as unknown as PoolClient;
+    return {
+      pool: {
+        async connect() {
+          return client;
+        },
+      } as unknown as Pick<Pool, "connect">,
+      queries,
+    };
+  };
+  const replayDatabase = fakePool(binding.requestBindingHash);
+  const replay = await issueProjectWindowComplianceShare(request, { pool: replayDatabase.pool });
+  assert.equal(replay.bearerSecret, null);
+  assert.equal(replay.idempotent, true);
+  assert.equal(replay.recoveryRequired, true);
+  assert.deepEqual(replay.grant, grant);
+  assert.equal(
+    replayDatabase.queries.some(query => query.startsWith("INSERT")),
+    false,
+  );
+  assert.equal(replayDatabase.queries.includes("COMMIT"), true);
+
+  const conflictDatabase = fakePool(digest("0"));
+  await assert.rejects(
+    issueProjectWindowComplianceShare(request, { pool: conflictDatabase.pool }),
+    (error: TokenlessServiceError) =>
+      error.status === 409 && error.code === "project_window_compliance_share_issuance_conflict",
+  );
+  assert.equal(conflictDatabase.queries.includes("ROLLBACK"), true);
+  assert.equal(
+    conflictDatabase.queries.some(query => query.startsWith("INSERT")),
+    false,
+  );
 });
 
 test("packet access verifies the pinned signing identity, digest, source IDs, and signature", async () => {

@@ -24,6 +24,7 @@ import {
   createBenchmarkResearchGrantPersistenceFacade,
   revokeBenchmarkResearchGrantInTransaction,
 } from "~~/lib/tokenless/benchmarkResearchGrants";
+import { deriveCapabilityIssuanceIdempotency } from "~~/lib/tokenless/capabilityIssuanceIdempotency";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/u;
@@ -719,17 +720,60 @@ export function createBenchmarkResearchPersistence(input?: {
       exportId: string;
       purpose: BenchmarkResearchPurpose;
       durationMs: number;
+      idempotencyKey: string;
       tokenLookupKeyId: string;
       recipientBindingKeyId: string;
     }) {
-      const tokenLookupKey = tokenLookupKeys.get(grantInput.tokenLookupKeyId);
-      const recipientBindingKey = recipientBindingKeys.get(grantInput.recipientBindingKeyId);
-      if (!tokenLookupKey || !recipientBindingKey) invalid("Benchmark research HMAC key is unavailable.", "keyId");
-      const token = randomBytes(32).toString("base64url");
-      const tokenLookupDigest = deriveBenchmarkResearchTokenLookupDigest({ token, key: tokenLookupKey });
-      const grantId = `brg_${randomBytes(16).toString("base64url")}`;
-      const grant = await withSerializable(pool, async client => {
+      return withSerializable(pool, async client => {
         await requireActiveManager(client, grantInput);
+        const issuance = deriveCapabilityIssuanceIdempotency({
+          capabilityKind: "benchmark_research_grant",
+          actorPrincipalId: grantInput.authenticatedManagerPrincipalId,
+          workspaceId: grantInput.workspaceId,
+          projectId: grantInput.projectId,
+          idempotencyKey: grantInput.idempotencyKey,
+          request: {
+            recipientPrincipalId: grantInput.recipientPrincipalId,
+            exportId: grantInput.exportId,
+            purpose: grantInput.purpose,
+            durationMs: grantInput.durationMs,
+          },
+        });
+        await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [issuance.idempotencyKeyDigest]);
+        const existingResult = await client.query(
+          `SELECT i.request_binding_hash,g.grant_json,g.event_digest,g.token_lookup_key_id
+             FROM tokenless_benchmark_research_grant_issuances i
+             JOIN tokenless_benchmark_research_grants g
+               ON g.workspace_id=i.workspace_id AND g.project_id=i.project_id AND g.grant_id=i.grant_id
+              AND g.event_digest=i.grant_event_digest AND g.authorized_by=i.authorized_by
+              AND g.issued_at=i.issued_at
+            WHERE i.workspace_id=$1 AND i.project_id=$2 AND i.authorized_by=$3
+              AND i.idempotency_key_digest=$4
+            FOR UPDATE OF i,g`,
+          [
+            grantInput.workspaceId,
+            grantInput.projectId,
+            grantInput.authenticatedManagerPrincipalId,
+            issuance.idempotencyKeyDigest,
+          ],
+        );
+        const existing = existingResult.rows[0] as Row | undefined;
+        if (existing) {
+          if (rowString(existing, "request_binding_hash") !== issuance.requestBindingHash) {
+            throw new TokenlessServiceError(
+              "This issuance idempotency key is already bound to a different request.",
+              409,
+              "benchmark_research_grant_issuance_conflict",
+            );
+          }
+          return {
+            grant: grantFromRow(existing),
+            token: null,
+            tokenLookupKeyId: rowString(existing, "token_lookup_key_id"),
+            idempotent: true,
+            recoveryRequired: true,
+          } as const;
+        }
         const scopedExport = await client.query(
           `SELECT 1 FROM tokenless_benchmark_research_approved_exports
             WHERE workspace_id=$1 AND project_id=$2 AND export_id=$3 FOR SHARE`,
@@ -742,7 +786,13 @@ export function createBenchmarkResearchPersistence(input?: {
             "benchmark_research_project_not_found",
           );
         }
-        return createBenchmarkResearchGrantInTransaction({
+        const tokenLookupKey = tokenLookupKeys.get(grantInput.tokenLookupKeyId);
+        const recipientBindingKey = recipientBindingKeys.get(grantInput.recipientBindingKeyId);
+        if (!tokenLookupKey || !recipientBindingKey) invalid("Benchmark research HMAC key is unavailable.", "keyId");
+        const token = randomBytes(32).toString("base64url");
+        const tokenLookupDigest = deriveBenchmarkResearchTokenLookupDigest({ token, key: tokenLookupKey });
+        const grantId = `brg_${randomBytes(16).toString("base64url")}`;
+        const grant = await createBenchmarkResearchGrantInTransaction({
           authenticatedManagerPrincipalId: grantInput.authenticatedManagerPrincipalId,
           recipientPrincipalId: grantInput.recipientPrincipalId,
           exportId: grantInput.exportId,
@@ -756,8 +806,30 @@ export function createBenchmarkResearchPersistence(input?: {
             tokenLookupDigest,
           }),
         });
+        await client.query(
+          `INSERT INTO tokenless_benchmark_research_grant_issuances
+           (workspace_id,project_id,authorized_by,idempotency_key_digest,request_binding_hash,grant_id,
+            grant_event_digest,issued_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+          [
+            grantInput.workspaceId,
+            grantInput.projectId,
+            grantInput.authenticatedManagerPrincipalId,
+            issuance.idempotencyKeyDigest,
+            issuance.requestBindingHash,
+            grant.grantId,
+            grant.eventDigest,
+            new Date(grant.issuedAt),
+          ],
+        );
+        return {
+          grant,
+          token,
+          tokenLookupKeyId: tokenLookupKey.keyId,
+          idempotent: false,
+          recoveryRequired: false,
+        } as const;
       });
-      return { grant, token } as const;
     },
 
     async revokeGrant(revocationInput: {
@@ -1415,53 +1487,73 @@ function createPostgresGrantReadTransaction(client: PoolClient): BenchmarkResear
   };
 }
 
+async function withPostgresCommittedTransaction<T>(
+  pool: PoolLike,
+  work: (client: PoolClient) => Promise<{ value: T; stagedEventDigest: `sha256:${string}` | null }>,
+) {
+  const client = await pool.connect();
+  let committed = false;
+  try {
+    await client.query("BEGIN ISOLATION LEVEL SERIALIZABLE");
+    const transactionIdentity = await client.query("SELECT txid_current()::text AS transaction_id");
+    const staged = await work(client);
+    await client.query("COMMIT");
+    committed = true;
+    const committedClock = await client.query("SELECT clock_timestamp() AS committed_at");
+    return {
+      value: staged.value,
+      transactionId: `brtx_${rowString(transactionIdentity.rows[0] as Row, "transaction_id")}`,
+      committedAt: rowDate(committedClock.rows[0] as Row, "committed_at").toISOString(),
+      stagedEventDigest: staged.stagedEventDigest,
+    };
+  } catch (error) {
+    if (!committed) await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 function createPostgresCommittedReadExecutor(pool: PoolLike) {
   return {
     async withCommittedTransaction<T>(work: (transaction: BenchmarkResearchGrantReadTransaction) => Promise<T>) {
-      const client = await pool.connect();
-      let committed = false;
-      try {
-        await client.query("BEGIN ISOLATION LEVEL SERIALIZABLE");
-        const transactionIdentity = await client.query("SELECT txid_current()::text AS transaction_id");
+      const committed = await withPostgresCommittedTransaction(pool, async client => {
         const value = await work(createPostgresGrantReadTransaction(client));
         const outcome = value as {
           kind?: string;
           snapshot?: BenchmarkResearchGrantAccessSnapshot;
           receipt?: BenchmarkResearchGrantDeniedAccessAuditReceipt;
         };
-        const stagedEventDigest =
-          outcome.kind === "staged_success"
-            ? (outcome.snapshot?.auditReceipt.auditEventDigest ?? null)
-            : outcome.kind === "staged_denial"
-              ? (outcome.receipt?.denialEventDigest ?? null)
-              : null;
-        await client.query("COMMIT");
-        committed = true;
-        const committedClock = await client.query("SELECT clock_timestamp() AS committed_at");
         return {
           value,
-          commitReceipt: {
-            schemaVersion: "rateloop.benchmark-research-transaction-commit-receipt.v1" as const,
-            status: "committed" as const,
-            transactionId: `brtx_${rowString(transactionIdentity.rows[0] as Row, "transaction_id")}`,
-            committedAt: rowDate(committedClock.rows[0] as Row, "committed_at").toISOString(),
-            stagedEventDigest,
-          },
+          stagedEventDigest:
+            outcome.kind === "staged_success"
+              ? (outcome.snapshot?.auditReceipt.auditEventDigest ?? null)
+              : outcome.kind === "staged_denial"
+                ? (outcome.receipt?.denialEventDigest ?? null)
+                : null,
         };
-      } catch (error) {
-        if (!committed) await client.query("ROLLBACK");
-        throw error;
-      } finally {
-        client.release();
-      }
+      });
+      return {
+        value: committed.value,
+        commitReceipt: {
+          schemaVersion: "rateloop.benchmark-research-transaction-commit-receipt.v1" as const,
+          status: "committed" as const,
+          transactionId: committed.transactionId,
+          committedAt: committed.committedAt,
+          stagedEventDigest: committed.stagedEventDigest,
+        },
+      };
     },
   };
 }
 
 export const __benchmarkResearchPersistenceTestUtils = {
+  deriveCapabilityIssuanceIdempotency,
   genesisDigest: GENESIS_DIGEST,
   grantLookupDomain: GRANT_LOOKUP_DOMAIN,
   recipientLookupDomain: RECIPIENT_LOOKUP_DOMAIN,
   requireExactApprovedExportWitness,
   tokenLookupDomain: TOKEN_LOOKUP_DOMAIN,
+  withPostgresCommittedTransaction,
 };
