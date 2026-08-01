@@ -15,10 +15,15 @@ import { test } from "node:test";
 
 import {
   parseTokenlessDeployArgs,
-  requireTokenlessFeeRecipient,
+  requireTokenlessDeploymentAddresses,
 } from "./tokenlessDeployArgs.js";
 
 const scriptsDirectory = dirname(fileURLToPath(import.meta.url));
+const validDeploymentAddresses = {
+  TOKENLESS_FEE_RECIPIENT: "0x1111111111111111111111111111111111111111",
+  TOKENLESS_ROTATION_AUTHORITY: "0x2222222222222222222222222222222222222222",
+  TOKENLESS_INITIAL_SIGNER: "0x3333333333333333333333333333333333333333",
+};
 
 test("allows an interactive Base Sepolia deployment without --keystore", () => {
   assert.deepEqual(parseTokenlessDeployArgs(["--network", "baseSepolia"]), {
@@ -62,29 +67,34 @@ test("rejects missing flag values and unsupported networks", () => {
   );
 });
 
-test("requires a valid non-zero fee recipient before deployment", () => {
-  assert.equal(
-    requireTokenlessFeeRecipient({
-      TOKENLESS_FEE_RECIPIENT: "0x1111111111111111111111111111111111111111",
-    }),
-    "0x1111111111111111111111111111111111111111",
+test("requires every deployment identity address to be valid and non-zero", () => {
+  assert.deepEqual(
+    requireTokenlessDeploymentAddresses(validDeploymentAddresses),
+    {
+      feeRecipient: validDeploymentAddresses.TOKENLESS_FEE_RECIPIENT,
+      rotationAuthority: validDeploymentAddresses.TOKENLESS_ROTATION_AUTHORITY,
+      initialSigner: validDeploymentAddresses.TOKENLESS_INITIAL_SIGNER,
+    },
   );
-  for (const feeRecipient of [
-    undefined,
-    "not-an-address",
-    "0x0000000000000000000000000000000000000000",
-  ]) {
-    assert.throws(
-      () =>
-        requireTokenlessFeeRecipient({
-          TOKENLESS_FEE_RECIPIENT: feeRecipient,
-        }),
-      /must be a non-zero address/u,
-    );
+  for (const envName of Object.keys(validDeploymentAddresses)) {
+    for (const address of [
+      undefined,
+      "not-an-address",
+      "0x0000000000000000000000000000000000000000",
+    ]) {
+      assert.throws(
+        () =>
+          requireTokenlessDeploymentAddresses({
+            ...validDeploymentAddresses,
+            [envName]: address,
+          }),
+        new RegExp(`${envName} must be a non-zero address`, "u"),
+      );
+    }
   }
 });
 
-test("invalid fee recipient exits before any chain probe or deployment child process", () => {
+test("invalid deployment identity exits before any chain probe or deployment child process", () => {
   const fixtureRoot = mkdtempSync(
     join(tmpdir(), "rateloop-tokenless-deploy-preflight-"),
   );
@@ -103,37 +113,41 @@ test("invalid fee recipient exits before any chain probe or deployment child pro
       chmodSync(executable, 0o755);
     }
 
-    for (const feeRecipient of [
-      " ",
-      "not-an-address",
-      "0x0000000000000000000000000000000000000000",
-    ]) {
-      const result = spawnSync(
-        process.execPath,
-        [
-          join(scriptsDirectory, "parseArgs.js"),
-          "--network",
-          "baseSepolia",
-          "--keystore",
-          "unused",
-        ],
-        {
-          cwd: join(scriptsDirectory, ".."),
-          encoding: "utf8",
-          env: {
-            ...process.env,
-            BASE_SEPOLIA_RPC_URL: "https://sepolia.base.org",
-            PATH: `${binDirectory}:${process.env.PATH ?? ""}`,
-            TOKENLESS_FEE_RECIPIENT: feeRecipient,
+    for (const envName of Object.keys(validDeploymentAddresses)) {
+      for (const address of [
+        " ",
+        "not-an-address",
+        "0x0000000000000000000000000000000000000000",
+      ]) {
+        const childEnv = {
+          ...process.env,
+          ...validDeploymentAddresses,
+          BASE_SEPOLIA_RPC_URL: "https://sepolia.base.org",
+          PATH: `${binDirectory}:${process.env.PATH ?? ""}`,
+          [envName]: address,
+        };
+        const result = spawnSync(
+          process.execPath,
+          [
+            join(scriptsDirectory, "parseArgs.js"),
+            "--network",
+            "baseSepolia",
+            "--keystore",
+            "unused",
+          ],
+          {
+            cwd: join(scriptsDirectory, ".."),
+            encoding: "utf8",
+            env: childEnv,
           },
-        },
-      );
-      assert.notEqual(result.status, 0);
-      assert.match(
-        result.stderr,
-        /TOKENLESS_FEE_RECIPIENT must be a non-zero address/u,
-      );
-      assert.equal(existsSync(childMarker), false);
+        );
+        assert.notEqual(result.status, 0);
+        assert.match(
+          result.stderr,
+          new RegExp(`${envName} must be a non-zero address`, "u"),
+        );
+        assert.equal(existsSync(childMarker), false);
+      }
     }
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });

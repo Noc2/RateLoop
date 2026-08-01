@@ -296,6 +296,20 @@ export function reconstructTokenlessDeploymentFromBroadcast(
   const feedbackBonus = oneDeployment(creates, "TokenlessFeedbackBonus");
   const x402PanelSubmitter = optionalDeployment(creates, "X402PanelSubmitter");
 
+  if (credentialIssuer.arguments.length < 2) {
+    throw new Error(
+      "CredentialIssuer constructor must include the rotation authority and initial signer.",
+    );
+  }
+  requireTokenlessNonZeroAddress(
+    credentialIssuer.arguments[0],
+    "CredentialIssuer rotation authority",
+  );
+  requireTokenlessNonZeroAddress(
+    credentialIssuer.arguments[1],
+    "CredentialIssuer initial signer",
+  );
+
   if (
     feedbackBonus.arguments.length < 2 ||
     !sameAddress(feedbackBonus.arguments[0], testUsdc.address) ||

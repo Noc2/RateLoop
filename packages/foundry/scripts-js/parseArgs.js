@@ -9,7 +9,7 @@ import {
 } from "./foundryAccounts.js";
 import {
   parseTokenlessDeployArgs,
-  requireTokenlessFeeRecipient,
+  requireTokenlessDeploymentAddresses,
   TOKENLESS_DEPLOY_USAGE,
 } from "./tokenlessDeployArgs.js";
 
@@ -23,7 +23,7 @@ if (showHelp) {
   console.log(TOKENLESS_DEPLOY_USAGE);
   process.exit(0);
 }
-requireTokenlessFeeRecipient(process.env);
+requireTokenlessDeploymentAddresses(process.env);
 const rpcUrl = process.env.BASE_SEPOLIA_RPC_URL?.trim();
 if (!rpcUrl) throw new Error("BASE_SEPOLIA_RPC_URL is required.");
 const chainProbe = spawnSync("cast", ["chain-id", "--rpc-url", rpcUrl], {

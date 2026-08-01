@@ -10,6 +10,20 @@ export function requireTokenlessFeeRecipient(env = process.env) {
   );
 }
 
+export function requireTokenlessDeploymentAddresses(env = process.env) {
+  return {
+    feeRecipient: requireTokenlessFeeRecipient(env),
+    rotationAuthority: requireTokenlessNonZeroAddress(
+      env.TOKENLESS_ROTATION_AUTHORITY?.trim(),
+      "TOKENLESS_ROTATION_AUTHORITY",
+    ),
+    initialSigner: requireTokenlessNonZeroAddress(
+      env.TOKENLESS_INITIAL_SIGNER?.trim(),
+      "TOKENLESS_INITIAL_SIGNER",
+    ),
+  };
+}
+
 function readFlagValue(args, index, flag) {
   const value = args[index + 1];
   if (!value || value.startsWith("--")) {

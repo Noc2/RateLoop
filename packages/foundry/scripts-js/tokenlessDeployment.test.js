@@ -21,7 +21,7 @@ import {
   TOKENLESS_DEPLOYMENT_SCHEMA,
   validateTokenlessDeploymentArtifact,
 } from "./tokenlessDeployment.js";
-import { requireTokenlessFeeRecipient } from "./tokenlessDeployArgs.js";
+import { requireTokenlessDeploymentAddresses } from "./tokenlessDeployArgs.js";
 
 function address(index) {
   return `0x${index.toString(16).padStart(40, "0")}`;
@@ -129,32 +129,70 @@ test("reconstructs an isolated versioned tokenless Base Sepolia artifact", () =>
   );
 });
 
-test("deploy preflight and artifact reconstruction share the fee-recipient boundary", () => {
-  for (const feeRecipient of [
-    undefined,
-    "not-an-address",
-    "0x0000000000000000000000000000000000000000",
+test("deploy preflight and artifact reconstruction share deployment-address boundaries", () => {
+  const deploymentAddresses = {
+    TOKENLESS_FEE_RECIPIENT: FEE_RECIPIENT,
+    TOKENLESS_ROTATION_AUTHORITY: address(51),
+    TOKENLESS_INITIAL_SIGNER: address(52),
+  };
+  for (const { constructorArgumentIndex, envName, reconstructionError } of [
+    {
+      constructorArgumentIndex: null,
+      envName: "TOKENLESS_FEE_RECIPIENT",
+      reconstructionError: /feeRecipient must be a non-zero address/u,
+    },
+    {
+      constructorArgumentIndex: 0,
+      envName: "TOKENLESS_ROTATION_AUTHORITY",
+      reconstructionError:
+        /CredentialIssuer rotation authority must be a non-zero address/u,
+    },
+    {
+      constructorArgumentIndex: 1,
+      envName: "TOKENLESS_INITIAL_SIGNER",
+      reconstructionError:
+        /CredentialIssuer initial signer must be a non-zero address/u,
+    },
   ]) {
-    assert.throws(
-      () =>
-        requireTokenlessFeeRecipient({
-          TOKENLESS_FEE_RECIPIENT: feeRecipient,
-        }),
-      /TOKENLESS_FEE_RECIPIENT must be a non-zero address/u,
-    );
-    assert.throws(
-      () =>
-        reconstructRawTokenlessDeploymentFromBroadcast(completeBroadcast(), {
-          feeRecipient,
-        }),
-      /feeRecipient must be a non-zero address/u,
-    );
+    for (const invalidAddress of [
+      undefined,
+      "not-an-address",
+      "0x0000000000000000000000000000000000000000",
+    ]) {
+      assert.throws(
+        () =>
+          requireTokenlessDeploymentAddresses({
+            ...deploymentAddresses,
+            [envName]: invalidAddress,
+          }),
+        new RegExp(`${envName} must be a non-zero address`, "u"),
+      );
+
+      const broadcast = completeBroadcast();
+      let feeRecipient = FEE_RECIPIENT;
+      if (constructorArgumentIndex === null) {
+        feeRecipient = invalidAddress;
+      } else {
+        const credentialIssuer = broadcast.transactions.find(
+          (transaction) => transaction.contractName === "CredentialIssuer",
+        );
+        credentialIssuer.arguments[constructorArgumentIndex] = invalidAddress;
+      }
+      assert.throws(
+        () =>
+          reconstructRawTokenlessDeploymentFromBroadcast(broadcast, {
+            feeRecipient,
+          }),
+        reconstructionError,
+      );
+    }
   }
 
-  assert.equal(
-    requireTokenlessFeeRecipient({ TOKENLESS_FEE_RECIPIENT: FEE_RECIPIENT }),
-    FEE_RECIPIENT,
-  );
+  assert.deepEqual(requireTokenlessDeploymentAddresses(deploymentAddresses), {
+    feeRecipient: FEE_RECIPIENT,
+    rotationAuthority: deploymentAddresses.TOKENLESS_ROTATION_AUTHORITY,
+    initialSigner: deploymentAddresses.TOKENLESS_INITIAL_SIGNER,
+  });
   const artifact =
     reconstructTokenlessDeploymentFromBroadcast(completeBroadcast());
   assert.equal(artifact.feeRecipient, FEE_RECIPIENT);
