@@ -9,23 +9,32 @@ import {
 } from "./foundryAccounts.js";
 import {
   parseTokenlessDeployArgs,
+  requireTokenlessFeeRecipient,
   TOKENLESS_DEPLOY_USAGE,
 } from "./tokenlessDeployArgs.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 config({ path: join(root, ".env") });
 
-const { keystore, network, resume, showHelp } = parseTokenlessDeployArgs(process.argv.slice(2));
+const { keystore, network, resume, showHelp } = parseTokenlessDeployArgs(
+  process.argv.slice(2),
+);
 if (showHelp) {
   console.log(TOKENLESS_DEPLOY_USAGE);
   process.exit(0);
 }
+requireTokenlessFeeRecipient(process.env);
 const rpcUrl = process.env.BASE_SEPOLIA_RPC_URL?.trim();
 if (!rpcUrl) throw new Error("BASE_SEPOLIA_RPC_URL is required.");
-const chainProbe = spawnSync("cast", ["chain-id", "--rpc-url", rpcUrl], { encoding: "utf8" });
-if (chainProbe.status !== 0) throw new Error(`Base Sepolia RPC probe failed: ${chainProbe.stderr.trim()}`);
+const chainProbe = spawnSync("cast", ["chain-id", "--rpc-url", rpcUrl], {
+  encoding: "utf8",
+});
+if (chainProbe.status !== 0)
+  throw new Error(`Base Sepolia RPC probe failed: ${chainProbe.stderr.trim()}`);
 if (chainProbe.stdout.trim() !== "84532") {
-  throw new Error(`BASE_SEPOLIA_RPC_URL reports chain ${chainProbe.stdout.trim()}, expected 84532.`);
+  throw new Error(
+    `BASE_SEPOLIA_RPC_URL reports chain ${chainProbe.stdout.trim()}, expected 84532.`,
+  );
 }
 
 const selectedKeystore = keystore

@@ -1,10 +1,21 @@
+import { requireTokenlessNonZeroAddress } from "./tokenlessDeployment.js";
+
 export const TOKENLESS_DEPLOY_USAGE =
   "yarn deploy --network baseSepolia [--keystore <foundry-account>] [--resume]";
+
+export function requireTokenlessFeeRecipient(env = process.env) {
+  return requireTokenlessNonZeroAddress(
+    env.TOKENLESS_FEE_RECIPIENT?.trim(),
+    "TOKENLESS_FEE_RECIPIENT",
+  );
+}
 
 function readFlagValue(args, index, flag) {
   const value = args[index + 1];
   if (!value || value.startsWith("--")) {
-    throw new Error(`${flag} requires a value. Usage: ${TOKENLESS_DEPLOY_USAGE}`);
+    throw new Error(
+      `${flag} requires a value. Usage: ${TOKENLESS_DEPLOY_USAGE}`,
+    );
   }
   return value;
 }
@@ -27,12 +38,16 @@ export function parseTokenlessDeployArgs(args) {
     } else if (value === "--help" || value === "-h") {
       return { showHelp: true };
     } else {
-      throw new Error(`Unknown deployment argument ${value}. Usage: ${TOKENLESS_DEPLOY_USAGE}`);
+      throw new Error(
+        `Unknown deployment argument ${value}. Usage: ${TOKENLESS_DEPLOY_USAGE}`,
+      );
     }
   }
 
   if (network !== "baseSepolia") {
-    throw new Error(`Only --network baseSepolia is supported. Usage: ${TOKENLESS_DEPLOY_USAGE}`);
+    throw new Error(
+      `Only --network baseSepolia is supported. Usage: ${TOKENLESS_DEPLOY_USAGE}`,
+    );
   }
   return { keystore, network, resume, showHelp: false };
 }

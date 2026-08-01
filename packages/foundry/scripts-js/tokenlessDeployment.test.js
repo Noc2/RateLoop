@@ -21,6 +21,7 @@ import {
   TOKENLESS_DEPLOYMENT_SCHEMA,
   validateTokenlessDeploymentArtifact,
 } from "./tokenlessDeployment.js";
+import { requireTokenlessFeeRecipient } from "./tokenlessDeployArgs.js";
 
 function address(index) {
   return `0x${index.toString(16).padStart(40, "0")}`;
@@ -128,13 +129,35 @@ test("reconstructs an isolated versioned tokenless Base Sepolia artifact", () =>
   );
 });
 
-test("requires the operational fee recipient in every deployment artifact", () => {
-  assert.throws(
-    () => reconstructRawTokenlessDeploymentFromBroadcast(completeBroadcast()),
-    /feeRecipient must be a non-zero address/u,
+test("deploy preflight and artifact reconstruction share the fee-recipient boundary", () => {
+  for (const feeRecipient of [
+    undefined,
+    "not-an-address",
+    "0x0000000000000000000000000000000000000000",
+  ]) {
+    assert.throws(
+      () =>
+        requireTokenlessFeeRecipient({
+          TOKENLESS_FEE_RECIPIENT: feeRecipient,
+        }),
+      /TOKENLESS_FEE_RECIPIENT must be a non-zero address/u,
+    );
+    assert.throws(
+      () =>
+        reconstructRawTokenlessDeploymentFromBroadcast(completeBroadcast(), {
+          feeRecipient,
+        }),
+      /feeRecipient must be a non-zero address/u,
+    );
+  }
+
+  assert.equal(
+    requireTokenlessFeeRecipient({ TOKENLESS_FEE_RECIPIENT: FEE_RECIPIENT }),
+    FEE_RECIPIENT,
   );
   const artifact =
     reconstructTokenlessDeploymentFromBroadcast(completeBroadcast());
+  assert.equal(artifact.feeRecipient, FEE_RECIPIENT);
   assert.throws(
     () =>
       validateTokenlessDeploymentArtifact({

@@ -23,7 +23,7 @@ const ALLOWED_DEPLOYMENTS = new Set([
   BEACON_VERIFIER_ARTIFACT,
 ]);
 
-function normalizeAddress(value, label) {
+export function requireTokenlessNonZeroAddress(value, label) {
   if (!isAddress(value) || value.toLowerCase() === zeroAddress) {
     throw new Error(`${label} must be a non-zero address.`);
   }
@@ -109,7 +109,7 @@ function receiptIndexes(receipts) {
       receipt.contractAddress === undefined
     )
       continue;
-    const normalizedAddress = normalizeAddress(
+    const normalizedAddress = requireTokenlessNonZeroAddress(
       receipt.contractAddress,
       `Receipt ${hash} contractAddress`,
     ).toLowerCase();
@@ -155,7 +155,7 @@ function findCreates(broadcast) {
 
   for (const transaction of createTransactions) {
     const contractName = transaction.contractName ?? "unknown";
-    const address = normalizeAddress(
+    const address = requireTokenlessNonZeroAddress(
       transaction.contractAddress,
       `${contractName} address`,
     );
@@ -269,7 +269,10 @@ export function reconstructTokenlessDeploymentFromBroadcast(
       `${TOKENLESS_DEPLOYMENT_KEY_VERSION} networkName must be ${TOKENLESS_BASE_SEPOLIA_NETWORK}.`,
     );
   }
-  const configuredFeeRecipient = normalizeAddress(feeRecipient, "feeRecipient");
+  const configuredFeeRecipient = requireTokenlessNonZeroAddress(
+    feeRecipient,
+    "feeRecipient",
+  );
 
   const creates = findCreates(broadcast);
   const unexpectedNames = creates
@@ -312,7 +315,7 @@ export function reconstructTokenlessDeploymentFromBroadcast(
       "TokenlessPanel constructor wiring must match the exported TestUSDC and CredentialIssuer addresses.",
     );
   }
-  const beaconVerifier = normalizeAddress(
+  const beaconVerifier = requireTokenlessNonZeroAddress(
     panel.arguments[2],
     "TokenlessPanel beacon verifier",
   );
@@ -418,8 +421,8 @@ export function validateTokenlessDeploymentArtifact(
     throw new Error("Tokenless deployment artifact is not for Base Sepolia.");
   }
   normalizeBlockNumber(artifact.deploymentBlockNumber, "deploymentBlockNumber");
-  normalizeAddress(artifact.feeRecipient, "feeRecipient");
-  normalizeAddress(artifact.beaconVerifier, "beaconVerifier");
+  requireTokenlessNonZeroAddress(artifact.feeRecipient, "feeRecipient");
+  requireTokenlessNonZeroAddress(artifact.beaconVerifier, "beaconVerifier");
   if (artifact.beaconVerifierArtifact !== BEACON_VERIFIER_ARTIFACT) {
     throw new Error(
       `Tokenless deployment beacon verifier artifact must be ${BEACON_VERIFIER_ARTIFACT}.`,
@@ -472,7 +475,7 @@ export function validateTokenlessDeploymentArtifact(
     if (!contract) {
       throw new Error(`Tokenless deployment artifact is missing ${name}.`);
     }
-    normalizeAddress(contract.address, `${name} address`);
+    requireTokenlessNonZeroAddress(contract.address, `${name} address`);
     normalizeBlockNumber(contract.deployedOnBlock, `${name} deployedOnBlock`);
     if (typeof contract.artifact !== "string" || !contract.artifact) {
       throw new Error(`${name} artifact name is missing.`);
@@ -484,7 +487,7 @@ export function validateTokenlessDeploymentArtifact(
     }
   }
   if (contracts.X402PanelSubmitter) {
-    normalizeAddress(
+    requireTokenlessNonZeroAddress(
       contracts.X402PanelSubmitter.address,
       "X402PanelSubmitter address",
     );
@@ -494,7 +497,7 @@ export function validateTokenlessDeploymentArtifact(
     );
   }
 
-  normalizeAddress(
+  requireTokenlessNonZeroAddress(
     contracts.TokenlessFeedbackBonus.address,
     "TokenlessFeedbackBonus address",
   );
