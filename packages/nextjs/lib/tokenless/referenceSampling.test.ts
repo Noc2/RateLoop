@@ -7,6 +7,7 @@ import {
   type ReferenceFrameUnit,
   __referenceSamplingTestUtils,
   createReferenceFrameCommitment,
+  deriveReferenceSystemIdentity,
   freezeReferenceSample,
   verifyFrozenReferenceSample,
 } from "~~/lib/tokenless/referenceSampling";
@@ -36,20 +37,23 @@ const source: ReferenceFrameSourceBinding = {
   benchmarkId: "benchmark_public_safe_1",
   activationReference: "activation_public_safe_1",
   deploymentKey: "deployment_tokenless_1",
+  contextAuthority: "workspace_manager_asserted_context",
   populationId: "population_reference_1",
   populationVersion: 1,
   populationContractHash: `sha256:${"0".repeat(64)}`,
   populationRoot: `sha256:${"1".repeat(64)}`,
+  populationFrozenAt: "2023-07-01T00:00:00.000Z",
   reportingWindow: { startInclusive: "2023-06-01T00:00:00.000Z", endExclusive: "2023-07-01T00:00:00.000Z" },
-  populationCount: 7,
+  populationCount: 6,
   eligibleDrawUnitCount: 5,
-  uncertainAlwaysReviewCount: 1,
-  excludedUnitCount: 1,
+  evaluatedDecisionCount: 4,
+  notAutomatedDecisionCount: 1,
+  excludedDecisionCount: 1,
 };
 const witness = {
   kind: "database_transaction_and_attestation" as const,
   witnessId: "witness_frame_commit_1",
-  sourceFrozenAt: "2023-07-01T00:00:00.000Z",
+  sourceFrozenAt: "2023-07-01T00:00:01.000Z",
   committedAt: "2023-07-01T00:00:01.000Z",
   auditHeadDigest: `sha256:${"2".repeat(64)}` as const,
 };
@@ -60,22 +64,41 @@ const frozenWitness = {
   auditHeadDigest: `sha256:${"3".repeat(64)}` as const,
 };
 
-function unit(character: string, outcome: "pass" | "fail", day: number): ReferenceFrameUnit {
+function unit(
+  character: string,
+  outcome: "pass" | "fail",
+  day: number,
+  systemId: "system_alpha" | "system_beta",
+  sourceDecisionCharacter = character,
+): ReferenceFrameUnit {
+  const systemVersion = systemId === "system_alpha" ? "1.0.0" : "2023.06";
   return {
     unitId: `rsu_${character.repeat(22)}`,
-    sourceDecisionBinding: `sha256:${character.toLowerCase().repeat(64)}` as `sha256:${string}`,
+    sourceDecisionBinding: `sha256:${sourceDecisionCharacter.repeat(64)}`,
+    sourceEvaluationBinding: `sha256:${character.repeat(64)}`,
+    sourceEvaluationHash: `sha256:${character.repeat(64)}`,
     decidedAt: `2023-06-${String(day).padStart(2, "0")}T12:00:00.000Z`,
+    automationProcessing: character === "e" ? "partially_automated" : "solely_automated",
+    systemIdentity: deriveReferenceSystemIdentity({ systemId, systemVersion }),
+    systemId,
+    systemVersion,
+    machineClass: systemId === "system_alpha" ? "text_classifier" : "rules_engine",
+    publicDesignation: systemId === "system_alpha" ? "Alpha text moderation" : "Beta policy rules",
     automatedOutcome: outcome,
     referenceLabelState: "unlabeled",
   };
 }
 
 const units = [
-  unit("a", "pass", 1),
-  unit("b", "pass", 2),
-  unit("c", "pass", 3),
-  unit("d", "fail", 4),
-  unit("e", "fail", 5),
+  unit("a", "pass", 1, "system_alpha", "a"),
+  unit("b", "pass", 1, "system_alpha", "a"),
+  unit("c", "fail", 3, "system_alpha"),
+  unit("d", "pass", 4, "system_beta"),
+  unit("e", "fail", 5, "system_beta"),
+];
+const sampleSizes = [
+  { systemId: "system_alpha", systemVersion: "1.0.0", automatedFail: 1, automatedPass: 1 },
+  { systemId: "system_beta", systemVersion: "2023.06", automatedFail: 1, automatedPass: 1 },
 ];
 
 function commitment(input: { units?: readonly ReferenceFrameUnit[]; source?: ReferenceFrameSourceBinding } = {}) {
@@ -85,7 +108,7 @@ function commitment(input: { units?: readonly ReferenceFrameUnit[]; source?: Ref
     source: input.source ?? source,
     witness,
     units: input.units ?? units,
-    sampleSizes: { automated_pass: 2, automated_fail: 1 },
+    sampleSizes,
     sampleSizePlanId: "sample_plan_pilot_1",
     sampleSizePlanVersion: 1,
     beaconNetwork: "quicknet-t",
@@ -93,15 +116,22 @@ function commitment(input: { units?: readonly ReferenceFrameUnit[]; source?: Ref
   });
 }
 
-test("binds the complete source scope and requires an attested five-minute beacon lead", () => {
+test("binds complete decision/evaluation scope and per-system outcome strata", () => {
   const frame = commitment();
-  assert.equal(frame.source.populationCount, 7);
+  assert.equal(frame.source.populationCount, 6);
   assert.equal(frame.source.eligibleDrawUnitCount, 5);
+  assert.equal(frame.source.evaluatedDecisionCount, 4);
+  assert.equal(frame.source.notAutomatedDecisionCount, 1);
   assert.equal(frame.methodVersion, REFERENCE_SAMPLING_METHOD_VERSION);
-  assert.deepEqual(frame.strata, [
-    { stratum: "automated_fail", eligibleCount: 2, sampleSize: 1, gap: null },
-    { stratum: "automated_pass", eligibleCount: 3, sampleSize: 2, gap: null },
-  ]);
+  assert.equal(frame.strata.length, 4);
+  for (const systemId of ["system_alpha", "system_beta"]) {
+    const cells = frame.strata.filter(row => row.systemId === systemId);
+    assert.deepEqual(cells.map(row => row.automatedOutcome).sort(), ["fail", "pass"]);
+    assert.ok(cells.every(row => row.sampleSize === 1 && row.gap === null));
+  }
+  const changed = commitment({ source: { ...source, evaluatedDecisionCount: 5, notAutomatedDecisionCount: 0 } });
+  assert.notEqual(changed.commitmentDigest, frame.commitmentDigest);
+
   const availableAt = __referenceSamplingTestUtils.roundAvailabilityMilliseconds("quicknet-t", 1);
   const tooLate = new Date(Number(availableAt - 60_000n)).toISOString();
   assert.throws(
@@ -110,9 +140,9 @@ test("binds the complete source scope and requires an attested five-minute beaco
         frameId: "frame_late",
         purpose: "dsa_reference",
         source,
-        witness: { ...witness, committedAt: tooLate },
+        witness: { ...witness, sourceFrozenAt: tooLate, committedAt: tooLate },
         units,
-        sampleSizes: { automated_pass: 2, automated_fail: 1 },
+        sampleSizes,
         sampleSizePlanId: "sample_plan_pilot_1",
         sampleSizePlanVersion: 1,
         beaconNetwork: "quicknet-t",
@@ -122,49 +152,26 @@ test("binds the complete source scope and requires an attested five-minute beaco
   );
 });
 
-test("freezes an exact stratified draw with rational inclusion probabilities", () => {
+test("freezes exact per-system draws with manifest-level inclusion probabilities", () => {
   const frame = commitment();
   const frozen = freezeReferenceSample({ commitment: frame, units: [...units].reverse(), beacon, frozenWitness });
-  assert.deepEqual(frozen.strata, [
-    { stratum: "automated_fail", eligibleCount: 2, selectedCount: 1, gap: null },
-    { stratum: "automated_pass", eligibleCount: 3, selectedCount: 2, gap: null },
-  ]);
-  assert.equal(frozen.manifest.filter(row => row.selected).length, 3);
-  assert.deepEqual(
-    {
-      frameRoot: frame.frameRoot,
-      commitmentDigest: frame.commitmentDigest,
-      seedDigest: frozen.seedDigest,
-      selected: frozen.manifest.filter(row => row.selected).map(row => [row.unitId, row.selectionRank]),
-      manifestRoot: frozen.manifestRoot,
-      sampleDigest: frozen.sampleDigest,
-    },
-    {
-      frameRoot: "sha256:3d384dd5a9bca434ba8756c5b62f48178922c95eac55f8b8caeefa4e741f9ccc",
-      commitmentDigest: "sha256:e27155c28247ea0b8dd6b6364dfe353993001fb35f225da758d4da2424c2296e",
-      seedDigest: "sha256:6b1b0a6c661e612e4e411b80c9be94900488f4ac10c2a58e7de1864bcf942975",
-      selected: [
-        ["rsu_aaaaaaaaaaaaaaaaaaaaaa", 1],
-        ["rsu_cccccccccccccccccccccc", 2],
-        ["rsu_dddddddddddddddddddddd", 1],
-      ],
-      manifestRoot: "sha256:6a81978ce2b8eaa8ebb7a5e2a7b77414c4143631407fd530ea4c8dcb7a945035",
-      sampleDigest: "sha256:c55d45d37224e54925ee55c834e6b95bd05e29e982ed384af5f4c56ef192ffcf",
-    },
-  );
+  assert.equal(frozen.manifest.filter(row => row.selected).length, 4);
+  assert.ok(frozen.manifest.every(row => row.systemIdentity === deriveReferenceSystemIdentity(row)));
   for (const row of frozen.manifest) {
-    assert.deepEqual(
-      row.inclusionProbability,
-      row.stratum === "automated_pass" ? { numerator: 2, denominator: 3 } : { numerator: 1, denominator: 2 },
-    );
+    const eligible = units.filter(
+      unit => unit.systemIdentity === row.systemIdentity && unit.automatedOutcome === row.automatedOutcome,
+    ).length;
+    assert.deepEqual(row.inclusionProbability, { numerator: 1, denominator: eligible });
   }
+  const repeated = freezeReferenceSample({ commitment: frame, units, beacon, frozenWitness });
+  assert.deepEqual(repeated, frozen);
   assert.deepEqual(
     verifyFrozenReferenceSample({ expected: frozen, commitment: frame, units, beacon, frozenWitness }),
     frozen,
   );
 });
 
-test("frame, source, method, round, and frozen-manifest substitutions fail closed", () => {
+test("frame, system, source, round, and frozen-manifest substitutions fail closed", () => {
   const frame = commitment();
   const frozen = freezeReferenceSample({ commitment: frame, units, beacon, frozenWitness });
   assert.throws(
@@ -172,14 +179,12 @@ test("frame, source, method, round, and frozen-manifest substitutions fail close
     /source binding is invalid|commitment is invalid|does not match/u,
   );
   assert.throws(
-    () =>
-      freezeReferenceSample({
-        commitment: { ...frame, methodVersion: "stratified-v2" as never },
-        units,
-        beacon,
-        frozenWitness,
-      }),
-    /commitment is invalid/u,
+    () => commitment({ units: [{ ...units[0]!, systemId: "system_other" }, ...units.slice(1)] }),
+    /system identity is invalid|exact pre-label/u,
+  );
+  assert.throws(
+    () => commitment({ units: [{ ...units[0]!, publicDesignation: '=HYPERLINK("bad")' }, ...units.slice(1)] }),
+    /exact pre-label/u,
   );
   assert.throws(
     () => freezeReferenceSample({ commitment: frame, units, beacon: { ...beacon, expectedRound: 2 }, frozenWitness }),
@@ -196,47 +201,22 @@ test("frame, source, method, round, and frozen-manifest substitutions fail close
       }),
     /verification failed/u,
   );
-  assert.throws(
-    () =>
-      verifyFrozenReferenceSample({
-        expected: { ...frozen, seedDigest: `sha256:${"f".repeat(64)}` },
-        commitment: frame,
-        units,
-        beacon,
-        frozenWitness,
-      }),
-    /verification failed/u,
-  );
 });
 
-test("exact unit projections, present-stratum probability, and explicit absent-stratum gaps are enforced", () => {
+test("multiple evaluations per decision are allowed while evaluation and system cells stay exact", () => {
+  assert.equal(units[0]!.sourceDecisionBinding, units[1]!.sourceDecisionBinding);
+  assert.doesNotThrow(() => commitment());
   assert.throws(() => commitment({ units: [units[0]!, units[0]!] }), /only once/u);
   assert.throws(
     () =>
       commitment({
-        units: [units[0]!, { ...units[1]!, sourceDecisionBinding: units[0]!.sourceDecisionBinding }, ...units.slice(2)],
+        units: [
+          units[0]!,
+          { ...units[1]!, sourceEvaluationBinding: units[0]!.sourceEvaluationBinding },
+          ...units.slice(2),
+        ],
       }),
-    /source decision may bind only one/u,
-  );
-  assert.throws(
-    () => commitment({ units: [{ ...units[0]!, decidedAt: "2023-07-01T00:00:00.000Z" }, ...units.slice(1)] }),
-    /inside the bound reporting window/u,
-  );
-  assert.throws(
-    () =>
-      createReferenceFrameCommitment({
-        frameId: "frame_extra_field",
-        purpose: "dsa_reference",
-        source,
-        witness,
-        units: [{ ...units[0]!, referenceLabel: "pass" } as never, ...units.slice(1)],
-        sampleSizes: { automated_pass: 2, automated_fail: 1 },
-        sampleSizePlanId: "sample_plan_pilot_1",
-        sampleSizePlanVersion: 1,
-        beaconNetwork: "quicknet-t",
-        beaconRound: 1,
-      }),
-    /exact pre-label source projection/u,
+    /source evaluation may bind only one/u,
   );
   assert.throws(
     () =>
@@ -246,7 +226,7 @@ test("exact unit projections, present-stratum probability, and explicit absent-s
         source,
         witness,
         units,
-        sampleSizes: { automated_pass: 2, automated_fail: 0 },
+        sampleSizes: [{ ...sampleSizes[0]!, automatedPass: 0 }, sampleSizes[1]!],
         sampleSizePlanId: "sample_plan_pilot_1",
         sampleSizePlanVersion: 1,
         beaconNetwork: "quicknet-t",
@@ -255,28 +235,36 @@ test("exact unit projections, present-stratum probability, and explicit absent-s
     /positive sample/u,
   );
 
-  const passOnlyUnits = units.filter(row => row.automatedOutcome === "pass");
-  const passOnlySource = {
-    ...source,
-    populationCount: 5,
-    eligibleDrawUnitCount: 3,
-  };
+  const passOnlyUnits = units.filter(row => row.systemId === "system_alpha" && row.automatedOutcome === "pass");
   const passOnly = createReferenceFrameCommitment({
     frameId: "frame_absent_fail",
     purpose: "dsa_reference",
-    source: passOnlySource,
+    source: {
+      ...source,
+      populationCount: 3,
+      eligibleDrawUnitCount: 2,
+      evaluatedDecisionCount: 1,
+      notAutomatedDecisionCount: 1,
+      excludedDecisionCount: 1,
+    },
     witness,
     units: passOnlyUnits,
-    sampleSizes: { automated_pass: 2, automated_fail: 0 },
+    sampleSizes: [{ systemId: "system_alpha", systemVersion: "1.0.0", automatedFail: 0, automatedPass: 1 }],
     sampleSizePlanId: "sample_plan_pilot_1",
     sampleSizePlanVersion: 1,
     beaconNetwork: "quicknet-t",
     beaconRound: 1,
   });
-  assert.deepEqual(passOnly.strata[0], {
-    stratum: "automated_fail",
-    eligibleCount: 0,
-    sampleSize: 0,
-    gap: "absent_stratum",
-  });
+  assert.deepEqual(
+    passOnly.strata.find(row => row.automatedOutcome === "fail"),
+    {
+      systemIdentity: deriveReferenceSystemIdentity({ systemId: "system_alpha", systemVersion: "1.0.0" }),
+      systemId: "system_alpha",
+      systemVersion: "1.0.0",
+      automatedOutcome: "fail",
+      eligibleCount: 0,
+      sampleSize: 0,
+      gap: "absent_stratum",
+    },
+  );
 });

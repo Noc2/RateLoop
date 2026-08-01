@@ -184,6 +184,123 @@ async function signingLedgerTerminalPartialUniqueness(client) {
   }
 }
 
+async function dsaNullableDisjunctionChecks(client) {
+  const digest = `sha256:${"1".repeat(64)}`;
+  await client.query("BEGIN");
+  try {
+    await client.query(
+      `CREATE TEMP TABLE dsa_decision_fact_null_probe
+         (LIKE tokenless_dsa_content_moderation_decision_facts INCLUDING CONSTRAINTS)
+       ON COMMIT DROP`,
+    );
+    const factInsert = overrides => ({
+      text: `INSERT INTO dsa_decision_fact_null_probe
+        (workspace_id,provider_decision_id,decision_version,schema_version,measure_taken,moderation_measure_id,
+         origin,automation_processing,expected_evaluation_count,evaluation_set_root,article16_notice_id,notifier_class,
+         language_codes_json,no_language_reason,fact_json,fact_hash,
+         created_by,created_at)
+       VALUES ('ws_dsa_null_probe',$1,1,'rateloop.dsa-part8-content-moderation-decision.v3',true,$2,
+               $3,$4,$5,$6,$7,$8,$9,$10,'{}',$11,'principal:ci',clock_timestamp())`,
+      values: [
+        overrides.decisionId,
+        overrides.measureId,
+        overrides.origin,
+        overrides.automation,
+        overrides.expectedEvaluationCount,
+        overrides.evaluationSetRoot,
+        overrides.noticeId,
+        overrides.notifierClass,
+        overrides.languageCodes,
+        overrides.noLanguageReason,
+        digest,
+      ],
+    });
+    const valid = {
+      decisionId: "decision_null_probe",
+      measureId: "measure_null_probe_00000001",
+      origin: "own_initiative",
+      automation: "solely_automated",
+      noticeId: null,
+      notifierClass: null,
+      expectedEvaluationCount: 1,
+      evaluationSetRoot: digest,
+      languageCodes: '["en"]',
+      noLanguageReason: null,
+    };
+    for (const [name, change] of [
+      ["notice", { origin: "article16_notice", noticeId: "notice_null_probe_00000001", notifierClass: null }],
+      ["automation", { automation: "not_automated", expectedEvaluationCount: 1 }],
+      ["language", { languageCodes: "[]", noLanguageReason: null }],
+    ]) {
+      await client.query(`SAVEPOINT dsa_${name}_null_probe`);
+      await expectPostgresError(
+        client,
+        factInsert({
+          ...valid,
+          ...change,
+          decisionId: `${valid.decisionId}_${name}`,
+          measureId: `${valid.measureId}_${name}`,
+        }),
+        "23514",
+      );
+      await client.query(`ROLLBACK TO SAVEPOINT dsa_${name}_null_probe`);
+    }
+
+    await client.query(
+      `CREATE TEMP TABLE dsa_projection_null_probe
+         (LIKE tokenless_dsa_reference_decision_projections INCLUDING CONSTRAINTS)
+       ON COMMIT DROP`,
+    );
+    await expectPostgresError(
+      client,
+      {
+        text: `INSERT INTO dsa_projection_null_probe
+          (workspace_id,epoch_id,population_id,population_version,provider_decision_id,decision_version,
+           engagement_id,engagement_version,source_decision_binding,source_decision_hash,engagement_hash,
+           measure_taken,moderation_measure_id,part8_fact_json,part8_fact_hash,origin,article16_notice_id,
+           notifier_class,decision_at,source_eligibility_status,source_exclusion_reason,automation_processing,
+           expected_evaluation_count,evaluation_set_root,language_codes_json,no_language_reason,disposition,
+           projection_json,projection_hash)
+         VALUES ('ws_dsa_null_probe','rse_${"2".repeat(40)}','population_null_probe',1,'decision_projection_probe',1,
+                 'engagement_projection_probe',1,$1,$1,$1,true,'measure_projection_probe_00000001','{}',$1,
+                 'own_initiative',NULL,NULL,clock_timestamp(),'excluded',NULL,'solely_automated',
+                 1,$1,'["en"]',NULL,'excluded','{}',$1)`,
+        values: [digest],
+      },
+      "23514",
+    );
+  } finally {
+    await client.query("ROLLBACK");
+  }
+}
+
+async function dsaBeaconUsesLateCommitClock(client) {
+  await client.query(
+    `CREATE TEMP TABLE dsa_beacon_commit_clock_probe
+       (beacon_available_at timestamp with time zone NOT NULL)`,
+  );
+  await client.query(
+    `CREATE CONSTRAINT TRIGGER dsa_beacon_commit_clock_probe_guard
+       AFTER INSERT ON dsa_beacon_commit_clock_probe
+       DEFERRABLE INITIALLY DEFERRED
+       FOR EACH ROW EXECUTE FUNCTION tokenless_guard_dsa_reference_beacon_lead_at_commit()`,
+  );
+  await client.query("BEGIN");
+  try {
+    const inserted = await client.query(
+      `INSERT INTO dsa_beacon_commit_clock_probe(beacon_available_at)
+       VALUES (transaction_timestamp() + interval '5 minutes 250 milliseconds')
+       RETURNING beacon_available_at >= transaction_timestamp() + interval '5 minutes' AS old_clock_passes`,
+    );
+    assert.equal(inserted.rows[0]?.old_clock_passes, true, "The stale transaction clock should pass the old guard.");
+    await client.query("SELECT pg_sleep(0.4)");
+    await expectPostgresError(client, "COMMIT", "23514");
+  } finally {
+    await client.query("ROLLBACK").catch(() => undefined);
+    await client.query("DROP TABLE IF EXISTS dsa_beacon_commit_clock_probe");
+  }
+}
+
 export async function runPostgresInvariantTests(databaseUrl = process.env.DATABASE_URL) {
   const pool = new Pool({
     connectionString: localTestDatabaseUrl(databaseUrl),
@@ -195,6 +312,8 @@ export async function runPostgresInvariantTests(databaseUrl = process.env.DATABA
     await prepaidReferenceUniquenessAndRollback(client);
     await projectAccessPartialUniquenessAndChecks(client);
     await signingLedgerTerminalPartialUniqueness(client);
+    await dsaNullableDisjunctionChecks(client);
+    await dsaBeaconUsesLateCommitClock(client);
   } finally {
     client.release();
     await pool.end();

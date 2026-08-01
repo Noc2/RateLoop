@@ -9,8 +9,8 @@ import {
 } from "~~/lib/tokenless/referenceSamplingBeacon";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
-export const REFERENCE_FRAME_SCHEMA_VERSION = "rateloop.reference-sampling-frame.v1" as const;
-export const REFERENCE_SAMPLE_SCHEMA_VERSION = "rateloop.reference-sample.v1" as const;
+export const REFERENCE_FRAME_SCHEMA_VERSION = "rateloop.reference-sampling-frame.v3" as const;
+export const REFERENCE_SAMPLE_SCHEMA_VERSION = "rateloop.reference-sample.v2" as const;
 export const REFERENCE_SAMPLING_METHOD_VERSION = "stratified-sha256-rank-without-replacement-v1" as const;
 export const REFERENCE_SAMPLE_INTENDED_ESTIMANDS = ["accuracy", "precision", "recall"] as const;
 export const REFERENCE_SAMPLE_PLAN_LIMITATIONS = [
@@ -22,15 +22,48 @@ const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,159}$/u;
 const LOWER_IDENTIFIER = /^[a-z0-9][a-z0-9._:-]{0,127}$/u;
 const SHA256 = /^sha256:[0-9a-f]{64}$/u;
 const UNIT_ID = /^rsu_[A-Za-z0-9_-]{22}$/u;
+const PUBLIC_DESIGNATION = /^[^\u0000-\u001f\u007f]{1,160}$/u;
+const FORMULA_LEADING = /^[=+@-]/u;
+const MACHINE_CLASSES = new Set<ReferenceFrameUnit["machineClass"]>([
+  "text_classifier",
+  "image_classifier",
+  "audio_classifier",
+  "video_classifier",
+  "multimodal_classifier",
+  "rules_engine",
+  "other_machine_class",
+]);
 const MAX_FRAME_UNITS = 50_000;
 const MINIMUM_BEACON_LEAD_MS = 5 * 60 * 1_000;
 
 export type ReferenceFrameUnit = Readonly<{
   unitId: string;
   sourceDecisionBinding: `sha256:${string}`;
+  sourceEvaluationBinding: `sha256:${string}`;
+  sourceEvaluationHash: `sha256:${string}`;
   decidedAt: string;
+  automationProcessing: "solely_automated" | "partially_automated";
+  systemIdentity: `sha256:${string}`;
+  systemId: string;
+  systemVersion: string;
+  machineClass:
+    | "text_classifier"
+    | "image_classifier"
+    | "audio_classifier"
+    | "video_classifier"
+    | "multimodal_classifier"
+    | "rules_engine"
+    | "other_machine_class";
+  publicDesignation: string;
   automatedOutcome: "pass" | "fail";
   referenceLabelState: "unlabeled";
+}>;
+
+export type ReferenceSystemSampleSizePlan = Readonly<{
+  systemId: string;
+  systemVersion: string;
+  automatedFail: number;
+  automatedPass: number;
 }>;
 
 export type ReferenceFrameSourceBinding = Readonly<{
@@ -39,15 +72,18 @@ export type ReferenceFrameSourceBinding = Readonly<{
   benchmarkId: string;
   activationReference: string;
   deploymentKey: string;
+  contextAuthority: "workspace_manager_asserted_context";
   populationId: string;
   populationVersion: number;
   populationContractHash: `sha256:${string}`;
   populationRoot: `sha256:${string}`;
+  populationFrozenAt: string;
   reportingWindow: Readonly<{ startInclusive: string; endExclusive: string }>;
   populationCount: number;
   eligibleDrawUnitCount: number;
-  uncertainAlwaysReviewCount: number;
-  excludedUnitCount: number;
+  evaluatedDecisionCount: number;
+  notAutomatedDecisionCount: number;
+  excludedDecisionCount: number;
 }>;
 
 export type ReferenceFrameWitness = Readonly<{
@@ -76,7 +112,10 @@ export type ReferenceFrameCommitment = Readonly<{
     limitations: typeof REFERENCE_SAMPLE_PLAN_LIMITATIONS;
   }>;
   strata: readonly Readonly<{
-    stratum: "automated_fail" | "automated_pass";
+    systemIdentity: `sha256:${string}`;
+    systemId: string;
+    systemVersion: string;
+    automatedOutcome: "pass" | "fail";
     eligibleCount: number;
     sampleSize: number;
     gap: "absent_stratum" | null;
@@ -97,7 +136,10 @@ export type FrozenReferenceSample = Readonly<{
   }>;
   seedDigest: `sha256:${string}`;
   strata: readonly Readonly<{
-    stratum: "automated_fail" | "automated_pass";
+    systemIdentity: `sha256:${string}`;
+    systemId: string;
+    systemVersion: string;
+    automatedOutcome: "pass" | "fail";
     eligibleCount: number;
     selectedCount: number;
     gap: "absent_stratum" | null;
@@ -105,9 +147,16 @@ export type FrozenReferenceSample = Readonly<{
   manifest: readonly Readonly<{
     unitId: string;
     sourceDecisionBinding: `sha256:${string}`;
+    sourceEvaluationBinding: `sha256:${string}`;
+    sourceEvaluationHash: `sha256:${string}`;
     decidedAt: string;
+    automationProcessing: "solely_automated" | "partially_automated";
+    systemIdentity: `sha256:${string}`;
+    systemId: string;
+    systemVersion: string;
+    machineClass: ReferenceFrameUnit["machineClass"];
+    publicDesignation: string;
     automatedOutcome: "pass" | "fail";
-    stratum: "automated_fail" | "automated_pass";
     selected: boolean;
     selectionRank: number;
     inclusionProbability: Readonly<{ numerator: number; denominator: number }>;
@@ -143,6 +192,13 @@ function digestRecords(domain: string, header: unknown, rows: readonly unknown[]
   return `sha256:${hash.digest("hex")}` as const;
 }
 
+export function deriveReferenceSystemIdentity(input: { systemId: string; systemVersion: string }) {
+  if (!IDENTIFIER.test(input.systemId) || !IDENTIFIER.test(input.systemVersion)) {
+    invalid("Reference system identity is invalid.", "systemId");
+  }
+  return sha256Rfc8785({ systemId: input.systemId, systemVersion: input.systemVersion });
+}
+
 function normalizeUnits(units: readonly ReferenceFrameUnit[]) {
   if (!Array.isArray(units) || units.length === 0 || units.length > MAX_FRAME_UNITS) {
     invalid(`Reference frames must contain between 1 and ${MAX_FRAME_UNITS} units.`, "units");
@@ -154,12 +210,30 @@ function normalizeUnits(units: readonly ReferenceFrameUnit[]) {
       !hasExactKeys(unit, [
         "unitId",
         "sourceDecisionBinding",
+        "sourceEvaluationBinding",
+        "sourceEvaluationHash",
         "decidedAt",
+        "automationProcessing",
+        "systemIdentity",
+        "systemId",
+        "systemVersion",
+        "machineClass",
+        "publicDesignation",
         "automatedOutcome",
         "referenceLabelState",
       ]) ||
       !UNIT_ID.test(unit.unitId) ||
       !SHA256.test(unit.sourceDecisionBinding) ||
+      !SHA256.test(unit.sourceEvaluationBinding) ||
+      !SHA256.test(unit.sourceEvaluationHash) ||
+      (unit.automationProcessing !== "solely_automated" && unit.automationProcessing !== "partially_automated") ||
+      !SHA256.test(unit.systemIdentity) ||
+      unit.systemIdentity !== deriveReferenceSystemIdentity(unit) ||
+      !MACHINE_CLASSES.has(unit.machineClass) ||
+      typeof unit.publicDesignation !== "string" ||
+      unit.publicDesignation !== unit.publicDesignation.trim() ||
+      !PUBLIC_DESIGNATION.test(unit.publicDesignation) ||
+      FORMULA_LEADING.test(unit.publicDesignation) ||
       (unit.automatedOutcome !== "pass" && unit.automatedOutcome !== "fail") ||
       unit.referenceLabelState !== "unlabeled"
     ) {
@@ -175,45 +249,87 @@ function normalizeUnits(units: readonly ReferenceFrameUnit[]) {
   if (new Set(normalized.map(unit => unit.unitId)).size !== normalized.length) {
     invalid("A reference frame unit may appear only once, including across strata.", "units");
   }
-  if (new Set(normalized.map(unit => unit.sourceDecisionBinding)).size !== normalized.length) {
-    invalid("A source decision may bind only one reference frame unit.", "units");
+  if (new Set(normalized.map(unit => unit.sourceEvaluationBinding)).size !== normalized.length) {
+    invalid("A source evaluation may bind only one reference frame unit.", "units");
   }
+  const systemDescriptors = new Map<string, string>();
+  normalized.forEach(unit => {
+    const descriptor = canonicalizeRfc8785({
+      systemId: unit.systemId,
+      systemVersion: unit.systemVersion,
+      machineClass: unit.machineClass,
+      publicDesignation: unit.publicDesignation,
+    });
+    const existing = systemDescriptors.get(unit.systemIdentity);
+    if (existing && existing !== descriptor) {
+      invalid("A system identity must have one public descriptor throughout the frame.", "units");
+    }
+    systemDescriptors.set(unit.systemIdentity, descriptor);
+  });
   return normalized;
 }
 
 function normalizeSampleSizes(
   units: readonly ReferenceFrameUnit[],
-  sampleSizes: Readonly<Record<"automated_pass" | "automated_fail", number>>,
+  sampleSizes: readonly ReferenceSystemSampleSizePlan[],
 ) {
-  if (
-    !sampleSizes ||
-    typeof sampleSizes !== "object" ||
-    Array.isArray(sampleSizes) ||
-    !hasExactKeys(sampleSizes, ["automated_fail", "automated_pass"])
-  ) {
+  if (!Array.isArray(sampleSizes) || sampleSizes.length === 0) {
     invalid("Reference sample sizes are invalid.", "sampleSizes");
   }
-  const eligible = new Map<"automated_pass" | "automated_fail", number>([
-    ["automated_fail", 0],
-    ["automated_pass", 0],
-  ]);
+  const systems = new Map<string, { systemId: string; systemVersion: string }>();
+  const eligible = new Map<string, number>();
   units.forEach(unit => {
-    const stratum = `automated_${unit.automatedOutcome}` as const;
-    eligible.set(stratum, eligible.get(stratum)! + 1);
+    systems.set(unit.systemIdentity, { systemId: unit.systemId, systemVersion: unit.systemVersion });
+    const key = `${unit.systemIdentity}:${unit.automatedOutcome}`;
+    eligible.set(key, (eligible.get(key) ?? 0) + 1);
   });
-  return (["automated_fail", "automated_pass"] as const).map(stratum => {
-    const eligibleCount = eligible.get(stratum)!;
-    const sampleSize = sampleSizes[stratum];
+  const plans = new Map<string, ReferenceSystemSampleSizePlan>();
+  sampleSizes.forEach(plan => {
     if (
-      !Number.isSafeInteger(sampleSize) ||
-      sampleSize < 0 ||
-      sampleSize > eligibleCount ||
-      (eligibleCount === 0 ? sampleSize !== 0 : sampleSize < 1)
+      !plan ||
+      typeof plan !== "object" ||
+      !hasExactKeys(plan, ["systemId", "systemVersion", "automatedFail", "automatedPass"])
     ) {
-      invalid("Each present reference stratum needs a positive sample no larger than its frame.", "sampleSizes");
+      invalid("Each system needs an exact two-cell sample-size plan.", "sampleSizes");
     }
-    return { stratum, eligibleCount, sampleSize, gap: eligibleCount === 0 ? ("absent_stratum" as const) : null };
+    const identity = deriveReferenceSystemIdentity(plan);
+    if (plans.has(identity)) invalid("A system sample-size plan may appear only once.", "sampleSizes");
+    if (
+      !Number.isSafeInteger(plan.automatedFail) ||
+      plan.automatedFail < 0 ||
+      !Number.isSafeInteger(plan.automatedPass) ||
+      plan.automatedPass < 0
+    ) {
+      invalid("System sample sizes must be non-negative safe integers.", "sampleSizes");
+    }
+    plans.set(identity, { ...plan });
   });
+  if (plans.size !== systems.size || [...systems.keys()].some(identity => !plans.has(identity))) {
+    invalid("Every and only represented system versions require a sample-size plan.", "sampleSizes");
+  }
+  return [...systems.entries()]
+    .sort(([left], [right]) => portableCompare(left, right))
+    .flatMap(([systemIdentity, system]) =>
+      (["fail", "pass"] as const).map(automatedOutcome => {
+        const eligibleCount = eligible.get(`${systemIdentity}:${automatedOutcome}`) ?? 0;
+        const plan = plans.get(systemIdentity)!;
+        const sampleSize = automatedOutcome === "fail" ? plan.automatedFail : plan.automatedPass;
+        if (sampleSize > eligibleCount || (eligibleCount === 0 ? sampleSize !== 0 : sampleSize < 1)) {
+          invalid(
+            "Each present system-by-outcome stratum needs a positive sample no larger than its frame.",
+            "sampleSizes",
+          );
+        }
+        return {
+          systemIdentity: systemIdentity as `sha256:${string}`,
+          ...system,
+          automatedOutcome,
+          eligibleCount,
+          sampleSize,
+          gap: eligibleCount === 0 ? ("absent_stratum" as const) : null,
+        };
+      }),
+    );
 }
 
 function roundAvailabilityMilliseconds(network: "quicknet" | "quicknet-t", round: number) {
@@ -239,35 +355,42 @@ function normalizeSource(source: ReferenceFrameSourceBinding, units: readonly Re
       "benchmarkId",
       "activationReference",
       "deploymentKey",
+      "contextAuthority",
       "populationId",
       "populationVersion",
       "populationContractHash",
       "populationRoot",
+      "populationFrozenAt",
       "reportingWindow",
       "populationCount",
       "eligibleDrawUnitCount",
-      "uncertainAlwaysReviewCount",
-      "excludedUnitCount",
+      "evaluatedDecisionCount",
+      "notAutomatedDecisionCount",
+      "excludedDecisionCount",
     ]) ||
     !IDENTIFIER.test(source.workspaceId) ||
     !IDENTIFIER.test(source.projectId) ||
     !IDENTIFIER.test(source.benchmarkId) ||
     !IDENTIFIER.test(source.activationReference) ||
     !IDENTIFIER.test(source.deploymentKey) ||
+    source.contextAuthority !== "workspace_manager_asserted_context" ||
     !IDENTIFIER.test(source.populationId) ||
     !Number.isSafeInteger(source.populationVersion) ||
     source.populationVersion <= 0 ||
     !SHA256.test(source.populationContractHash) ||
     !SHA256.test(source.populationRoot) ||
+    typeof source.populationFrozenAt !== "string" ||
     !Number.isSafeInteger(source.populationCount) ||
     !Number.isSafeInteger(source.eligibleDrawUnitCount) ||
-    !Number.isSafeInteger(source.uncertainAlwaysReviewCount) ||
-    !Number.isSafeInteger(source.excludedUnitCount) ||
+    !Number.isSafeInteger(source.evaluatedDecisionCount) ||
+    !Number.isSafeInteger(source.notAutomatedDecisionCount) ||
+    !Number.isSafeInteger(source.excludedDecisionCount) ||
     source.populationCount < 1 ||
     source.eligibleDrawUnitCount !== units.length ||
-    source.uncertainAlwaysReviewCount < 0 ||
-    source.excludedUnitCount < 0 ||
-    source.eligibleDrawUnitCount + source.uncertainAlwaysReviewCount + source.excludedUnitCount !==
+    source.evaluatedDecisionCount < 0 ||
+    source.notAutomatedDecisionCount < 0 ||
+    source.excludedDecisionCount < 0 ||
+    source.evaluatedDecisionCount + source.notAutomatedDecisionCount + source.excludedDecisionCount !==
       source.populationCount ||
     !source.reportingWindow ||
     typeof source.reportingWindow !== "object" ||
@@ -277,7 +400,11 @@ function normalizeSource(source: ReferenceFrameSourceBinding, units: readonly Re
   }
   const start = canonicalTimestamp(source.reportingWindow.startInclusive, "source.reportingWindow.startInclusive");
   const end = canonicalTimestamp(source.reportingWindow.endExclusive, "source.reportingWindow.endExclusive");
+  const populationFrozenAt = canonicalTimestamp(source.populationFrozenAt, "source.populationFrozenAt");
   if (end <= start) invalid("Reference frame reporting window is invalid.", "source.reportingWindow");
+  if (populationFrozenAt < end) {
+    invalid("The population freeze must follow the complete reporting window.", "source.populationFrozenAt");
+  }
   if (units.some(unit => new Date(unit.decidedAt) < start || new Date(unit.decidedAt) >= end)) {
     invalid("Every reference frame unit must fall inside the bound reporting window.", "units");
   }
@@ -301,7 +428,9 @@ function normalizeCommitWitness(
   }
   const sourceFrozenAt = canonicalTimestamp(witness.sourceFrozenAt, "witness.sourceFrozenAt");
   const committedAt = canonicalTimestamp(witness.committedAt, "witness.committedAt");
-  if (committedAt < sourceFrozenAt) invalid("A reference frame cannot be committed before its source is frozen.");
+  if (committedAt < sourceFrozenAt) {
+    invalid("The commitment cannot predate its complete source projection.", "witness.committedAt");
+  }
   const availability = roundAvailabilityMilliseconds(beaconNetwork, beaconRound);
   if (availability - BigInt(committedAt.getTime()) < BigInt(MINIMUM_BEACON_LEAD_MS)) {
     invalid("The witnessed commitment must precede beacon availability by at least five minutes.", "beaconRound");
@@ -393,10 +522,10 @@ function validateCommitment(commitment: ReferenceFrameCommitment, units: readonl
   }
   const source = normalizeSource(commitment.source, units);
   const witness = normalizeCommitWitness(commitment.witness, commitment.beaconNetwork, commitment.beaconRound);
-  if (new Date(witness.sourceFrozenAt) < new Date(source.reportingWindow.endExclusive)) {
-    invalid("The source freeze witness must follow the complete reporting window.", "witness.sourceFrozenAt");
+  if (new Date(witness.sourceFrozenAt) < new Date(source.populationFrozenAt)) {
+    invalid("The source projection cannot be frozen before its bound population.", "witness.sourceFrozenAt");
   }
-  const expectedRoot = digestRecords("rateloop.reference-sampling-frame-units.v1", { source }, units);
+  const expectedRoot = digestRecords("rateloop.reference-sampling-frame-units.v2", { source }, units);
   if (
     expectedRoot !== commitment.frameRoot ||
     sha256Rfc8785(withoutDigest(commitment)) !== commitment.commitmentDigest
@@ -404,23 +533,51 @@ function validateCommitment(commitment: ReferenceFrameCommitment, units: readonl
     invalid("Reference frame commitment does not match the supplied frame.");
   }
   if (
-    commitment.strata.length !== 2 ||
+    commitment.strata.length === 0 ||
     commitment.strata.some(
       stratum =>
         !stratum ||
         typeof stratum !== "object" ||
-        !hasExactKeys(stratum, ["stratum", "eligibleCount", "sampleSize", "gap"]),
+        !hasExactKeys(stratum, [
+          "systemIdentity",
+          "systemId",
+          "systemVersion",
+          "automatedOutcome",
+          "eligibleCount",
+          "sampleSize",
+          "gap",
+        ]),
     )
   ) {
     invalid("Reference frame strata do not reconcile with the supplied frame.");
   }
-  const expectedStrata = normalizeSampleSizes(
-    units,
-    Object.fromEntries(commitment.strata.map(stratum => [stratum.stratum, stratum.sampleSize])) as Record<
-      "automated_pass" | "automated_fail",
-      number
-    >,
-  );
+  const planBySystem = new Map<string, ReferenceSystemSampleSizePlan>();
+  commitment.strata.forEach(stratum => {
+    if (
+      !SHA256.test(stratum.systemIdentity) ||
+      stratum.systemIdentity !== deriveReferenceSystemIdentity(stratum) ||
+      (stratum.automatedOutcome !== "pass" && stratum.automatedOutcome !== "fail")
+    ) {
+      invalid("Reference frame strata do not reconcile with the supplied frame.");
+    }
+    const current = planBySystem.get(stratum.systemIdentity) ?? {
+      systemId: stratum.systemId,
+      systemVersion: stratum.systemVersion,
+      automatedFail: -1,
+      automatedPass: -1,
+    };
+    if (current.systemId !== stratum.systemId || current.systemVersion !== stratum.systemVersion) {
+      invalid("Reference frame strata do not reconcile with the supplied frame.");
+    }
+    const field = stratum.automatedOutcome === "fail" ? "automatedFail" : "automatedPass";
+    if (current[field] !== -1) invalid("Reference frame strata contain a duplicate cell.");
+    planBySystem.set(stratum.systemIdentity, { ...current, [field]: stratum.sampleSize });
+  });
+  const plans = [...planBySystem.values()];
+  if (plans.some(plan => plan.automatedFail < 0 || plan.automatedPass < 0)) {
+    invalid("Every represented system requires both outcome cells.");
+  }
+  const expectedStrata = normalizeSampleSizes(units, plans);
   if (canonicalizeRfc8785(commitment.strata) !== canonicalizeRfc8785(expectedStrata)) {
     invalid("Reference frame strata do not reconcile with the supplied frame.");
   }
@@ -438,7 +595,7 @@ export function createReferenceFrameCommitment(input: {
   source: ReferenceFrameSourceBinding;
   witness: ReferenceFrameWitness;
   units: readonly ReferenceFrameUnit[];
-  sampleSizes: Readonly<Record<"automated_pass" | "automated_fail", number>>;
+  sampleSizes: readonly ReferenceSystemSampleSizePlan[];
   sampleSizePlanId: string;
   sampleSizePlanVersion: number;
   beaconNetwork: "quicknet" | "quicknet-t";
@@ -453,8 +610,8 @@ export function createReferenceFrameCommitment(input: {
   const units = normalizeUnits(input.units);
   const source = normalizeSource(input.source, units);
   const witness = normalizeCommitWitness(input.witness, input.beaconNetwork, input.beaconRound);
-  if (new Date(witness.sourceFrozenAt) < new Date(source.reportingWindow.endExclusive)) {
-    invalid("The source freeze witness must follow the complete reporting window.", "witness.sourceFrozenAt");
+  if (new Date(witness.sourceFrozenAt) < new Date(source.populationFrozenAt)) {
+    invalid("The source projection cannot be frozen before its bound population.", "witness.sourceFrozenAt");
   }
   const strata = normalizeSampleSizes(units, input.sampleSizes);
   if (
@@ -464,7 +621,7 @@ export function createReferenceFrameCommitment(input: {
   ) {
     invalid("Reference sample-size plan identity is invalid.", "sampleSizePlanId");
   }
-  const frameRoot = digestRecords("rateloop.reference-sampling-frame-units.v1", { source }, units);
+  const frameRoot = digestRecords("rateloop.reference-sampling-frame-units.v2", { source }, units);
   const payload = {
     schemaVersion: REFERENCE_FRAME_SCHEMA_VERSION,
     frameId: input.frameId,
@@ -514,24 +671,37 @@ export function freezeReferenceSample(input: {
     frameDigest: input.commitment.commitmentDigest,
     samplingMethod: input.commitment.methodVersion,
   });
-  const sampleSize = new Map(input.commitment.strata.map(stratum => [stratum.stratum, stratum.sampleSize]));
-  const eligibleCount = new Map(input.commitment.strata.map(stratum => [stratum.stratum, stratum.eligibleCount]));
+  const stratumKey = (systemIdentity: string, automatedOutcome: "pass" | "fail") =>
+    `${systemIdentity}:${automatedOutcome}`;
+  const sampleSize = new Map(
+    input.commitment.strata.map(stratum => [
+      stratumKey(stratum.systemIdentity, stratum.automatedOutcome),
+      stratum.sampleSize,
+    ]),
+  );
+  const eligibleCount = new Map(
+    input.commitment.strata.map(stratum => [
+      stratumKey(stratum.systemIdentity, stratum.automatedOutcome),
+      stratum.eligibleCount,
+    ]),
+  );
   const ranked = units.map(unit => ({
     ...unit,
-    stratum: `automated_${unit.automatedOutcome}` as "automated_fail" | "automated_pass",
+    samplingStratumKey: stratumKey(unit.systemIdentity, unit.automatedOutcome),
     selectionDigest: sha256Rfc8785({
-      domain: "rateloop.reference-sampling-unit-rank.v1",
+      domain: "rateloop.reference-sampling-unit-rank.v2",
       commitmentDigest: input.commitment.commitmentDigest,
       seedDigest,
-      stratum: `automated_${unit.automatedOutcome}`,
+      systemIdentity: unit.systemIdentity,
+      automatedOutcome: unit.automatedOutcome,
       unitId: unit.unitId,
     }),
   }));
-  const byStratum = new Map<"automated_fail" | "automated_pass", typeof ranked>();
+  const byStratum = new Map<string, typeof ranked>();
   ranked.forEach(unit => {
-    const entries = byStratum.get(unit.stratum);
+    const entries = byStratum.get(unit.samplingStratumKey);
     if (entries) entries.push(unit);
-    else byStratum.set(unit.stratum, [unit]);
+    else byStratum.set(unit.samplingStratumKey, [unit]);
   });
   const rankByUnit = new Map<string, number>();
   for (const [stratum, entries] of byStratum) {
@@ -544,14 +714,21 @@ export function freezeReferenceSample(input: {
   }
   const manifest = ranked.map(unit => {
     const selectionRank = rankByUnit.get(unit.unitId)!;
-    const numerator = sampleSize.get(unit.stratum)!;
-    const denominator = eligibleCount.get(unit.stratum)!;
+    const numerator = sampleSize.get(unit.samplingStratumKey)!;
+    const denominator = eligibleCount.get(unit.samplingStratumKey)!;
     return {
       unitId: unit.unitId,
       sourceDecisionBinding: unit.sourceDecisionBinding,
+      sourceEvaluationBinding: unit.sourceEvaluationBinding,
+      sourceEvaluationHash: unit.sourceEvaluationHash,
       decidedAt: unit.decidedAt,
+      automationProcessing: unit.automationProcessing,
+      systemIdentity: unit.systemIdentity,
+      systemId: unit.systemId,
+      systemVersion: unit.systemVersion,
+      machineClass: unit.machineClass,
+      publicDesignation: unit.publicDesignation,
       automatedOutcome: unit.automatedOutcome,
-      stratum: unit.stratum,
       selected: selectionRank <= numerator,
       selectionRank,
       inclusionProbability: { numerator, denominator },
@@ -559,16 +736,20 @@ export function freezeReferenceSample(input: {
   });
   const selectedCounts = new Map<string, number>();
   manifest.forEach(unit => {
-    if (unit.selected) selectedCounts.set(unit.stratum, (selectedCounts.get(unit.stratum) ?? 0) + 1);
+    const key = stratumKey(unit.systemIdentity, unit.automatedOutcome);
+    if (unit.selected) selectedCounts.set(key, (selectedCounts.get(key) ?? 0) + 1);
   });
   const strata = input.commitment.strata.map(stratum => ({
-    stratum: stratum.stratum,
+    systemIdentity: stratum.systemIdentity,
+    systemId: stratum.systemId,
+    systemVersion: stratum.systemVersion,
+    automatedOutcome: stratum.automatedOutcome,
     eligibleCount: stratum.eligibleCount,
-    selectedCount: selectedCounts.get(stratum.stratum) ?? 0,
+    selectedCount: selectedCounts.get(stratumKey(stratum.systemIdentity, stratum.automatedOutcome)) ?? 0,
     gap: stratum.gap,
   }));
   const manifestRoot = digestRecords(
-    "rateloop.reference-sample-manifest.v1",
+    "rateloop.reference-sample-manifest.v2",
     { commitmentDigest: input.commitment.commitmentDigest, seedDigest },
     manifest,
   );
