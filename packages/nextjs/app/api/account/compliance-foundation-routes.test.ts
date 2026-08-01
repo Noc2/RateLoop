@@ -361,32 +361,36 @@ test("benchmark research access returns the exact committed bytes and preserves 
   assert.equal(first.headers.get("cache-control"), NO_STORE);
 });
 
-test("benchmark research access rejects nested pagination fields before capability lookup", async () => {
-  let called = false;
+test("benchmark research access rejects nested pagination fields and bounds before capability lookup", async () => {
+  let calls = 0;
   const handler = createBenchmarkResearchAccessPost({
     requireSession: signedIn,
     readByToken: (async () => {
-      called = true;
+      calls += 1;
       throw new Error("must not run");
     }) as BenchmarkResearchPersistence["readByToken"],
   });
-  const response = await handler(
-    new NextRequest(`${ORIGIN}/api/account/benchmark-research/access`, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer research_${"t".repeat(43)}`,
-        "content-type": "application/json",
-        "x-rateloop-benchmark-key-id": "research-route-v1",
-      },
-      body: JSON.stringify({
-        idempotencyKey: "research-route-access-0002",
-        page: { offset: 0, limit: 10, privateCursor: "must-not-pass" },
+  for (const page of [
+    { offset: 0, limit: 10, privateCursor: "must-not-pass" },
+    { offset: -1, limit: 10 },
+    { offset: 0, limit: 0 },
+    { offset: 0, limit: 501 },
+  ]) {
+    const response = await handler(
+      new NextRequest(`${ORIGIN}/api/account/benchmark-research/access`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer research_${"t".repeat(43)}`,
+          "content-type": "application/json",
+          "x-rateloop-benchmark-key-id": "research-route-v1",
+        },
+        body: JSON.stringify({ idempotencyKey: "research-route-access-0002", page }),
       }),
-    }),
-  );
-  assert.equal(response.status, 400);
-  assert.equal(called, false);
-  assert.equal(response.headers.get("cache-control"), NO_STORE);
+    );
+    assert.equal(response.status, 400);
+    assert.equal(response.headers.get("cache-control"), NO_STORE);
+  }
+  assert.equal(calls, 0);
 });
 
 test("published Part 8 errors are never publicly cacheable", async () => {

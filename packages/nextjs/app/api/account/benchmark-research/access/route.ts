@@ -50,7 +50,8 @@ export function createBenchmarkResearchAccessPost(
         const page = exactBody(body.page as Record<string, unknown>, ["limit", "offset"], []);
         if (
           (page.offset !== undefined && (!Number.isSafeInteger(page.offset) || Number(page.offset) < 0)) ||
-          (page.limit !== undefined && (!Number.isSafeInteger(page.limit) || Number(page.limit) < 1))
+          (page.limit !== undefined &&
+            (!Number.isSafeInteger(page.limit) || Number(page.limit) < 1 || Number(page.limit) > 500))
         ) {
           throw new TokenlessServiceError("page is invalid.", 400, "invalid_compliance_request");
         }
