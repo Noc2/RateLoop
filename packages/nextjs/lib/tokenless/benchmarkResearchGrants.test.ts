@@ -35,6 +35,9 @@ const RECIPIENT = `rlp_${"c".repeat(48)}`;
 const OTHER_RECIPIENT = `rlp_${"d".repeat(48)}`;
 const NOW = new Date("2023-07-15T12:00:00.000Z");
 const KEY = { keyId: "binding_epoch_1", secret: new Uint8Array(32).fill(7) };
+const LABEL_SET_ID = `rsls_${"8".repeat(40)}`;
+const LABEL_SET_HASH = `sha256:${"8".repeat(64)}` as const;
+const PANEL_BRIDGE_HASH = `sha256:${"9".repeat(64)}` as const;
 const chain = PINNED_DRAND_CHAINS["quicknet-t"];
 
 function unit(character: string, outcome: "pass" | "fail", day: number): ReferenceFrameUnit {
@@ -134,6 +137,17 @@ function approvedExport(overrides: Partial<BenchmarkResearchApprovedExport> = {}
     activationReference: referenceSource.activationReference,
     referenceCommitment: commitment,
     frozenReferenceSample: frozen,
+    referenceProvenance: {
+      schemaVersion: "rateloop.benchmark-research-reference-provenance.v1" as const,
+      derivationSource: "independent_reference_panel" as const,
+      labelSetId: LABEL_SET_ID,
+      labelSetHash: LABEL_SET_HASH,
+      bridgeHash: PANEL_BRIDGE_HASH,
+      reportingMode: "independent_reference_panel_research_only" as const,
+      populationClaim: false as const,
+      operationalRollupEligible: false as const,
+      adaptiveReuseAllowed: false as const,
+    },
     referenceLabels: frozen.manifest
       .filter(row => row.selected)
       .map(row => ({ unitId: row.unitId, referenceLabel: row.automatedOutcome, agreement: true })) as readonly {
@@ -565,6 +579,7 @@ test("successful access stages matching audit and snapshot evidence before commi
   assert.equal(result.replayed, false);
   assert.equal(result.accessedAt, new Date(NOW.getTime() + 60_000).toISOString());
   assert.equal(decoded.accessedAt, result.accessedAt);
+  assert.deepEqual(decoded.referenceProvenance, approvedExport().referenceProvenance);
   assert.equal(persistence.audits.length, 1);
   assert.equal(persistence.snapshots.length, 1);
   assert.equal(persistence.audits[0]!.requestBindingDigest, persistence.snapshots[0]!.requestBindingDigest);
@@ -581,6 +596,31 @@ test("successful access stages matching audit and snapshot evidence before commi
   assert.doesNotMatch(
     new TextDecoder().decode(result.bytes),
     /workspaceId|projectId|benchmarkId|activationReference|deploymentKey|populationId|sourceDecisionBinding|automatedOutcome|auditHeadDigest|frozenWitness|manifestRoot|sampleDigest/u,
+  );
+});
+
+test("research rejects provenance that overclaims network-derived reference labels", async () => {
+  const valid = approvedExport();
+  const invalid = approvedExport({
+    referenceProvenance: {
+      ...valid.referenceProvenance,
+      derivationSource: "rateloop_network",
+      reportingMode: "independent_reference_panel_research_only",
+    } as never,
+  });
+  await assert.rejects(
+    () =>
+      createBenchmarkResearchGrantInTransaction({
+        transaction: transaction(purpose => creationContext(purpose, { export: invalid })),
+        authenticatedManagerPrincipalId: OWNER,
+        recipientPrincipalId: RECIPIENT,
+        exportId: "export_reference_1",
+        grantId: "brg_AAAAAAAAAAAAAAAAAAAAAA",
+        purpose: "methodology_validation",
+        durationMs: 86_400_000,
+        recipientBindingKey: KEY,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "project_not_found",
   );
 });
 

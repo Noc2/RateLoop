@@ -13,6 +13,7 @@ import { type TokenlessReferenceSampleBeacon } from "~~/lib/tokenless/referenceS
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const SHA256 = /^sha256:[0-9a-f]{64}$/u;
+const LABEL_SET_ID = /^rsls_[0-9a-f]{40}$/u;
 const HMAC_SHA256 = /^hmac-sha256:[0-9a-f]{64}$/u;
 const GRANT_ID = /^brg_[A-Za-z0-9_-]{22}$/u;
 const ACCESS_ID = /^bra_[A-Za-z0-9_-]{22}$/u;
@@ -35,6 +36,18 @@ export const BENCHMARK_RESEARCH_PURPOSE_SCOPES = {
 
 export type BenchmarkResearchPurpose = keyof typeof BENCHMARK_RESEARCH_PURPOSE_SCOPES;
 export type BenchmarkResearchScope = (typeof BENCHMARK_RESEARCH_PURPOSE_SCOPES)[BenchmarkResearchPurpose][number];
+
+export type BenchmarkResearchReferenceProvenance = Readonly<{
+  schemaVersion: "rateloop.benchmark-research-reference-provenance.v1";
+  derivationSource: "independent_reference_panel" | "rateloop_network";
+  labelSetId: string;
+  labelSetHash: `sha256:${string}`;
+  bridgeHash: `sha256:${string}`;
+  reportingMode: "independent_reference_panel_research_only" | "descriptive_panel_vs_network_only";
+  populationClaim: false;
+  operationalRollupEligible: false;
+  adaptiveReuseAllowed: false;
+}>;
 
 export type BenchmarkResearchApprovedExport = Readonly<{
   schemaVersion: "rateloop.approved-public-safe-reference-export.v1";
@@ -67,6 +80,7 @@ export type BenchmarkResearchApprovedExport = Readonly<{
   }>;
   referenceCommitment: ReferenceFrameCommitment;
   frozenReferenceSample: FrozenReferenceSample;
+  referenceProvenance: BenchmarkResearchReferenceProvenance;
   referenceLabels: readonly Readonly<{
     unitId: string;
     referenceLabel: "pass" | "fail" | "uncertain";
@@ -598,8 +612,43 @@ function approvedArtifactDigest(source: BenchmarkResearchApprovedExport) {
     activationReference: source.activationReference,
     referenceCommitment: source.referenceCommitment,
     frozenReferenceSample: source.frozenReferenceSample,
+    referenceProvenance: source.referenceProvenance,
     referenceLabels: source.referenceLabels,
   });
+}
+
+function validateReferenceProvenance(provenance: BenchmarkResearchReferenceProvenance) {
+  exactKeys(
+    provenance,
+    [
+      "adaptiveReuseAllowed",
+      "bridgeHash",
+      "derivationSource",
+      "labelSetHash",
+      "labelSetId",
+      "operationalRollupEligible",
+      "populationClaim",
+      "reportingMode",
+      "schemaVersion",
+    ],
+    "Reference provenance",
+  );
+  if (
+    provenance.schemaVersion !== "rateloop.benchmark-research-reference-provenance.v1" ||
+    !LABEL_SET_ID.test(provenance.labelSetId) ||
+    !SHA256.test(provenance.labelSetHash) ||
+    !SHA256.test(provenance.bridgeHash) ||
+    provenance.populationClaim !== false ||
+    provenance.operationalRollupEligible !== false ||
+    provenance.adaptiveReuseAllowed !== false ||
+    (provenance.derivationSource === "independent_reference_panel" &&
+      provenance.reportingMode !== "independent_reference_panel_research_only") ||
+    (provenance.derivationSource === "rateloop_network" &&
+      provenance.reportingMode !== "descriptive_panel_vs_network_only") ||
+    !["independent_reference_panel", "rateloop_network"].includes(provenance.derivationSource)
+  ) {
+    invalid("Reference provenance is invalid.");
+  }
 }
 
 function authorizationPayload(input: {
@@ -699,6 +748,7 @@ function validateApprovedExport(source: BenchmarkResearchApprovedExport) {
       "approval",
       "referenceCommitment",
       "frozenReferenceSample",
+      "referenceProvenance",
       "referenceLabels",
       "exportDigest",
     ],
@@ -754,6 +804,7 @@ function validateApprovedExport(source: BenchmarkResearchApprovedExport) {
   }
   strictDigest(source.approval.attestationBinding.artifactDigest, "Approval attestation artifact digest");
   if (!Array.isArray(source.referenceLabels)) invalid("Approved reference labels are invalid.");
+  validateReferenceProvenance(source.referenceProvenance);
   const sample = source.frozenReferenceSample;
   if (!sample || typeof sample !== "object" || !Array.isArray(sample.manifest)) {
     invalid("Approved frozen reference sample is invalid.");
@@ -1490,7 +1541,7 @@ function assertStrictBenchmarkResearchPublicView(value: unknown): void {
     invalid("Public benchmark research purpose is invalid.");
   }
   const scopes = exactScopes(purpose as BenchmarkResearchPurpose);
-  const topLevelFields = ["schemaVersion", "purpose", "accessedAt", "methodology", "disclosure"];
+  const topLevelFields = ["schemaVersion", "purpose", "accessedAt", "methodology", "referenceProvenance", "disclosure"];
   if (scopes.includes("reference_sample_evidence")) topLevelFields.push("referenceSample");
   if (scopes.includes("reference_labels")) topLevelFields.push("referenceLabelsPage");
   exactKeys(view, topLevelFields, "Public benchmark research view");
@@ -1559,6 +1610,23 @@ function assertStrictBenchmarkResearchPublicView(value: unknown): void {
       ),
     );
   }
+
+  exactKeys(
+    publicProjectionRecord(view.referenceProvenance, "Public reference provenance"),
+    [
+      "adaptiveReuseAllowed",
+      "bridgeHash",
+      "derivationSource",
+      "labelSetHash",
+      "labelSetId",
+      "operationalRollupEligible",
+      "populationClaim",
+      "reportingMode",
+      "schemaVersion",
+    ],
+    "Public reference provenance",
+  );
+  validateReferenceProvenance(view.referenceProvenance as BenchmarkResearchReferenceProvenance);
 
   exactKeys(
     publicProjectionRecord(view.disclosure, "Public disclosure"),
@@ -1633,6 +1701,7 @@ function projectView(input: {
     purpose: input.grant.purpose,
     accessedAt: input.accessedAt.toISOString(),
     methodology,
+    referenceProvenance: input.source.referenceProvenance,
     ...(scopes.has("reference_sample_evidence")
       ? {
           referenceSample: {

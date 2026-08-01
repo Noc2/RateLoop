@@ -1254,6 +1254,13 @@
       "when": 1785294000000,
       "tag": "0179_dsa_named_reference_panel",
       "breakpoints": true
+    },
+    {
+      "idx": 180,
+      "version": "7",
+      "when": 1785297600000,
+      "tag": "0180_dsa_derivation_consumer_safety",
+      "breakpoints": true
     }
   ]
 }

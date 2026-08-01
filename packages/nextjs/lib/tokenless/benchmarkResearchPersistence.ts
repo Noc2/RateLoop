@@ -148,6 +148,8 @@ export function benchmarkResearchExportApprovalAuditMetadata(source: BenchmarkRe
     exportId: source.exportId,
     exportSchemaVersion: source.schemaVersion,
     projectId: source.projectId,
+    referenceBridgeHash: source.referenceProvenance.bridgeHash,
+    referenceDerivationSource: source.referenceProvenance.derivationSource,
   } as const;
 }
 
@@ -604,24 +606,68 @@ export function createBenchmarkResearchPersistence(input?: {
         await approvedExportValidationProbe({ export: source, deploymentKey, transactionTime: now });
         await requireExactApprovedExportWitness(client, source);
         const labelSet = await client.query(
-          `SELECT label_root,set_hash FROM tokenless_dsa_reference_label_sets
-            WHERE workspace_id=$1 AND label_set_id=$2 AND epoch_id=$3 FOR SHARE`,
+          `SELECT labels.label_root,labels.set_hash,labels.derivation_source,
+                  COALESCE(network.bridge_hash,panel.bridge_hash) AS bridge_hash,
+                  COALESCE(network.reporting_mode,panel.reporting_mode) AS reporting_mode,
+                  COALESCE(network.population_claim,panel.population_claim) AS population_claim,
+                  COALESCE(network.operational_rollup_eligible,panel.operational_rollup_eligible)
+                    AS operational_rollup_eligible,
+                  COALESCE(network.adaptive_reuse_allowed,panel.adaptive_reuse_allowed) AS adaptive_reuse_allowed
+             FROM tokenless_dsa_reference_label_sets labels
+             LEFT JOIN tokenless_dsa_reference_network_label_set_bridges network
+               ON network.workspace_id=labels.workspace_id AND network.label_set_id=labels.label_set_id
+              AND labels.derivation_source='rateloop_network'
+             LEFT JOIN tokenless_dsa_named_panel_label_set_bridges panel
+               ON panel.workspace_id=labels.workspace_id AND panel.label_set_id=labels.label_set_id
+              AND labels.derivation_source='independent_reference_panel'
+            WHERE labels.workspace_id=$1 AND labels.label_set_id=$2 AND labels.epoch_id=$3
+            FOR SHARE OF labels`,
           [source.workspaceId, exportInput.labelSetId, exportInput.epochId],
         );
         const labelRow = labelSet.rows[0] as Row | undefined;
         if (!labelRow) invalid("Approved reference label set was not found.", "labelSetId");
+        if (
+          labelRow.bridge_hash === null ||
+          labelRow.bridge_hash === undefined ||
+          labelRow.reporting_mode === null ||
+          labelRow.reporting_mode === undefined ||
+          typeof labelRow.population_claim !== "boolean" ||
+          typeof labelRow.operational_rollup_eligible !== "boolean" ||
+          typeof labelRow.adaptive_reuse_allowed !== "boolean"
+        ) {
+          invalid("Approved reference derivation bridge was not found.", "labelSetId");
+        }
+        const expectedReferenceProvenance = {
+          schemaVersion: "rateloop.benchmark-research-reference-provenance.v1",
+          derivationSource: rowString(labelRow, "derivation_source"),
+          labelSetId: exportInput.labelSetId,
+          labelSetHash: rowString(labelRow, "set_hash"),
+          bridgeHash: rowString(labelRow, "bridge_hash"),
+          reportingMode: rowString(labelRow, "reporting_mode"),
+          populationClaim: labelRow.population_claim,
+          operationalRollupEligible: labelRow.operational_rollup_eligible,
+          adaptiveReuseAllowed: labelRow.adaptive_reuse_allowed,
+        };
+        if (canonicalizeRfc8785(source.referenceProvenance) !== canonicalizeRfc8785(expectedReferenceProvenance)) {
+          invalid("Approved export reference provenance does not bind the exact label derivation.", "export");
+        }
+        const referenceProvenanceJson = canonicalizeRfc8785(source.referenceProvenance);
+        const referenceProvenanceHash = rawSha256(referenceProvenanceJson);
         const exportJson = canonicalizeRfc8785(withoutDigest(source, "exportDigest"));
         if (rawSha256(exportJson) !== source.exportDigest) invalid("Approved export digest is invalid.", "export");
         await client.query(
           `INSERT INTO tokenless_benchmark_research_approved_exports
            (workspace_id,project_id,benchmark_id,activation_reference,deployment_key,export_id,schema_version,
             approval_id,approval_status,data_classification,activation_status,public_safe_only,derivation,epoch_id,
-            commitment_digest,sample_digest,manifest_root,label_set_id,label_root,label_set_hash,audit_event_id,
-            audit_event_digest,attestation_job_id,attestation_artifact_kind,attestation_artifact_digest,export_json,
-            export_digest,approved_by,approved_at)
+            commitment_digest,sample_digest,manifest_root,label_set_id,label_root,label_set_hash,
+            reference_derivation_source,reference_bridge_hash,reference_network_bridge_hash,
+            reference_named_panel_bridge_hash,reference_reporting_mode,reference_population_claim,
+            reference_operational_rollup_eligible,reference_adaptive_reuse_allowed,reference_provenance_json,
+            reference_provenance_hash,audit_event_id,audit_event_digest,attestation_job_id,
+            attestation_artifact_kind,attestation_artifact_digest,export_json,export_digest,approved_by,approved_at)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'approved_immutable','public_safe','active',true,
                    'verified_committed_and_frozen_reference_sample',$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,
-                   'audit_export_head',$17,$19,$20,$21,$22)`,
+                   $19,$20,$21,$22,$23,$24,$25,$26,$27,$28,'audit_export_head',$27,$29,$30,$31,$32)`,
           [
             source.workspaceId,
             source.projectId,
@@ -638,6 +684,20 @@ export function createBenchmarkResearchPersistence(input?: {
             exportInput.labelSetId,
             rowString(labelRow, "label_root"),
             rowString(labelRow, "set_hash"),
+            source.referenceProvenance.derivationSource,
+            source.referenceProvenance.bridgeHash,
+            source.referenceProvenance.derivationSource === "rateloop_network"
+              ? source.referenceProvenance.bridgeHash
+              : null,
+            source.referenceProvenance.derivationSource === "independent_reference_panel"
+              ? source.referenceProvenance.bridgeHash
+              : null,
+            source.referenceProvenance.reportingMode,
+            source.referenceProvenance.populationClaim,
+            source.referenceProvenance.operationalRollupEligible,
+            source.referenceProvenance.adaptiveReuseAllowed,
+            referenceProvenanceJson,
+            referenceProvenanceHash,
             source.approval.auditBinding.eventId,
             source.approval.auditBinding.eventDigest,
             source.approval.attestationBinding.jobId,

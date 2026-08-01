@@ -903,7 +903,8 @@ export async function createDsaPart8ReportVersion(input: {
            ON labels.workspace_id=sample.workspace_id AND labels.epoch_id=sample.epoch_id
          WHERE sample.workspace_id=$1 AND sample.epoch_id=$2 AND sample.commitment_digest=$3
            AND sample.sample_digest=$4 AND sample.manifest_root=$5 AND labels.label_set_id=$6
-           AND labels.label_root=$7 AND labels.set_hash=$8 FOR SHARE OF sample,labels`,
+           AND labels.label_root=$7 AND labels.set_hash=$8
+           AND labels.derivation_source='independent_reference_panel' FOR SHARE OF sample,labels`,
         [
           input.build.workspaceId,
           input.build.reference.epochId,

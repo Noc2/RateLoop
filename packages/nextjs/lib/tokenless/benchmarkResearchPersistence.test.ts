@@ -37,6 +37,17 @@ const exportWitness = {
   projectId: "project_contractual_research",
   benchmarkId: "benchmark_contractual_research",
   activationReference: "activation_contractual_research",
+  referenceProvenance: {
+    schemaVersion: "rateloop.benchmark-research-reference-provenance.v1",
+    derivationSource: "independent_reference_panel",
+    labelSetId: `rsls_${"5".repeat(40)}`,
+    labelSetHash: `sha256:${"6".repeat(64)}`,
+    bridgeHash: `sha256:${"7".repeat(64)}`,
+    reportingMode: "independent_reference_panel_research_only",
+    populationClaim: false,
+    operationalRollupEligible: false,
+    adaptiveReuseAllowed: false,
+  },
   approval: {
     approvalId: "approval_contractual_research",
     approvedBy: "rlp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
