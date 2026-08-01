@@ -8,6 +8,7 @@ import {
   DSA_PART8_SOLELY_AUTOMATED,
   EU_OFFICIAL_LANGUAGE_CODES,
 } from "~~/lib/tokenless/dsaPart8SourceFacts";
+import { classifyDsaConfusionCell } from "~~/lib/tokenless/dsaReferenceOutcomes";
 import {
   type FrozenReferenceSample,
   REFERENCE_SAMPLE_PLAN_LIMITATIONS,
@@ -434,12 +435,10 @@ export function estimateDsaAutomatedMeansMetrics(input: DsaAutomatedMeansEstimat
             BigInt(manifest.inclusionProbability.denominator),
             BigInt(manifest.inclusionProbability.numerator),
           );
-          if (manifest.automatedOutcome === "fail" && fact.referenceOutcome === "fail")
-            cells.tp = add(cells.tp, weight);
-          else if (manifest.automatedOutcome === "fail" && fact.referenceOutcome === "pass")
-            cells.fp = add(cells.fp, weight);
-          else if (manifest.automatedOutcome === "pass" && fact.referenceOutcome === "pass")
-            cells.tn = add(cells.tn, weight);
+          const confusionCell = classifyDsaConfusionCell(manifest.automatedOutcome, fact.referenceOutcome);
+          if (confusionCell === "true_positive") cells.tp = add(cells.tp, weight);
+          else if (confusionCell === "false_positive") cells.fp = add(cells.fp, weight);
+          else if (confusionCell === "true_negative") cells.tn = add(cells.tn, weight);
           else cells.fn = add(cells.fn, weight);
         }
         const gap = (

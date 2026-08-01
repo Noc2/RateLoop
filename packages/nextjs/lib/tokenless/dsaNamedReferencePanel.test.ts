@@ -5,7 +5,7 @@ import test from "node:test";
 const source = readFileSync(new URL("./dsaNamedReferencePanel.ts", import.meta.url), "utf8");
 
 test("named-panel outcomes are derived from exact stored response choices", () => {
-  assert.match(source, /choice === "candidate" \? "pass" : choice === "baseline" \? "fail" : null/u);
+  assert.match(source, /referenceOutcomeForStoredAssuranceChoice/u);
   assert.match(source, /assuranceReviewerKey/u);
   assert.match(source, /reviewer_key=ANY\(\$3::text\[\]\)/u);
   assert.match(source, /validity='valid'/u);
@@ -14,7 +14,7 @@ test("named-panel outcomes are derived from exact stored response choices", () =
 });
 
 test("the blinded public response contract is translated to the frozen assurance polarity", () => {
-  assert.match(source, /choice === "policy_matches"/u);
+  assert.match(source, /referenceOutcomeForNamedPanelPolicyChoice/u);
   assert.match(source, /candidate_artifact_id/u);
   assert.match(source, /baseline_artifact_id/u);
   assert.match(source, /submitAssuranceResponses/u);

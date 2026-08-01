@@ -15,6 +15,10 @@ import {
   type DsaWithheldCaseValues,
   freezeDsaBlindedCaseMapping,
 } from "~~/lib/tokenless/dsaBlindedCaseProjection";
+import {
+  referenceOutcomeForNamedPanelPolicyChoice,
+  referenceOutcomeForStoredAssuranceChoice,
+} from "~~/lib/tokenless/dsaReferenceOutcomes";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Row = Record<string, unknown>;
@@ -678,10 +682,9 @@ export async function submitDsaNamedPanelResponseIfExists(input: {
   ) {
     fail("A valid DSA reference-panel response is required.", "invalid_dsa_named_panel_response");
   }
+  const referenceOutcome = referenceOutcomeForNamedPanelPolicyChoice(input.response.choice);
   const selectedArtifactId =
-    input.response.choice === "policy_matches"
-      ? text(lookup, "candidate_artifact_id")!
-      : text(lookup, "baseline_artifact_id")!;
+    referenceOutcome === "fail" ? text(lookup, "candidate_artifact_id")! : text(lookup, "baseline_artifact_id")!;
   const displayedOption =
     selectedArtifactId === text(lookup, "variant_a_artifact_id") ? ("A" as const) : ("B" as const);
   return submitAssuranceResponses({
@@ -753,7 +756,7 @@ async function materializeResponses(
         409,
       );
     const choice = text(rr, "choice");
-    const derivedLabel = choice === "candidate" ? "pass" : choice === "baseline" ? "fail" : null;
+    const derivedLabel = referenceOutcomeForStoredAssuranceChoice(choice ?? "");
     if (!derivedLabel)
       fail("A named-panel response has an unsupported choice.", "dsa_named_panel_response_invalid", 409);
     const evidence = {
