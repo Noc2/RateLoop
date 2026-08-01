@@ -653,6 +653,8 @@ export function createBenchmarkResearchPersistence(input?: {
 
     async issueGrant(grantInput: {
       authenticatedManagerPrincipalId: string;
+      workspaceId: string;
+      projectId: string;
       recipientPrincipalId: string;
       exportId: string;
       purpose: BenchmarkResearchPurpose;
@@ -666,8 +668,21 @@ export function createBenchmarkResearchPersistence(input?: {
       const token = randomBytes(32).toString("base64url");
       const tokenLookupDigest = deriveBenchmarkResearchTokenLookupDigest({ token, key: tokenLookupKey });
       const grantId = `brg_${randomBytes(16).toString("base64url")}`;
-      const grant = await withSerializable(pool, async client =>
-        createBenchmarkResearchGrantInTransaction({
+      const grant = await withSerializable(pool, async client => {
+        await requireActiveManager(client, grantInput);
+        const scopedExport = await client.query(
+          `SELECT 1 FROM tokenless_benchmark_research_approved_exports
+            WHERE workspace_id=$1 AND project_id=$2 AND export_id=$3 FOR SHARE`,
+          [grantInput.workspaceId, grantInput.projectId, grantInput.exportId],
+        );
+        if (scopedExport.rowCount !== 1) {
+          throw new TokenlessServiceError(
+            "Benchmark research project not found.",
+            404,
+            "benchmark_research_project_not_found",
+          );
+        }
+        return createBenchmarkResearchGrantInTransaction({
           authenticatedManagerPrincipalId: grantInput.authenticatedManagerPrincipalId,
           recipientPrincipalId: grantInput.recipientPrincipalId,
           exportId: grantInput.exportId,
@@ -680,24 +695,39 @@ export function createBenchmarkResearchPersistence(input?: {
             tokenLookupKeyId: tokenLookupKey.keyId,
             tokenLookupDigest,
           }),
-        }),
-      );
+        });
+      });
       return { grant, token } as const;
     },
 
     async revokeGrant(revocationInput: {
       authenticatedManagerPrincipalId: string;
+      workspaceId: string;
+      projectId: string;
       grantId: string;
       reason: BenchmarkResearchGrantRevocationEvidence["reason"];
     }) {
-      return withSerializable(pool, async client =>
-        revokeBenchmarkResearchGrantInTransaction({
+      return withSerializable(pool, async client => {
+        await requireActiveManager(client, revocationInput);
+        const scopedGrant = await client.query(
+          `SELECT 1 FROM tokenless_benchmark_research_grants
+            WHERE workspace_id=$1 AND project_id=$2 AND grant_id=$3 FOR SHARE`,
+          [revocationInput.workspaceId, revocationInput.projectId, revocationInput.grantId],
+        );
+        if (scopedGrant.rowCount !== 1) {
+          throw new TokenlessServiceError(
+            "Benchmark research project not found.",
+            404,
+            "benchmark_research_project_not_found",
+          );
+        }
+        return revokeBenchmarkResearchGrantInTransaction({
           authenticatedManagerPrincipalId: revocationInput.authenticatedManagerPrincipalId,
           grantId: revocationInput.grantId,
           reason: revocationInput.reason,
           transaction: createPostgresGrantWriteTransaction(client),
-        }),
-      );
+        });
+      });
     },
 
     async readByToken(readInput: {

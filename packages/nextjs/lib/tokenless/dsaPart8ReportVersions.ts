@@ -1225,6 +1225,89 @@ export async function publishDsaPart8ReportVersion(input: {
   });
 }
 
+export async function downloadDsaPart8ReportVersion(input: {
+  accountAddress: string;
+  workspaceId: string;
+  reportId: string;
+  reportVersion: number;
+  fileKind: "public_csv" | "confidential_evidence_json";
+}) {
+  return inRepeatableRead(async client => {
+    await requireManager(client, input.accountAddress, input.workspaceId);
+    const reportVersion = positiveInteger(input.reportVersion, "reportVersion");
+    if (!IDENTIFIER.test(input.reportId) || !["public_csv", "confidential_evidence_json"].includes(input.fileKind)) {
+      throw new TokenlessServiceError("Part 8 report file not found.", 404, "dsa_part8_report_file_not_found");
+    }
+    const result = await client.query(
+      `SELECT f.media_type,f.file_bytes,f.byte_length,f.file_digest,r.report_digest,
+              r.public_file_digest,r.confidential_file_digest
+       FROM tokenless_dsa_part8_report_versions r
+       JOIN tokenless_dsa_part8_report_files f
+         ON f.workspace_id=r.workspace_id AND f.report_id=r.report_id AND f.report_version=r.report_version
+       WHERE r.workspace_id=$1 AND r.report_id=$2 AND r.report_version=$3 AND f.file_kind=$4
+       FOR SHARE OF r,f`,
+      [input.workspaceId, input.reportId, reportVersion, input.fileKind],
+    );
+    const row = result.rows[0] as Row | undefined;
+    const bytes = row?.file_bytes;
+    if (!row || !(bytes instanceof Uint8Array) || Number(row.byte_length) !== bytes.byteLength) {
+      throw new TokenlessServiceError("Part 8 report file not found.", 404, "dsa_part8_report_file_not_found");
+    }
+    const digest = rawDigest(bytes);
+    const expectedDigest =
+      input.fileKind === "public_csv" ? text(row, "public_file_digest") : text(row, "confidential_file_digest");
+    if (digest !== text(row, "file_digest") || digest !== expectedDigest) storedInvalid();
+    return {
+      reportId: input.reportId,
+      reportVersion,
+      reportDigest: text(row, "report_digest") as `sha256:${string}`,
+      fileKind: input.fileKind,
+      mediaType: text(row, "media_type")!,
+      fileDigest: digest,
+      bytes: new Uint8Array(bytes),
+    } as const;
+  });
+}
+
+export async function downloadPublishedDsaPart8ReportVersion(input: { reportId: string; reportVersion: number }) {
+  const reportVersion = positiveInteger(input.reportVersion, "reportVersion");
+  if (!IDENTIFIER.test(input.reportId)) {
+    throw new TokenlessServiceError("Published Part 8 report not found.", 404, "published_dsa_part8_report_not_found");
+  }
+  return inRepeatableRead(async client => {
+    const result = await client.query(
+      `SELECT f.media_type,f.file_bytes,f.byte_length,f.file_digest,p.report_digest,p.publication_digest
+       FROM tokenless_dsa_part8_report_publications p
+       JOIN tokenless_dsa_part8_report_files f
+         ON f.workspace_id=p.workspace_id AND f.report_id=p.report_id AND f.report_version=p.report_version
+        AND f.file_kind='public_csv' AND f.file_digest=p.public_file_digest
+       WHERE p.report_id=$1 AND p.report_version=$2
+       FOR SHARE OF p,f`,
+      [input.reportId, reportVersion],
+    );
+    const row = result.rows[0] as Row | undefined;
+    const bytes = row?.file_bytes;
+    if (!row || !(bytes instanceof Uint8Array) || Number(row.byte_length) !== bytes.byteLength) {
+      throw new TokenlessServiceError(
+        "Published Part 8 report not found.",
+        404,
+        "published_dsa_part8_report_not_found",
+      );
+    }
+    const digest = rawDigest(bytes);
+    if (digest !== text(row, "file_digest")) storedInvalid();
+    return {
+      reportId: input.reportId,
+      reportVersion,
+      reportDigest: text(row, "report_digest") as `sha256:${string}`,
+      publicationDigest: text(row, "publication_digest") as `sha256:${string}`,
+      mediaType: text(row, "media_type")!,
+      fileDigest: digest,
+      bytes: new Uint8Array(bytes),
+    } as const;
+  });
+}
+
 export const __dsaPart8ReportVersionsTestUtils = {
   deterministicId,
   publicCsvBytes,

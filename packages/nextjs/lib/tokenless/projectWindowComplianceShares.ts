@@ -832,6 +832,39 @@ export async function revokeProjectWindowComplianceShare(input: {
   });
 }
 
+export async function listProjectWindowComplianceShares(input: {
+  accountAddress: string;
+  workspaceId: string;
+  projectId: string;
+}) {
+  if (!SIMPLE_IDENTIFIER.test(input.workspaceId) || !IDENTIFIER.test(input.projectId)) {
+    throw new TokenlessServiceError("Project not found.", 404, "project_not_found");
+  }
+  return withSerializable(async client => {
+    await requireManagerProject(client, input);
+    const result = await client.query(
+      `SELECT s.*,r.reason AS revocation_reason,r.revoked_at
+       FROM tokenless_project_window_compliance_shares s
+       LEFT JOIN tokenless_project_window_compliance_share_revocations r
+         ON r.workspace_id=s.workspace_id AND r.share_id=s.share_id
+       WHERE s.workspace_id=$1 AND s.project_id=$2
+       ORDER BY s.issued_at DESC,s.share_id DESC`,
+      [input.workspaceId, input.projectId],
+    );
+    return (result.rows as Row[]).map(row => {
+      const grant = verifyStoredShareGrant(row);
+      return {
+        grant,
+        grantHash: stringValue(row, "grant_hash"),
+        revoked: stringValue(row, "revocation_reason") !== null,
+        revocationReason: stringValue(row, "revocation_reason"),
+        revokedAt:
+          row.revoked_at === null || row.revoked_at === undefined ? null : databaseTimestamp(row, "revoked_at"),
+      };
+    });
+  });
+}
+
 function accessIdentity(input: { shareId: string; bearerSecret: string; idempotencyKey: string }) {
   const hashedToken = tokenHash(input.bearerSecret);
   const shareLookupHash = sha256Rfc8785({ domain: "rateloop.project-window-share-lookup.v1", shareId: input.shareId });
