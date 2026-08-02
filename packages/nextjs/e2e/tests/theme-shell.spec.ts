@@ -48,7 +48,7 @@ for (const expected of themeCases) {
     expect(colors).toEqual({
       activeBackground: expected.activeBackground,
       activeText: expected.activeText,
-      railBackground: "rgb(5, 5, 5)",
+      railBackground: expected.shellBackground,
       shellBackground: expected.shellBackground,
     });
     expect(hydrationErrors).toEqual([]);

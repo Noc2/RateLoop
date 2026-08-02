@@ -35,8 +35,8 @@ test("tokenless navigation uses the shared page background", () => {
 
   assert.match(source, /<header className="[^"]*bg-base-100/);
   assert.match(source, /<aside[\s\S]*data-rateloop-rail[\s\S]*bg-base-100/);
-  assert.match(globalStyles, /\[data-rateloop-rail\][\s\S]*background: var\(--rateloop-rail-surface\)/);
-  assert.match(globalStyles, /--rateloop-rail-surface: #050505/);
+  assert.doesNotMatch(globalStyles, /--rateloop-rail-(?:surface|text|border)/);
+  assert.doesNotMatch(globalStyles, /\[data-rateloop-rail\]\s*\{/);
 });
 
 test("shell sign-in actions preserve the current destination", () => {
