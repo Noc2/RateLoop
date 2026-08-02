@@ -10,7 +10,13 @@ const source = [
 test("account and security notifications cannot be disabled", () => {
   assert.match(source, /if \(key === "accountSecurity"\) return/);
   assert.match(source, /disabled=\{savingPreferences \|\| option\.key === "accountSecurity"\}/);
-  assert.match(source, /Always on for important sign-in and account changes/);
+  assert.match(source, /"alwaysOn": "Always on"/);
+});
+
+test("notification choices rely on concise labels and disclose email details on demand", () => {
+  assert.doesNotMatch(source, /options\.\$\{option\.key\}\.description/);
+  assert.doesNotMatch(source, /Choose which updates you receive/);
+  assert.match(source, /<InfoPopover label=\{t\("aboutEmail"\)\}>\{t\("emailDescription"\)\}<\/InfoPopover>/);
 });
 
 test("workspace and payment choices appear only when they apply", () => {

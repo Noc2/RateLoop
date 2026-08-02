@@ -19,28 +19,22 @@
     },
     "options": {
       "assignmentAvailable": {
-        "label": "New review",
-        "description": "When review work is ready for you."
+        "label": "New review"
       },
       "assignmentCompleted": {
-        "label": "Review outcome",
-        "description": "When a submitted review is accepted or closed."
+        "label": "Review outcome"
       },
       "paymentUpdates": {
-        "label": "Payment updates",
-        "description": "When money from paid review work is ready or needs action."
+        "label": "Payment updates"
       },
       "askResults": {
-        "label": "Workspace results",
-        "description": "When a workspace review has a result or needs another step."
+        "label": "Workspace results"
       },
       "accountSecurity": {
-        "label": "Account security",
-        "description": "Always on for important sign-in and account changes."
+        "label": "Account security"
       },
       "oversightAlerts": {
-        "label": "Workspace alerts",
-        "description": "When review work is blocked, fails, expires, or is stopped."
+        "label": "Workspace alerts"
       }
     },
     "verified": "Email verified. RateLoop can now send notifications to that address.",
@@ -55,8 +49,8 @@
     "emailUpdateFailed": "Unable to update email notification settings.",
     "browserEnabled": "Browser notifications enabled.",
     "browserBlocked": "Browser notifications remain blocked.",
-    "title": "Choose your notifications",
-    "description": "Choose which updates you receive. Account security notifications stay on.",
+    "title": "Notifications",
+    "alwaysOn": "Always on",
     "browserStatus": {
       "granted": "Browser alerts enabled",
       "denied": "Browser alerts blocked",
@@ -67,6 +61,7 @@
     "empty": "No notification choices available.",
     "enableBrowser": "Enable browser notifications",
     "emailTitle": "Notification email",
+    "aboutEmail": "About notification email",
     "emailDescription": "Add an email address for verified RateLoop notifications. Clearing it disables email delivery.",
     "emailStatus": {
       "unavailable": "Email notifications unavailable",
@@ -78,7 +73,7 @@
     "saving": "Saving…",
     "saved": "Email settings saved",
     "save": "Save email settings",
-    "unavailableDescription": "Email notifications are unavailable right now. Browser notifications still use the choices above."
+    "unavailableDescription": "Browser notifications still work."
   },
   "passkeys": {
     "updateFailed": "Unable to update passkeys.",

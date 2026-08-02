@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
+import { InfoPopover } from "~~/components/tokenless/InfoPopover";
 import { ChoiceInput, Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
@@ -104,24 +105,24 @@ function PreferenceToggle({
   const label = t(`options.${option.key}.label`);
   return (
     <label
-      className="flex items-start justify-between gap-4 rounded-xl border border-base-content/10 bg-base-content/[0.03] px-4 py-3"
+      className="flex items-center justify-between gap-4 rounded-xl border border-base-content/10 bg-base-content/[0.03] px-4 py-3"
       htmlFor={`notification-${option.key}`}
     >
-      <span>
-        <span className="block text-sm font-semibold text-base-content">{label}</span>
-        <span className="mt-1 block text-xs leading-5 text-base-content/55">
-          {t(`options.${option.key}.description`)}
-        </span>
+      <span className="text-sm font-semibold text-base-content">{label}</span>
+      <span className="flex items-center gap-3">
+        {option.key === "accountSecurity" ? (
+          <span className="text-xs font-medium text-base-content/60">{t("alwaysOn")}</span>
+        ) : null}
+        <ChoiceInput
+          id={`notification-${option.key}`}
+          type="checkbox"
+          aria-label={label}
+          className="toggle toggle-sm toggle-primary"
+          checked={checked}
+          disabled={disabled}
+          onChange={event => onChange(event.target.checked)}
+        />
       </span>
-      <ChoiceInput
-        id={`notification-${option.key}`}
-        type="checkbox"
-        aria-label={label}
-        className="toggle toggle-sm toggle-primary mt-1"
-        checked={checked}
-        disabled={disabled}
-        onChange={event => onChange(event.target.checked)}
-      />
     </label>
   );
 }
@@ -275,10 +276,7 @@ export function NotificationSettingsPanel() {
     <section id="notifications" className="scroll-mt-24 space-y-5">
       <Card as="section" className="rounded-2xl p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h2 className="text-xl font-semibold">{t("title")}</h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-base-content/60">{t("description")}</p>
-          </div>
+          <h2 className="text-xl font-semibold">{t("title")}</h2>
           <div className="rounded-lg border border-base-content/10 bg-base-content/[0.03] px-3 py-2 text-xs text-base-content/60">
             {browserPermission === "granted"
               ? t("browserStatus.granted")
@@ -334,9 +332,9 @@ export function NotificationSettingsPanel() {
 
       <Card as="section" className="rounded-2xl p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
+          <div className="flex items-center gap-2">
             <h2 className="text-xl font-semibold">{t("emailTitle")}</h2>
-            <p className="mt-2 text-sm leading-6 text-base-content/60">{t("emailDescription")}</p>
+            <InfoPopover label={t("aboutEmail")}>{t("emailDescription")}</InfoPopover>
           </div>
           <span className="rounded-lg border border-base-content/10 bg-base-content/[0.03] px-3 py-2 text-xs text-base-content/60">
             {!emailSettings.deliveryConfigured

@@ -19,28 +19,22 @@
     },
     "options": {
       "assignmentAvailable": {
-        "label": "Neue Prüfung",
-        "description": "Wenn eine Prüfaufgabe für dich bereitsteht."
+        "label": "Neue Prüfung"
       },
       "assignmentCompleted": {
-        "label": "Prüfergebnis",
-        "description": "Wenn eine eingereichte Prüfung angenommen oder geschlossen wurde."
+        "label": "Prüfergebnis"
       },
       "paymentUpdates": {
-        "label": "Zahlungsaktualisierungen",
-        "description": "Wenn Geld aus bezahlten Prüfungen bereitsteht oder eine Aktion erfordert."
+        "label": "Zahlungsaktualisierungen"
       },
       "askResults": {
-        "label": "Workspace-Ergebnisse",
-        "description": "Wenn eine Workspace-Prüfung ein Ergebnis hat oder einen weiteren Schritt erfordert."
+        "label": "Workspace-Ergebnisse"
       },
       "accountSecurity": {
-        "label": "Kontosicherheit",
-        "description": "Für wichtige Anmelde- und Kontoänderungen immer aktiv."
+        "label": "Kontosicherheit"
       },
       "oversightAlerts": {
-        "label": "Workspace-Warnungen",
-        "description": "Wenn Prüfarbeit blockiert ist, fehlschlägt, abläuft oder gestoppt wird."
+        "label": "Workspace-Warnungen"
       }
     },
     "verified": "E-Mail bestätigt. RateLoop kann jetzt Benachrichtigungen an diese Adresse senden.",
@@ -55,8 +49,8 @@
     "emailUpdateFailed": "E-Mail-Benachrichtigungseinstellungen konnten nicht aktualisiert werden.",
     "browserEnabled": "Browser-Benachrichtigungen aktiviert.",
     "browserBlocked": "Browser-Benachrichtigungen bleiben blockiert.",
-    "title": "Benachrichtigungen auswählen",
-    "description": "Wähle aus, welche Aktualisierungen du erhältst. Benachrichtigungen zur Kontosicherheit bleiben aktiv.",
+    "title": "Benachrichtigungen",
+    "alwaysOn": "Immer aktiv",
     "browserStatus": {
       "granted": "Browser-Hinweise aktiviert",
       "denied": "Browser-Hinweise blockiert",
@@ -67,6 +61,7 @@
     "empty": "Keine Benachrichtigungsoptionen verfügbar.",
     "enableBrowser": "Browser-Benachrichtigungen aktivieren",
     "emailTitle": "Benachrichtigungs-E-Mail",
+    "aboutEmail": "Über Benachrichtigungs-E-Mails",
     "emailDescription": "Füge eine E-Mail-Adresse für verifizierte RateLoop-Benachrichtigungen hinzu. Wenn du sie leerst, wird die E-Mail-Zustellung deaktiviert.",
     "emailStatus": {
       "unavailable": "E-Mail-Benachrichtigungen nicht verfügbar",
@@ -78,7 +73,7 @@
     "saving": "Wird gespeichert…",
     "saved": "E-Mail-Einstellungen gespeichert",
     "save": "E-Mail-Einstellungen speichern",
-    "unavailableDescription": "E-Mail-Benachrichtigungen sind derzeit nicht verfügbar. Browser-Benachrichtigungen verwenden weiterhin die obige Auswahl."
+    "unavailableDescription": "Browser-Benachrichtigungen funktionieren weiterhin."
   },
   "passkeys": {
     "updateFailed": "Passkeys konnten nicht aktualisiert werden.",
