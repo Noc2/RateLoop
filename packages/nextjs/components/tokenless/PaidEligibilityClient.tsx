@@ -270,7 +270,7 @@ export function PaidEligibilityClient() {
             {reviewerSource === "customer_invited" ? (
               <button
                 type="button"
-                className="text-sm text-sky-200 underline underline-offset-4"
+                className="text-sm text-[var(--rateloop-blue)] underline underline-offset-4"
                 onClick={() => setReviewerSource("rateloop_network")}
               >
                 {t("useNetwork")}

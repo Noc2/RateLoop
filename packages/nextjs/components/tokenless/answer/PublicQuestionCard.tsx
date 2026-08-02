@@ -934,8 +934,8 @@ export function PublicQuestionCard({
                     className={`tab-control flex items-center justify-center gap-1.5 px-3 py-3 text-sm font-semibold transition-colors ${
                       answer === value
                         ? value === "yes"
-                          ? "border-transparent bg-[var(--rateloop-green)] text-black"
-                          : "border-transparent bg-[var(--rateloop-pink)] text-white"
+                          ? "border-transparent bg-[var(--rateloop-green)] text-[var(--rateloop-active-control-text)]"
+                          : "border-transparent bg-[var(--rateloop-pink)] text-[var(--rateloop-active-control-text)]"
                         : "pill-inactive"
                     }`}
                     onClick={() => setAnswer(value)}

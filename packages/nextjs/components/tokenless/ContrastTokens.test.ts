@@ -11,6 +11,9 @@ const assuranceLoopPromise = readFile(
   new URL("../../components/assurance/HumanAssuranceLoop.tsx", import.meta.url),
   "utf8",
 );
+const chipPromise = readFile(new URL("./ui/Chip.tsx", import.meta.url), "utf8");
+const paidEligibilityPromise = readFile(new URL("./PaidEligibilityClient.tsx", import.meta.url), "utf8");
+const publicQuestionCardPromise = readFile(new URL("./answer/PublicQuestionCard.tsx", import.meta.url), "utf8");
 
 function themeTokens(styles: string, theme: "light" | "dark") {
   const match = styles.match(new RegExp(`@plugin "daisyui/theme"\\s*\\{\\s*name: "${theme}";([\\s\\S]*?)\\n\\}`));
@@ -180,6 +183,13 @@ test("semantic text and status pairs meet WCAG AA contrast in both themes", asyn
       value("--rateloop-active-control-bg"),
       `${theme} active control`,
     );
+    for (const accent of ["green", "pink"] as const) {
+      assertContrast(
+        value("--rateloop-active-control-text"),
+        value(`--rateloop-${accent}`),
+        `${theme} active control text on ${accent}`,
+      );
+    }
     assertContrast(value("--rateloop-prose-link"), value("--rateloop-surface"), `${theme} prose link`);
 
     for (const role of ["primary", "secondary", "accent", "neutral", "info", "success", "warning", "error"]) {
@@ -215,7 +225,13 @@ test("shared surfaces and prose use semantic colors instead of dark-only literal
 });
 
 test("brand text consumers use theme-aware accent tokens", async () => {
-  const [landingPage, assuranceLoop] = await Promise.all([landingPagePromise, assuranceLoopPromise]);
+  const [landingPage, assuranceLoop, chip, paidEligibility, publicQuestionCard] = await Promise.all([
+    landingPagePromise,
+    assuranceLoopPromise,
+    chipPromise,
+    paidEligibilityPromise,
+    publicQuestionCardPromise,
+  ]);
 
   for (const accent of ["blue", "green", "pink"]) {
     assert.match(landingPage, new RegExp(`color: "var\\(--rateloop-${accent}\\)"`));
@@ -223,4 +239,10 @@ test("brand text consumers use theme-aware accent tokens", async () => {
   for (const accent of ["blue", "green", "yellow", "pink"]) {
     assert.match(assuranceLoop, new RegExp(`color: "var\\(--rateloop-${accent}\\)"`));
   }
+  assert.match(chip, /text-\[var\(--rateloop-pink\)\]/);
+  assert.doesNotMatch(chip, /text-pink-100/);
+  assert.match(paidEligibility, /text-\[var\(--rateloop-blue\)\]/);
+  assert.doesNotMatch(paidEligibility, /text-sky-200/);
+  assert.match(publicQuestionCard, /bg-\[var\(--rateloop-green\)\] text-\[var\(--rateloop-active-control-text\)\]/);
+  assert.match(publicQuestionCard, /bg-\[var\(--rateloop-pink\)\] text-\[var\(--rateloop-active-control-text\)\]/);
 });
