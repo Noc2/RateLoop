@@ -107,7 +107,7 @@ export function AnswerPageClient({
       if (controller.signal.aborted || generation !== loadGenerationRef.current) return;
       setTasks((publicQueue.body.tasks ?? []) as PublicAnswerTask[]);
       const nextAssignments = (
-        privateQueue.error ? [] : readAccountBoundAssignments(privateQueue.body, browserSession.principalId)
+        privateQueue.error ? [] : readAccountBoundAssignments(privateQueue.body, browserSession.principalId, view)
       ) as PrivateAnswerAssignment[];
       setAssignments(nextAssignments);
       setFocusedAssignmentId(current =>

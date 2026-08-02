@@ -1,3 +1,8 @@
+import {
+  type ReviewerAssignmentQueueView,
+  filterPrivateAssignmentsForView,
+} from "~~/lib/tokenless/reviewerAssignmentSurfaces";
+
 export type AnswerScope = "all" | "public" | "private" | "submitted";
 
 export class AnswerRequestError extends Error {
@@ -15,7 +20,11 @@ export type AnswerQueueResponse = {
   error: AnswerRequestError | null;
 };
 
-export function readAccountBoundAssignments(body: Record<string, unknown>, principalId: string) {
+export function readAccountBoundAssignments(
+  body: Record<string, unknown>,
+  principalId: string,
+  view: ReviewerAssignmentQueueView = "active",
+) {
   if (body.principalId !== principalId) {
     throw new AnswerRequestError(
       "Your account changed while review work was loading. Check again.",
@@ -23,7 +32,7 @@ export function readAccountBoundAssignments(body: Record<string, unknown>, princ
       "account_session_changed",
     );
   }
-  return Array.isArray(body.assignments) ? body.assignments : [];
+  return filterPrivateAssignmentsForView(Array.isArray(body.assignments) ? body.assignments : [], view);
 }
 
 async function fetchJson(url: string, fetchImpl: typeof fetch) {

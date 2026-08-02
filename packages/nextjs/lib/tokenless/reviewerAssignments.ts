@@ -1,6 +1,11 @@
 import "server-only";
 import { dbClient } from "~~/lib/db";
 import { listDirectPrivateReviewAssignments } from "~~/lib/tokenless/privateReviewResponses";
+import {
+  type ReviewerAssignmentQueueView,
+  filterPrivateAssignmentsForView,
+  privateAssignmentQueueIncludesPaid,
+} from "~~/lib/tokenless/reviewerAssignmentSurfaces";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Row = Record<string, unknown>;
@@ -28,7 +33,7 @@ export async function listReviewerAssignments(input: {
   if (!principalId) throw new TokenlessServiceError("Account is invalid.", 400, "invalid_account");
   const query = input.query?.trim() ?? "";
   const state = input.state?.trim() ?? "";
-  const view = input.view?.trim() || "all";
+  const rawView = input.view?.trim() || "all";
   const now = new Date();
   const limit = Math.min(Math.max(input.limit ?? 50, 1), 50);
   if (query.length > 120) {
@@ -37,9 +42,11 @@ export async function listReviewerAssignments(input: {
   if (state && !new Set(["reserved", "accepted", "expired", "completed", "released"]).has(state)) {
     throw new TokenlessServiceError("Assignment state is unsupported.", 400, "invalid_assignment_state");
   }
-  if (!new Set(["active", "history", "all"]).has(view)) {
+  if (!new Set(["active", "history", "all"]).has(rawView)) {
     throw new TokenlessServiceError("Assignment view is unsupported.", 400, "invalid_assignment_view");
   }
+  const view = rawView as ReviewerAssignmentQueueView;
+  const includePaidAssignments = privateAssignmentQueueIncludesPaid(view);
   const viewFilter =
     view === "active"
       ? {
@@ -94,6 +101,7 @@ export async function listReviewerAssignments(input: {
                    OR (a.rater_id IS NULL AND a.reviewer_account_address = ?))
               AND (a.private_group_id IS NULL OR a.status IN ('accepted', 'completed') OR g.group_id IS NOT NULL)
               AND (? = '' OR a.status = ?)
+              AND (? OR a.paid_assignment=FALSE)
             ${viewFilter.sql}
             AND (? = '' OR a.assignment_id ILIKE ? OR (named_unit.unit_id IS NULL AND p.name ILIKE ?))
           GROUP BY a.assignment_id, a.project_id, p.name, p.data_classification, a.source, a.status,
@@ -101,7 +109,19 @@ export async function listReviewerAssignments(input: {
                    a.assignment_expires_at, a.created_at, a.updated_at, a.private_group_id,
                    a.private_group_policy_version, a.private_group_policy_hash, named_unit.unit_id
           ORDER BY a.created_at DESC, a.assignment_id DESC LIMIT ?`,
-    args: [now, principalId, principalId, state, state, ...viewFilter.args, query, `%${query}%`, `%${query}%`, limit],
+    args: [
+      now,
+      principalId,
+      principalId,
+      state,
+      state,
+      includePaidAssignments,
+      ...viewFilter.args,
+      query,
+      `%${query}%`,
+      `%${query}%`,
+      limit,
+    ],
   });
   const standardAssignments = result.rows.map(row => {
     const value = row as Row;
@@ -137,7 +157,7 @@ export async function listReviewerAssignments(input: {
     };
   });
   const directAssignments = await listDirectPrivateReviewAssignments(input);
-  return [...directAssignments, ...standardAssignments]
+  return filterPrivateAssignmentsForView([...directAssignments, ...standardAssignments], view)
     .sort((left, right) => String(right.createdAt ?? "").localeCompare(String(left.createdAt ?? "")))
     .slice(0, limit);
 }

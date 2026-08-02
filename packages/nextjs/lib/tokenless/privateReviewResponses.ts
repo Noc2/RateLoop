@@ -20,6 +20,10 @@ import {
   observeHumanReviewResult,
 } from "~~/lib/tokenless/humanReviewResultObservation";
 import { projectPrivateHumanReviewResultEnvelope } from "~~/lib/tokenless/humanReviewResultProjection";
+import {
+  type ReviewerAssignmentQueueView,
+  privateAssignmentQueueIncludesPaid,
+} from "~~/lib/tokenless/reviewerAssignmentSurfaces";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Row = Record<string, unknown>;
@@ -180,12 +184,13 @@ export async function listDirectPrivateReviewAssignments(input: {
   const principal = normalizePrincipal(input.accountAddress);
   const query = input.query?.trim() ?? "";
   const state = input.state?.trim() ?? "";
-  const view = input.view?.trim() || "all";
+  const view = (input.view?.trim() || "all") as ReviewerAssignmentQueueView;
   const now = new Date();
   const limit = Math.min(Math.max(input.limit ?? 50, 1), 50);
   if (!new Set(["active", "history", "all"]).has(view)) {
     throw new TokenlessServiceError("Assignment view is unsupported.", 400, "invalid_assignment_view");
   }
+  const includePaidAssignments = privateAssignmentQueueIncludesPaid(view);
   const result = await dbClient.execute({
     sql: `SELECT a.assignment_id,a.status,a.reservation_expires_at,a.assignment_expires_at,
                  a.response_deadline,a.created_at,a.updated_at,d.private_group_policy_hash,
@@ -227,6 +232,7 @@ export async function listDirectPrivateReviewAssignments(input: {
                 )
               )
             )
+            AND (? OR rp.compensation_mode='unpaid')
             AND (
               a.status='completed'
               OR (
@@ -260,6 +266,7 @@ export async function listDirectPrivateReviewAssignments(input: {
       principal,
       principal,
       principal,
+      includePaidAssignments,
       now,
       state,
       state,

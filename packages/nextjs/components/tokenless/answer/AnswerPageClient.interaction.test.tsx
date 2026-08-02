@@ -47,6 +47,12 @@ const privateAssignment = {
   caseCount: 3,
 };
 
+const unpaidPrivateAssignment = {
+  ...privateAssignment,
+  assignmentId: "hasn_unpaid_private_queue_1",
+  paidAssignment: false,
+};
+
 const router = {
   push: () => undefined,
   replace: () => undefined,
@@ -154,7 +160,7 @@ test("assigned work renders every principal-bound source without browsing contro
   const render = withEnglishAppTestProviders(baseRender);
   const { AppRouterContext } = await import("next/dist/shared/lib/app-router-context.shared-runtime");
   const { AnswerPageClient } = await import("./AnswerPageClient");
-  const restoreFetch = installQueueFetch({ assignments: [privateAssignment], tasks: [publicTask] });
+  const restoreFetch = installQueueFetch({ assignments: [unpaidPrivateAssignment], tasks: [publicTask] });
 
   try {
     render(
@@ -165,8 +171,39 @@ test("assigned work renders every principal-bound source without browsing contro
     const screen = within(document.body);
     await waitFor(() => assert.ok(screen.getByText(publicTask.question.prompt)));
 
-    assert.ok(screen.getByText(privateAssignment.projectName));
+    assert.ok(screen.getByText(unpaidPrivateAssignment.projectName));
     assert.equal(screen.queryByRole("group", { name: "Review sources" }), null);
+  } finally {
+    cleanup();
+    await settle();
+    restoreFetch();
+    restoreDom();
+  }
+});
+
+test("an active invited paid assignment renders only through the paid task card", async () => {
+  const restoreDom = installTestDom();
+  const { cleanup, render: baseRender, waitFor, within } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
+  const { AppRouterContext } = await import("next/dist/shared/lib/app-router-context.shared-runtime");
+  const { AnswerPageClient } = await import("./AnswerPageClient");
+  const duplicatedPaidAssignment = {
+    ...privateAssignment,
+    assignmentId: publicTask.assignmentId,
+  };
+  const restoreFetch = installQueueFetch({ assignments: [duplicatedPaidAssignment], tasks: [publicTask] });
+
+  try {
+    render(
+      <AppRouterContext.Provider value={router as never}>
+        <AnswerPageClient />
+      </AppRouterContext.Provider>,
+    );
+    const screen = within(document.body);
+    await waitFor(() => assert.ok(screen.getByText(publicTask.question.prompt)));
+
+    assert.equal(screen.getAllByText(publicTask.question.prompt).length, 1);
+    assert.equal(screen.queryByRole("heading", { name: duplicatedPaidAssignment.projectName }), null);
   } finally {
     cleanup();
     await settle();

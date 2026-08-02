@@ -85,3 +85,16 @@ test("private assignments fail closed when a response belongs to another browser
     (error: unknown) => error instanceof AnswerRequestError && error.code === "account_session_changed",
   );
 });
+
+test("active private work excludes paid seats while history retains their terminal record", () => {
+  const unpaidAssignment = { assignmentId: "hpua_unpaid", paidAssignment: false };
+  const paidAssignment = { assignmentId: "hpua_paid", paidAssignment: true };
+  const body = {
+    principalId: "rlp_current",
+    assignments: [unpaidAssignment, paidAssignment],
+  };
+
+  assert.deepEqual(readAccountBoundAssignments(body, "rlp_current", "active"), [unpaidAssignment]);
+  assert.deepEqual(readAccountBoundAssignments(body, "rlp_current", "history"), [unpaidAssignment, paidAssignment]);
+  assert.deepEqual(readAccountBoundAssignments(body, "rlp_current", "all"), [unpaidAssignment, paidAssignment]);
+});
