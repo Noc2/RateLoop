@@ -178,3 +178,18 @@ test("authenticated assignment handlers return private empty state, enforce orig
     unknownResponses.every(response => response.headers.get("cache-control") === "private, no-store, max-age=0"),
   );
 });
+
+test("assignment listing rejects a malformed limit instead of passing NaN to the database", async () => {
+  const identity = await resolveBetterAuthPrincipal({
+    betterAuthUserId: "better_assignment_invalid_limit_test",
+    method: "passkey",
+  });
+  const session = await createAuthSession(identity);
+
+  const response = await listAssignments(
+    request("/api/account/assurance/assignments?limit=bogus", "GET", session.token),
+  );
+  assert.equal(response.status, 400);
+  assert.equal(response.headers.get("cache-control"), "private, no-store, max-age=0");
+  assert.equal((await response.json()).code, "invalid_assignment_limit");
+});

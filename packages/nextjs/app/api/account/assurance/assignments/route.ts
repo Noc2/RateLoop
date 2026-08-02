@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
           query: params.get("q") ?? "",
           state: params.get("state") ?? "",
           view: params.get("view") ?? "active",
-          limit: Number(params.get("limit") ?? 50),
+          limit: params.get("limit") ?? undefined,
         }),
         query: params.get("q") ?? "",
         state: params.get("state") ?? "",

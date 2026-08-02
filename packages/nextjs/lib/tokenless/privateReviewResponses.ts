@@ -21,6 +21,7 @@ import {
 } from "~~/lib/tokenless/humanReviewResultObservation";
 import { projectPrivateHumanReviewResultEnvelope } from "~~/lib/tokenless/humanReviewResultProjection";
 import { directPrivateReviewForecastRequired } from "~~/lib/tokenless/reviewCapabilities";
+import { parseReviewerAssignmentLimit } from "~~/lib/tokenless/reviewerAssignmentLimit";
 import {
   type ReviewerAssignmentQueueView,
   paidReviewCompletionSql,
@@ -182,14 +183,14 @@ export async function listDirectPrivateReviewAssignments(input: {
   query?: string;
   state?: string;
   view?: string;
-  limit?: number;
+  limit?: string | number;
 }) {
   const principal = normalizePrincipal(input.accountAddress);
   const query = input.query?.trim() ?? "";
   const state = input.state?.trim() ?? "";
   const view = (input.view?.trim() || "all") as ReviewerAssignmentQueueView;
   const now = new Date();
-  const limit = Math.min(Math.max(input.limit ?? 50, 1), 50);
+  const limit = parseReviewerAssignmentLimit(input.limit);
   if (!new Set(["active", "history", "all"]).has(view)) {
     throw new TokenlessServiceError("Assignment view is unsupported.", 400, "invalid_assignment_view");
   }

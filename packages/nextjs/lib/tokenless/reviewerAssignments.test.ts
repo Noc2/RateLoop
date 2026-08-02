@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import { type DatabaseResources, type QueryInput, __setDatabaseResourcesForTests } from "~~/lib/db";
+import { listDirectPrivateReviewAssignments } from "~~/lib/tokenless/privateReviewResponses";
 import { listReviewerAssignments } from "~~/lib/tokenless/reviewerAssignments";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -37,6 +38,38 @@ test("assignment search fails closed on an unknown active/history view", async (
     listReviewerAssignments({ accountAddress: "rlp_reviewer_assignments_test_0001", view: "everything" }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_assignment_view",
   );
+});
+
+test("both assignment consumers reject malformed limits and share the same bounds", async () => {
+  const accountAddress = "rlp_reviewer_assignment_limit_test";
+  for (const limit of [Number.NaN, Number.POSITIVE_INFINITY, 1.5, "bogus", "5.5"]) {
+    for (const consumer of [listReviewerAssignments, listDirectPrivateReviewAssignments]) {
+      await assert.rejects(
+        consumer({ accountAddress, limit }),
+        (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_assignment_limit",
+      );
+    }
+  }
+
+  const queries: QueryInput[] = [];
+  __setDatabaseResourcesForTests({
+    client: {
+      async execute(input: QueryInput) {
+        queries.push(input);
+        return { rowCount: 0, rows: [] };
+      },
+    },
+    database: {},
+    pool: {},
+  } as unknown as DatabaseResources);
+
+  await listDirectPrivateReviewAssignments({ accountAddress, limit: -10 });
+  await listReviewerAssignments({ accountAddress, limit: "+100" });
+  const queryLimits = queries.map(input => {
+    assert.ok(typeof input !== "string");
+    return input.args?.at(-1);
+  });
+  assert.deepEqual(queryLimits, [1, 50, 50]);
 });
 
 test("named DSA assignment listings mask provider and private-routing metadata", async () => {

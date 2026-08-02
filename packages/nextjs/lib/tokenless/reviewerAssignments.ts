@@ -1,6 +1,7 @@
 import "server-only";
 import { dbClient } from "~~/lib/db";
 import { listDirectPrivateReviewAssignments } from "~~/lib/tokenless/privateReviewResponses";
+import { parseReviewerAssignmentLimit } from "~~/lib/tokenless/reviewerAssignmentLimit";
 import {
   type ReviewerAssignmentQueueView,
   filterPrivateAssignmentsForView,
@@ -27,7 +28,7 @@ export async function listReviewerAssignments(input: {
   query?: string;
   state?: string;
   view?: string;
-  limit?: number;
+  limit?: string | number;
 }) {
   const principalId = input.accountAddress.trim();
   if (!principalId) throw new TokenlessServiceError("Account is invalid.", 400, "invalid_account");
@@ -35,7 +36,7 @@ export async function listReviewerAssignments(input: {
   const state = input.state?.trim() ?? "";
   const rawView = input.view?.trim() || "all";
   const now = new Date();
-  const limit = Math.min(Math.max(input.limit ?? 50, 1), 50);
+  const limit = parseReviewerAssignmentLimit(input.limit);
   if (query.length > 120) {
     throw new TokenlessServiceError("Search query must be at most 120 characters.", 400, "invalid_search");
   }
@@ -156,7 +157,7 @@ export async function listReviewerAssignments(input: {
       requiresDsaReferencePanelAcceptance,
     };
   });
-  const directAssignments = await listDirectPrivateReviewAssignments(input);
+  const directAssignments = await listDirectPrivateReviewAssignments({ ...input, limit });
   return filterPrivateAssignmentsForView([...directAssignments, ...standardAssignments], view)
     .sort((left, right) => String(right.createdAt ?? "").localeCompare(String(left.createdAt ?? "")))
     .slice(0, limit);
