@@ -40,6 +40,17 @@ function hash(index) {
   return `0x${index.toString(16).padStart(64, "0")}`;
 }
 
+function addRuntimeCodeEvidence(artifact) {
+  const evidenced = structuredClone(artifact);
+  let index = 100;
+  for (const contract of Object.values(evidenced.contracts)) {
+    contract.runtimeCodeHash = hash(index++);
+  }
+  evidenced.beaconVerifierRuntimeCodeHash = hash(index);
+  evidenced.runtimeCodeEvidenceComplete = true;
+  return evidenced;
+}
+
 function createTransaction(contractName, contractAddress, args, index) {
   const transactionHash = hash(index);
   return {
@@ -381,6 +392,65 @@ test("validates deployment keys against contract addresses", () => {
       }),
     /deployment key does not match/,
   );
+});
+
+test("complete artifacts require exact test profile, currency, artifacts, and runtime evidence", () => {
+  const complete = addRuntimeCodeEvidence(
+    reconstructTokenlessDeploymentFromBroadcast(
+      completeBroadcast({ includeAdapter: true }),
+    ),
+  );
+  assert.doesNotThrow(() =>
+    validateTokenlessDeploymentArtifact(complete, {
+      requireRuntimeCodeEvidence: true,
+    }),
+  );
+
+  const mutations = [
+    {
+      mutate: (artifact) => {
+        artifact.deploymentProfile = "production";
+      },
+      error: /profile must be test/u,
+    },
+    ...["contract", "decimals", "symbol", "unrestrictedMint"].map((field) => ({
+      mutate: (artifact) => {
+        artifact.testCurrency[field] =
+          field === "unrestrictedMint" ? false : "wrong";
+      },
+      error: /test currency metadata must exactly describe unrestricted tUSDC/u,
+    })),
+    {
+      mutate: (artifact) => {
+        artifact.testCurrency.extra = true;
+      },
+      error: /test currency metadata must exactly describe unrestricted tUSDC/u,
+    },
+    ...Object.keys(complete.contracts).map((name) => ({
+      mutate: (artifact) => {
+        artifact.contracts[name].artifact = "WrongArtifact";
+      },
+      error: new RegExp(`${name} artifact must be`, "u"),
+    })),
+    {
+      mutate: (artifact) => {
+        delete artifact.contracts.X402PanelSubmitter.runtimeCodeHash;
+      },
+      error: /X402PanelSubmitter runtimeCodeHash is missing/u,
+    },
+  ];
+
+  for (const { mutate, error } of mutations) {
+    const candidate = structuredClone(complete);
+    mutate(candidate);
+    assert.throws(
+      () =>
+        validateTokenlessDeploymentArtifact(candidate, {
+          requireRuntimeCodeEvidence: true,
+        }),
+      error,
+    );
+  }
 });
 
 test("export writes tokenless-v4 with exact runtime hashes and leaves historical artifacts untouched", async () => {

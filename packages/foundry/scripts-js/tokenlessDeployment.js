@@ -13,11 +13,21 @@ const REQUIRED_CONTRACTS = [
   "TokenlessFeedbackBonus",
 ];
 const OPTIONAL_CONTRACTS = ["X402PanelSubmitter"];
+const CONTRACT_ARTIFACTS = Object.freeze({
+  TestUSDC: "MockERC20",
+  CredentialIssuer: "CredentialIssuer",
+  TokenlessPanel: "TokenlessPanel",
+  TokenlessFeedbackBonus: "TokenlessFeedbackBonus",
+  X402PanelSubmitter: "X402PanelSubmitter",
+});
+const TOKENLESS_TEST_CURRENCY = Object.freeze({
+  contract: "TestUSDC",
+  decimals: 6,
+  symbol: "tUSDC",
+  unrestrictedMint: true,
+});
 const BEACON_VERIFIER_ARTIFACT = "QuicknetTBeaconVerifier";
-const ALLOWED_CONTRACTS = new Set([
-  ...REQUIRED_CONTRACTS,
-  ...OPTIONAL_CONTRACTS,
-]);
+const ALLOWED_CONTRACTS = new Set(Object.keys(CONTRACT_ARTIFACTS));
 const ALLOWED_DEPLOYMENTS = new Set([
   ...ALLOWED_CONTRACTS,
   BEACON_VERIFIER_ARTIFACT,
@@ -122,10 +132,6 @@ function receiptIndexes(receipts) {
 
 function deploymentLabel(contractName) {
   return contractName === "MockERC20" ? "TestUSDC" : contractName;
-}
-
-function artifactName(contractName) {
-  return contractName === "MockERC20" ? "MockERC20" : contractName;
 }
 
 function findCreates(broadcast) {
@@ -361,7 +367,7 @@ export function reconstructTokenlessDeploymentFromBroadcast(
     if (!deployment) continue;
     contracts[label] = {
       address: deployment.address,
-      artifact: artifactName(deployment.contractName),
+      artifact: CONTRACT_ARTIFACTS[label],
       deployedOnBlock: deployment.blockNumber,
     };
   }
@@ -394,13 +400,37 @@ export function reconstructTokenlessDeploymentFromBroadcast(
     beaconVerifierArtifact: BEACON_VERIFIER_ARTIFACT,
     beaconVerifierDeployedOnBlock: beaconVerifierDeployment.blockNumber,
     contracts,
-    testCurrency: {
-      contract: "TestUSDC",
-      decimals: 6,
-      symbol: "tUSDC",
-      unrestrictedMint: true,
-    },
+    testCurrency: { ...TOKENLESS_TEST_CURRENCY },
   });
+}
+
+function validateTokenlessContractMetadata(
+  name,
+  contract,
+  { requireRuntimeCodeEvidence },
+) {
+  if (!contract || typeof contract !== "object") {
+    throw new Error(`Tokenless deployment artifact is missing ${name}.`);
+  }
+  requireTokenlessNonZeroAddress(contract.address, `${name} address`);
+  normalizeBlockNumber(contract.deployedOnBlock, `${name} deployedOnBlock`);
+  if (contract.artifact !== CONTRACT_ARTIFACTS[name]) {
+    throw new Error(`${name} artifact must be ${CONTRACT_ARTIFACTS[name]}.`);
+  }
+  if (contract.runtimeCodeHash !== undefined) {
+    normalizeCodeHash(contract.runtimeCodeHash, `${name} runtimeCodeHash`);
+  } else if (requireRuntimeCodeEvidence) {
+    throw new Error(`${name} runtimeCodeHash is missing.`);
+  }
+}
+
+function hasExactTestCurrencyMetadata(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const expectedEntries = Object.entries(TOKENLESS_TEST_CURRENCY);
+  return (
+    Object.keys(value).length === expectedEntries.length &&
+    expectedEntries.every(([key, expected]) => value[key] === expected)
+  );
 }
 
 export function validateTokenlessDeploymentArtifact(
@@ -427,6 +457,9 @@ export function validateTokenlessDeploymentArtifact(
   }
   if (artifact.deploymentComplete !== true) {
     throw new Error("Tokenless deployment artifact is not marked complete.");
+  }
+  if (artifact.deploymentProfile !== "test") {
+    throw new Error("Tokenless deployment artifact profile must be test.");
   }
   if (
     artifact.chainId !== TOKENLESS_BASE_SEPOLIA_CHAIN_ID ||
@@ -485,29 +518,19 @@ export function validateTokenlessDeploymentArtifact(
     }
   }
   for (const name of REQUIRED_CONTRACTS) {
-    const contract = contracts[name];
-    if (!contract) {
-      throw new Error(`Tokenless deployment artifact is missing ${name}.`);
-    }
-    requireTokenlessNonZeroAddress(contract.address, `${name} address`);
-    normalizeBlockNumber(contract.deployedOnBlock, `${name} deployedOnBlock`);
-    if (typeof contract.artifact !== "string" || !contract.artifact) {
-      throw new Error(`${name} artifact name is missing.`);
-    }
-    if (contract.runtimeCodeHash !== undefined) {
-      normalizeCodeHash(contract.runtimeCodeHash, `${name} runtimeCodeHash`);
-    } else if (requireRuntimeCodeEvidence) {
-      throw new Error(`${name} runtimeCodeHash is missing.`);
-    }
+    validateTokenlessContractMetadata(name, contracts[name], {
+      requireRuntimeCodeEvidence,
+    });
   }
-  if (contracts.X402PanelSubmitter) {
-    requireTokenlessNonZeroAddress(
-      contracts.X402PanelSubmitter.address,
-      "X402PanelSubmitter address",
-    );
-    normalizeBlockNumber(
-      contracts.X402PanelSubmitter.deployedOnBlock,
-      "X402PanelSubmitter deployedOnBlock",
+  for (const name of OPTIONAL_CONTRACTS) {
+    if (!Object.prototype.hasOwnProperty.call(contracts, name)) continue;
+    validateTokenlessContractMetadata(name, contracts[name], {
+      requireRuntimeCodeEvidence,
+    });
+  }
+  if (!hasExactTestCurrencyMetadata(artifact.testCurrency)) {
+    throw new Error(
+      "Tokenless test currency metadata must exactly describe unrestricted tUSDC.",
     );
   }
 
