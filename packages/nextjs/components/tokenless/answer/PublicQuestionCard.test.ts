@@ -89,7 +89,8 @@ test("the blind crowd forecast accepts the full one-percent RBTS grid without a 
   assert.match(crowdForecastSource, /max=\{99\}/);
   assert.match(crowdForecastSource, /step=\{1\}/);
   assert.match(crowdForecastSource, /value=\{value \?\? ""\}/);
-  assert.match(crowdForecastSource, /No forecast is preselected/);
+  assert.doesNotMatch(crowdForecastSource, /No forecast is preselected|Fine-tune with the slider/);
+  assert.match(crowdForecastSource, /"selectedHelp": "\{privacy\}"/);
   assert.match(source, /privacyContext=\{PUBLIC_PAID_REVIEW_PRIVACY_CONTEXT\}/);
   assert.match(source, /predictedUpBps: prediction \* 100/);
   assert.doesNotMatch(crowdForecastSource, /\[10, 30, 50, 70, 90\]/);

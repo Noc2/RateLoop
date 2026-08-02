@@ -191,8 +191,8 @@
     "invalid": "Enter a whole number from 1 to 99.",
     "publicPrivacy": "Your forecast is sealed on submission and becomes publicly decryptable after the commit deadline.",
     "privatePrivacy": "Your forecast stays off-chain and is recorded with this private, unpaid review when you submit.",
-    "selectedHelp": "Fine-tune with the slider. {privacy}",
-    "emptyHelp": "Enter a whole number from 1 to 99. No forecast is preselected. {privacy}"
+    "selectedHelp": "{privacy}",
+    "emptyHelp": "Enter a whole number from 1 to 99. {privacy}"
   },
   "assignment": {
     "assignedTitle": "Assigned private review",

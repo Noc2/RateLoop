@@ -24,7 +24,8 @@ test("the shared crowd forecast starts unset and reveals its slider only after a
     const input = screen.getByRole<HTMLInputElement>("spinbutton", { name: "Crowd forecast" });
     assert.equal(input.value, "");
     assert.equal(screen.queryByRole("slider"), null);
-    assert.match(screen.getByText(/No forecast is preselected/u).textContent ?? "", /No forecast is preselected/u);
+    assert.match(screen.getByText(/Enter a whole number from 1 to 99/u).textContent ?? "", /stays off-chain/u);
+    assert.equal(screen.queryByText(/No forecast is preselected/u), null);
 
     fireEvent.change(input, { target: { value: "73" } });
     view.rerender(
@@ -36,6 +37,7 @@ test("the shared crowd forecast starts unset and reveals its slider only after a
       />,
     );
     assert.equal(screen.getByRole<HTMLInputElement>("slider", { name: "Crowd forecast slider" }).value, "73");
+    assert.equal(screen.queryByText(/Fine-tune with the slider/u), null);
   } finally {
     cleanup();
     restoreDom();

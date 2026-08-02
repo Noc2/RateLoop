@@ -191,8 +191,8 @@
     "invalid": "Gib eine ganze Zahl von 1 bis 99 ein.",
     "publicPrivacy": "Deine Prognose wird bei der Einreichung versiegelt und nach Ablauf der Commit-Frist öffentlich entschlüsselbar.",
     "privatePrivacy": "Deine Prognose bleibt off-chain und wird bei der Einreichung zusammen mit dieser privaten, unbezahlten Prüfung erfasst.",
-    "selectedHelp": "Mit dem Regler feinjustieren. {privacy}",
-    "emptyHelp": "Gib eine ganze Zahl von 1 bis 99 ein. Es ist keine Prognose vorausgewählt. {privacy}"
+    "selectedHelp": "{privacy}",
+    "emptyHelp": "Gib eine ganze Zahl von 1 bis 99 ein. {privacy}"
   },
   "assignment": {
     "assignedTitle": "Zugewiesene private Prüfung",
