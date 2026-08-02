@@ -20,7 +20,7 @@ export function SignedOutGate({
   title,
   titleId,
 }: {
-  description: string;
+  description?: string;
   headingLevel?: 1 | 2;
   layout?: SignInSurfaceLayout;
   preview?: ReactNode;

@@ -8,11 +8,9 @@
     "settings": "Settings"
   },
   "signIn": {
-    "inboxTitle": "Your inbox",
-    "profileTitle": "Your profile",
-    "settingsTitle": "Your settings",
-    "inboxDescription": "Sign in to view your reviewer notifications.",
-    "accountDescription": "Sign in to view and update your {section}."
+    "inboxTitle": "Sign in to view your inbox",
+    "profileTitle": "Sign in to view your profile",
+    "settingsTitle": "Sign in to manage settings"
   },
   "inboxBadge": "{count, plural, one {# unread reviewer notification} other {# unread reviewer notifications}}",
   "metadata": {

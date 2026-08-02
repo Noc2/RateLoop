@@ -63,7 +63,7 @@ test("Human profile keeps established surface cards without a dashboard hero", (
 test("assigned review work keeps sign-in requirements concise", () => {
   const page = source("./answer/AnswerPageClient.tsx");
   assert.match(page, /Sign in to view assigned work/);
-  assert.match(page, /only review work assigned to your account/);
+  assert.doesNotMatch(page, /signInDescription|only review work assigned to your account/);
   assert.match(page, /<SignedOutGate/);
   assert.match(page, /headingLevel=\{2\}/);
   assert.match(page, /layout="embedded"/);
@@ -102,6 +102,10 @@ test("Human profile and settings render their controls directly", () => {
   assert.ok(page.indexOf("if (!session)") < page.lastIndexOf("<HumanTabs active={tab} />"));
   assert.match(signInPrompt, /<SignedOutGate/);
   assert.match(signInPrompt, /returnTo=\{returnTo\}/);
+  assert.match(signInPrompt, /Sign in to view your inbox/);
+  assert.match(signInPrompt, /Sign in to view your profile/);
+  assert.match(signInPrompt, /Sign in to manage settings/);
+  assert.doesNotMatch(signInPrompt, /inboxDescription|accountDescription|description=/);
   assert.match(profileSectionFocus, /scrollIntoView/);
   assert.match(page, /findAuthSession/);
   assert.match(profileContent, /ReviewerAccessPanel/);

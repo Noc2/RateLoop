@@ -24,7 +24,6 @@
     "privateReview": "Private review",
     "assignedPrivateReview": "Assigned private review",
     "loadFailed": "Unable to load the review queue.",
-    "signInDescription": "Sign in to see only review work assigned to your account.",
     "signInTitle": "Sign in to view assigned work",
     "noHistory": "No review history yet.",
     "noneAvailable": "No review work is assigned to you right now.",

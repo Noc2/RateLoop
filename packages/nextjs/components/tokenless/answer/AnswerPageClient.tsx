@@ -240,7 +240,6 @@ export function AnswerPageClient({
           : null}
         {!loading && signedOut ? (
           <SignedOutGate
-            description={t("signInDescription")}
             headingLevel={2}
             layout="embedded"
             returnTo={assignedInboxHref(pathname, initialInvitationOpen, view)}

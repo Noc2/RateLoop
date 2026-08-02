@@ -8,11 +8,9 @@
     "settings": "Einstellungen"
   },
   "signIn": {
-    "inboxTitle": "Dein Posteingang",
-    "profileTitle": "Dein Profil",
-    "settingsTitle": "Deine Einstellungen",
-    "inboxDescription": "Melde dich an, um deine Prüfbenachrichtigungen zu sehen.",
-    "accountDescription": "Melde dich an, um deine Angaben im Bereich {section} anzusehen und zu ändern."
+    "inboxTitle": "Anmelden, um den Posteingang zu sehen",
+    "profileTitle": "Anmelden, um dein Profil zu sehen",
+    "settingsTitle": "Anmelden, um Einstellungen zu verwalten"
   },
   "inboxBadge": "{count, plural, one {# ungelesene Prüfbenachrichtigung} other {# ungelesene Prüfbenachrichtigungen}}",
   "metadata": {
