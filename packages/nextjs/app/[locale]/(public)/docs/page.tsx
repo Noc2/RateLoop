@@ -54,22 +54,6 @@ export default function DocsPage({ params }: { params?: PublicLocaleParams } = {
           ))}
         </nav>
 
-        <h2>How one review works</h2>
-        <ol>
-          <li>
-            <strong>Set policy:</strong> choose the workflow, risk rules, reviewers, and response window.
-          </li>
-          <li>
-            <strong>Request:</strong> the connected agent submits eligible work and waits when review is required.
-          </li>
-          <li>
-            <strong>Review:</strong> invited reviewers answer independently without seeing other responses.
-          </li>
-          <li>
-            <strong>Decide:</strong> use the result, reasons, disagreement, and evidence in your own workflow.
-          </li>
-        </ol>
-
         <h2>Learn more</h2>
         <ul>
           <li>

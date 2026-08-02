@@ -20,7 +20,7 @@ test("documentation introduction presents the hosted task paths", async () => {
     html,
     /Add RateLoop to the agent host|Choose when the agent asks|Open assigned work|Inspect completed review records/i,
   );
-  assert.match(html, /Set policy:.*Request:.*Review:.*Decide:/i);
+  assert.doesNotMatch(html, /How one review works|Set policy:.*Request:.*Review:.*Decide:/i);
   assert.match(html, /href="\/agents\/connections"/i);
   assert.match(html, /href="\/agents\/review-setup"/i);
   assert.match(html, /href="\/human\/review"/i);
@@ -36,5 +36,5 @@ test("documentation introduction presents the hosted task paths", async () => {
     .replace(/&[a-zA-Z0-9#]+;/g, " ")
     .trim()
     .split(/\s+/).length;
-  assert.ok(visibleWords <= 150, `documentation index should stay under 150 visible words; found ${visibleWords}`);
+  assert.ok(visibleWords <= 80, `documentation index should stay under 80 visible words; found ${visibleWords}`);
 });
