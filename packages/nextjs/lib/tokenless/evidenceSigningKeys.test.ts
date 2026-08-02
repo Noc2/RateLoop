@@ -87,6 +87,7 @@ test("missing signer still requires a valid non-empty Ed25519 keyring", () => {
 
 test("public trust history includes configured decision-packet pins without a workspace session", () => {
   const current = ed25519Entry();
+  const attestation = ed25519Entry();
   const retired = historicalP256Entry();
   const gate = generateKeyPairSync("ed25519");
   __setHumanReviewGateEvidenceConfigForTests({
@@ -96,6 +97,7 @@ test("public trust history includes configured decision-packet pins without a wo
   try {
     const history = projectPublicEvidenceTrustedKeyHistory({
       TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS: JSON.stringify([current, retired]),
+      TOKENLESS_ATTESTATION_VERIFICATION_KEYS: JSON.stringify([attestation]),
     });
     assert.equal(history.schemaVersion, "rateloop.evidence-public-trusted-keys.v1");
     assert.deepEqual(
@@ -107,6 +109,13 @@ test("public trust history includes configured decision-packet pins without a wo
         { algorithm: "ECDSA-SHA256", keyId: retired.keyId, status: "retired" },
       ],
     );
+    assert.deepEqual(
+      history.keys
+        .filter(key => key.uses.includes("external_attestation"))
+        .map(key => ({ keyId: key.keyId, uses: key.uses })),
+      [{ keyId: attestation.keyId, uses: ["external_attestation"] }],
+    );
+    assert.equal(history.keys.find(key => key.keyId === attestation.keyId)?.uses.includes("human_review_gate"), false);
   } finally {
     __setHumanReviewGateEvidenceConfigForTests(null);
   }

@@ -7,7 +7,7 @@ import {
 } from "./check-tokenless-production-readiness.mjs";
 import { deriveHostedDatabaseIdentity } from "./migrate-hosted-database.mjs";
 import assert from "node:assert/strict";
-import { createHash, generateKeyPairSync, sign } from "node:crypto";
+import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, sign } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { privateKeyToAccount } from "viem/accounts";
@@ -20,6 +20,23 @@ const tokenlessGoldKeyring = (index = 16) => ({
   TOKENLESS_GOLD_INJECTION_KEY_VERSION: "v1",
   TOKENLESS_GOLD_INJECTION_KEYS: JSON.stringify({ v1: encodedKey(index) }),
 });
+const tokenlessManagedAttestation = () => {
+  const signer = generateKeyPairSync("ed25519");
+  const publicKeyDer = signer.publicKey.export({ format: "der", type: "spki" });
+  const keyId = `ed25519:${createHash("sha256").update(publicKeyDer).digest("hex").slice(0, 24)}`;
+  const rekor = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+  return {
+    TOKENLESS_ATTESTATION_SIGNING_PRIVATE_KEY: signer.privateKey
+      .export({ format: "der", type: "pkcs8" })
+      .toString("base64url"),
+    TOKENLESS_ATTESTATION_SIGNING_KEY_ID: keyId,
+    TOKENLESS_ATTESTATION_REKOR_URL: "https://rekor.example.test",
+    TOKENLESS_ATTESTATION_REKOR_PUBLIC_KEY_PEM: rekor.publicKey.export({ format: "pem", type: "spki" }).toString(),
+    TOKENLESS_ATTESTATION_VERIFICATION_KEYS: JSON.stringify([
+      { algorithm: "Ed25519", keyId, publicKey: publicKeyDer.toString("base64url"), status: "current" },
+    ]),
+  };
+};
 const tokenlessTestOperationalSecrets = () => ({
   TOKENLESS_MCP_RATE_LIMIT_SECRET: "m".repeat(32),
   CRON_SECRET: "c".repeat(32),
@@ -30,6 +47,7 @@ const tokenlessTestOperationalSecrets = () => ({
   TOKENLESS_WALLET_SCREENING_PROVIDER_ID: "wallet-screening:v1",
   TOKENLESS_WALLET_SCREENING_PROVIDER_URL: "https://screening.example.test/check",
   TOKENLESS_WALLET_SCREENING_PROVIDER_SECRET: "w".repeat(32),
+  ...tokenlessManagedAttestation(),
 });
 const tokenlessTestDatabase = () => {
   const DATABASE_URL = "postgresql://rateloop:secret@tokenless-db.example/tokenless?sslmode=require";
@@ -159,6 +177,7 @@ function validFixture() {
   const euManifestDigest = manifestDigest();
   const env = Object.fromEntries(REQUIRED_TOKENLESS_PRODUCTION_VARIABLES.map(name => [name, `configured-${name}`]));
   Object.assign(env, {
+    ...tokenlessManagedAttestation(),
     VERCEL_ENV: "production",
     VERCEL_GIT_COMMIT_REF: "main",
     VERCEL_GIT_COMMIT_SHA: GIT_SHA,
@@ -447,6 +466,30 @@ test("platform-secret signer keys, addresses, and versions are pinned and distin
   const reusedOutput = validateTokenlessProductionReadiness(reusedKey).join("\n");
   assert.match(reusedOutput, /Platform signer EVM addresses must be distinct/iu);
   assert.match(reusedOutput, /Production key roles must be distinct/iu);
+
+  const reusedAttestation = validFixture();
+  const attestationPrivateKey = createPrivateKey({
+    key: Buffer.from(reusedAttestation.env.TOKENLESS_ATTESTATION_SIGNING_PRIVATE_KEY, "base64url"),
+    format: "der",
+    type: "pkcs8",
+  });
+  const attestationPublicKey = createPublicKey(attestationPrivateKey).export({ format: "der", type: "spki" });
+  const attestationKeyId = `ed25519:${createHash("sha256").update(attestationPublicKey).digest("hex").slice(0, 24)}`;
+  reusedAttestation.env.TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY =
+    reusedAttestation.env.TOKENLESS_ATTESTATION_SIGNING_PRIVATE_KEY;
+  reusedAttestation.env.TOKENLESS_EVIDENCE_SIGNING_KEY_ID = attestationKeyId;
+  reusedAttestation.env.TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS = JSON.stringify([
+    {
+      algorithm: "Ed25519",
+      keyId: attestationKeyId,
+      publicKey: attestationPublicKey.toString("base64url"),
+      status: "current",
+    },
+  ]);
+  assert.match(
+    validateTokenlessProductionReadiness(reusedAttestation).join("\n"),
+    /Production key roles must be distinct: TOKENLESS_ATTESTATION_SIGNING_PRIVATE_KEY, TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY/u,
+  );
 
   const invalidVersion = validFixture();
   invalidVersion.env.TOKENLESS_CREDENTIAL_ISSUER_SIGNER_KEY_VERSION = "contains spaces";

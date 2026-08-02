@@ -1,5 +1,6 @@
 import { type KeyObject, createHash, createPrivateKey, createPublicKey, randomBytes, sign, verify } from "node:crypto";
 import "server-only";
+import { parseEvidenceVerificationKeyring } from "~~/lib/tokenless/evidenceVerificationKeyring.mjs";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 export const HUMAN_REVIEW_GATE_EVIDENCE_SCHEMA_VERSION = "rateloop.human-review-gate-evidence.v1" as const;
@@ -23,7 +24,6 @@ const HASH = /^sha256:[0-9a-f]{64}$/u;
 const KEY_ID = /^ed25519:[0-9a-f]{24}$/u;
 const NONCE = /^[A-Za-z0-9_-]{32}$/u;
 const SIGNATURE = /^[A-Za-z0-9_-]{86}$/u;
-const PUBLIC_KEY = /^[A-Za-z0-9_-]{59}$/u;
 const HOST_LOCAL_IDENTIFIER = /^[A-Za-z0-9_-]{1,128}$/u;
 const HOST_OPAQUE_IDENTIFIER = /^[A-Za-z0-9._:-]{8,200}$/u;
 const HOST_NONCE = /^[A-Za-z0-9_-]{32,128}$/u;
@@ -720,29 +720,11 @@ function parseConfiguredVerificationKeys(): VerificationKey[] {
   const encoded = process.env.TOKENLESS_EVIDENCE_VERIFICATION_KEYS?.trim();
   if (!encoded) return [];
   try {
-    const value = JSON.parse(encoded) as unknown;
-    if (!Array.isArray(value) || value.length < 1 || value.length > 16) throw new Error("invalid keyring");
-    return value.map((entry, index) => {
-      const item = record(entry, `verification key ${index}`);
-      exactKeys(item, ["algorithm", "keyId", "publicKey", "status"], `verification key ${index}`);
-      if (
-        item.algorithm !== "Ed25519" ||
-        (item.status !== "current" && item.status !== "retired") ||
-        typeof item.keyId !== "string" ||
-        !KEY_ID.test(item.keyId) ||
-        typeof item.publicKey !== "string" ||
-        !PUBLIC_KEY.test(item.publicKey)
-      ) {
-        throw new Error("invalid key");
-      }
-      const publicKey = createPublicKey({
-        key: Buffer.from(item.publicKey, "base64url"),
-        format: "der",
-        type: "spki",
-      });
-      if (derivedKeyId(publicKey) !== item.keyId) throw new Error("key ID mismatch");
-      return { keyId: item.keyId, publicKey, status: item.status };
-    });
+    return parseEvidenceVerificationKeyring(encoded).map(entry => ({
+      keyId: entry.keyId,
+      publicKey: entry.publicKey,
+      status: entry.status,
+    }));
   } catch {
     serviceError(
       "The evidence verification keyring is invalid.",

@@ -6,6 +6,10 @@ import {
   tokenlessDeployedContracts,
   tokenlessDeploymentSchema,
 } from "../../contracts/src/tokenless/deployedContracts.ts";
+import {
+  resolveManagedAssuranceAttestationConfiguration,
+  validateRequiredManagedAssuranceAttestationConfiguration,
+} from "../lib/tokenless/assuranceAttestationConfiguration.mjs";
 import * as paidLaneActivationModule from "../lib/tokenless/paidLaneActivation.ts";
 import { TOKENLESS_VERCEL_PROJECT } from "./check-identity-deployment.mjs";
 import { validateHostedDatabaseIdentity } from "./migrate-hosted-database.mjs";
@@ -138,6 +142,11 @@ export const REQUIRED_TOKENLESS_PRODUCTION_VARIABLES = [
   "TOKENLESS_EVIDENCE_SIGNING_KEY_ID",
   "TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY",
   "TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS",
+  "TOKENLESS_ATTESTATION_SIGNING_PRIVATE_KEY",
+  "TOKENLESS_ATTESTATION_SIGNING_KEY_ID",
+  "TOKENLESS_ATTESTATION_REKOR_URL",
+  "TOKENLESS_ATTESTATION_REKOR_PUBLIC_KEY_PEM",
+  "TOKENLESS_ATTESTATION_VERIFICATION_KEYS",
   "TOKENLESS_EVIDENCE_TENANT_COMMITMENT_KEY",
   "TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY",
   "TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY_VERSION",
@@ -467,6 +476,22 @@ function addSecretRole(roles, name, secret) {
   else roles.set(fingerprint, [name]);
 }
 
+function ed25519PrivateKeyFingerprint(encoded) {
+  try {
+    const privateKey = createPrivateKey(
+      encoded.includes("BEGIN PRIVATE KEY")
+        ? encoded.replaceAll("\\n", "\n")
+        : { key: Buffer.from(encoded, "base64url"), format: "der", type: "pkcs8" },
+    );
+    if (privateKey.asymmetricKeyType !== "ed25519") return null;
+    return createHash("sha256")
+      .update(privateKey.export({ format: "der", type: "pkcs8" }))
+      .digest();
+  } catch {
+    return null;
+  }
+}
+
 function validatePlatformSecretInventory(env, errors) {
   const inventory = tokenlessEuDeploymentManifest.resources.platformSecrets;
   if (!value(env, inventory.resourceIdEnv)) {
@@ -498,6 +523,7 @@ function validateTokenlessTestVault(env, errors) {
 
 function validateTokenlessTestDeployment(env, { activeRegistry, deploymentSchema }) {
   const errors = [];
+  errors.push(...validateRequiredManagedAssuranceAttestationConfiguration(env));
   const activatedTestLanes = [
     [
       "TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED",
@@ -630,6 +656,20 @@ function validateTokenlessTestDeployment(env, { activeRegistry, deploymentSchema
     );
   }
   const testSecretRoles = new Map();
+  try {
+    addSecretRole(
+      testSecretRoles,
+      "TOKENLESS_ATTESTATION_SIGNING_PRIVATE_KEY",
+      resolveManagedAssuranceAttestationConfiguration(env).signer.privateKeyFingerprint,
+    );
+  } catch {
+    // The shared hosted-attestation validator already reports the sanitized configuration error.
+  }
+  addSecretRole(
+    testSecretRoles,
+    "TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY",
+    ed25519PrivateKeyFingerprint(value(env, "TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY")),
+  );
   addSecretRole(testSecretRoles, "TOKENLESS_ARTIFACT_MASTER_KEY", isolatedReviewVaultKey);
   addSecretRole(testSecretRoles, "TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET", previewSecret);
   const goldVersion = value(env, "TOKENLESS_GOLD_INJECTION_KEY_VERSION");
@@ -723,6 +763,7 @@ export function validateTokenlessProductionReadiness({
       missingConfiguration = true;
     }
   }
+  errors.push(...validateRequiredManagedAssuranceAttestationConfiguration(env));
   for (const name of FORBIDDEN_PUBLIC_SECRETS) {
     if (value(env, name)) errors.push(`${name} is forbidden because production secrets must remain server-only.`);
   }
@@ -983,6 +1024,15 @@ export function validateTokenlessProductionReadiness({
   }
 
   const secretRoles = new Map();
+  try {
+    addSecretRole(
+      secretRoles,
+      "TOKENLESS_ATTESTATION_SIGNING_PRIVATE_KEY",
+      resolveManagedAssuranceAttestationConfiguration(env).signer.privateKeyFingerprint,
+    );
+  } catch {
+    // The shared hosted-attestation validator already reports the sanitized configuration error.
+  }
   const signerAddresses = new Map();
   for (const signer of PLATFORM_EVM_SIGNERS) {
     const raw = value(env, signer.privateKey).replace(/^0x/u, "");

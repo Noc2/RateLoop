@@ -1,5 +1,9 @@
 import "server-only";
 import {
+  managedAssuranceAttestationConfigurationState,
+  resolveManagedAssuranceAttestationConfiguration,
+} from "~~/lib/tokenless/assuranceAttestationConfiguration.mjs";
+import {
   createPlatformSecretManagedAttestationSigner,
   createRekorDssePublisher,
   createRfc3161TimestampAuthority,
@@ -23,112 +27,35 @@ type AttestationEnvironment = Record<string, string | undefined>;
 let runtimeOverride: RuntimeDependencies | null = null;
 let managedRuntime: Promise<RuntimeDependencies> | null = null;
 
-const CORE_PRIVATE_ENV_NAMES = [
-  "TOKENLESS_ATTESTATION_SIGNING_PRIVATE_KEY",
-  "TOKENLESS_ATTESTATION_SIGNING_KEY_ID",
-  "TOKENLESS_ATTESTATION_REKOR_URL",
-  "TOKENLESS_ATTESTATION_REKOR_PUBLIC_KEY_PEM",
-] as const;
-const TSA_PRIVATE_ENV_NAMES = [
-  "TOKENLESS_ATTESTATION_TSA_URL",
-  "TOKENLESS_ATTESTATION_TSA_CA_PEM",
-  "TOKENLESS_ATTESTATION_TSA_UNTRUSTED_PEM",
-] as const;
-const PRIVATE_ENV_NAMES = [...CORE_PRIVATE_ENV_NAMES, ...TSA_PRIVATE_ENV_NAMES] as const;
-const REQUIRED_TSA_ENV_NAMES = TSA_PRIVATE_ENV_NAMES.filter(name => name !== "TOKENLESS_ATTESTATION_TSA_UNTRUSTED_PEM");
-
-function value(env: AttestationEnvironment, name: string) {
-  return env[name]?.trim() ?? "";
-}
-
-function configurationState(env: AttestationEnvironment) {
-  const publicNames = PRIVATE_ENV_NAMES.map(name => `NEXT_PUBLIC_${name}`);
-  if (publicNames.some(name => value(env, name))) {
-    return {
-      configured: false,
-      timestampingConfigured: false,
-      error: "Attestation trust material must never use NEXT_PUBLIC_ variables.",
-    } as const;
-  }
-  const corePresent = CORE_PRIVATE_ENV_NAMES.filter(name => value(env, name));
-  const tsaPresent = TSA_PRIVATE_ENV_NAMES.filter(name => value(env, name));
-  if (corePresent.length === 0 && tsaPresent.length === 0) {
-    return { configured: false, timestampingConfigured: false, error: null } as const;
-  }
-  if (
-    corePresent.length !== CORE_PRIVATE_ENV_NAMES.length ||
-    (tsaPresent.length > 0 && REQUIRED_TSA_ENV_NAMES.some(name => !value(env, name)))
-  ) {
-    return {
-      configured: false,
-      timestampingConfigured: false,
-      error: "Managed attestation runtime configuration is incomplete.",
-    } as const;
-  }
-  return { configured: true, timestampingConfigured: tsaPresent.length > 0, error: null } as const;
-}
-
-function requirePublishedSignerKey(signer: ManagedAttestationSigner, env: AttestationEnvironment) {
-  let entries: unknown;
-  try {
-    entries = JSON.parse(value(env, "TOKENLESS_EVIDENCE_VERIFICATION_KEYS"));
-  } catch {
-    throw new TokenlessServiceError(
-      "Managed attestation signer is not present in the published verification keyring.",
-      500,
-      "invalid_attestation_config",
-    );
-  }
-  const encodedPublicKey = signer.publicKeyDer.toString("base64url");
-  const published =
-    Array.isArray(entries) &&
-    entries.some(
-      entry =>
-        entry &&
-        typeof entry === "object" &&
-        !Array.isArray(entry) &&
-        (entry as Record<string, unknown>).algorithm === "Ed25519" &&
-        (entry as Record<string, unknown>).status === "current" &&
-        (entry as Record<string, unknown>).keyId === signer.keyId &&
-        (entry as Record<string, unknown>).publicKey === encodedPublicKey,
-    );
-  if (!published) {
-    throw new TokenlessServiceError(
-      "Managed attestation signer is not present in the published verification keyring.",
-      500,
-      "invalid_attestation_config",
-    );
-  }
-}
-
 async function buildRuntime(env: AttestationEnvironment): Promise<RuntimeDependencies> {
-  const state = configurationState(env);
-  if (!state.configured) {
+  let configuration: ReturnType<typeof resolveManagedAssuranceAttestationConfiguration>;
+  try {
+    configuration = resolveManagedAssuranceAttestationConfiguration(env);
+  } catch (error) {
     throw new TokenlessServiceError(
-      state.error ?? "Managed attestation runtime is unavailable.",
+      error instanceof Error ? error.message : "Managed attestation runtime is unavailable.",
       503,
       "attestation_runtime_unavailable",
       true,
     );
   }
   const signer = createPlatformSecretManagedAttestationSigner({
-    expectedKeyId: value(env, "TOKENLESS_ATTESTATION_SIGNING_KEY_ID"),
-    privateKey: value(env, "TOKENLESS_ATTESTATION_SIGNING_PRIVATE_KEY"),
+    expectedKeyId: configuration.signer.keyId,
+    privateKey: configuration.signer.privateKey,
   });
-  requirePublishedSignerKey(signer, env);
   const runtime: RuntimeDependencies = {
     signer,
     rekor: createRekorDssePublisher({
-      logOrigin: value(env, "TOKENLESS_ATTESTATION_REKOR_URL"),
+      logOrigin: configuration.rekor.logOrigin,
       signerPublicKeyDer: signer.publicKeyDer,
-      trustedRekorPublicKeyPem: value(env, "TOKENLESS_ATTESTATION_REKOR_PUBLIC_KEY_PEM"),
+      trustedRekorPublicKeyPem: configuration.rekor.trustedPublicKeyPem,
     }),
   };
-  if (state.timestampingConfigured) {
+  if (configuration.tsa) {
     runtime.tsa = createRfc3161TimestampAuthority({
-      authorityUrl: value(env, "TOKENLESS_ATTESTATION_TSA_URL"),
-      trustedCaPem: value(env, "TOKENLESS_ATTESTATION_TSA_CA_PEM"),
-      untrustedChainPem: value(env, "TOKENLESS_ATTESTATION_TSA_UNTRUSTED_PEM") || undefined,
+      authorityUrl: configuration.tsa.authorityUrl,
+      trustedCaPem: configuration.tsa.trustedCaPem,
+      untrustedChainPem: configuration.tsa.untrustedChainPem,
     });
   }
   return runtime;
@@ -152,9 +79,21 @@ export async function processDueAssuranceAttestations(input: {
   const now = input.now ?? new Date();
   const dueCounts = await countDueAssuranceAttestationJobsByTimestampRequirement(now);
   const due = dueCounts.total;
-  const state = runtimeOverride
-    ? { configured: true, timestampingConfigured: Boolean(runtimeOverride.tsa), error: null }
-    : configurationState(input.env ?? process.env);
+  let state;
+  if (runtimeOverride) {
+    state = { configured: true, timestampingConfigured: Boolean(runtimeOverride.tsa), error: null };
+  } else {
+    try {
+      const configuration = resolveManagedAssuranceAttestationConfiguration(input.env ?? process.env);
+      state = { configured: true, timestampingConfigured: Boolean(configuration.tsa), error: null };
+    } catch (error) {
+      state = {
+        configured: false,
+        timestampingConfigured: false,
+        error: error instanceof Error ? error.message : "Managed attestation runtime is unavailable.",
+      };
+    }
+  }
   if (due === 0) {
     return {
       configured: state.configured,
@@ -202,6 +141,5 @@ export function __setAssuranceAttestationRuntimeForTests(value: RuntimeDependenc
 
 export const __assuranceAttestationRuntimeTestUtils = {
   buildRuntime,
-  configurationState,
-  requirePublishedSignerKey,
+  configurationState: managedAssuranceAttestationConfigurationState,
 };

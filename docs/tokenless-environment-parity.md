@@ -91,6 +91,12 @@ Next.js:
   `TOKENLESS_SURPRISE_BONUS_FUNDER_*` private-key, expected-address, and key-version bundles
 - versioned artifact wrapping and Ed25519 evidence-signing keys; approved rotation, recovery, and signer spend-limit
   records; no AWS/KMS/IAM/OIDC configuration
+- a distinct Ed25519 attestation signer, its exact current entry in
+  `TOKENLESS_ATTESTATION_VERIFICATION_KEYS`, and an HTTPS Rekor origin with a pinned public trust key. This
+  purpose-bound keyring must never authorize human-review-gate evidence. These core values
+  are mandatory together because decision-packet attestations are always queued. RFC 3161 timestamp-service URL and
+  trust-chain values remain optional for the Base Sepolia review deployment, but must be supplied together before
+  audit or coverage export heads can be processed.
 - eligibility provider ID/public key/start URL/handoff secret, versioned vault keys, and DAC7 policy
 - `TOKENLESS_PIPELINE_TOKEN`, `CRON_SECRET`, `TOKENLESS_COMPLIANCE_OPERATOR_SECRET`,
   `TOKENLESS_COMPLIANCE_OPERATOR_KEY_VERSION`,

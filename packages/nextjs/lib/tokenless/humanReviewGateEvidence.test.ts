@@ -29,6 +29,7 @@ const RETIRED = generateKeyPairSync("ed25519");
 const ROTATED = generateKeyPairSync("ed25519");
 const ISSUED_AT = new Date("2026-07-16T12:00:00.000Z");
 const originalVerificationKeys = process.env.TOKENLESS_EVIDENCE_VERIFICATION_KEYS;
+const originalAttestationVerificationKeys = process.env.TOKENLESS_ATTESTATION_VERIFICATION_KEYS;
 const originalDecisionPacketVerificationKeys = process.env.TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS;
 const originalSigningKeyId = process.env.TOKENLESS_EVIDENCE_SIGNING_KEY_ID;
 const issueHumanReviewGateEvidence = __humanReviewGateEvidenceTestUtils.issueGenericEvidence;
@@ -140,6 +141,8 @@ afterEach(() => {
   __setHumanReviewGateEvidenceConfigForTests(null);
   if (originalVerificationKeys === undefined) delete process.env.TOKENLESS_EVIDENCE_VERIFICATION_KEYS;
   else process.env.TOKENLESS_EVIDENCE_VERIFICATION_KEYS = originalVerificationKeys;
+  if (originalAttestationVerificationKeys === undefined) delete process.env.TOKENLESS_ATTESTATION_VERIFICATION_KEYS;
+  else process.env.TOKENLESS_ATTESTATION_VERIFICATION_KEYS = originalAttestationVerificationKeys;
   if (originalDecisionPacketVerificationKeys === undefined)
     delete process.env.TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS;
   else process.env.TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS = originalDecisionPacketVerificationKeys;
@@ -299,6 +302,18 @@ test("loads fingerprint-bound current and retired public keys from the verificat
     () => __humanReviewGateEvidenceTestUtils.parseConfiguredVerificationKeys(),
     "review_gate_evidence_verification_unavailable",
   );
+});
+
+test("purpose-bound attestation keys never authorize human-review-gate evidence", () => {
+  const attestation = generateKeyPairSync("ed25519");
+  const publicKey = attestation.publicKey.export({ format: "der", type: "spki" });
+  const keyId = `ed25519:${createHash("sha256").update(publicKey).digest("hex").slice(0, 24)}`;
+  process.env.TOKENLESS_ATTESTATION_VERIFICATION_KEYS = JSON.stringify([
+    { algorithm: "Ed25519", keyId, publicKey: publicKey.toString("base64url"), status: "current" },
+  ]);
+  delete process.env.TOKENLESS_EVIDENCE_VERIFICATION_KEYS;
+  assert.deepEqual(__humanReviewGateEvidenceTestUtils.parseConfiguredVerificationKeys(), []);
+  delete process.env.TOKENLESS_ATTESTATION_VERIFICATION_KEYS;
 });
 
 test("rejects expired and future-dated receipts", () => {

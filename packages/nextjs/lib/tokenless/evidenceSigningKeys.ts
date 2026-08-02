@@ -1,6 +1,7 @@
 import { createHash, createPublicKey } from "node:crypto";
 import "server-only";
 import { dbClient } from "~~/lib/db";
+import { parseAttestationVerificationKeyring } from "~~/lib/tokenless/assuranceAttestationConfiguration.mjs";
 import { requireAssuranceAttestationManagement } from "~~/lib/tokenless/assuranceAttestationPipeline";
 import { encodeEd25519SpkiDerBase64url } from "~~/lib/tokenless/evidenceVerificationKey";
 import { projectHumanReviewGateTrustedKeyHistory } from "~~/lib/tokenless/humanReviewGateEvidence";
@@ -35,9 +36,27 @@ type DecisionPacketVerificationKey = {
 };
 
 type EvidenceSigningEnvironment = {
+  TOKENLESS_ATTESTATION_VERIFICATION_KEYS?: string;
   TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS?: string;
   TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY?: string;
 };
+
+function configuredAttestationVerificationKeys(env?: EvidenceSigningEnvironment) {
+  const encoded =
+    env?.TOKENLESS_ATTESTATION_VERIFICATION_KEYS?.trim() ?? process.env.TOKENLESS_ATTESTATION_VERIFICATION_KEYS?.trim();
+  if (!encoded) return [];
+  try {
+    return parseAttestationVerificationKeyring(encoded).map(key => ({
+      algorithm: "Ed25519" as const,
+      keyId: key.keyId,
+      publicKey: key.publicKeyDer.toString("base64url"),
+      publicKeyJwk: key.publicKey.export({ format: "jwk" }),
+      status: key.status,
+    }));
+  } catch {
+    throw new TokenlessServiceError("Attestation verification keys are invalid.", 503, "invalid_attestation_keyring");
+  }
+}
 
 function parseDecisionPacketVerificationKeysWithOptions(encoded: string, options: { allowEmpty?: boolean }) {
   let entries: unknown;
@@ -137,7 +156,7 @@ export function projectPublicEvidenceTrustedKeyHistory(env?: EvidenceSigningEnvi
       publicKeyJwk: JsonWebKey;
       publicKeySpki: string;
       status: "current" | "retired";
-      uses: Array<"decision_packet" | "human_review_gate">;
+      uses: Array<"decision_packet" | "external_attestation" | "human_review_gate">;
     }
   >();
   for (const key of projectHumanReviewGateTrustedKeyHistory().keys) {
@@ -163,6 +182,24 @@ export function projectPublicEvidenceTrustedKeyHistory(env?: EvidenceSigningEnvi
       publicKeySpki: key.publicKey,
       status: key.status,
       uses: ["decision_packet"],
+    });
+  }
+  for (const key of configuredAttestationVerificationKeys(env)) {
+    const identity = keyIdentity(key.keyId, key.publicKey);
+    if (byIdentity.has(identity)) {
+      throw new TokenlessServiceError(
+        "Attestation verification keys must remain purpose-bound.",
+        503,
+        "attestation_key_purpose_conflict",
+      );
+    }
+    byIdentity.set(identity, {
+      algorithm: key.algorithm,
+      keyId: key.keyId,
+      publicKeyJwk: key.publicKeyJwk,
+      publicKeySpki: key.publicKey,
+      status: key.status,
+      uses: ["external_attestation"],
     });
   }
   return {

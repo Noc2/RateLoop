@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
-import { createHash, generateKeyPairSync, sign } from "node:crypto";
+import { createHash, createPrivateKey, generateKeyPairSync, sign } from "node:crypto";
 import { afterEach, beforeEach, test } from "node:test";
+import { rootCertificates } from "node:tls";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { enqueueAssuranceAttestation } from "~~/lib/tokenless/assuranceAttestationPipeline";
@@ -10,16 +11,34 @@ import {
   processDueAssuranceAttestations,
 } from "~~/lib/tokenless/assuranceAttestationRuntime";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
+import { validateTokenlessProductionReadiness } from "~~/scripts/check-tokenless-production-readiness.mjs";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
 const NOW = new Date("2026-07-16T12:00:00.000Z");
 const DIGEST = `sha256:${"34".repeat(32)}`;
-const CORE_CONFIGURATION = {
-  TOKENLESS_ATTESTATION_SIGNING_PRIVATE_KEY: "private-key",
-  TOKENLESS_ATTESTATION_SIGNING_KEY_ID: "key-id",
-  TOKENLESS_ATTESTATION_REKOR_URL: "https://rekor.example.test",
-  TOKENLESS_ATTESTATION_REKOR_PUBLIC_KEY_PEM: "rekor-key",
-};
+function managedAttestationConfiguration() {
+  const signer = generateKeyPairSync("ed25519");
+  const publicKeyDer = signer.publicKey.export({ format: "der", type: "spki" });
+  const keyId = `ed25519:${createHash("sha256").update(publicKeyDer).digest("hex").slice(0, 24)}`;
+  const rekor = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+  return {
+    TOKENLESS_ATTESTATION_SIGNING_PRIVATE_KEY: signer.privateKey
+      .export({ format: "der", type: "pkcs8" })
+      .toString("base64url"),
+    TOKENLESS_ATTESTATION_SIGNING_KEY_ID: keyId,
+    TOKENLESS_ATTESTATION_REKOR_URL: "https://rekor.example.test",
+    TOKENLESS_ATTESTATION_REKOR_PUBLIC_KEY_PEM: rekor.publicKey.export({ format: "pem", type: "spki" }).toString(),
+    TOKENLESS_ATTESTATION_VERIFICATION_KEYS: JSON.stringify([
+      {
+        algorithm: "Ed25519",
+        keyId,
+        publicKey: publicKeyDer.toString("base64url"),
+        status: "current",
+      },
+    ]),
+  };
+}
+const CORE_CONFIGURATION = managedAttestationConfiguration();
 
 beforeEach(() => {
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
@@ -246,10 +265,39 @@ test("platform attestation runtime stays optional and rejects partial configurat
     __assuranceAttestationRuntimeTestUtils.configurationState({
       ...CORE_CONFIGURATION,
       TOKENLESS_ATTESTATION_TSA_URL: "https://tsa.example.test/rfc3161",
-      TOKENLESS_ATTESTATION_TSA_CA_PEM: "tsa-ca",
+      TOKENLESS_ATTESTATION_TSA_CA_PEM: rootCertificates[0],
     }),
     { configured: true, timestampingConfigured: true, error: null },
   );
+});
+
+test("the hosted gate and runtime share the managed attestation configuration invariant", async () => {
+  const hosted = {
+    VERCEL_ENV: "production",
+    VERCEL_GIT_COMMIT_REF: "main",
+    VERCEL_GIT_COMMIT_SHA: "a".repeat(40),
+  };
+  const readiness = (env: Record<string, string>) =>
+    validateTokenlessProductionReadiness({ env, activeRegistry: {} }).join("\n");
+
+  assert.equal(__assuranceAttestationRuntimeTestUtils.configurationState(hosted).configured, false);
+  assert.match(
+    readiness(hosted),
+    /Managed attestation signing, Rekor trust, and the published verification key are required/u,
+  );
+
+  const configured = { ...hosted, ...CORE_CONFIGURATION };
+  assert.deepEqual(__assuranceAttestationRuntimeTestUtils.configurationState(configured), {
+    configured: true,
+    timestampingConfigured: false,
+    error: null,
+  });
+  await assert.doesNotReject(__assuranceAttestationRuntimeTestUtils.buildRuntime(configured));
+  assert.doesNotMatch(readiness(configured), /Managed attestation (?:signing|runtime)/u);
+
+  const partialTsa = { ...configured, TOKENLESS_ATTESTATION_TSA_URL: "https://tsa.example.test/rfc3161" };
+  assert.match(__assuranceAttestationRuntimeTestUtils.configurationState(partialTsa).error ?? "", /incomplete/u);
+  assert.match(readiness(partialTsa), /Managed attestation runtime configuration is incomplete/u);
 });
 
 test("platform attestation runtime builds from a sealed Ed25519 secret and public trust anchors", async () => {
@@ -264,7 +312,7 @@ test("platform attestation runtime builds from a sealed Ed25519 secret and publi
     TOKENLESS_ATTESTATION_SIGNING_PRIVATE_KEY: signerKeys.privateKey
       .export({ format: "der", type: "pkcs8" })
       .toString("base64url"),
-    TOKENLESS_EVIDENCE_VERIFICATION_KEYS: JSON.stringify([
+    TOKENLESS_ATTESTATION_VERIFICATION_KEYS: JSON.stringify([
       {
         algorithm: "Ed25519",
         status: "current",
@@ -277,7 +325,7 @@ test("platform attestation runtime builds from a sealed Ed25519 secret and publi
   assert.equal(coreRuntime.tsa, undefined);
   const runtime = await __assuranceAttestationRuntimeTestUtils.buildRuntime({
     ...coreEnvironment,
-    TOKENLESS_ATTESTATION_TSA_CA_PEM: "test-only-ca",
+    TOKENLESS_ATTESTATION_TSA_CA_PEM: rootCertificates[0],
     TOKENLESS_ATTESTATION_TSA_URL: "https://tsa.example.test/rfc3161",
   });
   assert.equal(runtime.signer.keyId, keyId);
@@ -285,32 +333,52 @@ test("platform attestation runtime builds from a sealed Ed25519 secret and publi
   assert.ok(runtime.tsa);
 });
 
-test("managed attestation signing requires the exact current public verification key", () => {
-  const keys = generateKeyPairSync("ed25519");
-  const publicKeyDer = keys.publicKey.export({ format: "der", type: "spki" });
-  const keyId = `ed25519:${createHash("sha256").update(publicKeyDer).digest("hex").slice(0, 24)}`;
-  const signer = {
-    custody: "managed" as const,
-    keyId,
-    publicKeyDer,
-    sign: async (payload: Buffer) => sign(null, payload, keys.privateKey),
-  };
-  const env = {
-    TOKENLESS_EVIDENCE_VERIFICATION_KEYS: JSON.stringify([
-      {
-        algorithm: "Ed25519",
-        status: "current",
-        keyId,
-        publicKey: publicKeyDer.toString("base64url"),
-      },
-    ]),
-  };
-  assert.doesNotThrow(() => __assuranceAttestationRuntimeTestUtils.requirePublishedSignerKey(signer, env));
-  assert.throws(
-    () =>
-      __assuranceAttestationRuntimeTestUtils.requirePublishedSignerKey(signer, {
-        TOKENLESS_EVIDENCE_VERIFICATION_KEYS: "[]",
-      }),
-    /published verification keyring/u,
+test("managed attestation structural validation fails before work is claimed", async () => {
+  const wrongKeyId = { ...CORE_CONFIGURATION, TOKENLESS_ATTESTATION_SIGNING_KEY_ID: `ed25519:${"0".repeat(24)}` };
+  await assert.rejects(__assuranceAttestationRuntimeTestUtils.buildRuntime(wrongKeyId), /fingerprint/u);
+  await assert.rejects(
+    __assuranceAttestationRuntimeTestUtils.buildRuntime({
+      ...CORE_CONFIGURATION,
+      TOKENLESS_ATTESTATION_VERIFICATION_KEYS: "[]",
+    }),
+    /verification keyring/u,
+  );
+  await assert.rejects(
+    __assuranceAttestationRuntimeTestUtils.buildRuntime({
+      ...CORE_CONFIGURATION,
+      TOKENLESS_ATTESTATION_REKOR_URL: "http://rekor.example.test",
+    }),
+    /Rekor URL/u,
+  );
+  await assert.rejects(
+    __assuranceAttestationRuntimeTestUtils.buildRuntime({
+      ...CORE_CONFIGURATION,
+      TOKENLESS_ATTESTATION_REKOR_PUBLIC_KEY_PEM: "not-a-public-key",
+    }),
+    /Rekor public trust key/u,
+  );
+  await assert.rejects(
+    __assuranceAttestationRuntimeTestUtils.buildRuntime({
+      ...CORE_CONFIGURATION,
+      TOKENLESS_ATTESTATION_TSA_URL: "https://tsa.example.test/rfc3161",
+      TOKENLESS_ATTESTATION_TSA_CA_PEM: "not-a-certificate",
+    }),
+    /certificate bundle/u,
+  );
+
+  const empty = await processDueAssuranceAttestations({ env: wrongKeyId, now: NOW });
+  assert.deepEqual(empty, { configured: false, due: 0, completed: 0, retry: 0, dead: 0, unavailable: 0 });
+
+  const privateKey = createPrivateKey({
+    key: Buffer.from(CORE_CONFIGURATION.TOKENLESS_ATTESTATION_SIGNING_PRIVATE_KEY, "base64url"),
+    format: "der",
+    type: "pkcs8",
+  });
+  const escapedPem = privateKey.export({ format: "pem", type: "pkcs8" }).toString().replaceAll("\n", "\\n");
+  await assert.doesNotReject(
+    __assuranceAttestationRuntimeTestUtils.buildRuntime({
+      ...CORE_CONFIGURATION,
+      TOKENLESS_ATTESTATION_SIGNING_PRIVATE_KEY: escapedPem,
+    }),
   );
 });

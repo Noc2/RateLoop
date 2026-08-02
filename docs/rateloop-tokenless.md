@@ -225,9 +225,13 @@ Signed with Ed25519 from a server-only key whose identifier must equal its own
 public-key fingerprint or signing fails closed. Workspace identity appears only as
 a keyed commitment.
 
-External witnesses — a transparency log and a timestamp authority — are implemented
-but off by default, and **when unconfigured the maintenance tick reports success
-while doing nothing**.
+Decision-packet attestations always require the distinct managed Ed25519 signer,
+its purpose-bound published verification key, and the pinned Rekor trust anchor.
+Hosted readiness rejects an absent or invalid core witness configuration, and due
+work reports broken health instead of succeeding silently. RFC 3161 timestamping
+remains an additional all-or-none requirement for audit and coverage export heads;
+it is not enabled on the Base Sepolia review deployment until a qualified provider
+and trust chain are approved.
 
 ---
 
@@ -384,17 +388,17 @@ and hashes instead of relying on a hard-coded historical head.
 
 Recorded so the same drift is not reintroduced.
 
-| Claim                                          | Reality                                                                                                             |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| A scope has five dimensions                    | Twelve in the database constraint, fourteen in the identity hash                                                    |
-| Monitoring floor is 10%                        | Shared runtime, UI, projection, and alert invariant                                                                 |
-| Adaptive reports safety gates unavailable      | That branch is unreachable; gates are available                                                                     |
-| Opportunity keyed on integration id            | Keyed on agent id                                                                                                   |
-| Deployment is `tokenless-v3` at an older block | The active test deployment is `tokenless-v4` from block `44915850`; historical artifacts are evidence only         |
-| README advertises paid mechanisms plainly      | All of them are gated off                                                                                           |
-| Adaptive coverage pinned at 100%               | The ladder shipped                                                                                                  |
-| An agents `handoff` CLI command exists         | It does not; the real path is a media upload followed by an MCP tool call                                           |
-| Schema table counts are stable documentation   | They are intentionally partial and must be derived from the current migration journal                               |
+| Claim                                          | Reality                                                                                                    |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| A scope has five dimensions                    | Twelve in the database constraint, fourteen in the identity hash                                           |
+| Monitoring floor is 10%                        | Shared runtime, UI, projection, and alert invariant                                                        |
+| Adaptive reports safety gates unavailable      | That branch is unreachable; gates are available                                                            |
+| Opportunity keyed on integration id            | Keyed on agent id                                                                                          |
+| Deployment is `tokenless-v3` at an older block | The active test deployment is `tokenless-v4` from block `44915850`; historical artifacts are evidence only |
+| README advertises paid mechanisms plainly      | All of them are gated off                                                                                  |
+| Adaptive coverage pinned at 100%               | The ladder shipped                                                                                         |
+| An agents `handoff` CLI command exists         | It does not; the real path is a media upload followed by an MCP tool call                                  |
+| Schema table counts are stable documentation   | They are intentionally partial and must be derived from the current migration journal                      |
 
 **Left deliberately unresolved**, because they are decisions rather than facts:
 whether the adaptive ladder shipped ahead of its safety gate or the register is
