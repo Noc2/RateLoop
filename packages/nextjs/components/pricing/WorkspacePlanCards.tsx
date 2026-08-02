@@ -82,8 +82,8 @@ export function WorkspacePlanCards({
           features={[
             `${earlyAccessPlan.decisionsPerPeriod} completed review decisions each subscription period`,
             `${earlyAccessPlan.activeAgents} active agents`,
-            "Unlimited invited reviewers",
-            "After 12 months, 20% off the then-current comparable plan; price changes get at least 60 days’ notice",
+            "Unlimited invited, unpaid reviewers",
+            "First 12 months. Then 20% off the comparable plan; 60 days’ notice before changes. Cancel before they apply.",
           ]}
           footer={
             earlyAccessHref.startsWith("mailto:") ? (
