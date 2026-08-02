@@ -85,7 +85,7 @@ export function SurprisinglyPopularBonusChart({ locale = "en" }: { locale?: Loca
           <text x={saturationX} y={Y0 + 17} textAnchor="middle" className="fill-current text-[10px] opacity-60">
             2,500
           </text>
-          <text x={(X0 + X1) / 2} y={Y0 + 37} textAnchor="middle" className="fill-current text-[10px] opacity-45">
+          <text x={(X0 + X1) / 2} y={Y0 + 37} textAnchor="middle" className="fill-current text-[10px] opacity-60">
             leave-one-out surprise margin (basis points)
           </text>
           <text
@@ -93,7 +93,7 @@ export function SurprisinglyPopularBonusChart({ locale = "en" }: { locale?: Loca
             y={(Y0 + Y1) / 2}
             textAnchor="middle"
             transform={`rotate(-90 14 ${(Y0 + Y1) / 2})`}
-            className="fill-current text-[10px] opacity-45"
+            className="fill-current text-[10px] opacity-60"
           >
             top-up (% of guaranteed base)
           </text>

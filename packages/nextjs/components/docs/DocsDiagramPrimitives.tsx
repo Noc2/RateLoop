@@ -7,7 +7,7 @@ const accentColors: Record<DiagramAccent, string> = {
   green: "var(--rateloop-green)",
   yellow: "var(--rateloop-yellow)",
   pink: "var(--rateloop-pink)",
-  neutral: "rgb(245 245 245 / 0.58)",
+  neutral: "var(--rateloop-text-secondary)",
 };
 
 export function getDiagramAccentColor(accent: DiagramAccent) {
