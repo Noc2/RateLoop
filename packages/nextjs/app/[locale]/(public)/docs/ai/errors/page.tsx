@@ -7,6 +7,7 @@ import {
   usePublicLocale,
 } from "~~/components/docs/LocalizedPublicContent";
 import { PublicLink as Link } from "~~/components/docs/PublicLink";
+import type { Locale } from "~~/i18n/config";
 
 export function generateMetadata({ params }: { params: PublicLocaleParams }): Promise<Metadata> {
   return getLocalizedPublicMetadata({ params, section: "docs", title: "Agent error reference" });
@@ -25,8 +26,7 @@ const errors = [
   ["result_not_ready", "The ask has no terminal result yet.", "Follow the wait continuation and retry later."],
 ] as const;
 
-const AIErrorsPage = ({ params }: { params?: PublicLocaleParams } = {}) => {
-  const locale = usePublicLocale(params);
+export function AIErrorsContent({ locale }: { locale: Locale }) {
   return (
     <LocalizedPublicContent locale={locale} section="docs">
       <article className="prose max-w-none">
@@ -78,6 +78,8 @@ const AIErrorsPage = ({ params }: { params?: PublicLocaleParams } = {}) => {
       </article>
     </LocalizedPublicContent>
   );
-};
+}
 
-export default AIErrorsPage;
+export default function AIErrorsPage({ params }: { params?: PublicLocaleParams } = {}) {
+  return <AIErrorsContent locale={usePublicLocale(params)} />;
+}
