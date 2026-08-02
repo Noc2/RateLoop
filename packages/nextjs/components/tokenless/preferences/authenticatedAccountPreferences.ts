@@ -1,0 +1,55 @@
+type AccountPreferences = {
+  preferredLocale?: unknown;
+  preferredTheme?: unknown;
+};
+
+type AuthSession = {
+  authenticated?: unknown;
+};
+
+type AccountPreferenceUpdate = {
+  preferredLocale?: string;
+  preferredTheme?: string;
+};
+
+function requestInit(signal?: AbortSignal): RequestInit {
+  return {
+    cache: "no-store",
+    credentials: "same-origin",
+    ...(signal ? { signal } : {}),
+  };
+}
+
+async function hasAuthenticatedSession(fetcher: typeof fetch, signal?: AbortSignal) {
+  const response = await fetcher("/api/auth/session", requestInit(signal));
+  if (!response.ok) return false;
+  const session = (await response.json()) as AuthSession;
+  return session.authenticated === true;
+}
+
+export async function loadAuthenticatedAccountPreferences({
+  fetcher = fetch,
+  signal,
+}: {
+  fetcher?: typeof fetch;
+  signal?: AbortSignal;
+} = {}): Promise<AccountPreferences | null> {
+  if (!(await hasAuthenticatedSession(fetcher, signal))) return null;
+  const response = await fetcher("/api/account/profile", requestInit(signal));
+  if (!response.ok) return null;
+  return (await response.json()) as AccountPreferences;
+}
+
+export async function persistAuthenticatedAccountPreference(
+  update: AccountPreferenceUpdate,
+  { fetcher = fetch, signal }: { fetcher?: typeof fetch; signal?: AbortSignal } = {},
+) {
+  if (!(await hasAuthenticatedSession(fetcher, signal))) return false;
+  const response = await fetcher("/api/account/profile", {
+    ...requestInit(signal),
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(update),
+  });
+  return response.ok;
+}

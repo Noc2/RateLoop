@@ -2,43 +2,13 @@
 
 import { useEffect } from "react";
 import { useSearchParams } from "next/navigation";
+import { loadAuthenticatedAccountPreferences } from "./authenticatedAccountPreferences";
 import { useLocale } from "next-intl";
 import { isLocale } from "~~/i18n/config";
 import { usePathname, useRouter } from "~~/i18n/navigation";
 import { parseThemePreference, serializeThemePreferenceCookie } from "~~/lib/ui/themePreference";
 
-type AccountPreferences = {
-  preferredLocale?: unknown;
-  preferredTheme?: unknown;
-};
-
-type AuthSession = {
-  authenticated?: unknown;
-};
-
 let preferenceSyncCompleted = false;
-
-export async function loadAuthenticatedAccountPreferences({
-  fetcher = fetch,
-  signal,
-}: {
-  fetcher?: typeof fetch;
-  signal?: AbortSignal;
-} = {}): Promise<AccountPreferences | null> {
-  const requestInit: RequestInit = {
-    cache: "no-store",
-    credentials: "same-origin",
-    ...(signal ? { signal } : {}),
-  };
-  const sessionResponse = await fetcher("/api/auth/session", requestInit);
-  if (!sessionResponse.ok) return null;
-  const session = (await sessionResponse.json()) as AuthSession;
-  if (session.authenticated !== true) return null;
-
-  const profileResponse = await fetcher("/api/account/profile", requestInit);
-  if (!profileResponse.ok) return null;
-  return (await profileResponse.json()) as AccountPreferences;
-}
 
 export function AccountPreferenceHydrator() {
   const activeLocale = useLocale();

@@ -1,18 +1,14 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
+import { persistAuthenticatedAccountPreference } from "./authenticatedAccountPreferences";
 import { useLocale, useTranslations } from "next-intl";
 import { type Locale, isLocale } from "~~/i18n/config";
 import { usePathname, useRouter } from "~~/i18n/navigation";
 
 async function persistAuthenticatedLocale(locale: Locale) {
   try {
-    await fetch("/api/account/profile", {
-      method: "PATCH",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ preferredLocale: locale }),
-    });
+    await persistAuthenticatedAccountPreference({ preferredLocale: locale });
   } catch {
     // The locale cookie and URL remain authoritative for signed-out or offline visitors.
   }

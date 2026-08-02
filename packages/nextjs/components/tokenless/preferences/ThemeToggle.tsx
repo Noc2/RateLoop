@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { persistAuthenticatedAccountPreference } from "./authenticatedAccountPreferences";
 import {
   type Theme,
   parseThemePreference,
@@ -28,12 +29,7 @@ function applyExplicitTheme(theme: Theme) {
 
 async function persistAuthenticatedTheme(theme: Theme) {
   try {
-    await fetch("/api/account/profile", {
-      method: "PATCH",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ preferredTheme: theme }),
-    });
+    await persistAuthenticatedAccountPreference({ preferredTheme: theme });
   } catch {
     // The theme cookie remains authoritative for signed-out or offline visitors.
   }
