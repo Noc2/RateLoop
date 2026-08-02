@@ -8,7 +8,7 @@ import {
   type ManagedAttestationSigner,
   type RekorPublisher,
   type Rfc3161TimestampAuthority,
-  countDueAssuranceAttestationJobs,
+  countDueAssuranceAttestationJobsByTimestampRequirement,
   processAssuranceAttestationJobs,
 } from "~~/lib/tokenless/assuranceAttestationPipeline";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -16,23 +16,26 @@ import { TokenlessServiceError } from "~~/lib/tokenless/server";
 type RuntimeDependencies = {
   signer: ManagedAttestationSigner;
   rekor: RekorPublisher;
-  tsa: Rfc3161TimestampAuthority;
+  tsa?: Rfc3161TimestampAuthority;
 };
 type AttestationEnvironment = Record<string, string | undefined>;
 
 let runtimeOverride: RuntimeDependencies | null = null;
 let managedRuntime: Promise<RuntimeDependencies> | null = null;
 
-const PRIVATE_ENV_NAMES = [
+const CORE_PRIVATE_ENV_NAMES = [
   "TOKENLESS_ATTESTATION_SIGNING_PRIVATE_KEY",
   "TOKENLESS_ATTESTATION_SIGNING_KEY_ID",
   "TOKENLESS_ATTESTATION_REKOR_URL",
   "TOKENLESS_ATTESTATION_REKOR_PUBLIC_KEY_PEM",
+] as const;
+const TSA_PRIVATE_ENV_NAMES = [
   "TOKENLESS_ATTESTATION_TSA_URL",
   "TOKENLESS_ATTESTATION_TSA_CA_PEM",
   "TOKENLESS_ATTESTATION_TSA_UNTRUSTED_PEM",
 ] as const;
-const REQUIRED_ENV_NAMES = PRIVATE_ENV_NAMES.filter(name => name !== "TOKENLESS_ATTESTATION_TSA_UNTRUSTED_PEM");
+const PRIVATE_ENV_NAMES = [...CORE_PRIVATE_ENV_NAMES, ...TSA_PRIVATE_ENV_NAMES] as const;
+const REQUIRED_TSA_ENV_NAMES = TSA_PRIVATE_ENV_NAMES.filter(name => name !== "TOKENLESS_ATTESTATION_TSA_UNTRUSTED_PEM");
 
 function value(env: AttestationEnvironment, name: string) {
   return env[name]?.trim() ?? "";
@@ -41,14 +44,28 @@ function value(env: AttestationEnvironment, name: string) {
 function configurationState(env: AttestationEnvironment) {
   const publicNames = PRIVATE_ENV_NAMES.map(name => `NEXT_PUBLIC_${name}`);
   if (publicNames.some(name => value(env, name))) {
-    return { configured: false, error: "Attestation trust material must never use NEXT_PUBLIC_ variables." } as const;
+    return {
+      configured: false,
+      timestampingConfigured: false,
+      error: "Attestation trust material must never use NEXT_PUBLIC_ variables.",
+    } as const;
   }
-  const present = PRIVATE_ENV_NAMES.filter(name => value(env, name));
-  if (present.length === 0) return { configured: false, error: null } as const;
-  if (REQUIRED_ENV_NAMES.some(name => !value(env, name))) {
-    return { configured: false, error: "Managed attestation runtime configuration is incomplete." } as const;
+  const corePresent = CORE_PRIVATE_ENV_NAMES.filter(name => value(env, name));
+  const tsaPresent = TSA_PRIVATE_ENV_NAMES.filter(name => value(env, name));
+  if (corePresent.length === 0 && tsaPresent.length === 0) {
+    return { configured: false, timestampingConfigured: false, error: null } as const;
   }
-  return { configured: true, error: null } as const;
+  if (
+    corePresent.length !== CORE_PRIVATE_ENV_NAMES.length ||
+    (tsaPresent.length > 0 && REQUIRED_TSA_ENV_NAMES.some(name => !value(env, name)))
+  ) {
+    return {
+      configured: false,
+      timestampingConfigured: false,
+      error: "Managed attestation runtime configuration is incomplete.",
+    } as const;
+  }
+  return { configured: true, timestampingConfigured: tsaPresent.length > 0, error: null } as const;
 }
 
 function requirePublishedSignerKey(signer: ManagedAttestationSigner, env: AttestationEnvironment) {
@@ -99,19 +116,22 @@ async function buildRuntime(env: AttestationEnvironment): Promise<RuntimeDepende
     privateKey: value(env, "TOKENLESS_ATTESTATION_SIGNING_PRIVATE_KEY"),
   });
   requirePublishedSignerKey(signer, env);
-  return {
+  const runtime: RuntimeDependencies = {
     signer,
     rekor: createRekorDssePublisher({
       logOrigin: value(env, "TOKENLESS_ATTESTATION_REKOR_URL"),
       signerPublicKeyDer: signer.publicKeyDer,
       trustedRekorPublicKeyPem: value(env, "TOKENLESS_ATTESTATION_REKOR_PUBLIC_KEY_PEM"),
     }),
-    tsa: createRfc3161TimestampAuthority({
+  };
+  if (state.timestampingConfigured) {
+    runtime.tsa = createRfc3161TimestampAuthority({
       authorityUrl: value(env, "TOKENLESS_ATTESTATION_TSA_URL"),
       trustedCaPem: value(env, "TOKENLESS_ATTESTATION_TSA_CA_PEM"),
       untrustedChainPem: value(env, "TOKENLESS_ATTESTATION_TSA_UNTRUSTED_PEM") || undefined,
-    }),
-  };
+    });
+  }
+  return runtime;
 }
 
 async function getRuntime(env: AttestationEnvironment) {
@@ -130,10 +150,20 @@ export async function processDueAssuranceAttestations(input: {
   signal?: AbortSignal;
 }) {
   const now = input.now ?? new Date();
-  const due = await countDueAssuranceAttestationJobs(now);
-  const state = runtimeOverride ? { configured: true, error: null } : configurationState(input.env ?? process.env);
+  const dueCounts = await countDueAssuranceAttestationJobsByTimestampRequirement(now);
+  const due = dueCounts.total;
+  const state = runtimeOverride
+    ? { configured: true, timestampingConfigured: Boolean(runtimeOverride.tsa), error: null }
+    : configurationState(input.env ?? process.env);
   if (due === 0) {
-    return { configured: state.configured, due, completed: 0, retry: 0, dead: 0, unavailable: 0 };
+    return {
+      configured: state.configured && state.timestampingConfigured,
+      due,
+      completed: 0,
+      retry: 0,
+      dead: 0,
+      unavailable: 0,
+    };
   }
   if (!state.configured) {
     return { configured: false, due, completed: 0, retry: 0, dead: 0, unavailable: due };
@@ -144,19 +174,24 @@ export async function processDueAssuranceAttestations(input: {
   } catch {
     return { configured: false, due, completed: 0, retry: 0, dead: 0, unavailable: due };
   }
-  const outcomes = await processAssuranceAttestationJobs({
-    ...runtime,
+  const unavailable = runtime.tsa ? 0 : dueCounts.timestampedExports;
+  const common = {
+    signer: runtime.signer,
+    rekor: runtime.rekor,
     now,
     limit: input.limit,
     signal: input.signal,
-  });
+  };
+  const outcomes = runtime.tsa
+    ? await processAssuranceAttestationJobs({ ...common, tsa: runtime.tsa })
+    : await processAssuranceAttestationJobs({ ...common, scope: "decision_packet" });
   return {
-    configured: true,
+    configured: unavailable === 0,
     due,
     completed: outcomes.filter(outcome => outcome.state === "completed").length,
     retry: outcomes.filter(outcome => outcome.state === "retry").length,
     dead: outcomes.filter(outcome => outcome.state === "dead").length,
-    unavailable: 0,
+    unavailable,
   };
 }
 

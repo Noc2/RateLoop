@@ -412,6 +412,10 @@ settlement, and result machinery as production. Deterministic fixtures and local
 identity, database head, EU resource evidence, signing roles, and chain addresses fail closed on a complete deployment
 key; mixed address bundles are invalid.
 
+Externally witnessed decision packets require a distinct managed signer and Rekor receipt but no RFC 3161 timestamp.
+Audit and coverage export heads additionally require the configured timestamp authority and remain unclaimed, without
+consuming a retry attempt, until that authority is available.
+
 Operational instructions are intentionally separate from product design:
 
 - [environment parity](tokenless-environment-parity.md);

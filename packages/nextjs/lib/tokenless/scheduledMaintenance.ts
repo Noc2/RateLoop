@@ -1253,7 +1253,7 @@ export async function runTokenlessScheduledMaintenance(input: {
         }
         return {
           configurationState: "disabled",
-          disabledReason: "managed RFC 3161 attestation runtime is not configured",
+          disabledReason: "external attestation adapters are not fully configured",
         };
       },
       fallback: { configured: false, due: 0, completed: 0, retry: 0, dead: 0, unavailable: 0 } as Awaited<

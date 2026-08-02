@@ -416,7 +416,7 @@ test("one processor failure degrades the run, retains safe evidence, and logs on
     {
       configuration_state: "disabled",
       consecutive_failures: 0,
-      disabled_reason: "managed RFC 3161 attestation runtime is not configured",
+      disabled_reason: "external attestation adapters are not fully configured",
       last_error_code: null,
       last_error_digest: null,
       operator_alert_state: "resolved",
@@ -1462,14 +1462,14 @@ test("scheduled maintenance projects assurance events, delivers them, and degrad
   });
 });
 
-test("scheduled maintenance reports attestation retry, dead-letter, and adapter-unavailable health", async () => {
+test("scheduled maintenance stays degraded when eligible attestations progress beside unavailable export work", async () => {
   const result = await runTokenlessScheduledMaintenance({
     appOrigin: "https://tokenless.example.test",
     now: NOW,
     processors: {
       ...processors(async () => {}),
       async processAttestations() {
-        return { configured: false, due: 2, completed: 0, retry: 0, dead: 0, unavailable: 2 };
+        return { configured: false, due: 2, completed: 1, retry: 0, dead: 0, unavailable: 1 };
       },
     },
   });
@@ -1478,10 +1478,10 @@ test("scheduled maintenance reports attestation retry, dead-letter, and adapter-
   assert.deepEqual(result.summary.attestations, {
     configured: false,
     due: 2,
-    completed: 0,
+    completed: 1,
     retry: 0,
     dead: 0,
-    unavailable: 2,
+    unavailable: 1,
   });
   const health = await dbClient.execute({
     sql: `SELECT configuration_state,last_error_code,operator_alert_state

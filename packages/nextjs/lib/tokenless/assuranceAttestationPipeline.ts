@@ -290,17 +290,33 @@ export async function listAssuranceAttestations(input: {
   });
 }
 
-export async function countDueAssuranceAttestationJobs(now = new Date()) {
+export async function countDueAssuranceAttestationJobsByTimestampRequirement(now = new Date()) {
   const due = await dbClient.execute({
-    sql: `SELECT COUNT(*) AS count FROM tokenless_assurance_attestation_jobs
+    sql: `SELECT COUNT(*) AS count,
+                 COALESCE(SUM(CASE WHEN artifact_kind='decision_packet' THEN 1 ELSE 0 END),0) AS decision_packet_count
+          FROM tokenless_assurance_attestation_jobs
           WHERE ((state IN ('pending','retry') AND next_attempt_at<=?)
                  OR (state='processing' AND lease_expires_at<=?))
             AND attempt_count<? AND lease_generation<2147483647`,
     args: [validDate(now, "Attestation queue time"), now, MAX_ATTEMPTS],
   });
-  const count = Number((due.rows[0] as Row | undefined)?.count ?? 0);
-  if (!Number.isSafeInteger(count) || count < 0) throw new Error("Database returned an invalid attestation job count.");
-  return count;
+  const row = due.rows[0] as Row | undefined;
+  const total = Number(row?.count ?? 0);
+  const decisionPackets = Number(row?.decision_packet_count ?? 0);
+  if (
+    !Number.isSafeInteger(total) ||
+    total < 0 ||
+    !Number.isSafeInteger(decisionPackets) ||
+    decisionPackets < 0 ||
+    decisionPackets > total
+  ) {
+    throw new Error("Database returned invalid attestation job counts.");
+  }
+  return { total, decisionPackets, timestampedExports: total - decisionPackets };
+}
+
+export async function countDueAssuranceAttestationJobs(now = new Date()) {
+  return (await countDueAssuranceAttestationJobsByTimestampRequirement(now)).total;
 }
 
 export async function getPublicAssuranceAttestationBundle(jobId: string) {
@@ -410,7 +426,7 @@ async function publishClaimedAttestation(input: {
   envelope: DsseEnvelope;
   statement: AssuranceAttestationStatement;
   rekor: RekorPublisher;
-  tsa: Rfc3161TimestampAuthority;
+  tsa?: Rfc3161TimestampAuthority;
   now: Date;
   signal?: AbortSignal;
 }) {
@@ -432,8 +448,16 @@ async function publishClaimedAttestation(input: {
   if (!(await attestationClaimIsCurrent(claim))) return false;
 
   const isExport = text(input.row, "artifact_kind") !== "decision_packet";
+  if (isExport && !input.tsa) {
+    throw new TokenlessServiceError(
+      "RFC 3161 timestamping is unavailable for export attestations.",
+      503,
+      "attestation_timestamping_unavailable",
+      true,
+    );
+  }
   const timestamp = isExport
-    ? await input.tsa.timestamp({
+    ? await input.tsa!.timestamp({
         artifactDigest: text(input.row, "artifact_digest")!,
         boundaryAt: new Date(String(input.row.boundary_at)).toISOString(),
         signal: input.signal,
@@ -512,18 +536,23 @@ async function markAttestationClaimFailed(input: { row: Row; signerKeyId: string
   return failed.rows.length === 1 ? (dead ? "dead" : "retry") : null;
 }
 
-export async function processAssuranceAttestationJobs(input: {
+type ProcessAssuranceAttestationJobsBase = {
   signer: ManagedAttestationSigner;
   rekor: RekorPublisher;
-  tsa: Rfc3161TimestampAuthority;
   now?: Date;
   limit?: number;
   workspaceId?: string;
   signal?: AbortSignal;
-}) {
+};
+
+type ProcessAssuranceAttestationJobsInput = ProcessAssuranceAttestationJobsBase &
+  ({ scope: "decision_packet"; tsa?: never } | { scope?: "all"; tsa: Rfc3161TimestampAuthority });
+
+export async function processAssuranceAttestationJobs(input: ProcessAssuranceAttestationJobsInput) {
   validateManagedSigner(input.signer);
   const now = validDate(input.now ?? new Date(), "Attestation processing time");
   const workspaceFilter = input.workspaceId ? "AND workspace_id=?" : "";
+  const scopeFilter = input.scope === "decision_packet" ? "AND artifact_kind='decision_packet'" : "";
   // A job killed mid-attempt on its final try can never be claimed again, because the claim
   // requires attempt_count below the cap, and can never be failed, because it never reaches the
   // failure path. It stayed due forever while the run reported healthy, since health keys off
@@ -543,6 +572,7 @@ export async function processAssuranceAttestationJobs(input: {
                  OR (state='processing' AND lease_expires_at<=?))
             AND attempt_count<? AND lease_generation<2147483647
           ${workspaceFilter}
+          ${scopeFilter}
           ORDER BY next_attempt_at ASC,job_id ASC LIMIT ?`,
     args: [
       now,
@@ -565,6 +595,7 @@ export async function processAssuranceAttestationJobs(input: {
             WHERE job_id=? AND ((state IN ('pending','retry') AND next_attempt_at<=?)
               OR (state='processing' AND lease_expires_at<=?))
               AND attempt_count<? AND lease_generation<2147483647
+              ${scopeFilter}
             RETURNING job_id,workspace_id,artifact_kind,artifact_schema_version,artifact_digest,
                       boundary_at,statement_json,attempt_count,lease_generation,claim_signer_key_id`,
       args: [new Date(now.getTime() + LEASE_MS), input.signer.keyId, now, jobId, now, now, MAX_ATTEMPTS],
