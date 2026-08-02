@@ -4,6 +4,7 @@
     "wallets": "Wallet settings",
     "label": "Display name",
     "placeholder": "Your private name",
+    "loading": "Loading profile…",
     "saving": "Saving…",
     "save": "Save profile",
     "saved": "Profile saved.",

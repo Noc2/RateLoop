@@ -21,26 +21,41 @@ export function ProfileClient() {
   const t = useTranslations("account.profile");
   const [profile, setProfile] = useState<Profile | null>(null);
   const [displayName, setDisplayName] = useState("");
+  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const { capture, clear, fieldErrors, formError } = useFormErrors();
 
-  const refresh = useCallback(async () => {
-    const profileBody = await readJson<Profile>(
-      await fetch("/api/account/profile", { cache: "no-store", credentials: "same-origin" }),
-      { fallbackMessage: t("loadFailed") },
-    );
-    const nextProfile = profileBody;
-    setProfile(nextProfile);
-    setDisplayName(nextProfile.profileDisplayName ?? "");
-  }, [t]);
+  const refresh = useCallback(
+    async (signal: AbortSignal) => {
+      const profileBody = await readJson<Profile>(
+        await fetch("/api/account/profile", { cache: "no-store", credentials: "same-origin", signal }),
+        { fallbackMessage: t("loadFailed") },
+      );
+      if (signal.aborted) return;
+      const nextProfile = profileBody;
+      setProfile(nextProfile);
+      setDisplayName(nextProfile.profileDisplayName ?? "");
+    },
+    [t],
+  );
 
   useEffect(() => {
-    void refresh().catch(cause => capture(cause, t("loadFailed")));
+    const controller = new AbortController();
+    setLoading(true);
+    void refresh(controller.signal)
+      .catch(cause => {
+        if (!controller.signal.aborted) capture(cause, t("loadFailed"));
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
   }, [capture, refresh, t]);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (loading || !profile || busy) return;
     setBusy(true);
     clear();
     setSaved(false);
@@ -79,7 +94,7 @@ export function ProfileClient() {
             {t("wallets")}
           </Link>
         </div>
-        <form className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end" onSubmit={save}>
+        <form className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end" aria-busy={loading} onSubmit={save}>
           <div className="grow">
             <Field
               id="profile-display-name"
@@ -89,14 +104,15 @@ export function ProfileClient() {
                 setDisplayName(event.target.value);
                 clear("displayName");
               }}
+              disabled={loading || !profile || busy}
               className="input w-full border-base-content/10 bg-[var(--rateloop-field)]"
               maxLength={80}
               placeholder={profile?.providerDisplayName ?? t("placeholder")}
               error={fieldErrors.displayName}
             />
           </div>
-          <button type="submit" className="rateloop-gradient-action px-5" disabled={busy}>
-            {busy ? t("saving") : t("save")}
+          <button type="submit" className="rateloop-gradient-action px-5" disabled={loading || !profile || busy}>
+            {loading ? t("loading") : busy ? t("saving") : t("save")}
           </button>
         </form>
         {saved ? <p className="mt-3 text-sm text-success">{t("saved")}</p> : null}

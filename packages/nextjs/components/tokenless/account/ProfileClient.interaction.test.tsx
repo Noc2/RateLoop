@@ -61,7 +61,9 @@ test("saving a profile name updates the navbar account label without a reload", 
     assert.equal(screen.getByRole("link", { name: "Wallet settings" }).getAttribute("href"), "/settings/wallets");
 
     const user = userEvent.setup({ document });
-    await user.type(screen.getByRole("textbox", { name: "Display name" }), "Ada Lovelace");
+    const displayName = screen.getByRole("textbox", { name: "Display name" });
+    await waitFor(() => assert.equal(displayName.hasAttribute("disabled"), false));
+    await user.type(displayName, "Ada Lovelace");
     await user.click(screen.getByRole("button", { name: "Save profile" }));
 
     await waitFor(() => assert.ok(screen.getByText("Ada Lovelace")));
@@ -97,6 +99,7 @@ test("profile validation errors are attached to the display-name field", async (
     const view = render(<ProfileClient />);
     const screen = within(view.container);
     const input = await screen.findByRole("textbox", { name: "Display name" });
+    await waitFor(() => assert.equal(input.hasAttribute("disabled"), false));
     const user = userEvent.setup({ document });
     await user.type(input, "Ada");
     await user.click(screen.getByRole("button", { name: "Save profile" }));
@@ -104,6 +107,51 @@ test("profile validation errors are attached to the display-name field", async (
     await waitFor(() => assert.equal(input.getAttribute("aria-invalid"), "true"));
     assert.equal(input.getAttribute("aria-describedby"), "profile-display-name-error");
     assert.ok(screen.getByText("Choose a shorter display name."));
+  } finally {
+    cleanup();
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});
+
+test("profile editing waits for the initial profile response", async () => {
+  const restoreDom = installTestDom();
+  const { cleanup, render: baseRender, waitFor, within } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
+  const userEvent = (await import("@testing-library/user-event")).default;
+  const { ProfileClient } = await import("./ProfileClient");
+  const previousFetch = globalThis.fetch;
+  let finishInitialLoad!: (response: Response) => void;
+  const initialLoad = new Promise<Response>(resolve => {
+    finishInitialLoad = resolve;
+  });
+  const requests: Array<{ method: string; url: string }> = [];
+
+  globalThis.fetch = async (input, init) => {
+    const request = { method: init?.method ?? "GET", url: String(input) };
+    requests.push(request);
+    if (request.url === "/api/account/profile" && request.method === "GET") return initialLoad;
+    throw new Error(`Unexpected request: ${request.method} ${request.url}`);
+  };
+
+  try {
+    const view = render(<ProfileClient />);
+    const screen = within(view.container);
+    const input = screen.getByRole("textbox", { name: "Display name" }) as HTMLInputElement;
+    const save = screen.getByRole("button", { name: "Loading profile…" });
+    const user = userEvent.setup({ document });
+
+    assert.equal(input.disabled, true);
+    assert.equal(save.hasAttribute("disabled"), true);
+    await user.type(input, "This must not race the server");
+    await user.click(save);
+    assert.equal(input.value, "");
+    assert.deepEqual(requests, [{ method: "GET", url: "/api/account/profile" }]);
+
+    finishInitialLoad(Response.json(profile("Existing profile name")));
+    await waitFor(() => assert.equal(input.value, "Existing profile name"));
+    assert.equal(input.disabled, false);
+    assert.equal(screen.getByRole("button", { name: "Save profile" }).hasAttribute("disabled"), false);
   } finally {
     cleanup();
     globalThis.fetch = previousFetch;
