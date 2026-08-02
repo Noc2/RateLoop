@@ -56,27 +56,17 @@ export function SearchPageContent({
           <>
             <AuthorizedSiteSearchResults locale={locale} results={authorizedResults} />
             <SiteSearchResults locale={locale} query={query} excludeHrefs={["/human/review"]} />
-            <section aria-labelledby="review-work-heading" className="mt-10">
-              <div className="flex items-center justify-between gap-4">
-                <h2 id="review-work-heading" className="text-xl font-semibold text-base-content">
-                  Review work
-                </h2>
-                <span className="font-mono text-xs text-base-content/55">1 destination</span>
-              </div>
-              <Card
-                as={Link}
-                href={`/human/review?q=${encodeURIComponent(query)}`}
-                prefetch={false}
-                className="group mt-4 block rounded-xl px-4 py-3 transition-colors hover:border-base-content/20 hover:bg-base-content/[0.04]"
-              >
-                <h3 className="font-semibold text-base-content transition-colors group-hover:text-[var(--rateloop-blue)]">
-                  Search review work for &quot;{query}&quot;
-                </h3>
-                <p className="mt-1 text-sm leading-6 text-base-content/60">
-                  Open the full review queue with this search applied.
-                </p>
-              </Card>
-            </section>
+            <Card
+              as={Link}
+              aria-label={`Search review work for "${query}"`}
+              href={`/human/review?q=${encodeURIComponent(query)}`}
+              prefetch={false}
+              className="group mt-10 block rounded-xl px-4 py-3 transition-colors hover:border-base-content/20 hover:bg-base-content/[0.04]"
+            >
+              <h2 className="font-semibold text-base-content transition-colors group-hover:text-[var(--rateloop-blue)]">
+                Review work
+              </h2>
+            </Card>
           </>
         ) : (
           <Card as="p" className="mt-8 rounded-xl p-5 text-sm text-base-content/60">

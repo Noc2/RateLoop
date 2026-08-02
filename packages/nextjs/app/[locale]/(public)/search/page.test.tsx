@@ -21,7 +21,8 @@ test("search shows compact destinations instead of embedding the review workspac
   assert.match(html, /Review work/i);
   assert.match(html, /href="\/agents\/connections"/);
   assert.match(html, /href="\/human\/review\?q=connect%20agent"/);
-  assert.match(html, /Open the full review queue with this search applied/i);
+  assert.match(html, /aria-label="Search review work for &quot;connect agent&quot;"/i);
+  assert.doesNotMatch(html, />1 destination<|Open the full review queue|>Search review work for/iu);
   assert.doesNotMatch(html, /Reviewer navigation|Have an invitation|No review work is available/i);
 });
 
@@ -57,6 +58,7 @@ test("search shows one query-aware review-work destination", async () => {
   assert.equal(html.match(/>Review work</g)?.length, 1);
   assert.doesNotMatch(html, /href="\/human\/review"/);
   assert.match(html, /href="\/human\/review\?q=review"/);
+  assert.match(html, /aria-label="Search review work for &quot;review&quot;"/i);
 });
 
 test("the search route only loads private results after resolving a server session", () => {
