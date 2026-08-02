@@ -94,8 +94,16 @@ test("a confirmed paid commit projects the invited assignment as completed", () 
     "expired",
   );
   assert.equal(
-    paidReviewCompletionSql("rp.compensation_mode", "paid_commit.state"),
-    "(rp.compensation_mode='usdc' AND paid_commit.state IN ('confirmed'))",
+    paidReviewCompletionSql("rp.compensation_mode", "a.assignment_id"),
+    `(rp.compensation_mode='usdc' AND a.assignment_id IN (
+    SELECT completion_seat.assignment_id
+    FROM tokenless_paid_assignment_seats completion_seat
+    JOIN tokenless_paid_review_voucher_issuances completion_issuance
+      ON completion_issuance.issuance_id=completion_seat.voucher_issuance_id
+    JOIN tokenless_rater_commits completion_commit
+      ON completion_commit.voucher_id=completion_issuance.voucher_id
+    WHERE completion_commit.state IN ('confirmed')
+  ))`,
   );
 });
 
@@ -139,7 +147,8 @@ test("the server listing and browser queue apply the same paid-assignment bounda
   for (const input of directListings) {
     assert.ok(typeof input !== "string");
     assert.match(input.sql, /\(\? OR rp\.compensation_mode='unpaid'\)/u);
-    assert.match(input.sql, /rp\.compensation_mode='usdc' AND paid_commit\.state IN \('confirmed'\)/u);
+    assert.match(input.sql, /rp\.compensation_mode='usdc' AND a\.assignment_id IN \(/u);
+    assert.match(input.sql, /completion_commit\.state IN \('confirmed'\)/u);
   }
   assert.equal((directListings[0] as Exclude<QueryInput, string>).args?.[3], false);
   assert.equal((directListings[1] as Exclude<QueryInput, string>).args?.[3], true);

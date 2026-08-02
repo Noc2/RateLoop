@@ -6,9 +6,17 @@ export type ReviewerAssignmentSurfaceEntry = {
 
 export const PAID_REVIEW_COMPLETED_COMMIT_STATES = ["confirmed"] as const;
 
-export function paidReviewCompletionSql(compensationColumn: string, commitStateColumn: string) {
+export function paidReviewCompletionSql(compensationColumn: string, assignmentIdColumn: string) {
   const states = PAID_REVIEW_COMPLETED_COMMIT_STATES.map(state => `'${state}'`).join(",");
-  return `(${compensationColumn}='usdc' AND ${commitStateColumn} IN (${states}))`;
+  return `(${compensationColumn}='usdc' AND ${assignmentIdColumn} IN (
+    SELECT completion_seat.assignment_id
+    FROM tokenless_paid_assignment_seats completion_seat
+    JOIN tokenless_paid_review_voucher_issuances completion_issuance
+      ON completion_issuance.issuance_id=completion_seat.voucher_issuance_id
+    JOIN tokenless_rater_commits completion_commit
+      ON completion_commit.voucher_id=completion_issuance.voucher_id
+    WHERE completion_commit.state IN (${states})
+  ))`;
 }
 
 export function reviewerAssignmentDisplayStatus(input: {
