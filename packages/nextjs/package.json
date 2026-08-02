@@ -41,6 +41,8 @@
     "@better-auth/passkey": "1.6.23",
     "@better-auth/scim": "1.6.23",
     "@better-auth/sso": "1.6.23",
+    "@img/sharp-libvips-linux-x64": "1.3.2",
+    "@img/sharp-linux-x64": "0.35.3",
     "@rateloop/contracts": "workspace:*",
     "@rateloop/node-utils": "workspace:*",
     "@rateloop/sdk": "workspace:*",

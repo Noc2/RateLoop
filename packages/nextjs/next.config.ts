@@ -1,4 +1,5 @@
 import { assertNextConfigBuildGuards } from "./config/buildGuards";
+import { SHARP_LINUX_X64_TRACE_GLOBS, assertSharpLinuxX64RuntimePackages } from "./config/sharpDeployment";
 import { DEFAULT_LOCALE, SUPPORTED_LOCALES } from "./i18n/config";
 import withBundleAnalyzer from "@next/bundle-analyzer";
 import { loadEnvConfig } from "@next/env";
@@ -9,6 +10,7 @@ import { fileURLToPath } from "node:url";
 
 loadEnvConfig(dirname(fileURLToPath(import.meta.url)));
 assertNextConfigBuildGuards();
+assertSharpLinuxX64RuntimePackages();
 
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -42,6 +44,9 @@ const nextConfig: NextConfig = {
   },
   eslint: {
     ignoreDuringBuilds: false,
+  },
+  outputFileTracingIncludes: {
+    "/*": [...SHARP_LINUX_X64_TRACE_GLOBS],
   },
   headers: async () => [
     {
