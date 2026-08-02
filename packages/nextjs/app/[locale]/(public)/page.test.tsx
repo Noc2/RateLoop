@@ -14,9 +14,9 @@ test("landing page presents the tokenless human-assurance story", async () => {
   const html = renderToStaticMarkup(
     <TokenlessLandingPage
       socialProofItems={[
-        { value: "10", label: "Verified Humans" },
-        { value: "21", label: "Ratings" },
-        { value: "$12", label: "USDC Paid" },
+        { value: "10", labelKey: "verifiedHumans" },
+        { value: "21", labelKey: "reviewResponses" },
+        { value: "$12", labelKey: "usdcPaid" },
       ]}
     />,
   ).replace(/\s+/g, " ");
@@ -38,9 +38,9 @@ test("landing page presents the tokenless human-assurance story", async () => {
     html.indexOf("The Human") < html.indexOf('class="orb-animation-shell'),
     "the value proposition should precede the orb on small screens",
   );
-  assert.match(html, /<span class="font-semibold text-base-content">10<\/span> Verified Humans/);
-  assert.match(html, /<span class="font-semibold text-base-content">21<\/span> Ratings/);
-  assert.match(html, /<span class="font-semibold text-base-content">\$12<\/span> USDC Paid/);
+  assert.match(html, /<span class="font-semibold text-base-content">10<\/span> Verified humans/);
+  assert.match(html, /<span class="font-semibold text-base-content">21<\/span> Review responses/);
+  assert.match(html, /<span class="font-semibold text-base-content">\$12<\/span> USDC paid/);
   assert.match(html, /How It/);
   assert.match(html, /Owner sets policy/);
   assert.match(html, /Agent submits work/);
@@ -171,4 +171,21 @@ test("landing page presents the tokenless human-assurance story", async () => {
     .trim()
     .split(/\s+/).length;
   assert.ok(visibleWords <= 480, `landing page should stay under 480 visible words; found ${visibleWords}`);
+});
+
+test("landing social proof uses precise localized labels", async () => {
+  (globalThis as typeof globalThis & { React: typeof React }).React = React;
+  const { TokenlessLandingPage } = await import("./page");
+  const socialProofItems = [
+    { value: "10", labelKey: "verifiedHumans" as const },
+    { value: "21", labelKey: "reviewResponses" as const },
+    { value: "$12", labelKey: "usdcPaid" as const },
+  ];
+
+  const english = renderToStaticMarkup(<TokenlessLandingPage locale="en" socialProofItems={socialProofItems} />);
+  const german = renderToStaticMarkup(<TokenlessLandingPage locale="de" socialProofItems={socialProofItems} />);
+
+  assert.match(english, />21<\/span> Review responses/);
+  assert.match(german, />21<\/span> Prüfantworten/);
+  assert.doesNotMatch(german, />21<\/span> Ratings/);
 });

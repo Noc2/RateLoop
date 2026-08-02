@@ -1,5 +1,10 @@
 {
   "supportedAgents": "Funktioniert mit den Agenten, die Ihr Team bereits nutzt",
+  "socialProof": {
+    "verifiedHumans": "verifizierte Personen",
+    "reviewResponses": "Prüfantworten",
+    "usdcPaid": "USDC ausgezahlt"
+  },
   "sections": {
     "useCases": {
       "lead": "Wo Menschen",

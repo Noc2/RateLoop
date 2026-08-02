@@ -5,7 +5,7 @@ export type LandingSocialProofStats = {
 };
 
 export type LandingSocialProofItem = {
-  label: "Verified Humans" | "Ratings" | "USDC Paid";
+  labelKey: "verifiedHumans" | "reviewResponses" | "usdcPaid";
   value: string;
 };
 
@@ -40,15 +40,15 @@ export function buildLandingPageSocialProofItems(stats: LandingSocialProofStats)
   const items: LandingSocialProofItem[] = [
     {
       value: nonNegativeInteger(stats.totalVerifiedHumans).toLocaleString("en-US"),
-      label: "Verified Humans",
+      labelKey: "verifiedHumans",
     },
     {
       value: nonNegativeInteger(stats.totalRatings).toLocaleString("en-US"),
-      label: "Ratings",
+      labelKey: "reviewResponses",
     },
     {
       value: formatUsdcPaidOut(stats.totalPaidAtomic),
-      label: "USDC Paid",
+      labelKey: "usdcPaid",
     },
   ];
   return items.filter(item => item.value !== "0" && item.value !== "$0");

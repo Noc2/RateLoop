@@ -1,5 +1,10 @@
 {
   "supportedAgents": "Works with the agents your team already uses",
+  "socialProof": {
+    "verifiedHumans": "Verified humans",
+    "reviewResponses": "Review responses",
+    "usdcPaid": "USDC paid"
+  },
   "sections": {
     "useCases": {
       "lead": "Where Humans",

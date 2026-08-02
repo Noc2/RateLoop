@@ -10,9 +10,9 @@ test("landing social proof formats live identity, rating, and USDC totals", () =
       totalPaidAtomic: "12000000",
     }),
     [
-      { value: "10", label: "Verified Humans" },
-      { value: "21", label: "Ratings" },
-      { value: "$12", label: "USDC Paid" },
+      { value: "10", labelKey: "verifiedHumans" },
+      { value: "21", labelKey: "reviewResponses" },
+      { value: "$12", labelKey: "usdcPaid" },
     ],
   );
 });
@@ -32,7 +32,7 @@ test("landing social proof hides zero-value claims and keeps cent rounding stabl
       totalRatings: 21,
       totalPaidAtomic: 0,
     }),
-    [{ value: "21", label: "Ratings" }],
+    [{ value: "21", labelKey: "reviewResponses" }],
   );
   assert.equal(formatUsdcPaidOut(5_000n), "$0.01");
   assert.equal(formatUsdcPaidOut(12_345_600n), "$12.35");

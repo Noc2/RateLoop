@@ -147,12 +147,13 @@ export function TokenlessLandingPage({
               </div>
               {socialProofItems.length > 0 ? (
                 <div className="mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-center text-sm text-base-content/76 sm:text-[0.95rem] lg:justify-start lg:text-left">
-                  {socialProofItems.map(({ value, label }, index) => (
-                    <div key={label} className="flex items-center">
+                  {socialProofItems.map(({ value, labelKey }, index) => (
+                    <div key={labelKey} className="flex items-center">
                       <span
                         className={`whitespace-nowrap ${index < socialProofItems.length - 1 ? "sm:after:ml-3 sm:after:text-base-content/70 sm:after:content-['•']" : ""}`}
                       >
-                        <span className="font-semibold text-base-content">{value}</span> {label}
+                        <span className="font-semibold text-base-content">{value}</span>{" "}
+                        {homeMessages.socialProof[labelKey]}
                       </span>
                     </div>
                   ))}
