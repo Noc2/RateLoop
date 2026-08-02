@@ -14,7 +14,7 @@ test("documentation introduction presents the hosted task paths", async () => {
   const html = renderToStaticMarkup(<DocsPage />).replace(/\s+/g, " ");
 
   assert.match(html, /Human.*rateloop-text-gradient.*Assurance/i);
-  assert.match(html, /hosted service uses invited workspace reviewers for unpaid, private review/i);
+  assert.doesNotMatch(html, /Start with the task you need|Connect the agent first/i);
   assert.match(html, /Connect an agent.*Set review policy.*Complete a review.*Verify evidence/i);
   assert.match(html, /Set policy:.*Request:.*Review:.*Decide:/i);
   assert.match(html, /href="\/agents\/connections"/i);
@@ -27,4 +27,10 @@ test("documentation introduction presents the hosted task paths", async () => {
   assert.match(html, /href="\/docs\/human-oversight"/i);
   assert.match(html, /Connections.*Review setup.*View evidence in Results/i);
   assert.doesNotMatch(html, /guaranteed pay|bonus|USDC|settlement|budget/i);
+  const visibleWords = html
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&[a-zA-Z0-9#]+;/g, " ")
+    .trim()
+    .split(/\s+/).length;
+  assert.ok(visibleWords <= 150, `documentation index should stay under 150 visible words; found ${visibleWords}`);
 });

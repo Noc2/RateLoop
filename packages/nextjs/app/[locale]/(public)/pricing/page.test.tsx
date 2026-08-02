@@ -18,6 +18,7 @@ test("pricing page shows three tiers and discloses costs progressively", async (
   ).replace(/\s+/g, " ");
 
   assert.match(html, /Start free/);
+  assert.doesNotMatch(html, /Workspace plans cover completed review decisions/);
   assert.match(html, /Free/);
   assert.match(html, /\$29/);
   assert.match(html, /25 completed review decisions/);

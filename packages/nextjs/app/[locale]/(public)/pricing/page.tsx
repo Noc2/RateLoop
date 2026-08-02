@@ -6,7 +6,7 @@ import {
 } from "~~/components/docs/LocalizedPublicContent";
 import { WorkspacePlanCards } from "~~/components/pricing/WorkspacePlanCards";
 import { Card } from "~~/components/tokenless/ui/Card";
-import { TOKENLESS_BILLING_PLANS, TOKENLESS_HOSTED_REVIEW_COPY, formatUsdPrice } from "~~/lib/billing/plans";
+import { TOKENLESS_BILLING_PLANS, formatUsdPrice } from "~~/lib/billing/plans";
 import { resolveDemoBookingUrl } from "~~/lib/marketing/demoBooking";
 
 export async function generateMetadata({ params }: { params: Promise<{ locale?: string }> }): Promise<Metadata> {
@@ -45,13 +45,9 @@ export default async function PricingPage({
       <div className="flex grow flex-col items-center px-4 pb-20 pt-12 sm:pt-16 lg:pt-20">
         <div className="w-full max-w-6xl">
           <header className="max-w-4xl">
-            <p className="font-mono text-sm uppercase tracking-[0.22em] text-[var(--rateloop-blue)]">Pricing</p>
-            <h1 className="hero-headline mt-5 text-[3.25rem] leading-[0.95] text-base-content sm:text-[4.6rem] lg:text-[5.4rem]">
+            <h1 className="hero-headline text-[3.25rem] leading-[0.95] text-base-content sm:text-[4.6rem] lg:text-[5.4rem]">
               Start free. <span className="rateloop-text-gradient">Scale when you need it.</span>
             </h1>
-            <p className="mt-7 max-w-3xl text-lg leading-8 text-base-content/65 sm:text-xl">
-              {TOKENLESS_HOSTED_REVIEW_COPY.planSummary}
-            </p>
           </header>
 
           <section aria-labelledby="plans-heading" className="mt-14 sm:mt-20">

@@ -53,15 +53,8 @@ export default function DocsPage({ params }: { params?: PublicLocaleParams } = {
     <LocalizedPublicContent locale={locale} section="docs">
       <article className="prose max-w-none">
         <DocsTitle gradientText="Assurance">Human</DocsTitle>
-        <p className="lead text-base-content/60 text-lg">
-          Start with the task you need. The hosted service uses invited workspace reviewers for unpaid, private review.
-        </p>
 
         <h2>Choose a task</h2>
-        <p>
-          Connect the agent first, then set its review policy. Reviewers can complete assigned work while workspace
-          members inspect results and evidence.
-        </p>
 
         <div className="not-prose my-8 grid gap-x-8 gap-y-10 sm:grid-cols-2">
           {DOCS_PATHS.map(path => (
@@ -88,19 +81,16 @@ export default function DocsPage({ params }: { params?: PublicLocaleParams } = {
         <h2>Learn more</h2>
         <ul>
           <li>
-            <Link href="/docs/how-it-works">How It Works</Link> follows the current hosted review journey.
+            <Link href="/docs/how-it-works">How It Works</Link>
           </li>
           <li>
-            <Link href="/docs/use-cases">Use Cases</Link> maps concrete AI workflow problems to bounded human checks and
-            accountable owner decisions.
+            <Link href="/docs/use-cases">Use Cases</Link>
           </li>
           <li>
-            <Link href="/docs/evidence">Evidence reference</Link> explains what RateLoop records and what those records
-            do and do not establish.
+            <Link href="/docs/evidence">Evidence reference</Link>
           </li>
           <li>
-            <Link href="/docs/human-oversight">Human Oversight</Link> explains the controls your people remain
-            responsible for operating.
+            <Link href="/docs/human-oversight">Human Oversight</Link>
           </li>
         </ul>
       </article>

@@ -36,21 +36,18 @@ const whyItWorksFeatures = [
 const useCases = [
   {
     title: "Customer replies",
-    body: "A grounded reply can still frustrate. Would you send it?",
     href: "/docs/use-cases#customer-replies",
     color: "var(--rateloop-blue)",
     icon: "reply",
   },
   {
     title: "Research and client work",
-    body: "Citations can still support weak conclusions. Are the claims supported?",
     href: "/docs/use-cases#research-deliverables",
     color: "var(--rateloop-green)",
     icon: "research",
   },
   {
     title: "AI-assisted hiring",
-    body: "Hiring AI can be high-risk. Should an authorized recruiter approve it?",
     href: "/docs/use-cases#hiring-decisions",
     color: "var(--rateloop-pink)",
     icon: "hiring",
@@ -187,7 +184,6 @@ export function TokenlessLandingPage({
                       </Link>
                     </h3>
                   </div>
-                  <p className="mt-3 text-base leading-7 text-base-content/65">{useCase.body}</p>
                 </Card>
               ))}
             </div>

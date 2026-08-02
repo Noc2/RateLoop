@@ -114,27 +114,18 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /id="use-cases"/);
   assert.match(html, /Where Humans/);
   assert.doesNotMatch(html, /Automated checks catch many failures.*contextual decision.*actual output/i);
-  for (const [title, body, href] of [
-    [
-      "Customer replies",
-      "A grounded reply can still frustrate. Would you send it?",
-      "/docs/use-cases#customer-replies",
-    ],
-    [
-      "Research and client work",
-      "Citations can still support weak conclusions. Are the claims supported?",
-      "/docs/use-cases#research-deliverables",
-    ],
-    [
-      "AI-assisted hiring",
-      "Hiring AI can be high-risk. Should an authorized recruiter approve it?",
-      "/docs/use-cases#hiring-decisions",
-    ],
+  for (const [title, href] of [
+    ["Customer replies", "/docs/use-cases#customer-replies"],
+    ["Research and client work", "/docs/use-cases#research-deliverables"],
+    ["AI-assisted hiring", "/docs/use-cases#hiring-decisions"],
   ]) {
     assert.match(html, new RegExp(title, "i"));
-    assert.match(html, new RegExp(body.replace(/[?.]/g, "\\$&"), "i"));
     assert.match(html, new RegExp(`href="${href}"`));
   }
+  assert.doesNotMatch(
+    html,
+    /A grounded reply can still frustrate|Citations can still support|Hiring AI can be high-risk/i,
+  );
   assert.match(html, /href="\/docs\/use-cases"[^>]*>Explore example workflows<\/a>/i);
   assert.match(html, /id="faq"/);
   assert.match(html, /Common/);
@@ -170,7 +161,7 @@ test("landing page presents the tokenless human-assurance story", async () => {
     .replace(/&[a-zA-Z0-9#]+;/g, " ")
     .trim()
     .split(/\s+/).length;
-  assert.ok(visibleWords <= 480, `landing page should stay under 480 visible words; found ${visibleWords}`);
+  assert.ok(visibleWords <= 430, `landing page should stay under 430 visible words; found ${visibleWords}`);
 });
 
 test("landing social proof uses precise localized labels", async () => {
