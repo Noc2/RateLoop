@@ -58,21 +58,31 @@ export function ThemeToggle({
   const [theme, setTheme] = useState<Theme>();
 
   useEffect(() => {
+    const root = document.documentElement;
+    const observer = new MutationObserver(() => {
+      const renderedTheme = parseThemePreference(root.dataset.theme);
+      if (renderedTheme) setTheme(renderedTheme);
+    });
+    observer.observe(root, { attributeFilter: ["data-theme"], attributes: true });
+
     const explicitTheme = readThemePreferenceFromCookie(document.cookie);
     if (explicitTheme) {
-      applyThemePreference(document.documentElement, explicitTheme);
+      applyThemePreference(root, explicitTheme);
       setTheme(explicitTheme);
-      return;
+      return () => observer.disconnect();
     }
 
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const updateFromSystem = () => {
       if (readThemePreferenceFromCookie(document.cookie)) return;
-      setTheme(applyThemePreference(document.documentElement, resolveThemePreference(undefined, media.matches)));
+      setTheme(applyThemePreference(root, resolveThemePreference(undefined, media.matches)));
     };
     updateFromSystem();
     media.addEventListener("change", updateFromSystem);
-    return () => media.removeEventListener("change", updateFromSystem);
+    return () => {
+      observer.disconnect();
+      media.removeEventListener("change", updateFromSystem);
+    };
   }, []);
 
   const toggleTheme = () => {

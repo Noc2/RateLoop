@@ -2,6 +2,7 @@ import React from "react";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
+import { applyThemePreference, serializeThemePreferenceCookie } from "~~/lib/ui/themePreference";
 
 test("theme toggle follows the OS until a light or dark override is chosen", async () => {
   const restoreDom = installTestDom();
@@ -45,6 +46,17 @@ test("theme toggle follows the OS until a light or dark override is chosen", asy
     await act(async () => {
       for (const listener of listeners) listener();
     });
+    assert.equal(document.documentElement.dataset.theme, "light");
+    assert.ok(view.getByRole("button", { name: "Zum dunklen Design wechseln" }));
+
+    await act(async () => {
+      document.cookie = serializeThemePreferenceCookie("dark", false);
+      applyThemePreference(document.documentElement, "dark");
+    });
+    assert.ok(await view.findByRole("button", { name: "Zum hellen Design wechseln" }));
+    assert.match(view.getByText("Dunkles Design aktiv").textContent ?? "", /Dunkles Design aktiv/);
+
+    fireEvent.click(view.getByRole("button"));
     assert.equal(document.documentElement.dataset.theme, "light");
     assert.ok(view.getByRole("button", { name: "Zum dunklen Design wechseln" }));
   } finally {
