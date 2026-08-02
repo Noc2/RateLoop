@@ -22,6 +22,11 @@ test("setup progress reuses the canonical homepage spectrum without local colors
   assert.doesNotMatch(progressSource, /#[\da-f]{3,8}/iu);
 });
 
+test("the current-stage caption appears only when compact progress labels are hidden", () => {
+  assert.match(progressSource, /flex items-center gap-2 text-sm font-medium sm:hidden/);
+  assert.match(progressSource, /mt-3 hidden font-mono text-xs sm:block/);
+});
+
 test("completed setup steps navigate with a real click", async () => {
   const restoreDom = installTestDom();
   const { cleanup, render, screen } = await import("@testing-library/react");

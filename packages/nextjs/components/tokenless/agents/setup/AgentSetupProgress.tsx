@@ -78,7 +78,7 @@ export function AgentSetupProgress({
         <p className="font-mono text-xs uppercase tracking-[0.22em] text-base-content/55">
           {t("stepCount", { current: currentIndex + 1, total: stages.length })}
         </p>
-        <p className="flex items-center gap-2 text-sm font-medium">
+        <p className="flex items-center gap-2 text-sm font-medium sm:hidden">
           <span className="h-2 w-2 rounded-full" style={{ background: currentVisual.color }} aria-hidden="true" />
           {stageLabel(currentStep)}
         </p>
