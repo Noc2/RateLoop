@@ -13,9 +13,9 @@
     "overview": "Overview",
     "connect": "Connections",
     "inbox": "Approvals",
-    "registry": "Review setup",
+    "registry": "Review",
     "evaluations": "Results",
-    "billing": "Billing & settings"
+    "billing": "Settings"
   },
   "signIn": {
     "title": "Agents",

@@ -28,12 +28,9 @@ export function AgentTabs({
   const visible = tabs.filter(tab => visibleTabs.includes(tab));
 
   return (
-    <div className="space-y-3">
-      <nav
-        className="-mx-1 min-w-0 overflow-x-auto px-1 lg:mx-0 lg:overflow-visible lg:px-0"
-        aria-label={t("navigation")}
-      >
-        <div className="flex min-w-max gap-2 lg:min-w-0 lg:flex-wrap">
+    <div className="space-y-3 lg:flex lg:items-center lg:gap-3 lg:space-y-0">
+      <nav className="-mx-1 min-w-0 overflow-x-auto px-1 lg:mx-0 lg:flex-1 lg:px-0" aria-label={t("navigation")}>
+        <div className="flex min-w-max gap-2">
           {visible.map(tab => (
             <Link
               key={tab}
@@ -52,7 +49,7 @@ export function AgentTabs({
           ))}
         </div>
       </nav>
-      <div className="flex justify-end">
+      <div className="flex justify-end lg:shrink-0">
         <SelectField
           containerClassName="w-full shrink-0 sm:w-56"
           className="h-11 min-h-11 rounded-xl border-base-content/10 bg-[var(--rateloop-field)] text-sm font-medium"

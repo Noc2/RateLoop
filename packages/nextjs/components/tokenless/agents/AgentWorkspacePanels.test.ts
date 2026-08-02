@@ -30,6 +30,14 @@ const sectionPageSource = readFileSync(
   new URL("../../../app/[locale]/(app)/agents/[section]/page.tsx", import.meta.url),
   "utf8",
 );
+const englishAgents = JSON.parse(
+  readFileSync(new URL("../../../messages/en/agents.json", import.meta.url), "utf8"),
+) as {
+  tabs: Record<string, string>;
+};
+const germanAgents = JSON.parse(readFileSync(new URL("../../../messages/de/agents.json", import.meta.url), "utf8")) as {
+  tabs: Record<string, string>;
+};
 
 test("the requested accessible workspace wins and invalid returning links require a choice", () => {
   const workspaces = [
@@ -229,14 +237,20 @@ test("registered-agent search links open and focus the exact workflow version", 
   assert.match(registrySource, /<AgentText id="translated094" \/>/);
 });
 
-test("the active workspace selector keeps a stable row and clears record-specific state", () => {
+test("concise agent tabs and the workspace selector share one desktop row", () => {
+  assert.equal(englishAgents.tabs.registry, "Review");
+  assert.equal(englishAgents.tabs.billing, "Settings");
+  assert.equal(germanAgents.tabs.registry, "Prüfung");
+  assert.equal(germanAgents.tabs.billing, "Einstellungen");
   assert.match(tabsSource, /<SelectField/);
   assert.match(tabsSource, /label=\{t\("workspace"\)\}/);
   assert.match(tabsSource, /labelClassName="sr-only"/);
+  assert.match(tabsSource, /space-y-3 lg:flex lg:items-center lg:gap-3 lg:space-y-0/);
   assert.match(tabsSource, /overflow-x-auto/);
+  assert.match(tabsSource, /lg:flex-1/);
   assert.match(tabsSource, /min-w-max/);
-  assert.match(tabsSource, /lg:min-w-0 lg:flex-wrap/);
-  assert.match(tabsSource, /<div className="flex justify-end">\s*<SelectField/s);
+  assert.doesNotMatch(tabsSource, /lg:flex-wrap/);
+  assert.match(tabsSource, /<div className="flex justify-end lg:shrink-0">\s*<SelectField/s);
   assert.doesNotMatch(tabsSource, /flex flex-wrap gap-2/);
   assert.match(tabsSource, /workspaces\.map\(workspace =>/);
   assert.match(tabsSource, /onWorkspaceChange\(event\.target\.value\)/);
