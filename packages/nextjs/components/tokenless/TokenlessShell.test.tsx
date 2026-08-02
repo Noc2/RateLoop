@@ -30,14 +30,14 @@ test("tokenless shell exposes Humans, Agents, and Docs without the legacy produc
   assert.doesNotMatch(source, /href: "\/(rate|ask|settings)"|Validate|Earn|Start a validation/);
 });
 
-test("tokenless navigation uses the shared page background", () => {
+test("mobile navigation follows the page theme while the desktop rail stays dark", () => {
   const source = shellSource;
 
   assert.match(source, /<header className="[^"]*bg-base-100/);
   assert.match(source, /dropdown-content[^"\n]*bg-base-100/);
   assert.match(source, /<aside[\s\S]*data-rateloop-rail[\s\S]*bg-base-100/);
-  assert.doesNotMatch(globalStyles, /--rateloop-rail-(?:surface|text|border)/);
-  assert.doesNotMatch(globalStyles, /\[data-rateloop-rail\]\s*\{/);
+  assert.match(globalStyles, /--rateloop-rail-surface: #050505/);
+  assert.match(globalStyles, /\[data-rateloop-rail\][\s\S]*background: var\(--rateloop-rail-surface\)/);
 });
 
 test("shell sign-in actions preserve the current destination", () => {

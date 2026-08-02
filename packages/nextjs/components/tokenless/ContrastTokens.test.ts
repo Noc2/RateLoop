@@ -203,15 +203,12 @@ test("semantic text and status pairs meet WCAG AA contrast in both themes", asyn
   }
 });
 
-test("the desktop rail inherits the complete active theme surface", async () => {
+test("the desktop rail preserves the established dark surface in both page themes", async () => {
   const styles = await stylesPromise;
-  assert.doesNotMatch(styles, /--rateloop-rail-(?:surface|text|border)/);
-  assert.doesNotMatch(styles, /\[data-rateloop-rail\]\s*\{/);
-
-  for (const theme of ["light", "dark"] as const) {
-    const tokens = themeTokens(styles, theme);
-    assertContrast(tokens.get("--color-base-content")!, tokens.get("--color-base-100")!, `${theme} desktop rail`);
-  }
+  assert.match(styles, /--rateloop-rail-surface: #050505/);
+  assert.match(styles, /--rateloop-rail-text: #f5f5f5/);
+  assert.match(styles, /\[data-rateloop-rail\][\s\S]*background: var\(--rateloop-rail-surface\)/);
+  assertContrast("#f5f5f5", "#050505", "desktop rail");
 });
 
 test("shared surfaces and prose use semantic colors instead of dark-only literals", async () => {

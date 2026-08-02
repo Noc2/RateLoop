@@ -20,7 +20,10 @@ const themeCases = [
 ] as const;
 
 for (const expected of themeCases) {
-  test(`initial ${expected.colorScheme} theme keeps the shell and human navbar in sync`, async ({ context, page }) => {
+  test(`initial ${expected.colorScheme} theme keeps the page controls in sync and the desktop rail dark`, async ({
+    context,
+    page,
+  }) => {
     const hydrationErrors: string[] = [];
     page.on("console", message => {
       if (message.type() === "error" && /hydration|did not match|validateDOMNesting/iu.test(message.text())) {
@@ -57,7 +60,7 @@ for (const expected of themeCases) {
       activeBackground: expected.activeBackground,
       activeText: expected.activeText,
       idleBackground: expected.idleBackground,
-      railBackground: expected.shellBackground,
+      railBackground: "rgb(5, 5, 5)",
       shellBackground: expected.shellBackground,
     });
     expect(hydrationErrors).toEqual([]);
