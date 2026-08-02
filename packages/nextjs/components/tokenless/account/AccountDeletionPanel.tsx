@@ -122,7 +122,7 @@ export function AccountDeletionPanel() {
     await runRecentAuthentication(async () => {
       const response = await betterAuthClient.emailOtp.sendVerificationOtp({ email: reauthEmail, type: "sign-in" });
       if (response.error) {
-        throw new DeletionFieldError(response.error.message || t("sendFailed"), "email");
+        throw new DeletionFieldError(t("sendFailed"), "email");
       }
       setReauthOtpSent(true);
     }, t("sendFailed"));
@@ -133,7 +133,7 @@ export function AccountDeletionPanel() {
     await runRecentAuthentication(async () => {
       const response = await betterAuthClient.signIn.emailOtp({ email: reauthEmail, otp: reauthOtp });
       if (response.error) {
-        throw new DeletionFieldError(response.error.message || t("invalidCode"), "otp");
+        throw new DeletionFieldError(t("invalidCode"), "otp");
       }
       await finishRecentAuthentication();
     }, t("verifyCodeFailed"));
@@ -142,7 +142,7 @@ export function AccountDeletionPanel() {
   async function verifyWithPasskey() {
     await runRecentAuthentication(async () => {
       const response = await betterAuthClient.signIn.passkey();
-      if (response.error) throw new Error(response.error.message || t("passkeyFailed"));
+      if (response.error) throw new Error(t("passkeyFailed"));
       await finishRecentAuthentication();
     }, t("passkeyFailed"));
   }

@@ -116,7 +116,7 @@ export function PasskeyManagementPanel() {
         name: name.trim() || t("defaultName"),
       });
       if (result.error) {
-        throw new PasskeyFieldError(result.error.message || t("addFailed"), "name");
+        throw new PasskeyFieldError(t("addFailed"), "name");
       }
       setName("");
       setNotice(t("addedNotice"));
@@ -136,7 +136,7 @@ export function PasskeyManagementPanel() {
   async function verifyWithPasskey() {
     await run(async () => {
       const result = await betterAuthClient.signIn.passkey();
-      if (result.error) throw new Error(result.error.message || t("verificationFailed"));
+      if (result.error) throw new Error(t("verificationFailed"));
       await finish();
     }, t("verificationFailed"));
     await betterAuthClient.signOut().catch(() => undefined);
@@ -147,7 +147,7 @@ export function PasskeyManagementPanel() {
     await run(async () => {
       const result = await betterAuthClient.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
       if (result.error) {
-        throw new PasskeyFieldError(result.error.message || t("sendFailed"), "email");
+        throw new PasskeyFieldError(t("sendFailed"), "email");
       }
       setOtpSent(true);
     }, t("sendFailed"));
@@ -158,7 +158,7 @@ export function PasskeyManagementPanel() {
     await run(async () => {
       const result = await betterAuthClient.signIn.emailOtp({ email, otp });
       if (result.error) {
-        throw new PasskeyFieldError(result.error.message || t("invalidCode"), "otp");
+        throw new PasskeyFieldError(t("invalidCode"), "otp");
       }
       await finish();
     }, t("verifyCodeFailed"));

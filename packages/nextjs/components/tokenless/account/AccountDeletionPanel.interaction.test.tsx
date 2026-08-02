@@ -85,5 +85,6 @@ test("account deletion requires fresh OTP or passkey proof kept only in memory",
   assert.match(source, /issueAccountDeletionProof\(\)/);
   assert.match(source, /JSON\.stringify\(\{ confirmation: "DELETE", recentAuthProof \}\)/);
   assert.match(source, /betterAuthClient\.signOut/);
+  assert.doesNotMatch(source, /response\.error\.message/);
   assert.doesNotMatch(source, /localStorage|sessionStorage/);
 });

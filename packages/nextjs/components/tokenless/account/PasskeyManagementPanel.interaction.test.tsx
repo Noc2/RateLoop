@@ -55,8 +55,9 @@ test("passkey mutations require matching-account reauthentication and keep crede
   assert.match(source, /useFormErrors\(\)/);
   assert.equal(source.match(/<Field/g)?.length, 3);
   assert.match(source, /format="oneTimeCode"/);
-  assert.match(source, /new PasskeyFieldError\(result\.error\.message \|\| t\("sendFailed"\), "email"\)/);
-  assert.match(source, /new PasskeyFieldError\(result\.error\.message \|\| t\("invalidCode"\), "otp"\)/);
+  assert.match(source, /new PasskeyFieldError\(t\("sendFailed"\), "email"\)/);
+  assert.match(source, /new PasskeyFieldError\(t\("invalidCode"\), "otp"\)/);
+  assert.doesNotMatch(source, /result\.error\.message/);
   assert.match(source, /betterAuthClient\.passkey\.addPasskey/);
   assert.doesNotMatch(source, /betterAuthClient\.passkey\.deletePasskey/);
   assert.match(source, /betterAuthClient\.signIn\.passkey/);
