@@ -116,6 +116,19 @@ test("light and dark themes expose the same complete semantic contract", async (
   assert.ok(lightRateLoopTokens.length >= 25, "semantic RateLoop token set covers shared surfaces and controls");
 });
 
+test("shared cards remain distinct from the page canvas in both themes", async () => {
+  const styles = await stylesPromise;
+
+  for (const theme of ["light", "dark"] as const) {
+    const tokens = themeTokens(styles, theme);
+    assert.notEqual(
+      tokens.get("--rateloop-surface-elevated"),
+      tokens.get("--color-base-100"),
+      `${theme} cards must not disappear into the page canvas`,
+    );
+  }
+});
+
 test("semantic text and status pairs meet WCAG AA contrast in both themes", async () => {
   const styles = await stylesPromise;
 

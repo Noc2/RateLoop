@@ -4,12 +4,14 @@ const themeCases = [
   {
     activeBackground: "rgb(23, 23, 23)",
     activeText: "rgb(255, 255, 255)",
+    cardBackground: "rgb(247, 247, 245)",
     colorScheme: "light",
     shellBackground: "rgb(255, 255, 255)",
   },
   {
     activeBackground: "rgb(245, 245, 245)",
     activeText: "rgb(5, 5, 5)",
+    cardBackground: "rgb(18, 18, 18)",
     colorScheme: "dark",
     shellBackground: "rgb(10, 10, 10)",
   },
@@ -52,6 +54,12 @@ for (const expected of themeCases) {
       shellBackground: expected.shellBackground,
     });
     expect(hydrationErrors).toEqual([]);
+
+    await page.goto("/agents/overview", { waitUntil: "domcontentloaded" });
+    const card = page.locator('section.surface-card[aria-labelledby="agents-sign-in-title"]');
+    await expect(card).toBeVisible();
+    await expect(card).toHaveCSS("background-color", expected.cardBackground);
+    await expect(card).not.toHaveCSS("background-color", expected.shellBackground);
   });
 }
 

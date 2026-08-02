@@ -47,8 +47,8 @@
   --rateloop-surface: #f7f7f5;
   --rateloop-text-secondary: rgb(23 23 23 / 0.7);
   --rateloop-text-tertiary: rgb(23 23 23 / 0.62);
-  --rateloop-surface-elevated: #ffffff;
-  --rateloop-surface-elevated-rgb: 255 255 255;
+  --rateloop-surface-elevated: #f7f7f5;
+  --rateloop-surface-elevated-rgb: 247 247 245;
   --rateloop-surface-elevated-hover: #f1f1ee;
   --rateloop-surface-nested: #f1f1ee;
   --rateloop-field: #ffffff;
