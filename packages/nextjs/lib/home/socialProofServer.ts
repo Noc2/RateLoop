@@ -73,18 +73,43 @@ async function loadClaimedUsdc() {
   return nonNegativeBigInt(payload.totalClaimedAtomic);
 }
 
-export async function getLandingPageSocialProofItems(): Promise<LandingSocialProofItem[]> {
-  try {
-    const [applicationStats, totalClaimedAtomic] = await Promise.all([loadApplicationStats(), loadClaimedUsdc()]);
-    return buildLandingPageSocialProofItems({
-      totalVerifiedHumans: applicationStats.totalVerifiedHumans,
-      totalRatings: applicationStats.totalRatings,
-      totalPaidAtomic: totalClaimedAtomic + applicationStats.totalBonusPaidAtomic,
+type LandingSocialProofLoaders = {
+  application: typeof loadApplicationStats;
+  claimedUsdc: typeof loadClaimedUsdc;
+  warn: (message: string, detail: { message: string }) => void;
+};
+
+async function loadLandingPageSocialProofItems(loaders: LandingSocialProofLoaders): Promise<LandingSocialProofItem[]> {
+  const [applicationResult, claimedResult] = await Promise.allSettled([loaders.application(), loaders.claimedUsdc()]);
+  if (applicationResult.status === "rejected") {
+    loaders.warn("[landing-social-proof] Application totals are unavailable.", {
+      message:
+        applicationResult.reason instanceof Error ? applicationResult.reason.message : String(applicationResult.reason),
     });
-  } catch (error) {
-    console.warn("[landing-social-proof] Live totals are unavailable; hiding landing stats.", {
-      message: error instanceof Error ? error.message : String(error),
-    });
-    return [];
   }
+  if (claimedResult.status === "rejected") {
+    loaders.warn("[landing-social-proof] Claimed USDC total is unavailable.", {
+      message: claimedResult.reason instanceof Error ? claimedResult.reason.message : String(claimedResult.reason),
+    });
+  }
+  const applicationStats =
+    applicationResult.status === "fulfilled"
+      ? applicationResult.value
+      : { totalVerifiedHumans: "0", totalRatings: "0", totalBonusPaidAtomic: 0n };
+  const totalClaimedAtomic = claimedResult.status === "fulfilled" ? claimedResult.value : 0n;
+  return buildLandingPageSocialProofItems({
+    totalVerifiedHumans: applicationStats.totalVerifiedHumans,
+    totalRatings: applicationStats.totalRatings,
+    totalPaidAtomic: totalClaimedAtomic + applicationStats.totalBonusPaidAtomic,
+  });
 }
+
+export async function getLandingPageSocialProofItems(): Promise<LandingSocialProofItem[]> {
+  return loadLandingPageSocialProofItems({
+    application: loadApplicationStats,
+    claimedUsdc: loadClaimedUsdc,
+    warn: (message, detail) => console.warn(message, detail),
+  });
+}
+
+export const __landingSocialProofServerTestUtils = { loadLandingPageSocialProofItems };
