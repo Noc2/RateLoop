@@ -93,9 +93,9 @@ const footerLinks = [
 function Brand({ compact = false }: { compact?: boolean }) {
   const t = useTranslations("shell");
   return (
-    <Link href="/" className="flex min-w-0 items-center gap-2">
+    <Link href="/" aria-label="RateLoop" className="flex min-w-0 items-center gap-2">
       <RateLoopLogo className={compact ? "h-8 w-8 shrink-0" : "h-9 w-9 shrink-0"} idPrefix="tokenless-brand" />
-      <div className="flex min-w-0 flex-col gap-0.5">
+      <div className={`min-w-0 flex-col gap-0.5 ${compact ? "flex max-[359px]:hidden" : "flex"}`}>
         <span
           className={`font-display truncate leading-none text-base-content ${compact ? "text-[1.35rem]" : "text-[1.2rem]"}`}
         >
@@ -331,7 +331,7 @@ export function TokenlessShell({ children }: { children: React.ReactNode }) {
         {t("accessibility.skipToContent")}
       </a>
       <header className="sticky top-0 z-30 border-b border-base-content/10 bg-base-100 px-4 py-3 backdrop-blur-xl xl:hidden">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 max-[359px]:gap-2">
           <div className="flex min-w-0 flex-col items-start">
             <Brand compact />
             <Suspense fallback={null}>

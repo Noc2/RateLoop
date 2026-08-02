@@ -60,6 +60,7 @@ export function SiteSearch({ mobile = false }: { mobile?: boolean }) {
   const returnPath = workspaceReturnPathForLocation(pathname, searchParams);
   const activeQuery = pathname === SEARCH_ROUTE ? (searchParams.get("q") ?? "") : "";
   const [query, setQuery] = useState(activeQuery);
+  const formClassName = mobile ? "w-[min(10rem,38vw)] max-[359px]:w-20 sm:w-52" : "mx-2.5 mb-4";
 
   useEffect(() => {
     setQuery(activeQuery);
@@ -82,7 +83,7 @@ export function SiteSearch({ mobile = false }: { mobile?: boolean }) {
   }
 
   return (
-    <form onSubmit={submit} className={mobile ? "w-[min(10rem,38vw)] sm:w-52" : "mx-2.5 mb-4"} role="search">
+    <form onSubmit={submit} className={formClassName} role="search">
       <label className="sr-only" htmlFor={mobile ? "mobile-site-search" : "desktop-site-search"}>
         {t("label")}
       </label>

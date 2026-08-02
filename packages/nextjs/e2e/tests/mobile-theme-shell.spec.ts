@@ -34,3 +34,25 @@ for (const expected of themeCases) {
     });
   });
 }
+
+test("mobile header controls do not overlap the brand at 320px", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+
+  const header = page.locator("header");
+  const brand = header.getByRole("link", { name: "RateLoop", exact: true });
+  const actions = header.locator(":scope > div > div").last();
+  await expect(brand).toBeVisible();
+  await expect(actions).toBeVisible();
+
+  const [brandBox, actionsBox] = await Promise.all([brand.boundingBox(), actions.boundingBox()]);
+  expect(brandBox).not.toBeNull();
+  expect(actionsBox).not.toBeNull();
+  expect(brandBox!.x + brandBox!.width).toBeLessThanOrEqual(actionsBox!.x);
+  expect(actionsBox!.x + actionsBox!.width).toBeLessThanOrEqual(320);
+
+  await expect(header.getByRole("search")).toBeVisible();
+  await expect(header.locator("summary")).toBeVisible();
+  await expect(header.locator(".rateloop-theme-toggle")).toBeVisible();
+  await expect(header.getByRole("button", { name: /Language/u })).toBeVisible();
+});

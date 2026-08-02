@@ -40,6 +40,16 @@ test("mobile navigation follows the page theme while the desktop rail stays dark
   assert.match(globalStyles, /\[data-rateloop-rail\][\s\S]*background: var\(--rateloop-rail-surface\)/);
 });
 
+test("mobile navigation compacts only below 360px", () => {
+  const searchSource = readFileSync(new URL("./navigation/SiteSearch.tsx", import.meta.url), "utf8");
+
+  assert.match(shellSource, /compact \? "flex max-\[359px\]:hidden" : "flex"/);
+  assert.match(shellSource, /gap-4 max-\[359px\]:gap-2/);
+  assert.match(searchSource, /w-\[min\(10rem,38vw\)\] max-\[359px\]:w-20 sm:w-52/);
+  assert.match(shellSource, /<Link href="\/" aria-label="RateLoop"/);
+  assert.doesNotMatch(shellSource, /max-\[3(?:6|7|8|9)\dpx\]/);
+});
+
 test("shell sign-in actions preserve the current destination", () => {
   assert.match(shellSource, /useSearchParams\(\)\.toString\(\)/);
   assert.match(shellSource, /<ThirdwebSessionButton compact=\{compact\} returnTo=\{returnTo\}/);
