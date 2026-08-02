@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { LocalizedPublicContent } from "~~/components/docs/LocalizedPublicContent";
+import { LocalizedPublicContent, translatePublicString } from "~~/components/docs/LocalizedPublicContent";
 import { PublicLink as Link } from "~~/components/docs/PublicLink";
 import { Card } from "~~/components/tokenless/ui/Card";
 import type { Locale } from "~~/i18n/config";
@@ -31,43 +31,44 @@ export function WorkspacePlanCards({
   demoBookingUrl = null,
   locale = "en",
 }: WorkspacePlanCardsProps) {
+  const copy = (source: string) => translatePublicString(source, locale, "site");
   const earlyAccessHref = subscriptionsEnabled
     ? workspacePlanHref(workspaceId, "upgrade")
     : "mailto:hawigxyz@proton.me?subject=RateLoop%20Early%20Access";
-  const earlyAccessCta = subscriptionsEnabled ? "Choose Early Access" : "Join Early Access";
+  const earlyAccessCta = copy(subscriptionsEnabled ? "Choose Early Access" : "Join Early Access");
 
   return (
     <LocalizedPublicContent locale={locale} section="site">
       <div className="grid gap-5 lg:grid-cols-3">
         <PlanCard
-          name={freePlan.displayName}
+          name={copy(freePlan.displayName)}
           accent="var(--rateloop-blue)"
           priceRow={
             <div className="mt-8 flex items-end gap-3">
               <span className="display-section text-6xl leading-none">
                 {formatUsdPrice(freePlan.monthlyPriceCents)}
               </span>
-              <span className="pb-1 text-sm text-base-content/50">No card required</span>
+              <span className="pb-1 text-sm text-base-content/50">{copy("No card required")}</span>
             </div>
           }
           features={[
-            `${freePlan.decisionsPerPeriod} completed review decisions each calendar month`,
-            `${freePlan.activeAgents} active agent`,
-            TOKENLESS_HOSTED_REVIEW_COPY.planBenefit,
+            copy(`${freePlan.decisionsPerPeriod} completed review decisions each calendar month`),
+            copy(`${freePlan.activeAgents} active agent`),
+            copy(TOKENLESS_HOSTED_REVIEW_COPY.planBenefit),
           ]}
           footer={
             <Link
               href={workspacePlanHref(workspaceId)}
               className="btn rateloop-secondary-action min-h-12 w-full justify-center px-5"
             >
-              Start free
+              {copy("Start free")}
             </Link>
           }
         />
         <PlanCard
-          name={earlyAccessPlan.displayName}
+          name={copy(earlyAccessPlan.displayName)}
           accent="var(--rateloop-green)"
-          badge="Early Access price"
+          badge={copy("Early Access price")}
           priceRow={
             <div className="mt-8 flex items-end gap-3">
               <span className="display-section text-6xl leading-none">
@@ -75,15 +76,17 @@ export function WorkspacePlanCards({
               </span>
               <span className="flex flex-col pb-1 text-sm text-base-content/50">
                 <s className="text-base-content/40">{earlyAccessListPrice}</s>
-                <span>per workspace/month</span>
+                <span>{copy("per workspace/month")}</span>
               </span>
             </div>
           }
           features={[
-            `${earlyAccessPlan.decisionsPerPeriod} completed review decisions each subscription period`,
-            `${earlyAccessPlan.activeAgents} active agents`,
-            "Unlimited invited, unpaid reviewers",
-            "First 12 months. Then 20% off the comparable plan; 60 days’ notice before changes. Cancel before they apply.",
+            copy(`${earlyAccessPlan.decisionsPerPeriod} completed review decisions each subscription period`),
+            copy(`${earlyAccessPlan.activeAgents} active agents`),
+            copy("Unlimited invited, unpaid reviewers"),
+            copy(
+              "First 12 months. Then 20% off the comparable plan; 60 days’ notice before changes. Cancel before they apply.",
+            ),
           ]}
           footer={
             earlyAccessHref.startsWith("mailto:") ? (
@@ -98,18 +101,18 @@ export function WorkspacePlanCards({
           }
         />
         <PlanCard
-          name="Enterprise"
+          name={copy("Enterprise")}
           accent="var(--rateloop-pink)"
           priceRow={
             <div className="mt-8 flex items-end gap-3">
-              <span className="display-section text-6xl leading-none">Custom</span>
+              <span className="display-section text-6xl leading-none">{copy("Custom")}</span>
             </div>
           }
           features={[
-            "Everything in Early Access",
-            "Custom volumes and terms",
-            "Custom integrations",
-            "Evidence export support",
+            copy("Everything in Early Access"),
+            copy("Custom volumes and terms"),
+            copy("Custom integrations"),
+            copy("Evidence export support"),
           ]}
           footer={
             demoBookingUrl ? (
@@ -122,14 +125,14 @@ export function WorkspacePlanCards({
                 rel="noopener noreferrer"
                 className="rateloop-gradient-action min-h-12 w-full justify-center px-5"
               >
-                Book demo
+                {copy("Book demo")}
               </a>
             ) : (
               <a
                 className="rateloop-gradient-action min-h-12 w-full justify-center px-5"
                 href="mailto:hawigxyz@proton.me?subject=RateLoop%20Enterprise"
               >
-                Request a demo
+                {copy("Request a demo")}
               </a>
             )
           }

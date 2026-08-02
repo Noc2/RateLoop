@@ -69,3 +69,21 @@ test("a configured scheduler replaces the enterprise mailto with an external boo
 
   delete process.env.TOKENLESS_DEMO_BOOKING_URL;
 });
+
+test("German pricing localizes plan details rendered through plan cards", async () => {
+  (globalThis as typeof globalThis & { React: typeof React }).React = React;
+  process.env.TOKENLESS_SUBSCRIPTIONS_ENABLED = "true";
+  delete process.env.TOKENLESS_DEMO_BOOKING_URL;
+  const { default: PricingPage } = await import("./page");
+  const html = renderToStaticMarkup(
+    await PricingPage({ params: Promise.resolve({ locale: "de" }), searchParams: Promise.resolve({}) }),
+  ).replace(/\s+/g, " ");
+
+  assert.match(html, /Keine Karte erforderlich/);
+  assert.match(html, /25 abgeschlossene Prüfentscheidungen pro Kalendermonat/);
+  assert.match(html, /250 abgeschlossene Prüfentscheidungen pro Abrechnungszeitraum/);
+  assert.match(html, /Early Access wählen/);
+  assert.match(html, /Individuelle Integrationen/);
+  assert.match(html, /Demo anfragen/);
+  assert.doesNotMatch(html, /No card required|completed review decisions|Request a demo/);
+});
