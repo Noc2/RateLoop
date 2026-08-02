@@ -4,9 +4,9 @@ import { PublicLink as Link } from "~~/components/docs/PublicLink";
 import { UseCaseIcon } from "~~/components/docs/UseCaseVisuals";
 import { SupportedAgentsSection } from "~~/components/home/SupportedAgentsSection";
 import { TokenlessOrb } from "~~/components/home/TokenlessOrb";
+import { WorkspacePlanOverview } from "~~/components/pricing/WorkspacePlanOverview";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { getMessagesForLocale } from "~~/i18n/messages";
-import { TOKENLESS_BILLING_PLANS, formatUsdPrice } from "~~/lib/billing/plans";
 import type { LandingSocialProofItem } from "~~/lib/home/socialProof";
 import { getLandingPageSocialProofItems } from "~~/lib/home/socialProofServer";
 
@@ -250,24 +250,7 @@ export function TokenlessLandingPage({
             <SectionTitle number="04" gradient={homeMessages.sections.pricing.accent} className="mb-6">
               {homeMessages.sections.pricing.lead}
             </SectionTitle>
-            <Card
-              as="div"
-              className="flex flex-col gap-6 rounded-2xl p-7 sm:flex-row sm:items-center sm:justify-between sm:p-9"
-            >
-              <div>
-                <p className="font-mono text-sm uppercase tracking-[0.18em] text-[var(--rateloop-green)]">Start free</p>
-                <p className="mt-3 text-3xl font-semibold text-base-content">
-                  {formatUsdPrice(TOKENLESS_BILLING_PLANS.free.monthlyPriceCents)}
-                </p>
-                <p className="mt-3 max-w-2xl text-base leading-7 text-base-content/65">
-                  {TOKENLESS_BILLING_PLANS.free.decisionsPerPeriod} completed decisions each month,{" "}
-                  {TOKENLESS_BILLING_PLANS.free.activeAgents} active agent, and invited unpaid reviews.
-                </p>
-              </div>
-              <Link href="/pricing" className="btn rateloop-secondary-action min-h-11 shrink-0 px-5">
-                See pricing
-              </Link>
-            </Card>
+            <WorkspacePlanOverview locale={locale} />
           </section>
 
           <div aria-hidden="true" className="my-16 h-px w-full max-w-5xl bg-base-content/10 sm:my-20 lg:my-24" />
