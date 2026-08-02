@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { readApiRequestText } from "~~/lib/tokenless/apiRequestBody";
 import { privateNoStoreJson } from "~~/lib/tokenless/privateHttpResponse";
 import { type RaterCommitRequest, relayPaidRaterCommit } from "~~/lib/tokenless/raterService";
-import { requireRaterSession } from "~~/lib/tokenless/raterSession";
+import { requireSignedInRaterSession } from "~~/lib/tokenless/raterSession";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +20,7 @@ export async function readRaterCommitBody(request: Pick<Request, "body" | "heade
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await requireRaterSession(request, true);
+    const session = await requireSignedInRaterSession(request, true);
     const body = await readRaterCommitBody(request);
     const idempotencyKey = request.headers.get("idempotency-key") ?? body.idempotencyKey;
     if (!idempotencyKey || !body.voucherId || !body.authorization || !body.response) {

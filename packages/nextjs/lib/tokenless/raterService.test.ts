@@ -9,7 +9,11 @@ import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { EVM_TRANSACTION_FEE_POLICY } from "~~/lib/tokenless/chain/evmTransactionReplacement";
 import type { TokenlessChainRuntime } from "~~/lib/tokenless/chain/runtime";
 import { buildPublicVoucherRequest } from "~~/lib/tokenless/rater/publicVoucherRequest";
-import { __raterServiceTestUtils, listPaidRaterTasks } from "~~/lib/tokenless/raterService";
+import {
+  __raterServiceTestUtils,
+  hasOwnedPaidRaterCommitForVoucher,
+  listPaidRaterTasks,
+} from "~~/lib/tokenless/raterService";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const ACCOUNT = "0x1111111111111111111111111111111111111111";
@@ -103,7 +107,7 @@ afterEach(() => __setDatabaseResourcesForTests(null));
 
 async function seedRaterCommitState(input: {
   commitId: string;
-  state: "signed" | "submitted";
+  state: "failed" | "signed" | "submitted";
   transactionHash?: Hash;
 }) {
   const transactionHash = input.transactionHash ?? (`0x${"88".repeat(32)}` as Hash);
@@ -221,6 +225,30 @@ test("rater commit replay lookup is voucher-scoped and cannot be preclaimed by a
   assert.match(calls[0]!.sql, /WHERE voucher_id = \$1 LIMIT 1 FOR UPDATE/u);
   assert.doesNotMatch(calls[0]!.sql, /request_idempotency_key/u);
   assert.deepEqual(calls[0]!.values, ["voucher-b"]);
+});
+
+test("owned terminal commit replay is exact while retryable work continues recovery", async () => {
+  await seedRaterCommitState({ commitId: "commit_owned_replay", state: "failed" });
+  assert.equal(await hasOwnedPaidRaterCommitForVoucher({ principalId: PRINCIPAL, voucherId: "voucher_receipt" }), true);
+  assert.equal(
+    await hasOwnedPaidRaterCommitForVoucher({ principalId: RECOVERY_PRINCIPAL, voucherId: "voucher_receipt" }),
+    false,
+  );
+  const stored = await dbClient.execute({
+    sql: "SELECT * FROM tokenless_rater_commits WHERE commit_id = 'commit_owned_replay'",
+  });
+  assert.equal(
+    __raterServiceTestUtils.resolveOwnedPaidRaterCommitReplay(stored.rows[0], "request-hash")?.state,
+    "failed",
+  );
+  assert.equal(
+    __raterServiceTestUtils.resolveOwnedPaidRaterCommitReplay({ ...stored.rows[0], state: "retry" }, "request-hash"),
+    null,
+  );
+  assert.throws(
+    () => __raterServiceTestUtils.resolveOwnedPaidRaterCommitReplay(stored.rows[0], "different-request-hash"),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "commit_conflict",
+  );
 });
 
 test("a relay nonce reservation is idempotently bound to its prepared commit", async () => {

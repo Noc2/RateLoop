@@ -41,6 +41,7 @@ import { requirePaidLaneComplianceApproval } from "~~/lib/tokenless/paidLaneComp
 import { consumePrivatePaidReviewVoucherForCommit } from "~~/lib/tokenless/paidReviewVoucherReceipts";
 import { preparePublicRaterResponse } from "~~/lib/tokenless/publicRaterResponses";
 import type { PublicRaterResponseInput } from "~~/lib/tokenless/rater/publicResponse";
+import { requireRaterPayoutAddress } from "~~/lib/tokenless/raterPayoutAuthorization";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import { maximumSurpriseBonusForBase } from "~~/lib/tokenless/surpriseBounties";
 
@@ -471,6 +472,29 @@ function publicCommit(row: Row) {
   };
 }
 
+async function findOwnedPaidRaterCommitForVoucher(input: { principalId: string; voucherId: string }) {
+  const result = await dbClient.execute({
+    sql: `SELECT c.* FROM tokenless_rater_commits c
+          JOIN tokenless_paid_vouchers v ON v.voucher_id = c.voucher_id
+          JOIN tokenless_rater_profiles p ON p.rater_id = v.rater_id
+          WHERE c.voucher_id = ? AND p.principal_id = ? LIMIT 1`,
+    args: [input.voucherId, input.principalId],
+  });
+  return result.rows[0] as Row | undefined;
+}
+
+export async function hasOwnedPaidRaterCommitForVoucher(input: { principalId: string; voucherId: string }) {
+  return Boolean(await findOwnedPaidRaterCommitForVoucher(input));
+}
+
+function resolveOwnedPaidRaterCommitReplay(row: Row | undefined, requestHash: string) {
+  if (!row) return null;
+  if (rowString(row, "request_hash") !== requestHash) {
+    throw new TokenlessServiceError("Commit request conflicts with the existing attempt.", 409, "commit_conflict");
+  }
+  return new Set(["prepared", "signed", "retry"]).has(rowString(row, "state") ?? "") ? null : publicCommit(row);
+}
+
 async function lockCommitForVoucher(client: Pick<import("pg").PoolClient, "query">, voucherId: string) {
   return client.query("SELECT * FROM tokenless_rater_commits WHERE voucher_id = $1 LIMIT 1 FOR UPDATE", [voucherId]);
 }
@@ -782,7 +806,16 @@ export async function relayPaidRaterCommit(input: { principalId: string; request
   if (!IDEMPOTENCY.test(input.request.idempotencyKey)) {
     throw new TokenlessServiceError("Commit idempotency key is invalid.", 400, "invalid_idempotency_key");
   }
+  const ownedCommit = await findOwnedPaidRaterCommitForVoucher({
+    principalId: input.principalId,
+    voucherId: input.request.voucherId,
+  });
+  if (!ownedCommit) await requireRaterPayoutAddress(input.principalId);
   validateAuthorization(input.request.authorization);
+  const requestJson = stableJson(input.request);
+  const requestHash = digest(requestJson);
+  const replay = resolveOwnedPaidRaterCommitReplay(ownedCommit, requestHash);
+  if (replay) return replay;
   const config = loadTokenlessChainConfig();
   const runtime = getTokenlessChainRuntime(config);
   if (!runtime.relayerAccount || !runtime.relayerWallet) {
@@ -870,8 +903,6 @@ export async function relayPaidRaterCommit(input: { principalId: string; request
   if (getAddress(recovered) !== getAddress(auth.voteKey)) {
     throw new TokenlessServiceError("Vote key signature is invalid.", 401, "invalid_vote_key_signature");
   }
-  const requestJson = stableJson(input.request);
-  const requestHash = digest(requestJson);
   let commitId: string;
   let persistedNonce: number | null = null;
   let terminalPrevious: Row | null = null;
@@ -1251,6 +1282,7 @@ export const __raterServiceTestUtils = {
   paidTaskAssignmentBinding,
   preparePersistedRaterTransaction,
   reconcileSubmittedRaterCommitReceipt,
+  resolveOwnedPaidRaterCommitReplay,
   reserveRelayNonce,
   validateAuthorization,
 };
