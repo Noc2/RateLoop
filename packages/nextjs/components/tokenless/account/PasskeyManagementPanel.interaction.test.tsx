@@ -34,6 +34,7 @@ test("passkey management exposes named controls and blocks removal of the last f
     const view = render(<PasskeyManagementPanel />);
     await waitFor(() => assert.ok(view.getByText("MacBook")));
     assert.ok(view.getByRole("button", { name: "Add passkey" }));
+    assert.equal(view.queryByText("Sign in with your device instead of a code."), null);
     assert.equal(view.getByRole("button", { name: "Remove MacBook" }).hasAttribute("disabled"), true);
     assert.ok(view.getByText("Add another passkey before removing this one."));
     assert.ok(view.getByRole("list", { name: "Your passkeys" }));

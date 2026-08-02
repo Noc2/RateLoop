@@ -163,12 +163,9 @@ export function AccountDeletionPanel() {
   return (
     <Card as="section" className="rounded-2xl p-6" aria-labelledby="account-deletion-heading">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h2 id="account-deletion-heading" className="text-lg font-semibold text-error">
-            {t("title")}
-          </h2>
-          <p className="mt-2 text-sm leading-6 text-base-content/60">{t("description")}</p>
-        </div>
+        <h2 id="account-deletion-heading" className="text-lg font-semibold text-error">
+          {t("title")}
+        </h2>
         {!reviewing ? (
           <button
             type="button"

@@ -14,6 +14,7 @@ const settingsPageSource = readFileSync(
 test("account deletion exposes its action and requires the server preview", () => {
   assert.match(panelSource, /<Card as="section"[^>]+aria-labelledby="account-deletion-heading"/);
   assert.match(panelSource, /Review account deletion/);
+  assert.doesNotMatch(panelSource, /Review what will be deleted and which records must remain/);
   assert.match(panelSource, /onClick=\{startDeletionReview\}/);
   assert.match(panelSource, /\{reviewing \? \(/);
   assert.doesNotMatch(panelSource, /<details/);

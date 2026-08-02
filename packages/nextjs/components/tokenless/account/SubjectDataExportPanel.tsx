@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useFormatter, useTranslations } from "next-intl";
+import { InfoPopover } from "~~/components/tokenless/InfoPopover";
 import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { readJson } from "~~/lib/tokenless/http";
@@ -75,10 +76,12 @@ export function SubjectDataExportPanel() {
 
   return (
     <Card as="section" className="rounded-2xl p-6" aria-labelledby="subject-data-export-heading">
-      <h2 id="subject-data-export-heading" className="text-xl font-semibold">
-        {t("title")}
-      </h2>
-      <p className="mt-2 max-w-2xl text-sm leading-6 text-base-content/60">{t("description")}</p>
+      <div className="flex items-center gap-2">
+        <h2 id="subject-data-export-heading" className="text-xl font-semibold">
+          {t("title")}
+        </h2>
+        <InfoPopover label={t("about")}>{t("description")}</InfoPopover>
+      </div>
       <div className="mt-5 flex flex-wrap gap-3">
         <Button type="button" onClick={() => void requestExport()} disabled={busy || loading || pending}>
           {busy ? t("requesting") : pending ? t("processing") : t("request")}

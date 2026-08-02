@@ -90,7 +90,6 @@
     "invalidCode": "The sign-in code is invalid or expired.",
     "verifyCodeFailed": "Unable to verify the sign-in code.",
     "title": "Passkeys",
-    "description": "Sign in with your device instead of a code.",
     "add": "Add passkey",
     "loading": "Loading passkeys",
     "empty": "No passkey added yet.",
@@ -119,7 +118,6 @@
     "verifyCodeFailed": "Unable to verify the sign-in code.",
     "passkeyFailed": "Passkey verification failed.",
     "title": "Delete account",
-    "description": "Review what will be deleted and which records must remain.",
     "review": "Review account deletion",
     "permanent": "This permanently ends the current account. Signing in again, even with the same email address, creates a new account and a new RateLoop identity.",
     "retention": "Eligible private data is erased. Public blockchain entries and records required for legal, tax, settlement, or security purposes may be retained only as required.",
@@ -168,6 +166,7 @@
   },
   "dataExport": {
     "title": "Download your data",
+    "about": "About data exports",
     "description": "Request an authenticated JSON copy of the personal data associated with your RateLoop account. Completed downloads remain available for seven days.",
     "notAvailable": "Not available",
     "loadFailed": "Unable to load your data requests.",

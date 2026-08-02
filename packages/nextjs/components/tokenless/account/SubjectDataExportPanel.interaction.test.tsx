@@ -40,6 +40,8 @@ test("an account holder can request, refresh, and download a completed subject e
 
   try {
     const view = render(<SubjectDataExportPanel />);
+    assert.ok(view.getByRole("button", { name: "About data exports" }));
+    assert.equal(view.queryByText(/authenticated JSON copy/u), null);
     const request = await view.findByRole("button", { name: "Request data export" });
     await userEvent.setup({ document }).click(request);
     const download = await view.findByRole("link", { name: "Download JSON" });

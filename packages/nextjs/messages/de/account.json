@@ -90,7 +90,6 @@
     "invalidCode": "Der Anmeldecode ist ungültig oder abgelaufen.",
     "verifyCodeFailed": "Der Anmeldecode konnte nicht bestätigt werden.",
     "title": "Passkeys",
-    "description": "Melde dich mit deinem Gerät statt mit einem Code an.",
     "add": "Passkey hinzufügen",
     "loading": "Passkeys werden geladen",
     "empty": "Noch kein Passkey hinzugefügt.",
@@ -119,7 +118,6 @@
     "verifyCodeFailed": "Der Anmeldecode konnte nicht bestätigt werden.",
     "passkeyFailed": "Passkey-Bestätigung fehlgeschlagen.",
     "title": "Konto löschen",
-    "description": "Prüfe, was gelöscht wird und welche Datensätze erhalten bleiben müssen.",
     "review": "Kontolöschung prüfen",
     "permanent": "Dadurch wird das aktuelle Konto dauerhaft beendet. Eine erneute Anmeldung – auch mit derselben E-Mail-Adresse – erstellt ein neues Konto und eine neue RateLoop-Identität.",
     "retention": "Löschbare private Daten werden gelöscht. Einträge in öffentlichen Blockchains sowie Datensätze, die aus rechtlichen, steuerlichen, abrechnungsbezogenen oder sicherheitsbezogenen Gründen erforderlich sind, dürfen nur im erforderlichen Umfang aufbewahrt werden.",
@@ -168,6 +166,7 @@
   },
   "dataExport": {
     "title": "Deine Daten herunterladen",
+    "about": "Über Datenexporte",
     "description": "Fordere eine authentifizierte JSON-Kopie der personenbezogenen Daten an, die mit deinem RateLoop-Konto verknüpft sind. Fertige Downloads bleiben sieben Tage verfügbar.",
     "notAvailable": "Nicht verfügbar",
     "loadFailed": "Deine Datenanfragen konnten nicht geladen werden.",
