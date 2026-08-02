@@ -6,6 +6,7 @@ const themeCases = [
     activeText: "rgb(255, 255, 255)",
     cardBackground: "rgb(247, 247, 245)",
     colorScheme: "light",
+    idleBackground: "rgb(247, 247, 245)",
     shellBackground: "rgb(255, 255, 255)",
   },
   {
@@ -13,6 +14,7 @@ const themeCases = [
     activeText: "rgb(5, 5, 5)",
     cardBackground: "rgb(18, 18, 18)",
     colorScheme: "dark",
+    idleBackground: "rgba(18, 18, 18, 0.96)",
     shellBackground: "rgb(10, 10, 10)",
   },
 ] as const;
@@ -36,12 +38,16 @@ for (const expected of themeCases) {
       const main = document.querySelector<HTMLElement>("#main-content");
       const shell = main?.parentElement;
       const activeTab = main?.querySelector<HTMLElement>('nav a[aria-current="page"]');
+      const inactiveTab = main?.querySelector<HTMLElement>('nav a:not([aria-current="page"])');
       const rail = document.querySelector<HTMLElement>("[data-rateloop-rail]");
-      if (!shell || !activeTab || !rail) throw new Error("The themed shell navigation did not render.");
+      if (!shell || !activeTab || !inactiveTab || !rail) {
+        throw new Error("The themed shell navigation did not render.");
+      }
 
       return {
         activeBackground: getComputedStyle(activeTab).backgroundColor,
         activeText: getComputedStyle(activeTab).color,
+        idleBackground: getComputedStyle(inactiveTab).backgroundColor,
         railBackground: getComputedStyle(rail).backgroundColor,
         shellBackground: getComputedStyle(shell).backgroundColor,
       };
@@ -50,6 +56,7 @@ for (const expected of themeCases) {
     expect(colors).toEqual({
       activeBackground: expected.activeBackground,
       activeText: expected.activeText,
+      idleBackground: expected.idleBackground,
       railBackground: expected.shellBackground,
       shellBackground: expected.shellBackground,
     });

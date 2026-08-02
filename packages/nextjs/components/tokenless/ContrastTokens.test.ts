@@ -129,6 +129,19 @@ test("shared cards remain distinct from the page canvas in both themes", async (
   }
 });
 
+test("inactive tabs remain distinct from the page canvas in both themes", async () => {
+  const styles = await stylesPromise;
+
+  for (const theme of ["light", "dark"] as const) {
+    const tokens = themeTokens(styles, theme);
+    assert.notEqual(
+      tokens.get("--rateloop-tab-idle"),
+      tokens.get("--color-base-100"),
+      `${theme} inactive tabs must not disappear into the page canvas`,
+    );
+  }
+});
+
 test("semantic text and status pairs meet WCAG AA contrast in both themes", async () => {
   const styles = await stylesPromise;
 
