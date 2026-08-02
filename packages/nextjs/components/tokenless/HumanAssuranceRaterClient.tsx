@@ -14,6 +14,7 @@ import { PageHeading } from "~~/components/tokenless/ui/PageHeading";
 import { Link } from "~~/i18n/navigation";
 import { readBrowserSession, subscribeToBrowserAuthSessionChanges } from "~~/lib/auth/client";
 import { HttpJsonError, readJson } from "~~/lib/tokenless/http";
+import { directPrivateReviewForecastRequired } from "~~/lib/tokenless/reviewCapabilities";
 import { clearReviewDraft, loadReviewDraft, saveReviewDraft } from "~~/lib/tokenless/reviewDrafts";
 import { loadReviewReceipt, saveReviewReceipt } from "~~/lib/tokenless/reviewReceipts";
 
@@ -85,7 +86,7 @@ export type AssignmentTask = AssignmentTaskBase &
     | {
         taskKind: "binary_review";
         compensationMode: "unpaid";
-        forecastRequired: true;
+        forecastRequired: boolean;
         settlement: null;
       }
     | {
@@ -234,7 +235,7 @@ export function validateLoadedAssignmentTask(value: unknown): AssignmentTask {
     if (
       task.taskKind !== "binary_review" ||
       task.compensationMode !== "unpaid" ||
-      task.forecastRequired !== true ||
+      task.forecastRequired !== directPrivateReviewForecastRequired("unpaid") ||
       task.settlement !== null
     ) {
       throw new Error("This private assignment has unsupported compensation or settlement capabilities.");
@@ -1632,7 +1633,7 @@ export function HumanAssuranceRaterClient({
                                 </label>
                               ))}
                             </div>
-                            {draft.selectedOption ? (
+                            {task.forecastRequired && draft.selectedOption ? (
                               <CrowdForecastField
                                 positiveLabel={reviewCase.binaryReview.positiveLabel}
                                 privacyContext={PRIVATE_UNPAID_REVIEW_PRIVACY_CONTEXT}

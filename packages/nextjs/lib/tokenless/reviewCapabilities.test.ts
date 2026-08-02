@@ -6,6 +6,7 @@ import {
   configuredHumanReviewLaneForSelection,
   configuredHumanReviewLanes,
   deployedHumanReviewReadiness,
+  directPrivateReviewForecastRequired,
   humanReviewLaneImplementation,
   resolveHumanReviewCapability,
 } from "./reviewCapabilities";
@@ -30,6 +31,11 @@ test("the canonical audience, privacy, and compensation matrix is frozen", () =>
     assert.equal(capability.lane, entry.lane);
     assert.equal(capability.available, entry.structurallyValid);
   }
+});
+
+test("forecast collection stays off for ordinary unpaid review and on for paid RBTS settlement", () => {
+  assert.equal(directPrivateReviewForecastRequired("unpaid"), false);
+  assert.equal(directPrivateReviewForecastRequired("usdc"), true);
 });
 
 test("network and hybrid review reject unpaid or private material", () => {

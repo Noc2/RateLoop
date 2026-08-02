@@ -52,7 +52,7 @@ const binaryTask: AssignmentTask = {
   runId: "hpud_2222222222222222222222222222222222222222",
   taskKind: "binary_review",
   compensationMode: "unpaid",
-  forecastRequired: true,
+  forecastRequired: false,
   settlement: null,
   rubric: {
     prompt: "Is the agent output correct?",
@@ -127,7 +127,7 @@ const dsaTask = {
 
 test("direct private tasks fail closed unless unpaid capabilities are explicit and unambiguous", async () => {
   const { validateLoadedAssignmentTask } = await import("./HumanAssuranceRaterClient");
-  assert.equal(validateLoadedAssignmentTask(binaryTask).forecastRequired, true);
+  assert.equal(validateLoadedAssignmentTask(binaryTask).forecastRequired, false);
 
   const missingCapability = { ...binaryTask } as Record<string, unknown>;
   delete missingCapability.compensationMode;
@@ -136,7 +136,7 @@ test("direct private tasks fail closed unless unpaid capabilities are explicit a
     /unsupported compensation or settlement capabilities/u,
   );
   assert.throws(
-    () => validateLoadedAssignmentTask({ ...binaryTask, forecastRequired: false }),
+    () => validateLoadedAssignmentTask({ ...binaryTask, forecastRequired: true }),
     /unsupported compensation or settlement capabilities/u,
   );
   assert.throws(
@@ -677,16 +677,12 @@ test("an owner-fixed private task shows source and output separately and submits
     assert.equal(view.queryByRole("link", { name: "Open private artifact" }), null);
     assert.ok(view.getByText("This private, unpaid rating stays off-chain and is recorded when you submit."));
     await user.click(view.getByRole("radio", { name: "Approve" }));
-    assert.match(
-      view.getByText(/your forecast stays off-chain/iu).textContent ?? "",
-      /recorded with this private, unpaid review when you submit/iu,
-    );
-    await user.type(view.getByRole("spinbutton", { name: "Crowd forecast" }), "65");
+    assert.equal(view.queryByRole("spinbutton", { name: "Crowd forecast" }), null);
     await user.click(view.getByRole("button", { name: "Submit review" }));
     await waitFor(() => assert.ok(submission.current));
     const responses = submission.current?.responses as Array<Record<string, unknown>>;
     assert.equal(responses[0]?.displayedOption, "A");
-    assert.equal(responses[0]?.predictedPositiveBps, 6_500);
+    assert.equal("predictedPositiveBps" in (responses[0] ?? {}), false);
     assert.equal(responses[0]?.selectedArtifactId, "artifact_binary_suggestion");
     await user.click(view.getByRole("button", { name: "Review next assignment" }));
     assert.equal(continued, 1);
@@ -742,8 +738,6 @@ test("an incomplete private review explains what is missing instead of trapping 
     assert.equal(responsePosts, 0);
 
     await user.click(view.getByText("Approve"));
-    assert.ok(view.getByText("Enter a crowd forecast from 1% to 99%."));
-    await user.type(view.getByRole("spinbutton", { name: "Crowd forecast" }), "65");
     assert.ok(view.getByText("Add at least 10 characters of decision rationale."));
     await user.click(submit);
     assert.ok(view.getByRole("alert").textContent?.includes("at least 10 characters"));

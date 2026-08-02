@@ -68,6 +68,15 @@ export const GOVERNED_REVIEWER_EXPERIMENTS = {
   crowdForecast: false,
 } as const;
 
+/**
+ * Paid binary panels need a prediction for RBTS settlement. An ordinary
+ * private, unpaid review may collect one only when the separately governed
+ * Crowd Forecast experiment is available.
+ */
+export function directPrivateReviewForecastRequired(compensationMode: HumanReviewCompensationMode) {
+  return compensationMode === "usdc" || GOVERNED_REVIEWER_EXPERIMENTS.crowdForecast;
+}
+
 export function configuredHumanReviewMutationCapability(input: {
   audience: HumanReviewAudience;
   feedbackBonusEnabled: boolean;

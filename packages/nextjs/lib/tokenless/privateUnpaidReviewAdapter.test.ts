@@ -283,7 +283,6 @@ async function submitPositivePrivateResponse(
         caseId: setup.prepared.privateReviewId,
         displayedOption: "A",
         selectedArtifactId: setup.prepared.artifacts.suggestionArtifactId,
-        predictedPositiveBps: 6_500,
         failureTagKeys: [],
         rationale: "",
       },
@@ -341,12 +340,36 @@ test("direct private assignments surface in reviewer work and produce a terminal
     });
     assert.equal(task.taskKind, "binary_review");
     assert.equal(task.compensationMode, "unpaid");
-    assert.equal(task.forecastRequired, true);
+    assert.equal(task.forecastRequired, false);
+    const { validateLoadedAssignmentTask } = await import("~~/components/tokenless/HumanAssuranceRaterClient");
+    assert.equal(validateLoadedAssignmentTask(task).forecastRequired, false);
     assert.equal(task.settlement, null);
     assert.equal(task.rubric.prompt, "Is this suggestion correct and safe?");
     assert.equal(task.cases[0]?.binaryReview?.positiveLabel, "Approve");
     assert.equal(task.cases[0]?.binaryReview?.negativeLabel, "Reject");
   }
+
+  const firstAssignment = delivered.assignments[0]!;
+  await assert.rejects(
+    () =>
+      submitDirectPrivateReviewResponse({
+        assignmentId: firstAssignment.assignmentId,
+        accountAddress: firstAssignment.reviewerAccountAddress,
+        idempotencyKey: `response:forecast-disabled:${firstAssignment.assignmentId}`,
+        responses: [
+          {
+            caseId: setup.prepared.privateReviewId,
+            displayedOption: "A",
+            selectedArtifactId: setup.prepared.artifacts.suggestionArtifactId,
+            predictedPositiveBps: 6_500,
+            failureTagKeys: [],
+            rationale: "",
+          },
+        ],
+        now: new Date("2026-07-16T09:27:00.000Z"),
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "assurance_case_binding_mismatch",
+  );
 
   const respond = (index: number) => {
     const assignment = delivered.assignments[index]!;
@@ -359,7 +382,6 @@ test("direct private assignments surface in reviewer work and produce a terminal
           caseId: setup.prepared.privateReviewId,
           displayedOption: "A",
           selectedArtifactId: setup.prepared.artifacts.suggestionArtifactId,
-          predictedPositiveBps: 6_500,
           failureTagKeys: [],
           rationale: "",
         },
@@ -472,19 +494,11 @@ test("direct private assignments surface in reviewer work and produce a terminal
     `SELECT observation_count,outcome_observation_count,current_reason_codes_json
      FROM tokenless_forecast_calibration_accumulators ORDER BY subject_key`,
   );
-  assert.equal(forecastAggregates.rows.length, 2);
-  assert.ok(
-    forecastAggregates.rows.every(
-      row =>
-        Number(row.observation_count) === 1 &&
-        Number(row.outcome_observation_count) === 1 &&
-        row.current_reason_codes_json === "[]",
-    ),
-  );
+  assert.equal(forecastAggregates.rows.length, 0);
   const forecastReceipt = await dbClient.execute(
     "SELECT aggregated_forecast_count FROM tokenless_forecast_integrity_terminal_receipts",
   );
-  assert.equal(Number(forecastReceipt.rows[0]?.aggregated_forecast_count), 2);
+  assert.equal(Number(forecastReceipt.rows[0]?.aggregated_forecast_count), 0);
 });
 
 test("scheduled private evidence projection backs off poison rows and dead-letters them after bounded attempts", async () => {
@@ -1102,7 +1116,6 @@ test("accepted workspace and private-group reviewer invitations route exact priv
           caseId: routed.foundation.privateReviewId,
           displayedOption: "A",
           selectedArtifactId: binary.suggestion.artifactId,
-          predictedPositiveBps: 6_500,
           failureTagKeys: [],
           rationale: "",
         },

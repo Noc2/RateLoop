@@ -20,6 +20,7 @@ import {
   observeHumanReviewResult,
 } from "~~/lib/tokenless/humanReviewResultObservation";
 import { projectPrivateHumanReviewResultEnvelope } from "~~/lib/tokenless/humanReviewResultProjection";
+import { directPrivateReviewForecastRequired } from "~~/lib/tokenless/reviewCapabilities";
 import {
   type ReviewerAssignmentQueueView,
   privateAssignmentQueueIncludesPaid,
@@ -428,7 +429,7 @@ export async function getDirectPrivateReviewTask(input: { accountAddress: string
     runId: text(row, "delivery_id"),
     taskKind: "binary_review" as const,
     compensationMode: compensationMode === "usdc" ? ("usdc" as const) : ("unpaid" as const),
-    forecastRequired: true as const,
+    forecastRequired: directPrivateReviewForecastRequired(compensationMode === "usdc" ? "usdc" : "unpaid"),
     settlement:
       compensationMode === "usdc"
         ? {
@@ -993,6 +994,7 @@ export async function submitDirectPrivateReviewResponse(input: {
     }
     const paid = text(row, "compensation_mode") === "usdc";
     paidAssignment = paid;
+    const forecastRequired = directPrivateReviewForecastRequired(paid ? "usdc" : "unpaid");
     if (
       paid &&
       (text(row, "reviewer_principal_id") !== principal ||
@@ -1024,11 +1026,13 @@ export async function submitDirectPrivateReviewResponse(input: {
       responseInput.caseId !== text(row, "private_review_id") ||
       !["A", "B"].includes(responseInput.displayedOption) ||
       responseInput.selectedArtifactId !== text(row, "suggestion_artifact_id") ||
-      typeof predictedPositiveBps !== "number" ||
-      !Number.isSafeInteger(predictedPositiveBps) ||
-      predictedPositiveBps < 100 ||
-      predictedPositiveBps > 9_900 ||
-      predictedPositiveBps % 100 !== 0 ||
+      (forecastRequired
+        ? typeof predictedPositiveBps !== "number" ||
+          !Number.isSafeInteger(predictedPositiveBps) ||
+          predictedPositiveBps < 100 ||
+          predictedPositiveBps > 9_900 ||
+          predictedPositiveBps % 100 !== 0
+        : predictedPositiveBps !== undefined) ||
       !Array.isArray(responseInput.failureTagKeys) ||
       responseInput.failureTagKeys.length !== 0
     ) {
@@ -1059,17 +1063,30 @@ export async function submitDirectPrivateReviewResponse(input: {
       { accountAddress: principal, runId: text(row, "delivery_id")! },
       keyrings.reviewerMapping,
     );
-    const responseCommitment = hashHumanAssuranceDocument({
-      schemaVersion: "rateloop.private-review-response.v2",
-      deliveryId: text(row, "delivery_id"),
-      assignmentId: input.assignmentId,
-      privateReviewId: text(row, "private_review_id"),
-      foundationBindingHash: text(row, "foundation_binding_hash"),
-      membershipSnapshotHash: text(row, "membership_snapshot_hash"),
-      choice,
-      predictedPositiveBps,
-      rationaleDigest: rationaleMode === "off" ? null : digest,
-    });
+    const responseCommitment = hashHumanAssuranceDocument(
+      forecastRequired
+        ? {
+            schemaVersion: "rateloop.private-review-response.v2",
+            deliveryId: text(row, "delivery_id"),
+            assignmentId: input.assignmentId,
+            privateReviewId: text(row, "private_review_id"),
+            foundationBindingHash: text(row, "foundation_binding_hash"),
+            membershipSnapshotHash: text(row, "membership_snapshot_hash"),
+            choice,
+            predictedPositiveBps,
+            rationaleDigest: rationaleMode === "off" ? null : digest,
+          }
+        : {
+            schemaVersion: "rateloop.private-review-response.v1",
+            deliveryId: text(row, "delivery_id"),
+            assignmentId: input.assignmentId,
+            privateReviewId: text(row, "private_review_id"),
+            foundationBindingHash: text(row, "foundation_binding_hash"),
+            membershipSnapshotHash: text(row, "membership_snapshot_hash"),
+            choice,
+            rationaleDigest: rationaleMode === "off" ? null : digest,
+          },
+    );
     const existing = await client.query(
       `SELECT response_commitment,predicted_positive_bps
        FROM tokenless_private_review_responses WHERE assignment_id=$1`,
