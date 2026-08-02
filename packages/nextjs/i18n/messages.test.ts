@@ -1,5 +1,6 @@
 import { getIntlMessagesForLocale, getMessagesForLocale } from "./messages";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 type Catalog = Record<string, unknown>;
@@ -56,5 +57,13 @@ test("the next-intl payload excludes phrase dictionaries and dotted namespace ke
     assert.equal("public" in intlMessages, false);
     assert.equal("shared" in intlMessages, false);
     assertNoDottedKeys(intlMessages);
+  }
+});
+
+test("both next-intl providers use the safe message selector", () => {
+  for (const file of ["request.ts", "../app/[locale]/layout.tsx"]) {
+    const source = readFileSync(new URL(file, import.meta.url), "utf8");
+    assert.match(source, /\bgetIntlMessagesForLocale\b/u, file);
+    assert.doesNotMatch(source, /\bgetMessagesForLocale\b/u, file);
   }
 });
