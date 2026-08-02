@@ -18,6 +18,27 @@ type SubjectRequest = {
   exportDeleteAfter: string | null;
 };
 
+function localizedExportStatus(status: string, t: ReturnType<typeof useTranslations<"account.dataExport">>) {
+  switch (status) {
+    case "received":
+      return t("statuses.received");
+    case "identity_verified":
+      return t("statuses.identityVerified");
+    case "in_progress":
+      return t("statuses.inProgress");
+    case "blocked_by_hold":
+      return t("statuses.blockedByHold");
+    case "blocked_by_funds":
+      return t("statuses.blockedByFunds");
+    case "completed":
+      return t("statuses.completed");
+    case "denied":
+      return t("statuses.denied");
+    default:
+      return t("statuses.unknown");
+  }
+}
+
 export function SubjectDataExportPanel() {
   const t = useTranslations("account.dataExport");
   const format = useFormatter();
@@ -110,7 +131,9 @@ export function SubjectDataExportPanel() {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="font-medium">
-                    {request.exportReady ? t("ready") : t("status", { status: request.status.replaceAll("_", " ") })}
+                    {request.exportReady
+                      ? t("ready")
+                      : t("status", { status: localizedExportStatus(request.status, t) })}
                   </p>
                   <p className="mt-1 text-xs text-base-content/55">
                     {t("requestedAt", {

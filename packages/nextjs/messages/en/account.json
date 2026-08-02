@@ -195,6 +195,16 @@
     "refresh": "Refresh status",
     "ready": "Export ready",
     "status": "Export {status}",
+    "statuses": {
+      "received": "received",
+      "identityVerified": "identity verified",
+      "inProgress": "in progress",
+      "blockedByHold": "paused for a legal hold",
+      "blockedByFunds": "paused until funds are resolved",
+      "completed": "completed",
+      "denied": "denied",
+      "unknown": "status unavailable"
+    },
     "requestedAt": "Requested {date}",
     "availableUntil": "available until {date}",
     "download": "Download JSON"

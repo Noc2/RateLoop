@@ -195,6 +195,16 @@
     "refresh": "Status aktualisieren",
     "ready": "Export bereit",
     "status": "Export: {status}",
+    "statuses": {
+      "received": "eingegangen",
+      "identityVerified": "Identität bestätigt",
+      "inProgress": "in Bearbeitung",
+      "blockedByHold": "wegen gesetzlicher Aufbewahrung pausiert",
+      "blockedByFunds": "bis zur Klärung offener Beträge pausiert",
+      "completed": "abgeschlossen",
+      "denied": "abgelehnt",
+      "unknown": "Status nicht verfügbar"
+    },
     "requestedAt": "Angefordert am {date}",
     "availableUntil": "verfügbar bis {date}",
     "download": "JSON herunterladen"

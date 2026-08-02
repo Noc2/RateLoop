@@ -1,7 +1,7 @@
 import React from "react";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
+import { AgentTestProviders, withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 test("an account holder can request, refresh, and download a completed subject export", async () => {
@@ -52,6 +52,40 @@ test("an account holder can request, refresh, and download a completed subject e
       method: "POST",
       url: "/api/account/privacy/subject-requests",
     });
+  } finally {
+    await act(async () => cleanup());
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});
+
+test("subject export statuses are rendered in the active locale", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup, render } = await import("@testing-library/react");
+  const { SubjectDataExportPanel } = await import("./SubjectDataExportPanel");
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    Response.json({
+      requests: [
+        {
+          requestId: "dsr_export_pending",
+          requestType: "export",
+          status: "in_progress",
+          receivedAt: "2026-07-26T00:00:00.000Z",
+          dueAt: "2026-08-25T00:00:00.000Z",
+          completedAt: null,
+          exportReady: false,
+          exportDeleteAfter: null,
+        },
+      ],
+    });
+
+  try {
+    const view = render(<SubjectDataExportPanel />, {
+      wrapper: ({ children }) => <AgentTestProviders locale="de">{children}</AgentTestProviders>,
+    });
+    assert.ok(await view.findByText("Export: in Bearbeitung"));
+    assert.equal(view.queryByText("Export: in progress"), null);
   } finally {
     await act(async () => cleanup());
     globalThis.fetch = previousFetch;
