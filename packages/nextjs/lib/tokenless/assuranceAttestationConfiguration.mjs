@@ -184,6 +184,7 @@ export function resolveManagedAssuranceAttestationConfiguration(env) {
       logOrigin: httpsProviderUrl(value(env, "TOKENLESS_ATTESTATION_REKOR_URL"), "Rekor", true),
       trustedPublicKeyPem: rekorPublicKey.export({ format: "pem", type: "spki" }).toString(),
     },
+    verificationKeys,
     tsa,
   };
 }

@@ -20,6 +20,7 @@ export function parseEvidenceVerificationKeyring(encoded) {
   if (!encoded?.trim()) return [];
   const value = JSON.parse(encoded);
   if (!Array.isArray(value) || value.length < 1 || value.length > 16) throw new Error("invalid keyring");
+  const seen = new Set();
   return value.map(raw => {
     const entry = exactEntry(raw);
     if (
@@ -43,6 +44,9 @@ export function parseEvidenceVerificationKeyring(encoded) {
     ) {
       throw new Error("key ID mismatch");
     }
+    const identity = `${entry.keyId}\0${entry.publicKey}`;
+    if (seen.has(identity)) throw new Error("duplicate key");
+    seen.add(identity);
     return { keyId: entry.keyId, publicKey, publicKeyDer, status: entry.status };
   });
 }

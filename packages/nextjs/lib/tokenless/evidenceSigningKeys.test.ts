@@ -1,8 +1,10 @@
+import { parseAttestationVerificationKeyring } from "./assuranceAttestationConfiguration.mjs";
 import {
   configuredDecisionPacketVerificationKeys,
   parseDecisionPacketVerificationKeys,
   projectPublicEvidenceTrustedKeyHistory,
 } from "./evidenceSigningKeys";
+import { resolveRequiredEvidenceTrustConfiguration } from "./evidenceTrustConfiguration.mjs";
 import { __setHumanReviewGateEvidenceConfigForTests } from "./humanReviewGateEvidence";
 import assert from "node:assert/strict";
 import { createHash, generateKeyPairSync } from "node:crypto";
@@ -130,4 +132,70 @@ test("test signer does not hide a malformed configured keyring", () => {
       }),
     /verification keys are invalid/u,
   );
+});
+
+test("readiness and runtime consumers share strict decision-packet keyring validation", () => {
+  const signer = generateKeyPairSync("ed25519");
+  const publicKey = signer.publicKey.export({ format: "der", type: "spki" });
+  const current = {
+    algorithm: "Ed25519",
+    keyId: `ed25519:${createHash("sha256").update(publicKey).digest("hex").slice(0, 24)}`,
+    publicKey: publicKey.toString("base64url"),
+    status: "current",
+  } as const;
+  const retired = ed25519Entry("retired");
+  const encoded = JSON.stringify([current, retired, retired]);
+  const env = {
+    TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY: signer.privateKey
+      .export({ format: "der", type: "pkcs8" })
+      .toString("base64url"),
+    TOKENLESS_EVIDENCE_SIGNING_KEY_ID: current.keyId,
+    TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS: encoded,
+  };
+
+  assert.throws(() => parseDecisionPacketVerificationKeys(encoded), /verification keys are invalid/u);
+  assert.throws(
+    () => resolveRequiredEvidenceTrustConfiguration(env),
+    /Decision-packet verification keys must publish exactly one current Ed25519 evidence key/u,
+  );
+});
+
+test("readiness and the public trust projection reject historical cross-purpose attestation keys", () => {
+  const signer = generateKeyPairSync("ed25519");
+  const publicKey = signer.publicKey.export({ format: "der", type: "spki" });
+  const current = {
+    algorithm: "Ed25519",
+    keyId: `ed25519:${createHash("sha256").update(publicKey).digest("hex").slice(0, 24)}`,
+    publicKey: publicKey.toString("base64url"),
+    status: "current",
+  } as const;
+  const attestationCurrent = ed25519Entry();
+  const attestationKeyring = JSON.stringify([attestationCurrent, { ...current, status: "retired" }]);
+  const env = {
+    TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY: signer.privateKey
+      .export({ format: "der", type: "pkcs8" })
+      .toString("base64url"),
+    TOKENLESS_EVIDENCE_SIGNING_KEY_ID: current.keyId,
+    TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS: JSON.stringify([current]),
+    TOKENLESS_ATTESTATION_VERIFICATION_KEYS: attestationKeyring,
+  };
+  const attestationVerificationKeys = parseAttestationVerificationKeyring(attestationKeyring);
+  const gate = generateKeyPairSync("ed25519");
+  __setHumanReviewGateEvidenceConfigForTests({
+    signingPrivateKey: gate.privateKey,
+    verificationKeys: [{ publicKey: gate.publicKey, status: "current" }],
+  });
+
+  try {
+    assert.throws(
+      () => resolveRequiredEvidenceTrustConfiguration(env, { attestationVerificationKeys }),
+      /Attestation verification keys must remain purpose-bound/u,
+    );
+    assert.throws(
+      () => projectPublicEvidenceTrustedKeyHistory(env),
+      /Attestation verification keys must remain purpose-bound/u,
+    );
+  } finally {
+    __setHumanReviewGateEvidenceConfigForTests(null);
+  }
 });

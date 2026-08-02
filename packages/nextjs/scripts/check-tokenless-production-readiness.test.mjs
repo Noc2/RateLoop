@@ -37,6 +37,20 @@ const tokenlessManagedAttestation = () => {
     ]),
   };
 };
+const tokenlessEvidenceSigning = () => {
+  const signer = generateKeyPairSync("ed25519");
+  const publicKeyDer = signer.publicKey.export({ format: "der", type: "spki" });
+  const keyId = `ed25519:${createHash("sha256").update(publicKeyDer).digest("hex").slice(0, 24)}`;
+  return {
+    TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY: signer.privateKey
+      .export({ format: "der", type: "pkcs8" })
+      .toString("base64url"),
+    TOKENLESS_EVIDENCE_SIGNING_KEY_ID: keyId,
+    TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS: JSON.stringify([
+      { algorithm: "Ed25519", keyId, publicKey: publicKeyDer.toString("base64url"), status: "current" },
+    ]),
+  };
+};
 const tokenlessTestOperationalSecrets = () => ({
   TOKENLESS_MCP_RATE_LIMIT_SECRET: "m".repeat(32),
   CRON_SECRET: "c".repeat(32),
@@ -48,6 +62,7 @@ const tokenlessTestOperationalSecrets = () => ({
   TOKENLESS_WALLET_SCREENING_PROVIDER_URL: "https://screening.example.test/check",
   TOKENLESS_WALLET_SCREENING_PROVIDER_SECRET: "w".repeat(32),
   ...tokenlessManagedAttestation(),
+  ...tokenlessEvidenceSigning(),
 });
 const tokenlessTestDatabase = () => {
   const DATABASE_URL = "postgresql://rateloop:secret@tokenless-db.example/tokenless?sslmode=require";
@@ -818,6 +833,52 @@ test("tokenless hosted readiness requires explicit branch and immutable commit e
   assert.match(
     validateTokenlessProductionReadiness(production).join("\n"),
     /requires the full lowercase Git commit SHA/u,
+  );
+});
+
+test("the isolated tokenless gate requires the complete evidence trust bundle", () => {
+  const missingSigner = tokenlessHostedEnv();
+  delete missingSigner.TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY;
+  assert.match(
+    validateTokenlessProductionReadiness({ env: missingSigner, activeRegistry: tokenlessTestRegistry() }).join("\n"),
+    /Evidence signing key must be a dedicated Ed25519 PKCS#8 private key/u,
+  );
+
+  const malformedHistory = tokenlessHostedEnv();
+  const current = JSON.parse(malformedHistory.TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS)[0];
+  malformedHistory.TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS = JSON.stringify([
+    current,
+    { ...current, status: "retired", keyId: `ed25519:${"0".repeat(24)}` },
+  ]);
+  assert.match(
+    validateTokenlessProductionReadiness({ env: malformedHistory, activeRegistry: tokenlessTestRegistry() }).join("\n"),
+    /Decision-packet verification keys must publish exactly one current Ed25519 evidence key/u,
+  );
+});
+
+test("hosted readiness rejects historical attestation keys reused for evidence", () => {
+  const env = tokenlessHostedEnv();
+  const attestationKeys = JSON.parse(env.TOKENLESS_ATTESTATION_VERIFICATION_KEYS);
+  const evidenceKey = JSON.parse(env.TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS)[0];
+  env.TOKENLESS_ATTESTATION_VERIFICATION_KEYS = JSON.stringify([
+    ...attestationKeys,
+    { ...evidenceKey, status: "retired" },
+  ]);
+
+  assert.match(
+    validateTokenlessProductionReadiness({ env, activeRegistry: tokenlessTestRegistry() }).join("\n"),
+    /Attestation verification keys must remain purpose-bound from evidence and review-gate keys/u,
+  );
+
+  const duplicate = tokenlessHostedEnv();
+  const duplicateAttestationKeys = JSON.parse(duplicate.TOKENLESS_ATTESTATION_VERIFICATION_KEYS);
+  duplicate.TOKENLESS_ATTESTATION_VERIFICATION_KEYS = JSON.stringify([
+    ...duplicateAttestationKeys,
+    { ...duplicateAttestationKeys[0], status: "retired" },
+  ]);
+  assert.match(
+    validateTokenlessProductionReadiness({ env: duplicate, activeRegistry: tokenlessTestRegistry() }).join("\n"),
+    /evidence verification keyring is invalid/u,
   );
 });
 

@@ -10,6 +10,7 @@ import {
   resolveManagedAssuranceAttestationConfiguration,
   validateRequiredManagedAssuranceAttestationConfiguration,
 } from "../lib/tokenless/assuranceAttestationConfiguration.mjs";
+import { resolveRequiredEvidenceTrustConfiguration } from "../lib/tokenless/evidenceTrustConfiguration.mjs";
 import * as paidLaneActivationModule from "../lib/tokenless/paidLaneActivation.ts";
 import { TOKENLESS_VERCEL_PROJECT } from "./check-identity-deployment.mjs";
 import { validateHostedDatabaseIdentity } from "./migrate-hosted-database.mjs";
@@ -524,6 +525,19 @@ function validateTokenlessTestVault(env, errors) {
 function validateTokenlessTestDeployment(env, { activeRegistry, deploymentSchema }) {
   const errors = [];
   errors.push(...validateRequiredManagedAssuranceAttestationConfiguration(env));
+  let attestationConfiguration;
+  try {
+    attestationConfiguration = resolveManagedAssuranceAttestationConfiguration(env);
+  } catch {
+    // The shared hosted-attestation validator above reports the sanitized configuration error.
+  }
+  try {
+    resolveRequiredEvidenceTrustConfiguration(env, {
+      attestationVerificationKeys: attestationConfiguration?.verificationKeys ?? [],
+    });
+  } catch (error) {
+    errors.push(error instanceof Error ? error.message : "The hosted evidence trust configuration is invalid.");
+  }
   const activatedTestLanes = [
     [
       "TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED",
@@ -656,14 +670,12 @@ function validateTokenlessTestDeployment(env, { activeRegistry, deploymentSchema
     );
   }
   const testSecretRoles = new Map();
-  try {
+  if (attestationConfiguration) {
     addSecretRole(
       testSecretRoles,
       "TOKENLESS_ATTESTATION_SIGNING_PRIVATE_KEY",
-      resolveManagedAssuranceAttestationConfiguration(env).signer.privateKeyFingerprint,
+      attestationConfiguration.signer.privateKeyFingerprint,
     );
-  } catch {
-    // The shared hosted-attestation validator already reports the sanitized configuration error.
   }
   addSecretRole(
     testSecretRoles,
@@ -764,6 +776,19 @@ export function validateTokenlessProductionReadiness({
     }
   }
   errors.push(...validateRequiredManagedAssuranceAttestationConfiguration(env));
+  let attestationConfiguration;
+  try {
+    attestationConfiguration = resolveManagedAssuranceAttestationConfiguration(env);
+  } catch {
+    // The shared hosted-attestation validator above reports the sanitized configuration error.
+  }
+  try {
+    resolveRequiredEvidenceTrustConfiguration(env, {
+      attestationVerificationKeys: attestationConfiguration?.verificationKeys ?? [],
+    });
+  } catch (error) {
+    errors.push(error instanceof Error ? error.message : "The hosted evidence trust configuration is invalid.");
+  }
   for (const name of FORBIDDEN_PUBLIC_SECRETS) {
     if (value(env, name)) errors.push(`${name} is forbidden because production secrets must remain server-only.`);
   }
@@ -1024,14 +1049,12 @@ export function validateTokenlessProductionReadiness({
   }
 
   const secretRoles = new Map();
-  try {
+  if (attestationConfiguration) {
     addSecretRole(
       secretRoles,
       "TOKENLESS_ATTESTATION_SIGNING_PRIVATE_KEY",
-      resolveManagedAssuranceAttestationConfiguration(env).signer.privateKeyFingerprint,
+      attestationConfiguration.signer.privateKeyFingerprint,
     );
-  } catch {
-    // The shared hosted-attestation validator already reports the sanitized configuration error.
   }
   const signerAddresses = new Map();
   for (const signer of PLATFORM_EVM_SIGNERS) {
@@ -1076,66 +1099,11 @@ export function validateTokenlessProductionReadiness({
   }
   const artifactWrappingKey = currentKey(env, "TOKENLESS_ARTIFACT_WRAPPING", "base64url", errors);
   addSecretRole(secretRoles, "TOKENLESS_ARTIFACT_WRAPPING", artifactWrappingKey);
-  let evidencePrivateKey;
-  let evidencePublicKey;
-  try {
-    const encoded = value(env, "TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY");
-    evidencePrivateKey = createPrivateKey(
-      encoded.includes("BEGIN PRIVATE KEY")
-        ? encoded.replaceAll("\\n", "\n")
-        : { key: Buffer.from(encoded, "base64url"), format: "der", type: "pkcs8" },
-    );
-    if (evidencePrivateKey.asymmetricKeyType !== "ed25519") throw new Error("wrong key type");
-    evidencePublicKey = createPublicKey(evidencePrivateKey).export({ format: "der", type: "spki" });
-    addSecretRole(
-      secretRoles,
-      "TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY",
-      createHash("sha256")
-        .update(evidencePrivateKey.export({ format: "der", type: "pkcs8" }))
-        .digest(),
-    );
-  } catch {
-    errors.push("TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY must be a dedicated Ed25519 PKCS#8 private key.");
-  }
-  const evidenceKeyId = evidencePublicKey
-    ? `ed25519:${createHash("sha256").update(evidencePublicKey).digest("hex").slice(0, 24)}`
-    : "";
-  if (value(env, "TOKENLESS_EVIDENCE_SIGNING_KEY_ID") !== evidenceKeyId) {
-    errors.push("TOKENLESS_EVIDENCE_SIGNING_KEY_ID must match the configured Ed25519 public-key fingerprint.");
-  }
-  try {
-    const entries = JSON.parse(value(env, "TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS"));
-    const current =
-      Array.isArray(entries) &&
-      entries.filter(
-        entry =>
-          entry &&
-          typeof entry === "object" &&
-          !Array.isArray(entry) &&
-          entry.algorithm === "Ed25519" &&
-          entry.status === "current" &&
-          entry.keyId === value(env, "TOKENLESS_EVIDENCE_SIGNING_KEY_ID") &&
-          typeof entry.publicKey === "string",
-      );
-    if (!current || current.length !== 1) throw new Error("missing current key");
-    const publicKey = createPublicKey({
-      key: Buffer.from(current[0].publicKey, "base64url"),
-      format: "der",
-      type: "spki",
-    });
-    if (publicKey.asymmetricKeyType !== "ed25519") throw new Error("wrong key type");
-    const canonical = publicKey.export({ format: "der", type: "spki" });
-    const fingerprint = `ed25519:${createHash("sha256").update(canonical).digest("hex").slice(0, 24)}`;
-    if (
-      fingerprint !== current[0].keyId ||
-      canonical.toString("base64url") !== current[0].publicKey ||
-      (evidencePublicKey && !canonical.equals(evidencePublicKey))
-    ) {
-      throw new Error("wrong fingerprint");
-    }
-  } catch {
-    errors.push("TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS must publish exactly one current Ed25519 evidence key.");
-  }
+  addSecretRole(
+    secretRoles,
+    "TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY",
+    ed25519PrivateKeyFingerprint(value(env, "TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY")),
+  );
   const worldSigningKey = value(env, "WORLD_ID_RP_SIGNING_KEY").replace(/^0x/u, "");
   if (!/^[0-9a-fA-F]{64}$/u.test(worldSigningKey)) errors.push("WORLD_ID_RP_SIGNING_KEY must be a 32-byte hex key.");
   else addSecretRole(secretRoles, "WORLD_ID_RP_SIGNING_KEY", worldSigningKey);

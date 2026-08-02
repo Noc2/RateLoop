@@ -1,8 +1,8 @@
-import { createHash, createPublicKey } from "node:crypto";
 import "server-only";
 import { dbClient } from "~~/lib/db";
 import { parseAttestationVerificationKeyring } from "~~/lib/tokenless/assuranceAttestationConfiguration.mjs";
 import { requireAssuranceAttestationManagement } from "~~/lib/tokenless/assuranceAttestationPipeline";
+import { parseDecisionPacketVerificationKeyring } from "~~/lib/tokenless/evidenceTrustConfiguration.mjs";
 import { encodeEd25519SpkiDerBase64url } from "~~/lib/tokenless/evidenceVerificationKey";
 import { projectHumanReviewGateTrustedKeyHistory } from "~~/lib/tokenless/humanReviewGateEvidence";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -42,8 +42,11 @@ type EvidenceSigningEnvironment = {
 };
 
 function configuredAttestationVerificationKeys(env?: EvidenceSigningEnvironment) {
-  const encoded =
-    env?.TOKENLESS_ATTESTATION_VERIFICATION_KEYS?.trim() ?? process.env.TOKENLESS_ATTESTATION_VERIFICATION_KEYS?.trim();
+  const encoded = (
+    env === undefined
+      ? process.env.TOKENLESS_ATTESTATION_VERIFICATION_KEYS
+      : env.TOKENLESS_ATTESTATION_VERIFICATION_KEYS
+  )?.trim();
   if (!encoded) return [];
   try {
     return parseAttestationVerificationKeyring(encoded).map(key => ({
@@ -59,67 +62,35 @@ function configuredAttestationVerificationKeys(env?: EvidenceSigningEnvironment)
 }
 
 function parseDecisionPacketVerificationKeysWithOptions(encoded: string, options: { allowEmpty?: boolean }) {
-  let entries: unknown;
+  let keys;
   try {
-    entries = JSON.parse(encoded);
+    keys = parseDecisionPacketVerificationKeyring(encoded, { allowEmpty: options.allowEmpty });
   } catch {
+    let empty = false;
+    try {
+      const entries = JSON.parse(encoded);
+      empty = Array.isArray(entries) && entries.length === 0;
+    } catch {
+      // The shared parser supplies the canonical structural validation.
+    }
+    if (!options.allowEmpty && empty) {
+      throw new TokenlessServiceError(
+        "Decision-packet verification keys are unavailable.",
+        503,
+        "invalid_evidence_keyring",
+      );
+    }
     throw new TokenlessServiceError("Decision-packet verification keys are invalid.", 503, "invalid_evidence_keyring");
   }
-  if (!Array.isArray(entries) || (entries.length === 0 && !options.allowEmpty)) {
-    throw new TokenlessServiceError(
-      "Decision-packet verification keys are unavailable.",
-      503,
-      "invalid_evidence_keyring",
-    );
-  }
-  if (entries.length === 0) return [];
-  const seen = new Set<string>();
-  let current = 0;
-  const parsed = entries.map(entry => {
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw new Error("invalid key entry");
-    const value = entry as Record<string, unknown>;
-    if (
-      (value.algorithm !== "Ed25519" && value.algorithm !== "ECDSA-SHA256") ||
-      typeof value.keyId !== "string" ||
-      typeof value.publicKey !== "string" ||
-      (value.status !== "current" && value.status !== "retired")
-    ) {
-      throw new Error("invalid key entry");
-    }
-    const publicKey = createPublicKey({ key: Buffer.from(value.publicKey, "base64url"), format: "der", type: "spki" });
-    const canonical = publicKey.export({ format: "der", type: "spki" });
-    const ed25519 = value.algorithm === "Ed25519";
-    if (
-      (ed25519 && (publicKey.asymmetricKeyType !== "ed25519" || !/^ed25519:[0-9a-f]{24}$/u.test(value.keyId))) ||
-      (!ed25519 &&
-        (publicKey.asymmetricKeyType !== "ec" ||
-          publicKey.asymmetricKeyDetails?.namedCurve !== "prime256v1" ||
-          !/^p256:[0-9a-f]{24}$/u.test(value.keyId) ||
-          value.status !== "retired"))
-    ) {
-      throw new Error("invalid key type");
-    }
-    const derivedKeyId = `${ed25519 ? "ed25519" : "p256"}:${createHash("sha256")
-      .update(canonical)
-      .digest("hex")
-      .slice(0, 24)}`;
-    if (derivedKeyId !== value.keyId || canonical.toString("base64url") !== value.publicKey) {
-      throw new Error("invalid key identity");
-    }
-    const identity = keyIdentity(value.keyId, value.publicKey);
-    if (seen.has(identity)) throw new Error("duplicate key");
-    seen.add(identity);
-    if (value.status === "current") current += 1;
+  return keys.map(key => {
     return {
-      algorithm: value.algorithm,
-      keyId: value.keyId,
-      publicKey: value.publicKey,
-      publicKeyJwk: publicKey.export({ format: "jwk" }),
-      status: value.status,
+      algorithm: key.algorithm,
+      keyId: key.keyId,
+      publicKey: key.publicKey,
+      publicKeyJwk: key.publicKeyObject.export({ format: "jwk" }),
+      status: key.status,
     } as DecisionPacketVerificationKey;
   });
-  if (current !== 1) throw new Error("exactly one current key is required");
-  return parsed;
 }
 
 export function parseDecisionPacketVerificationKeys(encoded: string): DecisionPacketVerificationKey[] {
