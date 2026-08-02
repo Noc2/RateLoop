@@ -292,6 +292,9 @@ export function BetterAuthSignIn() {
     );
   }
 
+  const hasAlternativeSignIn =
+    configuration.methods.passkey || configuration.methods.google || configuration.methods.apple;
+
   return (
     <div className="space-y-5">
       {verified ? (
@@ -390,38 +393,46 @@ export function BetterAuthSignIn() {
         </form>
       )}
 
-      {!verified ? (
+      {!verified && hasAlternativeSignIn ? (
         <>
           <div className="flex items-center gap-3 text-xs uppercase tracking-wider text-base-content/35">
             <span className="h-px grow bg-base-content/10" />
             {t("or")}
             <span className="h-px grow bg-base-content/10" />
           </div>
-          <button
-            className="btn btn-outline min-h-11 w-full"
-            disabled={busy || !configuration.methods.passkey}
-            onClick={() => void signInWithPasskey()}
-          >
-            {t("passkey")}
-          </button>
-          <div className="grid gap-3 sm:grid-cols-2">
+          {configuration.methods.passkey ? (
             <button
-              className="btn rateloop-secondary-action gap-3"
-              disabled={busy || !configuration.methods.google}
-              onClick={() => void social("google")}
+              className="btn btn-outline min-h-11 w-full"
+              disabled={busy}
+              onClick={() => void signInWithPasskey()}
             >
-              <GoogleIcon />
-              {t("google")}
+              {t("passkey")}
             </button>
-            <button
-              className="btn rateloop-secondary-action gap-3"
-              disabled={busy || !configuration.methods.apple}
-              onClick={() => void social("apple")}
-            >
-              <AppleIcon />
-              {t("apple")}
-            </button>
-          </div>
+          ) : null}
+          {configuration.methods.google || configuration.methods.apple ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {configuration.methods.google ? (
+                <button
+                  className="btn rateloop-secondary-action gap-3"
+                  disabled={busy}
+                  onClick={() => void social("google")}
+                >
+                  <GoogleIcon />
+                  {t("google")}
+                </button>
+              ) : null}
+              {configuration.methods.apple ? (
+                <button
+                  className="btn rateloop-secondary-action gap-3"
+                  disabled={busy}
+                  onClick={() => void social("apple")}
+                >
+                  <AppleIcon />
+                  {t("apple")}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
         </>
       ) : null}
 

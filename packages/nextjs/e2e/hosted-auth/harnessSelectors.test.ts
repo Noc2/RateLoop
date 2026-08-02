@@ -29,6 +29,9 @@ test("the hosted harness and rendered sign-in input share one stable selector", 
     const view = render(React.createElement(BetterAuthSignIn));
     const renderedInput = await view.findByTestId(BETTER_AUTH_SIGN_IN_TEST_IDS.emailInput);
     assert.equal(view.getByRole("textbox", { name: "Email address" }), renderedInput);
+    assert.ok(view.getByRole("button", { name: "Sign in with a passkey" }));
+    assert.equal(view.queryByRole("button", { name: "Continue with Google" }), null);
+    assert.equal(view.queryByRole("button", { name: "Continue with Apple" }), null);
 
     const selectedTestIds: string[] = [];
     const locator = {} as Locator;
