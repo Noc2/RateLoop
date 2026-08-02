@@ -10,6 +10,7 @@ import { PublicLink as Link } from "~~/components/docs/PublicLink";
 import { UseCaseExampleCard, UseCaseIcon } from "~~/components/docs/UseCaseVisuals";
 import type { UseCaseExample, UseCaseIconKind } from "~~/components/docs/UseCaseVisuals";
 import { Card } from "~~/components/tokenless/ui/Card";
+import type { Locale } from "~~/i18n/config";
 
 const USE_CASES_DESCRIPTION =
   "Three worked examples of independent human judgment checking AI-generated customer replies, research conclusions, and hiring recommendations.";
@@ -127,8 +128,7 @@ const useCases: readonly UseCase[] = [
   },
 ] as const;
 
-export default function UseCasesPage({ params }: { params?: PublicLocaleParams } = {}) {
-  const locale = usePublicLocale(params);
+export function UseCasesContent({ locale }: { locale: Locale }) {
   return (
     <LocalizedPublicContent locale={locale} section="docs">
       <article className="prose max-w-none">
@@ -222,6 +222,10 @@ export default function UseCasesPage({ params }: { params?: PublicLocaleParams }
       </article>
     </LocalizedPublicContent>
   );
+}
+
+export default function UseCasesPage({ params }: { params?: PublicLocaleParams } = {}) {
+  return <UseCasesContent locale={usePublicLocale(params)} />;
 }
 
 function UseCaseDetail({ children, label }: { children: string; label: string }) {

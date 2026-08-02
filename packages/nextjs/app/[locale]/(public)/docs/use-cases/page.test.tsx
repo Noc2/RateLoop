@@ -93,3 +93,24 @@ test("use cases show three worked examples with bounded human-assurance decision
   assert.match(machineDocs, /private invited-review lane/i);
   assert.doesNotMatch(machineDocs, /Product experiences|product-experiences|checkout screens/i);
 });
+
+test("German use-case examples localize every artifact and panel result", async () => {
+  (globalThis as typeof globalThis & { React: typeof React }).React = React;
+  const { UseCasesContent } = await import("./page");
+  const html = renderToStaticMarkup(<UseCasesContent locale="de" />).replace(/\s+/g, " ");
+
+  assert.equal(html.match(/Beispiel zur Veranschaulichung/gu)?.length, 3);
+  assert.match(html, /Antwortentwurf/u);
+  assert.match(html, /Nein – 4 von 5 Prüfenden/u);
+  assert.match(html, /Wirkt abweisend/u);
+  assert.match(html, /Kein nächster Schritt angeboten/u);
+  assert.match(html, /Entwurf der Schlussfolgerung/u);
+  assert.match(html, /Nicht gestützt – 3 von 5 Prüfenden/u);
+  assert.match(html, /KI-Empfehlung/u);
+  assert.match(html, /Nicht weiter berücksichtigen – keine Erfahrung als Teamleitung/u);
+  assert.match(html, /Übersteuern – 4 von 5 autorisierten Prüfenden/u);
+  assert.doesNotMatch(
+    html,
+    /Illustrative example|Draft reply|No — 4 of 5 reviewers|Reads as dismissive|No next step offered|Draft conclusion|Not supported — 3 of 5 reviewers|AI recommendation|Override — 4 of 5 authorized reviewers/u,
+  );
+});
