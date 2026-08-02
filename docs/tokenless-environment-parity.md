@@ -25,7 +25,7 @@ environment. Deployment export compares its observed runtime code hash with the 
 any difference. Hosted app, Ponder, and keeper configuration consume the resulting pinned address as
 `TOKENLESS_BEACON_VERIFIER_ADDRESS` or their package-prefixed equivalent. The verifier remains unaudited, and this
 deployment binding does not remove the independent-review release gate.
-Other historical v1-v4 artifacts, including the v3 test bundle deployed at block `44132668`, must not be relabelled or
+Historical v1-v3 artifacts, including the v3 test bundle deployed at block `44132668`, must not be relabelled or
 used by a v4 app, Ponder, or keeper process.
 
 The isolated Vercel app, Ponder, and keeper must all be pinned to the same complete key and deployment block before any

@@ -42,7 +42,7 @@ before changing contracts, deployment artifacts, Ponder, Keeper, the app, SDK,
 agents, MCP, E2E, or public docs. Base mainnet contracts are legacy and are not
 final. The active versioned Base Sepolia artifact is
 `packages/foundry/deployments/tokenless-v4/84532.json`, a complete deployment at
-block `44390557`; `tokenless-v1` through `tokenless-v3` are historical evidence
+block `44915850`; `tokenless-v1` through `tokenless-v3` are historical evidence
 only. That artifact becomes stale after any future fund-core change and must
 then be freshly redeployed before live configuration. Prefer removal of
 obsolete consumers over any

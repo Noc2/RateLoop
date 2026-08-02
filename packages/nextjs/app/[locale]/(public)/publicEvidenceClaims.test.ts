@@ -24,6 +24,8 @@ const REPOSITORY_DIRECTORY = path.resolve(NEXTJS_DIRECTORY, "../..");
 const PLUGINS_DIRECTORY = path.join(REPOSITORY_DIRECTORY, "plugins");
 
 const TOKENLESS_DEPLOYMENT_CLAIM_FILES = [
+  path.join(REPOSITORY_DIRECTORY, "AGENTS.md"),
+  path.join(REPOSITORY_DIRECTORY, "CLAUDE.md"),
   path.join(REPOSITORY_DIRECTORY, "README.md"),
   path.join(REPOSITORY_DIRECTORY, "docs/implementation-plan.md"),
   path.join(REPOSITORY_DIRECTORY, "docs/rateloop-tokenless.md"),
@@ -111,10 +113,15 @@ test("the released deployment registry and every deployment claim share one exac
     assert.ok(source.includes(String(deployment.deploymentBlockNumber)), file);
     assert.doesNotMatch(
       source,
-      /44390557|0x377f8631030a06e997cee78bdf649106a90bba46|fresh_deployment_required|release status:\s*`unreleased`/iu,
+      /44390557|0x377f8631030a06e997cee78bdf649106a90bba46|fresh_deployment_required|fresh test redeployment is required|blocked on a fresh complete Base Sepolia deployment|release status:\s*`unreleased`/iu,
       file,
     );
   }
+
+  assert.match(
+    readFileSync(path.join(REPOSITORY_DIRECTORY, "docs/implementation-plan.md"), "utf8"),
+    /Fresh v4 Base Sepolia bundle deployed and synchronized; complete hosted exercise pending/u,
+  );
 
   for (const file of [
     path.join(REPOSITORY_DIRECTORY, "README.md"),
