@@ -60,6 +60,7 @@ export function SearchPageContent({
               as={Link}
               aria-label={`Search review work for "${query}"`}
               href={`/human/review?q=${encodeURIComponent(query)}`}
+              locale={locale}
               prefetch={false}
               className="group mt-10 block rounded-xl px-4 py-3 transition-colors hover:border-base-content/20 hover:bg-base-content/[0.04]"
             >

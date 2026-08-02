@@ -30,6 +30,7 @@ export function AuthorizedSiteSearchResults({
             as={Link}
             key={`${result.area}-${result.href}`}
             href={result.href}
+            locale={locale}
             prefetch={false}
             className="group block rounded-xl px-4 py-3 transition-colors hover:border-base-content/20 hover:bg-base-content/[0.04]"
           >

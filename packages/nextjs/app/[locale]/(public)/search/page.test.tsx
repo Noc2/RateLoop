@@ -49,6 +49,32 @@ test("signed-in search renders authorized data beside the unchanged public index
   assert.match(html, /Review work/i);
 });
 
+test("German wallet search localizes public and authorized result destinations", async () => {
+  (globalThis as typeof globalThis & { React: typeof React }).React = React;
+  const { SearchPageContent } = await import("./page");
+  const page = SearchPageContent({
+    authorizedResults: [
+      {
+        area: "Evidence",
+        title: "Wallet evidence",
+        description: "Workspace wallet record",
+        href: "/agents/results?workspace=workspace-1&packet=wallet_exact",
+      },
+    ],
+    locale: "de",
+    query: "Wallet",
+  });
+  const html = renderToStaticMarkup(page).replace(/\s+/g, " ");
+
+  assert.match(html, /href="\/de\/docs\/tech-stack#x402-usdc"/u);
+  assert.match(
+    html,
+    /Panels mit kurzlebigen EIP-3009-USDC-Autorisierungen oder einem vorausbezahlten Workspace-Guthaben finanzieren\./u,
+  );
+  assert.match(html, /href="\/de\/agents\/results\?workspace=workspace-1&amp;packet=wallet_exact"/u);
+  assert.doesNotMatch(html, /href="\/(?:docs\/tech-stack#x402-usdc|agents\/results\?)/u);
+});
+
 test("search shows one query-aware review-work destination", async () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
   const { SearchPageContent } = await import("./page");
