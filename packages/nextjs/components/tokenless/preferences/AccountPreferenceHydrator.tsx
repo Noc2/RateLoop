@@ -12,7 +12,33 @@ type AccountPreferences = {
   preferredTheme?: unknown;
 };
 
+type AuthSession = {
+  authenticated?: unknown;
+};
+
 let preferenceSyncCompleted = false;
+
+export async function loadAuthenticatedAccountPreferences({
+  fetcher = fetch,
+  signal,
+}: {
+  fetcher?: typeof fetch;
+  signal?: AbortSignal;
+} = {}): Promise<AccountPreferences | null> {
+  const requestInit: RequestInit = {
+    cache: "no-store",
+    credentials: "same-origin",
+    ...(signal ? { signal } : {}),
+  };
+  const sessionResponse = await fetcher("/api/auth/session", requestInit);
+  if (!sessionResponse.ok) return null;
+  const session = (await sessionResponse.json()) as AuthSession;
+  if (session.authenticated !== true) return null;
+
+  const profileResponse = await fetcher("/api/account/profile", requestInit);
+  if (!profileResponse.ok) return null;
+  return (await profileResponse.json()) as AccountPreferences;
+}
 
 export function AccountPreferenceHydrator() {
   const activeLocale = useLocale();
@@ -25,15 +51,7 @@ export function AccountPreferenceHydrator() {
     if (preferenceSyncCompleted) return;
     const controller = new AbortController();
 
-    void fetch("/api/account/profile", {
-      cache: "no-store",
-      credentials: "same-origin",
-      signal: controller.signal,
-    })
-      .then(async response => {
-        if (!response.ok) return null;
-        return (await response.json()) as AccountPreferences;
-      })
+    void loadAuthenticatedAccountPreferences({ signal: controller.signal })
       .then(preferences => {
         if (!preferences || controller.signal.aborted) return;
         preferenceSyncCompleted = true;
