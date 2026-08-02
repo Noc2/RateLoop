@@ -196,6 +196,7 @@
 
 /* Keep legacy opacity utilities readable while components migrate to named text tokens. */
 .text-base-content\/55,
+.text-base-content\/50,
 .text-base-content\/45 {
   color: var(--rateloop-text-secondary);
 }

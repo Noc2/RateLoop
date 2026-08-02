@@ -14,6 +14,11 @@ const assuranceLoopPromise = readFile(
 const chipPromise = readFile(new URL("./ui/Chip.tsx", import.meta.url), "utf8");
 const paidEligibilityPromise = readFile(new URL("./PaidEligibilityClient.tsx", import.meta.url), "utf8");
 const publicQuestionCardPromise = readFile(new URL("./answer/PublicQuestionCard.tsx", import.meta.url), "utf8");
+const fiftyPercentTextConsumerPromises = [
+  readFile(new URL("../../components/pricing/WorkspacePlanCards.tsx", import.meta.url), "utf8"),
+  readFile(new URL("../../components/auth/WalletBindingsClient.tsx", import.meta.url), "utf8"),
+  readFile(new URL("../../app/[locale]/(public)/legal/page.tsx", import.meta.url), "utf8"),
+];
 
 function themeTokens(styles: string, theme: "light" | "dark") {
   const match = styles.match(new RegExp(`@plugin "daisyui/theme"\\s*\\{\\s*name: "${theme}";([\\s\\S]*?)\\n\\}`));
@@ -217,11 +222,18 @@ test("shared surfaces and prose use semantic colors instead of dark-only literal
   assert.match(styles, /\.prose pre\s*\{[\s\S]*?background: var\(--rateloop-code-surface\)/);
   assert.match(
     styles,
-    /\.text-base-content\\\/55,\s*\.text-base-content\\\/45\s*\{\s*color: var\(--rateloop-text-secondary\)/,
+    /\.text-base-content\\\/55,\s*\.text-base-content\\\/50,\s*\.text-base-content\\\/45\s*\{\s*color: var\(--rateloop-text-secondary\)/,
   );
   for (const tier of ["40", "35", "30", "25"]) {
     assert.match(styles, new RegExp(`\\.text-base-content\\\\/${tier}`));
   }
+});
+
+test("legacy 50% text consumers share the AA secondary text token", async () => {
+  const [styles, ...consumers] = await Promise.all([stylesPromise, ...fiftyPercentTextConsumerPromises]);
+
+  assert.match(styles, /\.text-base-content\\\/50[\s\S]*?color: var\(--rateloop-text-secondary\)/);
+  for (const consumer of consumers) assert.match(consumer, /text-base-content\/50/);
 });
 
 test("brand text consumers use theme-aware accent tokens", async () => {
