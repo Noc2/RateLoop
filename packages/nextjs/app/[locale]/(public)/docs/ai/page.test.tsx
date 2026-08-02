@@ -64,3 +64,21 @@ test("agent docs lead with the hosted connected-workspace path", async () => {
   );
   assert.doesNotMatch(html, /(?:www\.)?rateloop\.ai/i);
 });
+
+test("German agent docs render complete sentences around technical identifiers", async () => {
+  (globalThis as typeof globalThis & { React: typeof React }).React = React;
+  const { TokenlessAgentDocsContent } = await import("./page");
+  const html = renderToStaticMarkup(<TokenlessAgentDocsContent locale="de" />).replace(/\s+/g, " ");
+
+  assert.match(html, /Agenten-Prüfablauf.*rateloop-text-gradient.*ausführen/u);
+  assert.match(html, /Verbinden Sie einen Agenten mit einer Workspace-Prüfrichtlinie/u);
+  assert.match(html, /Der aktuelle gehostete Pfad fordert private, unbezahlte Prüfungen/u);
+  assert.match(html, /Verbundene Workspace-Prüfung/u);
+  assert.match(html, /rateloop_get_agent_context<\/code>, dann <code>rateloop_verify_connection/u);
+  assert.match(html, /Mit Codex verbinden/u);
+  assert.match(html, /Entscheidungsgrenze/u);
+  assert.doesNotMatch(
+    html,
+    /Führen Sie den Agenten-|Prüfen Loop|Verbindened|\bthen\b|Connect with Codex|Decision boundary/u,
+  );
+});

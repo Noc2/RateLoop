@@ -8,6 +8,7 @@ import {
 } from "~~/components/docs/LocalizedPublicContent";
 import { PublicLink as Link } from "~~/components/docs/PublicLink";
 import { Card } from "~~/components/tokenless/ui/Card";
+import type { Locale } from "~~/i18n/config";
 
 export function generateMetadata({ params }: { params: PublicLocaleParams }): Promise<Metadata> {
   return getLocalizedPublicMetadata({ params, section: "docs", title: "Agent integration guide" });
@@ -31,8 +32,7 @@ function CodeBlock({ children }: { children: string }) {
   );
 }
 
-export default function TokenlessAgentDocsPage({ params }: { params?: PublicLocaleParams } = {}) {
-  const locale = usePublicLocale(params);
+export function TokenlessAgentDocsContent({ locale }: { locale: Locale }) {
   return (
     <LocalizedPublicContent locale={locale} section="docs">
       <article className="prose max-w-none">
@@ -160,4 +160,8 @@ codex plugin add rateloop@rateloop`}</CodeBlock>
       </article>
     </LocalizedPublicContent>
   );
+}
+
+export default function TokenlessAgentDocsPage({ params }: { params?: PublicLocaleParams } = {}) {
+  return <TokenlessAgentDocsContent locale={usePublicLocale(params)} />;
 }
