@@ -112,7 +112,7 @@ export function QuestionMedia({
 
   if (media.kind === "youtube") {
     return (
-      <div className="mt-6 overflow-hidden rounded-xl border border-white/10 bg-black/30">
+      <div className="mt-6 overflow-hidden rounded-xl border border-white/10 bg-[var(--rateloop-media-surface)]">
         {playVideo ? (
           <iframe
             className="aspect-video w-full"
@@ -144,7 +144,7 @@ export function QuestionMedia({
             <span className="mt-1 text-xs text-white/50">
               The privacy-enhanced player loads only after you choose play.
             </span>
-            <span className="mt-2 font-mono text-[11px] text-white/40">Video {media.videoId}</span>
+            <span className="mt-2 font-mono text-[11px] text-white/60">Video {media.videoId}</span>
           </button>
         )}
       </div>
@@ -161,7 +161,7 @@ export function QuestionMedia({
               imageButtonsRef.current[index] = element;
             }}
             type="button"
-            className={`overflow-hidden rounded-xl border border-white/10 bg-black/30 text-left transition-colors hover:border-white/25 ${
+            className={`overflow-hidden rounded-xl border border-white/10 bg-[var(--rateloop-media-surface)] text-left transition-colors hover:border-white/25 ${
               media.items.length === 3 && index === 0 ? "sm:col-span-2" : ""
             }`}
             onClick={() => setSelectedImage(index)}

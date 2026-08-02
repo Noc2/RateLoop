@@ -1,8 +1,18 @@
 import React from "react";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
+
+const mediaSource = readFileSync(new URL("./QuestionMedia.tsx", import.meta.url), "utf8");
+const globalStyles = readFileSync(new URL("../../../styles/globals.css", import.meta.url), "utf8");
+
+test("media previews keep an opaque dark surface and readable copy in either page theme", () => {
+  assert.match(globalStyles, /--rateloop-media-surface: #050505/);
+  assert.equal(mediaSource.match(/bg-\[var\(--rateloop-media-surface\)\]/g)?.length, 2);
+  assert.doesNotMatch(mediaSource, /bg-black\/30|text-white\/40/);
+});
 
 test("image preview focuses its close action and returns focus to the trigger", async () => {
   const restoreDom = installTestDom();
