@@ -31,6 +31,12 @@
     "loadFailed": "Unable to load reviewer access.",
     "noExpiry": "No expiry",
     "grant": "Up to {sensitivity} material · access expires {expiry}",
+    "sensitivity": {
+      "internal": "Internal",
+      "confidential": "Confidential",
+      "restricted": "Restricted",
+      "regulated": "Regulated"
+    },
     "leaving": "Leaving…",
     "stop": "Stop reviewing",
     "useInvitation": "Use an invitation",

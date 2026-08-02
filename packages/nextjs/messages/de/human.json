@@ -31,6 +31,12 @@
     "loadFailed": "Prüfzugriff konnte nicht geladen werden.",
     "noExpiry": "Kein Ablaufdatum",
     "grant": "Material bis {sensitivity} · Zugriff läuft ab: {expiry}",
+    "sensitivity": {
+      "internal": "Intern",
+      "confidential": "Vertraulich",
+      "restricted": "Eingeschränkt",
+      "regulated": "Reguliert"
+    },
     "leaving": "Wird beendet…",
     "stop": "Nicht mehr prüfen",
     "useInvitation": "Einladung verwenden",

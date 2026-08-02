@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useFormatter, useTranslations } from "next-intl";
+import {
+  type ReviewerAccessPrivateSensitivity,
+  reviewerAccessSensitivityMessageKey,
+} from "~~/components/tokenless/human/reviewerAccessSensitivity";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { ConfirmDialog } from "~~/components/tokenless/ui/ConfirmDialog";
@@ -13,7 +17,7 @@ type ReviewerAccess = {
   status: "active" | "removed" | "left" | "expired";
   grants: Array<{
     grantId: string;
-    maxPrivateSensitivity: "internal" | "confidential" | "restricted" | "regulated";
+    maxPrivateSensitivity: ReviewerAccessPrivateSensitivity;
     validUntil: string | null;
     status: "active" | "expired" | "revoked";
   }>;
@@ -120,7 +124,7 @@ export function ReviewerAccessPanel() {
                       .map(grant => (
                         <p className="mt-2 text-xs text-base-content/55" key={grant.grantId}>
                           {t("grant", {
-                            sensitivity: grant.maxPrivateSensitivity,
+                            sensitivity: t(reviewerAccessSensitivityMessageKey(grant.maxPrivateSensitivity)),
                             expiry: grant.validUntil
                               ? format.dateTime(new Date(grant.validUntil), { dateStyle: "medium" })
                               : t("noExpiry"),
