@@ -175,8 +175,7 @@ test("rejects an irreversible freeze before period end and accepts the exact bou
   });
   databaseNow = new Date(PERIOD_END.getTime() - 1);
   await assert.rejects(
-    () =>
-      reconcileAndFreezeDsaPopulation({ accountAddress: OWNER, workspaceId, populationId, populationVersion: 1 }),
+    () => reconcileAndFreezeDsaPopulation({ accountAddress: OWNER, workspaceId, populationId, populationVersion: 1 }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "dsa_population_period_incomplete",
   );
   databaseNow = new Date(PERIOD_END);

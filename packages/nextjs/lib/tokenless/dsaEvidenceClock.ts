@@ -11,7 +11,11 @@ export async function dsaEvidenceTransactionTimestamp(client: PoolClient) {
   const value = result.rows[0]?.transaction_time;
   const parsed = value instanceof Date ? value : new Date(String(value));
   if (!Number.isFinite(parsed.getTime())) {
-    throw new TokenlessServiceError("The DSA evidence transaction clock is invalid.", 500, "stored_dsa_evidence_invalid");
+    throw new TokenlessServiceError(
+      "The DSA evidence transaction clock is invalid.",
+      500,
+      "stored_dsa_evidence_invalid",
+    );
   }
   return parsed;
 }
