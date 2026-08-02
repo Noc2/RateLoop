@@ -1494,6 +1494,60 @@ test("scheduled maintenance stays degraded when eligible attestations progress b
   });
 });
 
+test("scheduled maintenance keeps core attestation health enabled after decision work drains", async () => {
+  let attestationRuns = 0;
+  const maintenanceProcessors = {
+    ...processors(async () => {}),
+    async processAttestations() {
+      attestationRuns += 1;
+      return attestationRuns === 1
+        ? { configured: true, due: 1, completed: 1, retry: 0, dead: 0, unavailable: 0 }
+        : { configured: true, due: 0, completed: 0, retry: 0, dead: 0, unavailable: 0 };
+    },
+  };
+
+  const draining = await runTokenlessScheduledMaintenance({
+    appOrigin: "https://tokenless.example.test",
+    now: NOW,
+    processors: maintenanceProcessors,
+  });
+  if (draining.status === "duplicate") assert.fail("first invocation cannot be duplicate");
+  assert.equal(draining.status, "healthy");
+
+  const empty = await runTokenlessScheduledMaintenance({
+    appOrigin: "https://tokenless.example.test",
+    now: new Date(NOW.getTime() + 5 * 60_000),
+    processors: maintenanceProcessors,
+  });
+  if (empty.status === "duplicate") assert.fail("later invocation cannot be duplicate");
+  assert.equal(empty.status, "healthy");
+  assert.deepEqual(empty.summary.attestations, {
+    configured: true,
+    due: 0,
+    completed: 0,
+    retry: 0,
+    dead: 0,
+    unavailable: 0,
+  });
+
+  const health = await dbClient.execute({
+    sql: `SELECT configuration_state,consecutive_failures,last_error_code,
+                 disabled_reason,operator_alert_state,last_succeeded_at
+          FROM tokenless_scheduled_processor_health WHERE processor_name='processAttestations'`,
+  });
+  assert.deepEqual(
+    { ...health.rows[0], last_succeeded_at: Boolean(health.rows[0]?.last_succeeded_at) },
+    {
+      configuration_state: "enabled",
+      consecutive_failures: 0,
+      disabled_reason: null,
+      last_error_code: null,
+      last_succeeded_at: true,
+      operator_alert_state: "resolved",
+    },
+  );
+});
+
 test("scheduled maintenance degrades and reports evidence-retention retries", async () => {
   const result = await runTokenlessScheduledMaintenance({
     appOrigin: "https://tokenless.example.test",

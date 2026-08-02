@@ -110,6 +110,23 @@ test("core managed witnesses process decision packets without TSA configuration"
   assert.deepEqual(witnesses.calls, { rekor: 1, tsa: 0 });
 });
 
+test("core managed witnesses stay configured after decision work drains without TSA", async () => {
+  await queuedJob();
+  const witnesses = managedWitnesses({ timestamping: false });
+  __setAssuranceAttestationRuntimeForTests(witnesses.runtime);
+
+  assert.equal((await processDueAssuranceAttestations({ now: NOW, env: {} })).completed, 1);
+  assert.deepEqual(await processDueAssuranceAttestations({ now: NOW, env: {} }), {
+    configured: true,
+    due: 0,
+    completed: 0,
+    retry: 0,
+    dead: 0,
+    unavailable: 0,
+  });
+  assert.deepEqual(witnesses.calls, { rekor: 1, tsa: 0 });
+});
+
 test("missing TSA processes decision packets but leaves export heads pending and degraded", async () => {
   const decision = await queuedJob();
   const auditExport = await queuedJob({ kind: "audit_export_head", digest: `sha256:${"56".repeat(32)}` });

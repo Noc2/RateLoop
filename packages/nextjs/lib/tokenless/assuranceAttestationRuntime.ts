@@ -157,7 +157,7 @@ export async function processDueAssuranceAttestations(input: {
     : configurationState(input.env ?? process.env);
   if (due === 0) {
     return {
-      configured: state.configured && state.timestampingConfigured,
+      configured: state.configured,
       due,
       completed: 0,
       retry: 0,
