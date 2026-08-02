@@ -359,7 +359,7 @@ export function TokenlessShell({ children }: { children: React.ReactNode }) {
                   <path d="M4 7h16M4 12h16M4 17h16" />
                 </svg>
               </summary>
-              <nav className="dropdown-content z-40 mt-3 max-h-[calc(100vh-5rem)] w-64 overflow-y-auto rounded-xl border border-[color:var(--rateloop-shell-border-strong)] bg-base-200 p-2 shadow-2xl">
+              <nav className="dropdown-content z-40 mt-3 max-h-[calc(100vh-5rem)] w-64 overflow-y-auto rounded-xl border border-[color:var(--rateloop-shell-border-strong)] bg-base-100 p-2 shadow-2xl">
                 <Suspense fallback={null}>
                   <NavLinks mobile onNavigate={() => setMobileNavOpen(false)} />
                 </Suspense>

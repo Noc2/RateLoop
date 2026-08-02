@@ -34,6 +34,7 @@ test("tokenless navigation uses the shared page background", () => {
   const source = shellSource;
 
   assert.match(source, /<header className="[^"]*bg-base-100/);
+  assert.match(source, /dropdown-content[^"\n]*bg-base-100/);
   assert.match(source, /<aside[\s\S]*data-rateloop-rail[\s\S]*bg-base-100/);
   assert.doesNotMatch(globalStyles, /--rateloop-rail-(?:surface|text|border)/);
   assert.doesNotMatch(globalStyles, /\[data-rateloop-rail\]\s*\{/);
