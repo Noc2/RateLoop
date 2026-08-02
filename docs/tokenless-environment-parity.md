@@ -40,6 +40,9 @@ Services must fail closed if their chain, addresses, start block, or deployment 
 
 - Web project: `rateloop-tokenless` on a Vercel-provided domain; never alias this branch to `rateloop.ai`.
 - Service project: `rateloop-tokenless` on Railway, with its own Postgres, Ponder, and keeper services.
+- Railway's `tokenless-ponder` and `tokenless-keeper` service settings must bind Config file paths
+  `/packages/ponder/railway.toml` and `/packages/keeper/railway.toml`, respectively. Before accepting a rollout,
+  deployment metadata must show the matching Dockerfile, start command, and strict health check from that file.
 - Ponder database schema is derived from the complete tokenless deployment identity.
 - The keeper uses a dedicated gas-only secp256k1 key in Railway's server-only secret store.
 - The credential issuer uses a different key in Vercel's server-only secret store. Every EVM role pins its derived

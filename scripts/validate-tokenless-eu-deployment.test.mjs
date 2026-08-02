@@ -3,17 +3,32 @@ import { generateKeyPairSync, sign } from "node:crypto";
 import test from "node:test";
 import {
   manifestDigest,
+  TOKENLESS_RAILWAY_SERVICE_CONFIGS,
   tokenlessEuDeploymentManifest,
   validateTokenlessEuDeployment,
 } from "./validate-tokenless-eu-deployment.mjs";
 
+function railwayConfig(service, region = "europe-west4-drams3a") {
+  return `[build]
+builder = "DOCKERFILE"
+dockerfilePath = "${service.dockerfilePath}"
+
+[deploy]
+startCommand = "${service.startCommand}"
+healthcheckPath = "${service.healthcheckPath}"
+healthcheckTimeout = ${service.healthcheckTimeout}
+
+[deploy.multiRegionConfig]
+"${region}" = { numReplicas = 1 }
+`;
+}
+
 function staticConfigs() {
   return {
     vercelConfig: { regions: ["fra1"] },
-    railwayConfigs: [
-      '[deploy.multiRegionConfig]\n"europe-west4-drams3a" = { numReplicas = 1 }\n',
-      '[deploy.multiRegionConfig]\n"europe-west4-drams3a" = { numReplicas = 1 }\n',
-    ],
+    railwayConfigs: TOKENLESS_RAILWAY_SERVICE_CONFIGS.map((service) =>
+      railwayConfig(service),
+    ),
   };
 }
 
@@ -111,17 +126,48 @@ test("static configuration rejects unpinned or mixed compute regions", async () 
     env: await processingRegionFixture(),
     vercelConfig: {},
     railwayConfigs: [
-      '[deploy.multiRegionConfig]\n"us-east4-eqdc4a" = { numReplicas = 1 }\n',
-      '[deploy.multiRegionConfig]\n"europe-west4-drams3a" = { numReplicas = 1 }\n"us-west2" = { numReplicas = 1 }\n',
+      railwayConfig(TOKENLESS_RAILWAY_SERVICE_CONFIGS[0], "us-east4-eqdc4a"),
+      railwayConfig(TOKENLESS_RAILWAY_SERVICE_CONFIGS[1]).replace(
+        '"europe-west4-drams3a" = { numReplicas = 1 }',
+        '"europe-west4-drams3a" = { numReplicas = 1 }\n"us-west2" = { numReplicas = 1 }',
+      ),
     ],
   });
   assert.match(
     errors.join("\n"),
     /Vercel functions must be pinned only to fra1/,
   );
-  assert.equal(
-    errors.filter((error) => /Railway service/.test(error)).length,
-    2,
+  assert.equal(errors.filter((error) => /must run only/.test(error)).length, 2);
+});
+
+test("both Railway services reject mixed builders, Dockerfiles, and health checks", async () => {
+  const configs = TOKENLESS_RAILWAY_SERVICE_CONFIGS.map((service) =>
+    railwayConfig(service),
+  );
+  configs[0] = configs[0]
+    .replace('builder = "DOCKERFILE"', 'builder = "RAILPACK"')
+    .replace('healthcheckPath = "/ready"', 'healthcheckPath = "/health"');
+  configs[1] = configs[1].replace(
+    'dockerfilePath = "packages/ponder/Dockerfile"',
+    'dockerfilePath = "packages/keeper/Dockerfile"',
+  );
+
+  const errors = await validateTokenlessEuDeployment({
+    env: await processingRegionFixture(),
+    vercelConfig: { regions: ["fra1"] },
+    railwayConfigs: configs,
+  });
+  assert.match(
+    errors.join("\n"),
+    /tokenless-keeper must build from packages\/keeper\/Dockerfile/,
+  );
+  assert.match(
+    errors.join("\n"),
+    /tokenless-keeper must retain its checked start command and \/ready/,
+  );
+  assert.match(
+    errors.join("\n"),
+    /tokenless-ponder must build from packages\/ponder\/Dockerfile/,
   );
 });
 
@@ -143,10 +189,28 @@ test("the manifest cannot omit governed resources, processors, or public-chain l
 });
 
 test("the manifest excludes control planes and backups from the region claim and inventories only used processors", () => {
-  assert.equal(tokenlessEuDeploymentManifest.claimBoundary.providerStateQueried, false);
-  assert.equal(tokenlessEuDeploymentManifest.claimBoundary.transferSafeguard, "standard-contractual-clauses");
-  assert.match(tokenlessEuDeploymentManifest.claimBoundary.excluded.join(" "), /control-plane/);
-  assert.match(tokenlessEuDeploymentManifest.claimBoundary.excluded.join(" "), /backups/);
-  assert.equal(tokenlessEuDeploymentManifest.resources.supportAccess, undefined);
-  assert.equal(tokenlessEuDeploymentManifest.externalProcessors.analytics, undefined);
+  assert.equal(
+    tokenlessEuDeploymentManifest.claimBoundary.providerStateQueried,
+    false,
+  );
+  assert.equal(
+    tokenlessEuDeploymentManifest.claimBoundary.transferSafeguard,
+    "standard-contractual-clauses",
+  );
+  assert.match(
+    tokenlessEuDeploymentManifest.claimBoundary.excluded.join(" "),
+    /control-plane/,
+  );
+  assert.match(
+    tokenlessEuDeploymentManifest.claimBoundary.excluded.join(" "),
+    /backups/,
+  );
+  assert.equal(
+    tokenlessEuDeploymentManifest.resources.supportAccess,
+    undefined,
+  );
+  assert.equal(
+    tokenlessEuDeploymentManifest.externalProcessors.analytics,
+    undefined,
+  );
 });

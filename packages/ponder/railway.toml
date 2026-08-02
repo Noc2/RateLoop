@@ -1,3 +1,5 @@
+# The Railway tokenless-ponder service must bind its Config file path to
+# /packages/ponder/railway.toml before any CLI or source deployment.
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "packages/ponder/Dockerfile"

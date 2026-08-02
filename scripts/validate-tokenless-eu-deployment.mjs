@@ -6,10 +6,28 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const manifestPath = path.join(root, "config/tokenless-eu-deployment.json");
 const vercelConfigPath = path.join(root, "packages/nextjs/vercel.json");
-const railwayConfigPaths = [
-  path.join(root, "packages/keeper/railway.toml"),
-  path.join(root, "packages/ponder/railway.toml"),
-];
+
+export const TOKENLESS_RAILWAY_SERVICE_CONFIGS = Object.freeze([
+  Object.freeze({
+    serviceName: "tokenless-keeper",
+    configFile: "/packages/keeper/railway.toml",
+    dockerfilePath: "packages/keeper/Dockerfile",
+    healthcheckPath: "/ready",
+    healthcheckTimeout: 120,
+    startCommand: "yarn start:built-dist",
+  }),
+  Object.freeze({
+    serviceName: "tokenless-ponder",
+    configFile: "/packages/ponder/railway.toml",
+    dockerfilePath: "packages/ponder/Dockerfile",
+    healthcheckPath: "/health/tokenless",
+    healthcheckTimeout: 1800,
+    startCommand: "yarn start",
+  }),
+]);
+const railwayConfigPaths = TOKENLESS_RAILWAY_SERVICE_CONFIGS.map((service) =>
+  path.join(root, service.configFile.slice(1)),
+);
 
 export const TOKENLESS_EU_MANIFEST_SCHEMA = "rateloop-processing-region-v2";
 export const TOKENLESS_HOME_REGION = "eu";
@@ -37,11 +55,7 @@ const REQUIRED_RESOURCES = Object.freeze([
   "backups",
   "auth",
 ]);
-const REQUIRED_PROCESSORS = Object.freeze([
-  "email",
-  "billing",
-  "rpc",
-]);
+const REQUIRED_PROCESSORS = Object.freeze(["email", "billing", "rpc"]);
 
 function readJson(file) {
   return JSON.parse(readFileSync(file, "utf8"));
@@ -98,6 +112,20 @@ function configuredRailwayRegions(toml) {
   ].map((match) => ({ region: match[1], replicas: Number(match[2]) }));
 }
 
+function configuredTomlString(toml, key) {
+  return (
+    toml.match(new RegExp(`^\\s*${key}\\s*=\\s*"([^"]+)"\\s*$`, "mu"))?.[1] ??
+    ""
+  );
+}
+
+function configuredTomlInteger(toml, key) {
+  const raw = toml.match(
+    new RegExp(`^\\s*${key}\\s*=\\s*([1-9]\\d*)\\s*$`, "mu"),
+  )?.[1];
+  return raw ? Number(raw) : 0;
+}
+
 export function validateTokenlessEuDeployment({
   env = process.env,
   manifest = tokenlessEuDeploymentManifest,
@@ -120,26 +148,35 @@ export function validateTokenlessEuDeployment({
     );
   }
   if (
-    manifest.claimBoundary?.transferSafeguard !== "standard-contractual-clauses" ||
+    manifest.claimBoundary?.transferSafeguard !==
+      "standard-contractual-clauses" ||
     manifest.claimBoundary?.validation !== "signed-static-configuration-only" ||
     manifest.claimBoundary?.providerStateQueried !== false ||
     !Array.isArray(manifest.claimBoundary?.excluded) ||
-    !manifest.claimBoundary.excluded.some(value => /control-plane/iu.test(value)) ||
-    !manifest.claimBoundary.excluded.some(value => /backups/iu.test(value))
+    !manifest.claimBoundary.excluded.some((value) =>
+      /control-plane/iu.test(value),
+    ) ||
+    !manifest.claimBoundary.excluded.some((value) => /backups/iu.test(value))
   ) {
     errors.push(
       "Processing-region manifest must disclose control-plane and backup exclusions, SCC safeguards, and its static-validation boundary.",
     );
   }
   if (manifest.resources?.supportAccess) {
-    errors.push("Processing-region manifest must not claim unimplemented support-access controls.");
+    errors.push(
+      "Processing-region manifest must not claim unimplemented support-access controls.",
+    );
   }
   if (manifest.externalProcessors?.analytics) {
-    errors.push("Processing-region manifest must not inventory an analytics processor that is not used.");
+    errors.push(
+      "Processing-region manifest must not inventory an analytics processor that is not used.",
+    );
   }
   for (const resource of REQUIRED_RESOURCES) {
     if (!manifest.resources?.[resource]?.resourceIdEnv) {
-      errors.push(`Processing-region manifest must inventory the ${resource} resource.`);
+      errors.push(
+        `Processing-region manifest must inventory the ${resource} resource.`,
+      );
     }
   }
   for (const [name, expectedRegion] of Object.entries(
@@ -198,7 +235,8 @@ export function validateTokenlessEuDeployment({
       `Vercel functions must be pinned only to ${TOKENLESS_VERCEL_REGION}.`,
     );
   }
-  for (const [index, toml] of railwayConfigs.entries()) {
+  for (const [index, service] of TOKENLESS_RAILWAY_SERVICE_CONFIGS.entries()) {
+    const toml = railwayConfigs[index] ?? "";
     const regions = configuredRailwayRegions(toml);
     if (
       regions.length !== 1 ||
@@ -206,7 +244,26 @@ export function validateTokenlessEuDeployment({
       regions[0].replicas < 1
     ) {
       errors.push(
-        `Railway service ${index + 1} must run only in ${TOKENLESS_RAILWAY_REGION}.`,
+        `Railway ${service.serviceName} must run only in ${TOKENLESS_RAILWAY_REGION}.`,
+      );
+    }
+    if (
+      configuredTomlString(toml, "builder") !== "DOCKERFILE" ||
+      configuredTomlString(toml, "dockerfilePath") !== service.dockerfilePath
+    ) {
+      errors.push(
+        `Railway ${service.serviceName} must build from ${service.dockerfilePath} via ${service.configFile}.`,
+      );
+    }
+    if (
+      configuredTomlString(toml, "startCommand") !== service.startCommand ||
+      configuredTomlString(toml, "healthcheckPath") !==
+        service.healthcheckPath ||
+      configuredTomlInteger(toml, "healthcheckTimeout") !==
+        service.healthcheckTimeout
+    ) {
+      errors.push(
+        `Railway ${service.serviceName} must retain its checked start command and ${service.healthcheckPath} health check.`,
       );
     }
   }
@@ -237,7 +294,10 @@ export function validateTokenlessEuDeployment({
         `${resource.resourceIdEnv} must match the isolated tokenless resource.`,
       );
     }
-    if (resource.regionEnv && value(env, resource.regionEnv) !== resource.region) {
+    if (
+      resource.regionEnv &&
+      value(env, resource.regionEnv) !== resource.region
+    ) {
       errors.push(`${resource.regionEnv} must be ${resource.region}.`);
     }
     if (

@@ -1,3 +1,5 @@
+# The Railway tokenless-keeper service must bind its Config file path to
+# /packages/keeper/railway.toml before any CLI or source deployment.
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "packages/keeper/Dockerfile"
