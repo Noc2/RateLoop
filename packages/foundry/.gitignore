@@ -3,7 +3,7 @@ cache/
 out/
 
 # Broadcasts are runtime records. The exported tokenless deployment identity is
-# checked in under deployments/tokenless-v1 instead.
+# checked in under deployments/tokenless-v4 instead.
 /broadcast/
 
 # Dotenv file
