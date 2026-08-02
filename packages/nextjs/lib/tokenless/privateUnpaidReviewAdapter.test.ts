@@ -24,7 +24,7 @@ import {
   projectDirectPrivateReviewDecisionEvidence,
 } from "~~/lib/tokenless/directPrivateReviewEvidence";
 import { generateAssuranceEvidencePacket } from "~~/lib/tokenless/evidencePackets";
-import { createAssuranceProject } from "~~/lib/tokenless/humanAssurance";
+import { createAssuranceProject, hashHumanAssuranceDocument } from "~~/lib/tokenless/humanAssurance";
 import {
   type FrozenHumanReviewRoutingContext,
   __humanReviewRequestRouterTestUtils,
@@ -290,6 +290,87 @@ async function submitPositivePrivateResponse(
     now: new Date(`2026-07-16T09:3${index}:00.000Z`),
   });
 }
+
+test("unpaid review preserves exact forecast-bearing replays from before forecast gating", async () => {
+  const setup = await fixture();
+  const delivered = await deliverPrivateFixture(setup);
+  await setPrivateFixtureDeadline(setup, new Date(Date.now() + 60_000));
+  const assignment = delivered.assignments[0]!;
+  await acceptPrivateUnpaidReviewAssignment({
+    assignmentId: assignment.assignmentId,
+    reviewerAccountAddress: assignment.reviewerAccountAddress,
+    confidentialityTermsAccepted: true,
+    confidentialityTermsHash: setup.prepared.bindings.privateGroup.policyHash,
+    now: new Date("2026-07-16T09:25:00.000Z"),
+  });
+  const binding = await dbClient.execute({
+    sql: `SELECT a.delivery_id,a.workspace_id,a.private_review_id,a.membership_snapshot_hash,
+                 d.foundation_binding_hash
+          FROM tokenless_private_unpaid_review_assignments a
+          JOIN tokenless_private_unpaid_review_deliveries d ON d.delivery_id=a.delivery_id
+          WHERE a.assignment_id=?`,
+    args: [assignment.assignmentId],
+  });
+  const row = binding.rows[0]!;
+  const forecastCommitment = hashHumanAssuranceDocument({
+    schemaVersion: "rateloop.private-review-response.v2",
+    deliveryId: row.delivery_id,
+    assignmentId: assignment.assignmentId,
+    privateReviewId: row.private_review_id,
+    foundationBindingHash: row.foundation_binding_hash,
+    membershipSnapshotHash: row.membership_snapshot_hash,
+    choice: "positive",
+    predictedPositiveBps: 6_500,
+    rationaleDigest: null,
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_private_review_responses
+          (response_id,assignment_id,delivery_id,workspace_id,private_review_id,reviewer_key,choice,
+           predicted_positive_bps,rationale_ciphertext,rationale_key_ref,rationale_digest,response_commitment,
+           idempotency_key,created_at)
+          VALUES (?,?,?,?,?,?,'positive',?,NULL,NULL,NULL,?,?,?)`,
+    args: [
+      "hprr_pre_forecast_gate",
+      assignment.assignmentId,
+      row.delivery_id,
+      row.workspace_id,
+      row.private_review_id,
+      hash("pre-forecast-gate-reviewer"),
+      6_500,
+      forecastCommitment,
+      "response:pre-forecast-gate",
+      new Date("2026-07-16T09:26:00.000Z"),
+    ],
+  });
+  const submit = (predictedPositiveBps: number) =>
+    submitDirectPrivateReviewResponse({
+      assignmentId: assignment.assignmentId,
+      accountAddress: assignment.reviewerAccountAddress,
+      idempotencyKey: `response:pre-forecast-replay:${predictedPositiveBps}`,
+      responses: [
+        {
+          caseId: setup.prepared.privateReviewId,
+          displayedOption: "A",
+          selectedArtifactId: setup.prepared.artifacts.suggestionArtifactId,
+          predictedPositiveBps,
+          failureTagKeys: [],
+          rationale: "",
+        },
+      ],
+      now: new Date("2026-07-16T09:27:00.000Z"),
+    });
+
+  assert.equal((await submit(6_500)).replay, true);
+  await dbClient.execute({
+    sql: "UPDATE tokenless_private_review_responses SET predicted_positive_bps=NULL WHERE assignment_id=?",
+    args: [assignment.assignmentId],
+  });
+  assert.equal((await submit(6_500)).replay, true);
+  await assert.rejects(
+    () => submit(6_600),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "assurance_response_conflict",
+  );
+});
 
 test("direct private assignments surface in reviewer work and produce a terminal aggregate result", async () => {
   const setup = await fixture();

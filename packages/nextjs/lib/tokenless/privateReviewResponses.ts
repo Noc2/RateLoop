@@ -1022,17 +1022,17 @@ export async function submitDirectPrivateReviewResponse(input: {
       throw new TokenlessServiceError("Assignment expired.", 410, "assignment_expired");
     }
     if (text(row, "status") !== "completed") assertCurrentDirectAssignmentAuthorization(row, now);
+    const validForecast =
+      typeof predictedPositiveBps === "number" &&
+      Number.isSafeInteger(predictedPositiveBps) &&
+      predictedPositiveBps >= 100 &&
+      predictedPositiveBps <= 9_900 &&
+      predictedPositiveBps % 100 === 0;
     if (
       responseInput.caseId !== text(row, "private_review_id") ||
       !["A", "B"].includes(responseInput.displayedOption) ||
       responseInput.selectedArtifactId !== text(row, "suggestion_artifact_id") ||
-      (forecastRequired
-        ? typeof predictedPositiveBps !== "number" ||
-          !Number.isSafeInteger(predictedPositiveBps) ||
-          predictedPositiveBps < 100 ||
-          predictedPositiveBps > 9_900 ||
-          predictedPositiveBps % 100 !== 0
-        : predictedPositiveBps !== undefined) ||
+      (forecastRequired ? !validForecast : predictedPositiveBps !== undefined && !validForecast) ||
       !Array.isArray(responseInput.failureTagKeys) ||
       responseInput.failureTagKeys.length !== 0
     ) {
@@ -1063,30 +1063,30 @@ export async function submitDirectPrivateReviewResponse(input: {
       { accountAddress: principal, runId: text(row, "delivery_id")! },
       keyrings.reviewerMapping,
     );
-    const responseCommitment = hashHumanAssuranceDocument(
-      forecastRequired
-        ? {
-            schemaVersion: "rateloop.private-review-response.v2",
-            deliveryId: text(row, "delivery_id"),
-            assignmentId: input.assignmentId,
-            privateReviewId: text(row, "private_review_id"),
-            foundationBindingHash: text(row, "foundation_binding_hash"),
-            membershipSnapshotHash: text(row, "membership_snapshot_hash"),
-            choice,
-            predictedPositiveBps,
-            rationaleDigest: rationaleMode === "off" ? null : digest,
-          }
-        : {
-            schemaVersion: "rateloop.private-review-response.v1",
-            deliveryId: text(row, "delivery_id"),
-            assignmentId: input.assignmentId,
-            privateReviewId: text(row, "private_review_id"),
-            foundationBindingHash: text(row, "foundation_binding_hash"),
-            membershipSnapshotHash: text(row, "membership_snapshot_hash"),
-            choice,
-            rationaleDigest: rationaleMode === "off" ? null : digest,
-          },
-    );
+    const legacyCommitment = hashHumanAssuranceDocument({
+      schemaVersion: "rateloop.private-review-response.v1",
+      deliveryId: text(row, "delivery_id"),
+      assignmentId: input.assignmentId,
+      privateReviewId: text(row, "private_review_id"),
+      foundationBindingHash: text(row, "foundation_binding_hash"),
+      membershipSnapshotHash: text(row, "membership_snapshot_hash"),
+      choice,
+      rationaleDigest: rationaleMode === "off" ? null : digest,
+    });
+    const forecastCommitment = validForecast
+      ? hashHumanAssuranceDocument({
+          schemaVersion: "rateloop.private-review-response.v2",
+          deliveryId: text(row, "delivery_id"),
+          assignmentId: input.assignmentId,
+          privateReviewId: text(row, "private_review_id"),
+          foundationBindingHash: text(row, "foundation_binding_hash"),
+          membershipSnapshotHash: text(row, "membership_snapshot_hash"),
+          choice,
+          predictedPositiveBps,
+          rationaleDigest: rationaleMode === "off" ? null : digest,
+        })
+      : null;
+    const responseCommitment = forecastRequired ? forecastCommitment! : legacyCommitment;
     const existing = await client.query(
       `SELECT response_commitment,predicted_positive_bps
        FROM tokenless_private_review_responses WHERE assignment_id=$1`,
@@ -1098,22 +1098,14 @@ export async function submitDirectPrivateReviewResponse(input: {
         existingRow.predicted_positive_bps === null || existingRow.predicted_positive_bps === undefined
           ? null
           : integer(existingRow, "predicted_positive_bps", 100);
-      const legacyCommitment = hashHumanAssuranceDocument({
-        schemaVersion: "rateloop.private-review-response.v1",
-        deliveryId: text(row, "delivery_id"),
-        assignmentId: input.assignmentId,
-        privateReviewId: text(row, "private_review_id"),
-        foundationBindingHash: text(row, "foundation_binding_hash"),
-        membershipSnapshotHash: text(row, "membership_snapshot_hash"),
-        choice,
-        rationaleDigest: rationaleMode === "off" ? null : digest,
-      });
-      if (
-        (storedPrediction === null && text(existingRow, "response_commitment") !== legacyCommitment) ||
-        (storedPrediction !== null &&
-          (storedPrediction !== predictedPositiveBps ||
-            text(existingRow, "response_commitment") !== responseCommitment))
-      ) {
+      const storedCommitment = text(existingRow, "response_commitment");
+      const exactReplay = forecastRequired
+        ? storedPrediction === predictedPositiveBps && storedCommitment === forecastCommitment
+        : predictedPositiveBps === undefined
+          ? storedPrediction === null && storedCommitment === legacyCommitment
+          : (storedPrediction === null || storedPrediction === predictedPositiveBps) &&
+            storedCommitment === forecastCommitment;
+      if (!exactReplay) {
         throw new TokenlessServiceError(
           "This assignment already has a different response.",
           409,
@@ -1122,6 +1114,13 @@ export async function submitDirectPrivateReviewResponse(input: {
       }
       replay = true;
     } else {
+      if (!forecastRequired && predictedPositiveBps !== undefined) {
+        throw new TokenlessServiceError(
+          "Response does not match the frozen private review.",
+          409,
+          "assurance_case_binding_mismatch",
+        );
+      }
       const encrypted =
         rationaleMode === "off"
           ? { ciphertext: null, keyRef: null }
