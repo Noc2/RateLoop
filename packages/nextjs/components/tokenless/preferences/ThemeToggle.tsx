@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { persistAuthenticatedAccountPreference } from "./authenticatedAccountPreferences";
 import {
   type Theme,
+  applyThemePreference,
   parseThemePreference,
   readThemePreferenceFromCookie,
   resolveThemePreference,
@@ -20,11 +21,6 @@ type ThemeToggleProps = {
 
 function currentSystemTheme(): Theme {
   return resolveThemePreference(undefined, window.matchMedia("(prefers-color-scheme: dark)").matches);
-}
-
-function applyExplicitTheme(theme: Theme) {
-  document.documentElement.dataset.theme = theme;
-  document.documentElement.style.colorScheme = theme;
 }
 
 async function persistAuthenticatedTheme(theme: Theme) {
@@ -64,7 +60,7 @@ export function ThemeToggle({
   useEffect(() => {
     const explicitTheme = readThemePreferenceFromCookie(document.cookie);
     if (explicitTheme) {
-      applyExplicitTheme(explicitTheme);
+      applyThemePreference(document.documentElement, explicitTheme);
       setTheme(explicitTheme);
       return;
     }
@@ -72,7 +68,7 @@ export function ThemeToggle({
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const updateFromSystem = () => {
       if (readThemePreferenceFromCookie(document.cookie)) return;
-      setTheme(resolveThemePreference(undefined, media.matches));
+      setTheme(applyThemePreference(document.documentElement, resolveThemePreference(undefined, media.matches)));
     };
     updateFromSystem();
     media.addEventListener("change", updateFromSystem);
@@ -82,7 +78,7 @@ export function ThemeToggle({
   const toggleTheme = () => {
     const renderedTheme = theme ?? parseThemePreference(document.documentElement.dataset.theme) ?? currentSystemTheme();
     const nextTheme = renderedTheme === "dark" ? "light" : "dark";
-    applyExplicitTheme(nextTheme);
+    applyThemePreference(document.documentElement, nextTheme);
     document.cookie = serializeThemePreferenceCookie(nextTheme, window.location.protocol === "https:");
     setTheme(nextTheme);
     void persistAuthenticatedTheme(nextTheme);

@@ -6,7 +6,7 @@ import { loadAuthenticatedAccountPreferences } from "./authenticatedAccountPrefe
 import { useLocale } from "next-intl";
 import { isLocale } from "~~/i18n/config";
 import { usePathname, useRouter } from "~~/i18n/navigation";
-import { parseThemePreference, serializeThemePreferenceCookie } from "~~/lib/ui/themePreference";
+import { applyThemePreference, parseThemePreference, serializeThemePreferenceCookie } from "~~/lib/ui/themePreference";
 
 let preferenceSyncCompleted = false;
 
@@ -29,8 +29,7 @@ export function AccountPreferenceHydrator() {
         const theme =
           typeof preferences.preferredTheme === "string" ? parseThemePreference(preferences.preferredTheme) : undefined;
         if (theme) {
-          document.documentElement.dataset.theme = theme;
-          document.documentElement.style.colorScheme = theme;
+          applyThemePreference(document.documentElement, theme);
           document.cookie = serializeThemePreferenceCookie(theme, window.location.protocol === "https:");
         }
 

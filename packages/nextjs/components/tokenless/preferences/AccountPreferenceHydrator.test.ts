@@ -86,3 +86,18 @@ test("global preference controls share auth-gated persistence", () => {
     assert.doesNotMatch(source, /fetch\("\/api\/account\/profile"/u, file);
   }
 });
+
+test("bootstrap, toggle, and authenticated hydration share document theme application", () => {
+  const consumers = [
+    ["../../../app/layout.tsx", "createThemeBootstrapScript"],
+    ["AccountPreferenceHydrator.tsx", "applyThemePreference"],
+    ["ThemeToggle.tsx", "applyThemePreference"],
+  ] as const;
+
+  for (const [file, sharedImplementation] of consumers) {
+    const source = readFileSync(new URL(file, import.meta.url), "utf8");
+    assert.match(source, new RegExp(`\\b${sharedImplementation}\\b`, "u"), file);
+    assert.doesNotMatch(source, /document\.documentElement\.dataset\.theme\s*=/u, file);
+    assert.doesNotMatch(source, /document\.documentElement\.style\.colorScheme\s*=/u, file);
+  }
+});

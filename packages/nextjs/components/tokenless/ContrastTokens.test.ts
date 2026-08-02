@@ -59,10 +59,14 @@ function assertContrast(foreground: string, background: string, label: string) {
 
 test("system color preference is the default and explicit choices are limited to light and dark", async () => {
   const [styles, rootLayout] = await Promise.all([stylesPromise, rootLayoutPromise]);
-  assert.match(styles, /themes:\s*light --default,\s*dark --prefersdark;/);
+  assert.match(styles, /themes:\s*light --default,\s*dark;/);
   assert.doesNotMatch(styles, /name:\s*"system"/);
   assert.match(rootLayout, /parseThemePreference\(cookieStore\.get\(THEME_COOKIE_NAME\)\?\.value\)/);
   assert.match(rootLayout, /data-theme=\{explicitTheme\}/);
+  assert.match(rootLayout, /id="rateloop-theme-bootstrap"/);
+  assert.match(rootLayout, /strategy="beforeInteractive"/);
+  assert.match(rootLayout, /nonce=\{nonce\}/);
+  assert.match(rootLayout, /createThemeBootstrapScript\(\)/);
   assert.doesNotMatch(rootLayout, /data-theme="(?:light|dark)"/);
 });
 

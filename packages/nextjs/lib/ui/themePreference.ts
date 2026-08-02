@@ -5,6 +5,11 @@ export const THEMES = ["light", "dark"] as const;
 
 export type Theme = (typeof THEMES)[number];
 
+type ThemeRoot = {
+  dataset: DOMStringMap;
+  style: CSSStyleDeclaration;
+};
+
 export function parseThemePreference(value: string | null | undefined): Theme | undefined {
   return THEMES.find(theme => theme === value);
 }
@@ -31,6 +36,20 @@ export function readThemePreferenceFromCookie(cookieHeader: string | null | unde
 
 export function resolveThemePreference(preference: Theme | undefined, prefersDark: boolean): Theme {
   return preference ?? (prefersDark ? "dark" : "light");
+}
+
+export function applyThemePreference(root: ThemeRoot, theme: Theme): Theme {
+  root.dataset.theme = theme;
+  root.style.colorScheme = theme;
+  return theme;
+}
+
+export function createThemeBootstrapScript(): string {
+  const themes = JSON.stringify(THEMES);
+  const resolveTheme = resolveThemePreference.toString();
+  const applyTheme = applyThemePreference.toString();
+
+  return `(() => { const root = document.documentElement; const themes = ${themes}; const current = root.dataset.theme; const preference = themes.includes(current) ? current : undefined; const theme = (${resolveTheme})(preference, window.matchMedia("(prefers-color-scheme: dark)").matches); (${applyTheme})(root, theme); })();`;
 }
 
 export function serializeThemePreferenceCookie(theme: Theme, secure: boolean): string {

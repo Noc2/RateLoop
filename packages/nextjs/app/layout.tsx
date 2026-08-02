@@ -1,8 +1,9 @@
 import { Inter, Space_Grotesk } from "next/font/google";
 import { cookies, headers } from "next/headers";
+import Script from "next/script";
 import { DEFAULT_LOCALE, isLocale } from "~~/i18n/config";
 import { getMessagesForLocale } from "~~/i18n/messages";
-import { THEME_COOKIE_NAME, parseThemePreference } from "~~/lib/ui/themePreference";
+import { THEME_COOKIE_NAME, createThemeBootstrapScript, parseThemePreference } from "~~/lib/ui/themePreference";
 import { AppProviders } from "~~/providers/AppProviders";
 import "~~/styles/globals.css";
 import { getMetadata } from "~~/utils/scaffold-eth/getMetadata";
@@ -34,6 +35,7 @@ const RootLayout = async ({ children }: { children: React.ReactNode }) => {
   const requestedLocale = requestHeaders.get("x-next-intl-locale");
   const locale = isLocale(requestedLocale) ? requestedLocale : DEFAULT_LOCALE;
   const explicitTheme = parseThemePreference(cookieStore.get(THEME_COOKIE_NAME)?.value);
+  const nonce = requestHeaders.get("x-nonce") ?? undefined;
 
   return (
     <html
@@ -43,6 +45,9 @@ const RootLayout = async ({ children }: { children: React.ReactNode }) => {
       suppressHydrationWarning
       style={explicitTheme ? { colorScheme: explicitTheme } : undefined}
     >
+      <Script id="rateloop-theme-bootstrap" nonce={nonce} strategy="beforeInteractive">
+        {createThemeBootstrapScript()}
+      </Script>
       <body suppressHydrationWarning>
         <AppProviders notificationDismissLabel={getMessagesForLocale(locale).shared.notifications.dismiss}>
           {children}

@@ -32,7 +32,8 @@ test("theme toggle follows the OS until a light or dark override is chosen", asy
     );
 
     assert.ok(await view.findByRole("button", { name: "Zum hellen Design wechseln" }));
-    assert.equal(document.documentElement.dataset.theme, undefined);
+    assert.equal(document.documentElement.dataset.theme, "dark");
+    assert.equal(document.documentElement.style.colorScheme, "dark");
     assert.equal(document.cookie, "");
 
     fireEvent.click(view.getByRole("button"));
