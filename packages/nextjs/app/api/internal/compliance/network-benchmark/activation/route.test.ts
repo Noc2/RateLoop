@@ -5,6 +5,8 @@ import test from "node:test";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const URL = "https://tokenless.example.test/api/internal/compliance/network-benchmark/activation";
+const ACTIVE_DEPLOYMENT_KEY =
+  "tokenless-v4:84532:0x1111111111111111111111111111111111111111:0x2222222222222222222222222222222222222222:0x3333333333333333333333333333333333333333:0x4444444444444444444444444444444444444444";
 
 function activationBody() {
   const evidenceTypes = [
@@ -28,7 +30,7 @@ function activationBody() {
     evidenceWindowStart: "2026-07-01T00:00:00.000Z",
     evidenceWindowEnd: "2026-07-31T00:00:00.000Z",
     methodVersion: "method_v1",
-    deploymentKey: "tokenless-v4:84532:deployment",
+    deploymentKey: ACTIVE_DEPLOYMENT_KEY,
     evidenceId: `evidence_${index}`,
     evidenceType,
     counterpartyReferenceHash: `sha256:${"b".repeat(64)}`,
@@ -58,7 +60,7 @@ function activationBody() {
     evidenceWindowStart: "2026-07-01T00:00:00.000Z",
     evidenceWindowEnd: "2026-07-31T00:00:00.000Z",
     methodVersion: "method_v1",
-    deploymentKey: "tokenless-v4:84532:deployment",
+    deploymentKey: ACTIVE_DEPLOYMENT_KEY,
     activationScope: "testnet_network_benchmark_exercise",
     permittedWorkerJurisdictions: ["DE", "FR"],
     authorizationDurationSeconds: 86_400,

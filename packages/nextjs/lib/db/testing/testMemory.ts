@@ -88,6 +88,22 @@ function applySqlStatements(sqlText: string, execute: (statement: string) => voi
 
 function memoryCompatibleMigrationStatement(file: string, statement: string): string | null {
   if (
+    file === "0188_network_benchmark_deployment_key.sql" &&
+    /^ALTER TABLE "tokenless_network_benchmark_[^"]+"[\s\S]*ADD CONSTRAINT[\s\S]*NOT VALID;?$/u.test(statement)
+  ) {
+    // PostgreSQL adds the checks without blocking writes and validates them in
+    // the following statement. pg-mem cannot parse NOT VALID, so install the
+    // same final validated check immediately in the in-memory harness.
+    return statement.replace(/ NOT VALID;?$/u, "");
+  }
+  if (
+    file === "0188_network_benchmark_deployment_key.sql" &&
+    /^ALTER TABLE "tokenless_network_benchmark_[^"]+"\s+VALIDATE CONSTRAINT/u.test(statement)
+  ) {
+    // The transformed ADD CONSTRAINT above already validates existing rows.
+    return null;
+  }
+  if (
     file === "0187_dsa_named_panel_materialization_retries.sql" &&
     /^(?:CREATE OR REPLACE FUNCTION|CREATE TRIGGER) tokenless_(?:guard_)?dsa_named_panel_materialization_retry/u.test(
       statement,

@@ -1,3 +1,4 @@
+import { buildTokenlessDeploymentKey, normalizeCompleteTokenlessDeploymentKey } from "../deploymentKey";
 import {
   type TokenlessPlatformSecretAccountConfiguration,
   loadPlatformSecretEthereumAccountConfiguration,
@@ -18,6 +19,7 @@ export const TOKENLESS_MINIMUM_REVEAL_WINDOW_SECONDS = Number(IMMUTABLE_MINIMUM_
 export const TOKENLESS_DEFAULT_REVEAL_WINDOW_SECONDS = 60 * 60;
 export const TOKENLESS_MINIMUM_BEACON_FAILURE_GRACE_SECONDS = Number(IMMUTABLE_MINIMUM_BEACON_FAILURE_GRACE_SECONDS);
 export const TOKENLESS_SCORING_BEACON_SAFETY_MARGIN_SECONDS = Number(IMMUTABLE_SCORING_BEACON_SAFETY_MARGIN_SECONDS);
+export { buildTokenlessDeploymentKey };
 
 const PRIVATE_KEY_PATTERN = /^0x[0-9a-fA-F]{64}$/;
 
@@ -133,23 +135,6 @@ function rpcUrls(env: NodeJS.ProcessEnv) {
   return { rpcUrl: normalized[0]!, rpcFallbackUrls: normalized.slice(1) };
 }
 
-export function buildTokenlessDeploymentKey(input: {
-  chainId: number;
-  panelAddress: Address;
-  issuerAddress: Address;
-  x402SubmitterAddress: Address;
-  feedbackBonusAddress: Address;
-}) {
-  return [
-    "tokenless-v4",
-    input.chainId,
-    input.panelAddress.toLowerCase(),
-    input.issuerAddress.toLowerCase(),
-    input.x402SubmitterAddress.toLowerCase(),
-    input.feedbackBonusAddress.toLowerCase(),
-  ].join(":");
-}
-
 export function loadTokenlessChainConfig(env: NodeJS.ProcessEnv = process.env): TokenlessChainConfig {
   const schemaVersion = required(env, "TOKENLESS_DEPLOYMENT_SCHEMA");
   if (schemaVersion !== TOKENLESS_DEPLOYMENT_SCHEMA) {
@@ -177,8 +162,8 @@ export function loadTokenlessChainConfig(env: NodeJS.ProcessEnv = process.env): 
     x402SubmitterAddress,
     feedbackBonusAddress,
   });
-  const deploymentKey = required(env, "TOKENLESS_DEPLOYMENT_KEY").toLowerCase();
-  if (deploymentKey !== expectedKey) {
+  const deploymentKey = normalizeCompleteTokenlessDeploymentKey(required(env, "TOKENLESS_DEPLOYMENT_KEY"));
+  if (!deploymentKey || deploymentKey !== expectedKey) {
     throw new Error("TOKENLESS_DEPLOYMENT_KEY does not match the complete configured tokenless contract bundle.");
   }
   const deploymentBlock = BigInt(required(env, "TOKENLESS_DEPLOYMENT_BLOCK"));

@@ -1,3 +1,7 @@
+import {
+  TOKENLESS_V4_BASE_SEPOLIA_DEPLOYMENT_KEY_SQL_PATTERN_SOURCE,
+  normalizeCompleteTokenlessDeploymentKey,
+} from "../tokenless/deploymentKey";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -5,6 +9,10 @@ import test from "node:test";
 const migration = readFileSync(new URL("../../drizzle/0177_network_benchmark_activation.sql", import.meta.url), "utf8");
 const hardening = readFileSync(
   new URL("../../drizzle/0183_network_benchmark_activation_v2.sql", import.meta.url),
+  "utf8",
+);
+const deploymentKeyHardening = readFileSync(
+  new URL("../../drizzle/0188_network_benchmark_deployment_key.sql", import.meta.url),
   "utf8",
 );
 const service = readFileSync(new URL("../tokenless/networkBenchmarkActivation.ts", import.meta.url), "utf8");
@@ -115,12 +123,30 @@ test("0183 requires a closed window, distinct method reviewer, demand, and worke
   assert.match(service, /auditCounterparties\.size !== 1/u);
 });
 
-test("0183 can authorize only the Base Sepolia benchmark exercise", () => {
+test("0183 and 0188 can authorize only the active complete Base Sepolia benchmark deployment", () => {
   assert.match(hardening, /\^tokenless-v4:84532:/u);
   assert.match(hardening, /"activation_scope" = 'testnet_network_benchmark_exercise'/u);
   assert.match(service, /NETWORK_BENCHMARK_ACTIVATION_SCOPE = "testnet_network_benchmark_exercise"/u);
-  assert.match(service, /\^tokenless-v4:84532:/u);
+  assert.match(service, /normalizeCompleteTokenlessDeploymentKey/u);
+  assert.match(service, /must match the active tokenless deployment/u);
   assert.doesNotMatch(hardening, /'live_marketplace_release'/u);
+
+  const activeKey =
+    "tokenless-v4:84532:0x1111111111111111111111111111111111111111:0x2222222222222222222222222222222222222222:0x3333333333333333333333333333333333333333:0x4444444444444444444444444444444444444444";
+  assert.ok(deploymentKeyHardening.includes(`~ '${TOKENLESS_V4_BASE_SEPOLIA_DEPLOYMENT_KEY_SQL_PATTERN_SOURCE}'`));
+  assert.equal(
+    (deploymentKeyHardening.match(/tokenless_is_complete_v4_base_sepolia_deployment_key\("deployment_key"\)/gu) ?? [])
+      .length,
+    6,
+  );
+  assert.equal(normalizeCompleteTokenlessDeploymentKey(activeKey), activeKey);
+  for (const invalid of [
+    "tokenless-v4:84532:any-text",
+    `${activeKey}:extra`,
+    activeKey.replace("0x1111111111111111111111111111111111111111", "0x0000000000000000000000000000000000000000"),
+  ]) {
+    assert.equal(normalizeCompleteTokenlessDeploymentKey(invalid), null, invalid);
+  }
 });
 
 test("activation evidence opportunities and acceptance share one exact worker-jurisdiction boundary", () => {

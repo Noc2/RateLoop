@@ -4,11 +4,11 @@ import type { Pool, PoolClient } from "pg";
 import "server-only";
 import { dbPool } from "~~/lib/db";
 import { type AuditEventInput, appendAuditEvent } from "~~/lib/privacy/audit";
+import { normalizeCompleteTokenlessDeploymentKey } from "~~/lib/tokenless/deploymentKey";
 import { PUBLIC_NETWORK_LEGAL_RESIDENCE_POLICY } from "~~/lib/tokenless/publicNetworkLegalResidence";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/u;
-const DEPLOYMENT_KEY = /^tokenless-v4:84532:[A-Za-z0-9:._-]{1,233}$/u;
 const DIGEST = /^sha256:[0-9a-f]{64}$/u;
 const MAX_ACTIVATION_SECONDS = 30 * 24 * 60 * 60;
 
@@ -173,10 +173,11 @@ function digest(value: string, field: string) {
 }
 
 function deploymentKey(value: string) {
-  if (!DEPLOYMENT_KEY.test(value)) {
+  const normalized = normalizeCompleteTokenlessDeploymentKey(value);
+  if (!normalized) {
     invalid("Deployment key must be a complete tokenless-v4 Base Sepolia key.", "deploymentKey");
   }
-  return value;
+  return normalized;
 }
 
 function instant(value: string, field: string) {
@@ -631,9 +632,11 @@ async function withSerializable<T>(pool: PoolLike, work: (client: PoolClient) =>
 export function createNetworkBenchmarkActivationService(input?: {
   pool?: PoolLike;
   appendAudit?: typeof appendAuditEvent;
+  activeDeploymentKey?: string;
 }) {
   const pool = input?.pool ?? dbPool;
   const appendAudit = input?.appendAudit ?? appendAuditEvent;
+  const configuredActiveDeploymentKey = input?.activeDeploymentKey ?? process.env.TOKENLESS_DEPLOYMENT_KEY ?? "";
   return {
     async activate(
       activationInput: NetworkBenchmarkActivationBoundary & {
@@ -644,6 +647,18 @@ export function createNetworkBenchmarkActivationService(input?: {
         opportunityIds: readonly string[];
       },
     ) {
+      const activeDeploymentKey = normalizeCompleteTokenlessDeploymentKey(configuredActiveDeploymentKey);
+      if (!activeDeploymentKey) {
+        throw new TokenlessServiceError(
+          "Network benchmark activation is unavailable without the active complete deployment key.",
+          503,
+          "network_benchmark_activation_unavailable",
+        );
+      }
+      const requestedDeploymentKey = deploymentKey(activationInput.deploymentKey);
+      if (requestedDeploymentKey !== activeDeploymentKey) {
+        invalid("Deployment key must match the active tokenless deployment.", "deploymentKey");
+      }
       return withSerializable(pool, async client => {
         await requireWorkspaceManagerReference(client, activationInput);
         const activatedAt = await transactionTime(client);
@@ -692,6 +707,7 @@ export function createNetworkBenchmarkActivationService(input?: {
         }));
         const built = buildNetworkBenchmarkActivation({
           ...activationInput,
+          deploymentKey: requestedDeploymentKey,
           activatedAt: activatedAt.toISOString(),
           opportunities,
         });

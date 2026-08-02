@@ -11,6 +11,10 @@ import {
 } from "~~/lib/tokenless/networkBenchmarkActivation";
 
 const digest = (character: string) => `sha256:${character.repeat(64)}` as const;
+const ACTIVE_DEPLOYMENT_KEY =
+  "tokenless-v4:84532:0x1111111111111111111111111111111111111111:0x2222222222222222222222222222222222222222:0x3333333333333333333333333333333333333333:0x4444444444444444444444444444444444444444";
+const OTHER_DEPLOYMENT_KEY =
+  "tokenless-v4:84532:0x1111111111111111111111111111111111111111:0x2222222222222222222222222222222222222222:0x3333333333333333333333333333333333333333:0x5555555555555555555555555555555555555555";
 const boundary = {
   workspaceId: "workspace_network_benchmark",
   projectId: "project_network_benchmark",
@@ -19,7 +23,7 @@ const boundary = {
   evidenceWindowStart: "2026-07-01T00:00:00.000Z",
   evidenceWindowEnd: "2026-07-31T00:00:00.000Z",
   methodVersion: "paid_randomized_network_assignment_v1",
-  deploymentKey: "tokenless-v4:84532:panel:issuer:adapter:bonus",
+  deploymentKey: ACTIVE_DEPLOYMENT_KEY,
   activationScope: "testnet_network_benchmark_exercise",
   permittedWorkerJurisdictions: ["DE", "FR"],
 } as const;
@@ -196,7 +200,7 @@ test("activation rejects incomplete, duplicate-provider, cross-benchmark, and cr
     /exact benchmark boundary/u,
   );
   const crossDeployment = requiredEvidence.map((item, index) =>
-    index === 0 ? { ...item, deploymentKey: "tokenless-v4:84532:other" } : item,
+    index === 0 ? { ...item, deploymentKey: OTHER_DEPLOYMENT_KEY } : item,
   );
   assert.throws(
     () => buildNetworkBenchmarkActivation({ ...base, evidence: crossDeployment }),
@@ -312,7 +316,7 @@ test("execution fails closed across benchmark, deployment, unrelated opportuniti
     "scope_mismatch",
   );
   assert.equal(
-    evaluateNetworkBenchmarkExecutionAuthorization({ ...exact, deploymentKey: "tokenless-v4:84532:other" }).reason,
+    evaluateNetworkBenchmarkExecutionAuthorization({ ...exact, deploymentKey: OTHER_DEPLOYMENT_KEY }).reason,
     "scope_mismatch",
   );
   assert.equal(
@@ -444,6 +448,40 @@ test("deactivation audit preserves operator, manager, reason, and supersession s
   });
 });
 
+test("activation service rejects malformed and stale deployment keys before opening a transaction", async () => {
+  let connections = 0;
+  const service = createNetworkBenchmarkActivationService({
+    activeDeploymentKey: ACTIVE_DEPLOYMENT_KEY,
+    pool: {
+      async connect() {
+        connections += 1;
+        throw new Error("database must not be reached");
+      },
+    } as unknown as Pick<Pool, "connect">,
+    async appendAudit() {
+      assert.fail("a rejected deployment key must not be audited as activated");
+    },
+  });
+  const input = {
+    ...boundary,
+    workspaceManagerReferencePrincipalId: "principal_network_manager",
+    complianceOperatorKeyVersion: "compliance-v9",
+    authorizationDurationSeconds: 86_400,
+    evidence: requiredEvidence,
+    opportunityIds: [opportunities[0]!.opportunityId],
+  };
+
+  await assert.rejects(
+    service.activate({ ...input, deploymentKey: "tokenless-v4:84532:any-text" }),
+    /complete tokenless-v4 Base Sepolia key/u,
+  );
+  await assert.rejects(
+    service.activate({ ...input, deploymentKey: OTHER_DEPLOYMENT_KEY }),
+    /must match the active tokenless deployment/u,
+  );
+  assert.equal(connections, 0);
+});
+
 test("activation service verifies a manager reference but canonically attributes the operator", async () => {
   const statements: string[] = [];
   const audits: Record<string, unknown>[] = [];
@@ -490,6 +528,7 @@ test("activation service verifies a manager reference but canonically attributes
     release() {},
   } as unknown as PoolClient;
   const service = createNetworkBenchmarkActivationService({
+    activeDeploymentKey: ACTIVE_DEPLOYMENT_KEY,
     pool: { connect: async () => client } as unknown as Pick<Pool, "connect">,
     async appendAudit(input) {
       audits.push(input as unknown as Record<string, unknown>);
@@ -554,6 +593,7 @@ test("activation service rejects an opportunity when its frozen request profile 
     release() {},
   } as unknown as PoolClient;
   const service = createNetworkBenchmarkActivationService({
+    activeDeploymentKey: ACTIVE_DEPLOYMENT_KEY,
     pool: { connect: async () => client } as unknown as Pick<Pool, "connect">,
     async appendAudit() {
       assert.fail("an unavailable request profile must not be audited as activated");
@@ -598,6 +638,7 @@ test("activation service rejects a private project before reading its opportunit
     release() {},
   } as unknown as PoolClient;
   const service = createNetworkBenchmarkActivationService({
+    activeDeploymentKey: ACTIVE_DEPLOYMENT_KEY,
     pool: { connect: async () => client } as unknown as Pick<Pool, "connect">,
     async appendAudit() {
       assert.fail("a private project must not be audited as activated");
@@ -650,6 +691,7 @@ test("emergency deactivation does not depend on the manager remaining active", a
     release() {},
   } as unknown as PoolClient;
   const service = createNetworkBenchmarkActivationService({
+    activeDeploymentKey: ACTIVE_DEPLOYMENT_KEY,
     pool: { connect: async () => client } as unknown as Pick<Pool, "connect">,
     async appendAudit(input) {
       audits.push(input as unknown as Record<string, unknown>);

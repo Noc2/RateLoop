@@ -2009,7 +2009,8 @@ async function dsaNamedPanelMaterializationRetryChecks(client) {
 
 export async function networkBenchmarkPublicBoundaryChecks(client) {
   const activationReference = "network_activation_public_boundary";
-  const deploymentKey = "tokenless-v4:84532:public-boundary";
+  const deploymentKey =
+    "tokenless-v4:84532:0x1111111111111111111111111111111111111111:0x2222222222222222222222222222222222222222:0x3333333333333333333333333333333333333333:0x4444444444444444444444444444444444444444";
   const now = new Date();
   const expiresAt = new Date(now.getTime() + 60_000);
   await client.query("BEGIN");
