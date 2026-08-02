@@ -241,12 +241,9 @@ export function BetterAuthSignIn() {
     const accountLabel = session.displayName?.trim() || t("yourAccount");
     return (
       <section className="space-y-4" aria-labelledby="active-account-heading">
-        <div>
-          <h2 id="active-account-heading" className="text-lg font-semibold text-base-content">
-            {t("alreadySignedIn")}
-          </h2>
-          <p className="mt-2 text-sm leading-6 text-base-content/65">{t("alreadySignedInDescription")}</p>
-        </div>
+        <h2 id="active-account-heading" className="text-lg font-semibold text-base-content">
+          {t("alreadySignedIn")}
+        </h2>
         <button
           className="rateloop-gradient-action min-h-11 w-full px-4"
           disabled={busy}

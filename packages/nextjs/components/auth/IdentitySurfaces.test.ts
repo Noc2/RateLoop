@@ -51,12 +51,14 @@ test("account sign-in is Better Auth first and explicitly creates no wallet", ()
   assert.match(signInPage, /<SignInSurface/);
   assert.match(signInPage, /<LocalizedPublicContent[\s\S]*<SignInSurface branded title="Sign in"/);
   assert.doesNotMatch(signInPage, /No wallet required/i);
-  assert.match(signInSurface, /"brandTitle": "The Human Assurance Loop"/);
+  assert.doesNotMatch(signInSurface, /brandTitle|The Human Assurance Loop/);
   assert.doesNotMatch(signInSurface, /Assurance <span[^>]+>Loop/);
   assert.match(signInSurface, /branded \? "rateloop-text-gradient" : "text-base-content"/);
   assert.match(signInSurface, /<RateLoopLogo/);
   assert.match(signInSurface, /<Card as="section"/);
   assert.match(signInSurface, /w-full max-w-md rounded-2xl p-8 text-center/);
+  assert.doesNotMatch(signIn, /alreadySignedInDescription/);
+  assert.match(signIn, /"verified": "Email verified\."/);
 });
 
 test("wallet setup is explicit, purpose-bound, and keeps managed wallets disabled in production", () => {

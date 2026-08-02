@@ -24,7 +24,7 @@ test("English and German expose the same message contract", () => {
   assert.deepEqual(germanKeys, englishKeys);
   assert.ok(englishKeys.includes("shell.navigation.primary"));
   assert.ok(englishKeys.includes("home.loop.stages.policy.title"));
-  assert.ok(englishKeys.includes("auth.brandTitle"));
+  assert.ok(englishKeys.includes("auth.signIn.alreadySignedIn"));
 });
 
 test("locale validation and URL normalization share the supported locale contract", () => {
@@ -48,7 +48,6 @@ test("German copy uses the established plain-language review vocabulary", () => 
     .map(value => value.replaceAll("{reviewer}", ""))
     .join("\n");
 
-  assert.equal(germanMessages.auth.brandTitle, "Geprüft von Menschen.");
   assert.equal(germanMessages.shell.brandTagline, "Prüfung");
   assert.equal(
     [
