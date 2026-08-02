@@ -204,6 +204,67 @@ function verifySignedEntryTimestamp(entry, rekorPublicKey) {
   }
 }
 
+function verifyCheckpoint(proof, rekorPublicKey) {
+  const checkpoint = proof?.checkpoint;
+  if (typeof checkpoint !== "string" || checkpoint.length > 65_536 || !checkpoint.endsWith("\n")) return false;
+  const separator = checkpoint.indexOf("\n\n");
+  if (separator < 1) return false;
+  const signedText = checkpoint.slice(0, separator + 1);
+  const checkpointLines = signedText.slice(0, -1).split("\n");
+  if (checkpointLines.length < 3) return false;
+  const origin = checkpointLines[0];
+  const treeSize = number(checkpointLines[1].trim());
+  let rootHash;
+  try {
+    rootHash = strictBase64(checkpointLines[2].trim());
+  } catch {
+    return false;
+  }
+  if (
+    !origin ||
+    origin !== origin.trim() ||
+    treeSize === null ||
+    treeSize < 1 ||
+    rootHash.byteLength !== 32 ||
+    treeSize !== number(proof?.treeSize)
+  ) {
+    return false;
+  }
+  try {
+    if (!rootHash.equals(hashBytes(proof?.rootHash))) return false;
+  } catch {
+    return false;
+  }
+
+  let key;
+  let keyHint;
+  let algorithm;
+  try {
+    key = publicKey(rekorPublicKey);
+    keyHint = sha256Bytes(keyDer(key)).subarray(0, 4);
+    algorithm = key.asymmetricKeyType === "ed25519" || key.asymmetricKeyType === "ed448" ? null : "sha256";
+  } catch {
+    return false;
+  }
+  const signatureLines = checkpoint.slice(separator + 2).split("\n");
+  if (signatureLines.pop() !== "" || signatureLines.length === 0) return false;
+  let trustedSignature = false;
+  for (const line of signatureLines) {
+    const match = line.match(/^— ([^\s]+) ([A-Za-z0-9+/]+={0,2})$/u);
+    if (!match) return false;
+    const [, name, encoded] = match;
+    if (origin !== name && !origin.startsWith(`${name} - `)) continue;
+    try {
+      const signature = strictBase64(encoded);
+      if (signature.byteLength <= 4 || !signature.subarray(0, 4).equals(keyHint)) continue;
+      if (verify(algorithm, Buffer.from(signedText), key, signature.subarray(4))) trustedSignature = true;
+    } catch {
+      return false;
+    }
+  }
+  return trustedSignature;
+}
+
 export function verifyRekorReceipt(input) {
   const errors = [];
   const receipt = jsonObject(input.receipt);
@@ -258,7 +319,9 @@ export function verifyRekorReceipt(input) {
     errors.push("invalid_rekor_trust_anchor");
   }
   if (!verifySignedEntryTimestamp(entry, input.rekorPublicKey)) errors.push("invalid_rekor_signed_entry_timestamp");
-  if (!body || !verifyInclusionProof(body, entry.verification?.inclusionProof)) {
+  const inclusionProof = entry.verification?.inclusionProof;
+  if (!verifyCheckpoint(inclusionProof, input.rekorPublicKey)) errors.push("invalid_rekor_checkpoint");
+  if (!body || !verifyInclusionProof(body, inclusionProof)) {
     errors.push("invalid_rekor_inclusion_proof");
   }
   return { valid: errors.length === 0, errors };
@@ -374,4 +437,9 @@ export function verifyAssuranceAttestationWitnessBundle(bundle, trust = {}) {
   return { valid: errors.length === 0, errors };
 }
 
-export const __attestationWitnessCoreTestUtils = { dssePae, verifyInclusionProof, verifySignedEntryTimestamp };
+export const __attestationWitnessCoreTestUtils = {
+  dssePae,
+  verifyCheckpoint,
+  verifyInclusionProof,
+  verifySignedEntryTimestamp,
+};

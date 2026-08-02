@@ -15,6 +15,7 @@ import {
 } from "~~/lib/tokenless/assuranceAttestations";
 import {
   REKOR_RECEIPT_SCHEMA_VERSION,
+  __attestationWitnessCoreTestUtils,
   canonicalizeLegacyAttestationWitness,
   expectedLegacyRekorCanonicalBody,
   expectedRekorCanonicalBody,
@@ -39,6 +40,21 @@ async function signedEnvelope() {
     signer: { keyId: SIGNER_KEY_ID, sign: async payload => sign(null, payload, signerKeys.privateKey) },
   });
   return { signerKeys, statement, envelope };
+}
+
+function signedCheckpoint(input: {
+  rootHash: string;
+  treeSize: number;
+  rekorKeys: ReturnType<typeof generateKeyPairSync>;
+  origin?: string;
+}) {
+  const origin = input.origin ?? "rekor.example.test - test-log";
+  const signerName = origin.split(" - ")[0];
+  const message = `${origin}\n ${input.treeSize}\n ${Buffer.from(input.rootHash, "hex").toString("base64")}\n Timestamp: ${NOW.getTime()}\n`;
+  const publicKeyDer = input.rekorKeys.publicKey.export({ format: "der", type: "spki" });
+  const keyHint = createHash("sha256").update(publicKeyDer).digest().subarray(0, 4);
+  const signature = sign("sha256", Buffer.from(message), input.rekorKeys.privateKey);
+  return `${message}\n— ${signerName} ${Buffer.concat([keyHint, signature]).toString("base64")}\n`;
 }
 
 function rekorResponse(input: {
@@ -66,13 +82,14 @@ function rekorResponse(input: {
   const rootHash = createHash("sha256")
     .update(Buffer.concat([Buffer.from([0]), body]))
     .digest("hex");
+  const checkpoint = signedCheckpoint({ rootHash, treeSize: 1, rekorKeys: input.rekorKeys });
   return {
     entryUuid: "a".repeat(64),
     logEntry: {
       ...logEntry,
       verification: {
         signedEntryTimestamp,
-        inclusionProof: { logIndex: 0, treeSize: 1, rootHash, hashes: [], checkpoint: "signed-checkpoint" },
+        inclusionProof: { logIndex: 0, treeSize: 1, rootHash, hashes: [], checkpoint },
       },
     },
   };
@@ -95,7 +112,7 @@ test("platform-secret managed signer pins the Ed25519 key fingerprint and signs 
   await assert.rejects(() => signer.sign(Buffer.alloc(4097)), /payload/u);
 });
 
-test("Rekor publisher submits DSSE proposedContent and locally verifies SET plus inclusion proof", async () => {
+test("Rekor publisher submits DSSE proposedContent and locally verifies SET, checkpoint, and inclusion proof", async () => {
   const signed = await signedEnvelope();
   const rekorKeys = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
   const response = rekorResponse({
@@ -119,6 +136,55 @@ test("Rekor publisher submits DSSE proposedContent and locally verifies SET plus
   assert.equal(receipt.entryUuid, response.entryUuid);
   assert.equal(receipt.logIndex, "0");
   assert.equal(receipt.inclusionBundle.schemaVersion, REKOR_RECEIPT_SCHEMA_VERSION);
+});
+
+test("Rekor checkpoint verification follows signed-note framing and rejects unauthenticated roots", async () => {
+  const signed = await signedEnvelope();
+  const rekorKeys = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+  const response = rekorResponse({
+    envelope: signed.envelope,
+    signerPublicKey: signed.signerKeys.publicKey,
+    rekorKeys,
+  });
+  const proof = response.logEntry.verification.inclusionProof;
+  assert.equal(__attestationWitnessCoreTestUtils.verifyCheckpoint(proof, rekorKeys.publicKey), true);
+
+  assert.equal(
+    __attestationWitnessCoreTestUtils.verifyCheckpoint({ ...proof, checkpoint: undefined }, rekorKeys.publicKey),
+    false,
+  );
+  const tamperedSignature = proof.checkpoint.replace(
+    /^(— [^ ]+ )([A-Za-z0-9+/])/mu,
+    (_line, prefix: string, first: string) => `${prefix}${first === "A" ? "B" : "A"}`,
+  );
+  assert.equal(
+    __attestationWitnessCoreTestUtils.verifyCheckpoint(
+      { ...proof, checkpoint: tamperedSignature },
+      rekorKeys.publicKey,
+    ),
+    false,
+  );
+  assert.equal(
+    __attestationWitnessCoreTestUtils.verifyCheckpoint(
+      { ...proof, rootHash: Buffer.alloc(32, 1).toString("hex") },
+      rekorKeys.publicKey,
+    ),
+    false,
+  );
+
+  const untrustedKeys = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+  const untrustedCheckpoint = signedCheckpoint({
+    rootHash: proof.rootHash,
+    treeSize: proof.treeSize,
+    rekorKeys: untrustedKeys,
+  });
+  assert.equal(
+    __attestationWitnessCoreTestUtils.verifyCheckpoint(
+      { ...proof, checkpoint: untrustedCheckpoint },
+      rekorKeys.publicKey,
+    ),
+    false,
+  );
 });
 
 test("RFC 3161 adapter sends a DER timestamp query and accepts only a locally verified response", async () => {
@@ -182,6 +248,14 @@ test("offline witness verifier binds DSSE, Rekor, and explicit signer/log trust 
     expectedSignerKeyId: SIGNER_KEY_ID,
   });
   assert.deepEqual(valid, { valid: true, errors: [] });
+  const missingCheckpoint = structuredClone(bundle);
+  Reflect.deleteProperty(missingCheckpoint.rekor.bundle.logEntry.verification.inclusionProof, "checkpoint");
+  assert.ok(
+    verifyAssuranceAttestationWitnessBundle(missingCheckpoint, {
+      signerPublicKey: signed.signerKeys.publicKey.export({ format: "pem", type: "spki" }),
+      rekorPublicKey: rekorKeys.publicKey.export({ format: "pem", type: "spki" }),
+    }).errors.includes("invalid_rekor_checkpoint"),
+  );
   const tampered = structuredClone(bundle);
   tampered.artifact.digest = `sha256:${"ff".repeat(32)}`;
   assert.equal(
@@ -248,6 +322,7 @@ test("offline witness verifier preserves historical v1 statement and Rekor SET b
   const rootHash = createHash("sha256")
     .update(Buffer.concat([Buffer.from([0]), body]))
     .digest("hex");
+  const checkpoint = signedCheckpoint({ rootHash, treeSize: 1, rekorKeys });
   const entryUuid = "b".repeat(64);
   const bundle = {
     schemaVersion: "rateloop.assurance-external-witness.v1",
@@ -271,7 +346,7 @@ test("offline witness verifier preserves historical v1 statement and Rekor SET b
           ...logEntry,
           verification: {
             signedEntryTimestamp,
-            inclusionProof: { logIndex: 0, treeSize: 1, rootHash, hashes: [] },
+            inclusionProof: { logIndex: 0, treeSize: 1, rootHash, hashes: [], checkpoint },
           },
         },
       },
