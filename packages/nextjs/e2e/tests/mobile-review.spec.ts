@@ -195,7 +195,8 @@ test("mobile question images stack and recovery confirmation waits for a success
   const save = page.getByRole("link", { name: "Download recovery backup" });
   const confirmation = page.getByRole("checkbox", { name: "I saved the recovery backup" });
   await save.click();
-  await expect(page.getByText("Mobile share was rejected.", { exact: true })).toBeVisible();
+  await expect(page.getByText("The recovery backup could not be saved.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Mobile share was rejected.", { exact: true })).toHaveCount(0);
   await expect(confirmation).toBeDisabled();
 
   await page.evaluate(() => {
