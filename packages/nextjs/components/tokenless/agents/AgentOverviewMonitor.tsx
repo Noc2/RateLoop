@@ -946,9 +946,14 @@ function AttentionList({ overview, workspaceId }: { overview: AgentOverview; wor
   const ui = useAgentTranslations("ui");
   return (
     <Card as="section" className="rounded-2xl p-5" aria-labelledby="agent-attention-heading">
-      <h2 id="agent-attention-heading" className="text-xl font-semibold">
-        <AgentText id="translated077" />
-      </h2>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <h2 id="agent-attention-heading" className="text-xl font-semibold">
+          <AgentText id="translated077" />
+        </h2>
+        <span className="text-xs text-base-content/55">
+          {localizeOverviewPeriod(overview.attention.periodLabel, ui)}
+        </span>
+      </div>
       {overview.attention.items.length === 0 ? (
         <p className="mt-5 text-sm text-base-content/55">
           <AgentText id="noAttention" />
