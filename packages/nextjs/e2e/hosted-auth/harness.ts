@@ -1,5 +1,6 @@
 import { HOSTED_AUTH_ROLES, type HostedAuthConfig, type HostedAuthRole, readHostedAuthConfig } from "./config";
 import { ResendReceivingInbox, redactHostedAuthSecrets } from "./inbox";
+import { BETTER_AUTH_SIGN_IN_TEST_IDS } from "../../components/auth/browserSelectors";
 import type { Browser, BrowserContext, Page } from "@playwright/test";
 
 type HarnessOptions = {
@@ -22,6 +23,10 @@ type HostedBrowserSession = {
   authProvider: "better_auth:email-otp";
   principalId: string;
 };
+
+export function hostedAuthEmailInput(page: Pick<Page, "getByTestId">) {
+  return page.getByTestId(BETTER_AUTH_SIGN_IN_TEST_IDS.emailInput);
+}
 
 async function assertAuthenticatedSession(page: Page): Promise<HostedBrowserSession> {
   const result = await page.evaluate(async () => {
@@ -149,7 +154,7 @@ export class HostedAuthHarness {
     const page = await runtime.context.newPage();
     try {
       await page.goto("/sign-in?returnTo=%2F", { waitUntil: "domcontentloaded" });
-      const email = page.getByLabel("Work email");
+      const email = hostedAuthEmailInput(page);
       await email.waitFor({ state: "visible" });
       await email.fill(account.email);
       const requestedAt = new Date();

@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import { BETTER_AUTH_SIGN_IN_TEST_IDS } from "./browserSelectors";
 import { normalizeSignInReturnPath } from "./signInReturnPath";
 import { useTranslations } from "next-intl";
 import { Field } from "~~/components/tokenless/forms/Field";
@@ -362,6 +363,7 @@ export function BetterAuthSignIn() {
         <form className="space-y-4" onSubmit={sendCode}>
           <Field
             id="rateloop-email"
+            data-testid={BETTER_AUTH_SIGN_IN_TEST_IDS.emailInput}
             label={t("emailAddress")}
             type="email"
             autoComplete="email"
