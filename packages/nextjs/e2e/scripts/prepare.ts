@@ -125,6 +125,17 @@ async function connectedWorkspace(ownerAddress: string) {
       environment: "production",
     },
   });
+  const privateGroup = await createPrivateGroup({
+    accountAddress: ownerAddress,
+    workspaceId,
+    name: "Browser test reviewers",
+    purpose: "Exercise the owner-facing private human-review configuration with a real routing group.",
+    policy: {
+      defaultCompensation: "unpaid",
+      dataClassifications: ["internal", "confidential"],
+      exportAllowed: false,
+    },
+  });
   // Typing the fixture against the owner-facing request-profile contract keeps this deterministic
   // gate honest: when the server adds a required profile field (as it did with `questionAuthority`),
   // this fixture stops type-checking at the point the field is introduced rather than failing at
@@ -136,14 +147,14 @@ async function connectedWorkspace(ownerAddress: string) {
     positiveLabel: "Approve",
     negativeLabel: "Reject",
     rationaleMode: "required",
-    audience: "public_network",
-    contentBoundary: "public_or_test",
-    privateSensitivity: null,
-    privateGroupId: null,
+    audience: "private_invited",
+    contentBoundary: "private_workspace",
+    privateSensitivity: "confidential",
+    privateGroupId: privateGroup.groupId,
     responseWindowSeconds: 3_600,
-    panelSize: 3,
-    compensationMode: "usdc",
-    bountyPerSeatAtomic: "1000000",
+    panelSize: 2,
+    compensationMode: "unpaid",
+    bountyPerSeatAtomic: null,
   };
   await persistCurrentIntegrityEpochFixture("integrity:playwright");
   const review = await putHumanReviewConfigurationForOwner({
@@ -165,7 +176,7 @@ async function connectedWorkspace(ownerAddress: string) {
         maximumLatencyMs: 120_000,
       },
       requestProfile,
-      authority: "prepare_for_approval",
+      authority: "check_only",
     },
   });
   const reviews = await configureWorkspaceSetupReviews({
@@ -178,51 +189,10 @@ async function connectedWorkspace(ownerAddress: string) {
     accountAddress: ownerAddress,
     workspaceId,
     revision: reviews.revision,
-    decision: "not_required",
+    decision: "later",
+    groupId: privateGroup.groupId,
   });
   await completeWorkspaceAgentSetup({ accountAddress: ownerAddress, workspaceId, revision: people.revision });
-  const privateGroup = await createPrivateGroup({
-    accountAddress: ownerAddress,
-    workspaceId,
-    name: "Browser test reviewers",
-    purpose: "Exercise the owner-facing private human-review configuration with a real routing group.",
-    policy: {
-      defaultCompensation: "unpaid",
-      dataClassifications: ["internal", "confidential"],
-      exportAllowed: false,
-    },
-  });
-  await putHumanReviewConfigurationForOwner({
-    accountAddress: ownerAddress,
-    workspaceId,
-    agentId: connected.agent.agentId,
-    body: {
-      expectedBindingVersion: review.configuration.version,
-      selection: {
-        mode: "adaptive",
-        enforcementMode: "advisory",
-        agreementThresholdBps: 8_000,
-        productionFloorBps: 1_000,
-        fixedRateBps: null,
-        maximumUnreviewedGap: 20,
-        requiredRiskTiers: ["high"],
-        criticalRiskTiers: ["critical"],
-        minimumConfidenceBps: 7_000,
-        maximumLatencyMs: 120_000,
-      },
-      requestProfile: {
-        ...requestProfile,
-        audience: "private_invited",
-        contentBoundary: "private_workspace",
-        privateSensitivity: "confidential",
-        privateGroupId: privateGroup.groupId,
-        panelSize: 2,
-        compensationMode: "unpaid",
-        bountyPerSeatAtomic: null,
-      },
-      authority: "check_only",
-    },
-  });
   return { agentId: connected.agent.agentId, workspaceId };
 }
 
