@@ -251,9 +251,11 @@
     "create": "Wallet mit thirdweb erstellen",
     "connected": "Verbundene Wallet: {address}",
     "yourWallets": "Deine Wallets",
+    "loading": "Wallets werden geladen…",
     "appWallet": "App-Wallet",
     "yourWallet": "deine Wallet",
     "remove": "Entfernen",
+    "removeWallet": "Wallet {address} für {purpose} entfernen",
     "empty": "Mit diesem Konto ist keine Wallet verknüpft.",
     "privacy": "Finanzierungs- und Auszahlungsadressen sind auf Base öffentlich. Die Wiederverwendung einer Adresse kann bezahlte Aktivitäten über mehrere Runden hinweg verknüpfen.",
     "unavailable": "Wallet-Verbindungen sind für diese Bereitstellung nicht konfiguriert. Dein RateLoop-Konto funktioniert weiterhin ohne Wallet."

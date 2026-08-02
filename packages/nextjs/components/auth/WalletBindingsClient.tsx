@@ -8,7 +8,7 @@ import { readBrowserSession, subscribeToBrowserAuthSessionChanges } from "~~/lib
 import type { WalletBindingPurpose } from "~~/lib/auth/walletBindings";
 import { rateLoopThirdwebManagedWallet, rateLoopThirdwebWallets, thirdwebBrowserClient } from "~~/lib/thirdweb/client";
 
-type Binding = {
+export type Binding = {
   bindingId: string;
   purpose: WalletBindingPurpose;
   source: "self_custodial" | "thirdweb";
@@ -18,6 +18,8 @@ type Binding = {
 type SelectableWalletPurpose = Extract<WalletBindingPurpose, "funding" | "payout">;
 
 const PURPOSES: SelectableWalletPurpose[] = ["funding", "payout"];
+
+type WalletBindingLoadState = "loading" | "ready" | "error";
 
 export function WalletPurposeChooser({
   purpose,
@@ -69,6 +71,62 @@ function shortAddress(address: string) {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
+export function WalletBindingList({
+  bindings,
+  busy,
+  loadState,
+  onRevoke,
+}: {
+  bindings: Binding[];
+  busy: boolean;
+  loadState: WalletBindingLoadState;
+  onRevoke: (bindingId: string) => void;
+}) {
+  const t = useTranslations("account.walletBinding");
+  if (loadState === "loading") {
+    return (
+      <p className="mt-3 text-sm text-base-content/55" role="status">
+        {t("loading")}
+      </p>
+    );
+  }
+  if (loadState === "error") return null;
+  if (!bindings.length) return <p className="mt-3 text-sm text-base-content/55">{t("empty")}</p>;
+  return (
+    <ul className="mt-4 space-y-3">
+      {bindings.map(binding => {
+        const purposeLabel =
+          binding.purpose === "funding" || binding.purpose === "payout"
+            ? t(`purpose.${binding.purpose}.title`)
+            : t("purpose.connection");
+        const address = shortAddress(binding.walletAddress);
+        return (
+          <li
+            key={binding.bindingId}
+            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-base-content/10 p-4"
+          >
+            <div>
+              <p className="font-medium">{purposeLabel}</p>
+              <p className="font-mono text-xs text-base-content/50">
+                {address} · {binding.source === "thirdweb" ? t("appWallet") : t("yourWallet")}
+              </p>
+            </div>
+            <button
+              aria-label={t("removeWallet", { address, purpose: purposeLabel })}
+              className="btn btn-ghost btn-sm text-error"
+              disabled={busy}
+              onClick={() => onRevoke(binding.bindingId)}
+              type="button"
+            >
+              {t("remove")}
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 function WalletBindingControls({
   initialPurpose,
   managedWalletEnabled,
@@ -82,6 +140,7 @@ function WalletBindingControls({
   const [purpose, setPurpose] = useState<SelectableWalletPurpose>(initialPurpose);
   const [thirdwebJti, setThirdwebJti] = useState<string | null>(null);
   const [bindings, setBindings] = useState<Binding[]>([]);
+  const [loadState, setLoadState] = useState<WalletBindingLoadState>("loading");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -98,6 +157,8 @@ function WalletBindingControls({
   useEffect(() => {
     const refreshSession = async () => {
       const sessionRead = ++sessionReadRef.current;
+      setLoadState("loading");
+      setError(null);
       try {
         const session = await readBrowserSession();
         if (sessionRead !== sessionReadRef.current) return;
@@ -112,9 +173,11 @@ function WalletBindingControls({
           setNotice(null);
         }
         if (nextPrincipal) await refresh();
+        if (sessionRead === sessionReadRef.current) setLoadState("ready");
       } catch {
         if (sessionRead === sessionReadRef.current) {
           setError(t("loadFailed"));
+          setLoadState("error");
         }
       }
     };
@@ -266,37 +329,12 @@ function WalletBindingControls({
 
       <section>
         <h2 className="text-xl font-semibold">{t("yourWallets")}</h2>
-        {bindings.length ? (
-          <ul className="mt-4 space-y-3">
-            {bindings.map(binding => (
-              <li
-                key={binding.bindingId}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-base-content/10 p-4"
-              >
-                <div>
-                  <p className="font-medium">
-                    {binding.purpose === "funding" || binding.purpose === "payout"
-                      ? t(`purpose.${binding.purpose}.title`)
-                      : t("purpose.connection")}
-                  </p>
-                  <p className="font-mono text-xs text-base-content/50">
-                    {shortAddress(binding.walletAddress)} ·{" "}
-                    {binding.source === "thirdweb" ? t("appWallet") : t("yourWallet")}
-                  </p>
-                </div>
-                <button
-                  className="btn btn-ghost btn-sm text-error"
-                  disabled={busy}
-                  onClick={() => void revoke(binding.bindingId)}
-                >
-                  {t("remove")}
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="mt-3 text-sm text-base-content/55">{t("empty")}</p>
-        )}
+        <WalletBindingList
+          bindings={bindings}
+          busy={busy}
+          loadState={loadState}
+          onRevoke={bindingId => void revoke(bindingId)}
+        />
       </section>
 
       <p className="text-xs leading-5 text-base-content/45">{t("privacy")}</p>

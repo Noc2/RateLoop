@@ -38,3 +38,40 @@ test("wallet setup presents direct purpose-specific actions with accessible sele
     restoreDom();
   }
 });
+
+test("wallet bindings distinguish loading from empty and expose specific removal names", async () => {
+  const restoreDom = installTestDom();
+  const { cleanup, render: baseRender } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
+  const { WalletBindingList } = await import("./WalletBindingsClient");
+  const bindings = [
+    {
+      bindingId: "wallet_funding",
+      purpose: "funding" as const,
+      source: "self_custodial" as const,
+      walletAddress: "0x1111111111111111111111111111111111111111",
+    },
+    {
+      bindingId: "wallet_payout",
+      purpose: "payout" as const,
+      source: "self_custodial" as const,
+      walletAddress: "0x2222222222222222222222222222222222222222",
+    },
+  ];
+
+  try {
+    const view = render(
+      <WalletBindingList bindings={[]} busy={false} loadState="loading" onRevoke={() => undefined} />,
+    );
+    assert.ok(view.getByRole("status", { name: "" }).textContent?.includes("Loading wallets"));
+    assert.equal(view.queryByText("No wallet is attached to this account."), null);
+
+    view.rerender(<WalletBindingList bindings={bindings} busy={false} loadState="ready" onRevoke={() => undefined} />);
+    assert.ok(view.getByRole("button", { name: "Remove Pay for public asks wallet 0x1111…1111" }));
+    assert.ok(view.getByRole("button", { name: "Remove Receive reviewer payouts wallet 0x2222…2222" }));
+    assert.equal(view.queryByRole("button", { name: "Remove" }), null);
+  } finally {
+    cleanup();
+    restoreDom();
+  }
+});
