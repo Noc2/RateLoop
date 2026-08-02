@@ -319,6 +319,7 @@
     "description": "Kopiere eine Nachricht in den Agent-Chat, den du verbinden möchtest.",
     "descriptionAnother": "Kopiere eine Nachricht in den zusätzlichen Agent-Chat, den du verbinden möchtest.",
     "descriptionReconnect": "Verbinde einen gespeicherten Agent erneut, ohne seine Prüfeinstellungen zu ändern.",
+    "aboutReconnect": "Über die erneute Verbindung",
     "copyMessage": "Verbindungsnachricht kopieren",
     "creatingCopying": "Wird erstellt und kopiert…",
     "safeAccess": "Über sicheren Agent-Zugriff",

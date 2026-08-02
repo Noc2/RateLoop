@@ -1213,7 +1213,7 @@ export function AgentConnectionPanel({
     <div className="space-y-5">
       {showConnectionStart ? (
         <Card as="section" className="rounded-2xl p-6">
-          <div>
+          <div className="flex items-center gap-2">
             <h2 className="text-2xl font-semibold">
               {reconnectableIntegrations.length > 0
                 ? t("titleReconnect")
@@ -1221,13 +1221,9 @@ export function AgentConnectionPanel({
                   ? t("titleAnother")
                   : t("title")}
             </h2>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-base-content/60">
-              {reconnectableIntegrations.length > 0
-                ? t("descriptionReconnect")
-                : activeIntegrations.length > 0
-                  ? t("descriptionAnother")
-                  : t("description")}
-            </p>
+            {reconnectableIntegrations.length > 0 ? (
+              <InfoPopover label={t("aboutReconnect")}>{t("descriptionReconnect")}</InfoPopover>
+            ) : null}
           </div>
           <div className="mt-5 flex flex-wrap items-center gap-3">
             {reconnectableIntegrations.length > 0 ? (

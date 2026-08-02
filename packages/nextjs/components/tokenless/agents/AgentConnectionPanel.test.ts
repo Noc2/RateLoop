@@ -19,7 +19,7 @@ test("default connection UI creates and copies one safe connection intent", () =
   assert.match(messages, /Connect your agent/);
   assert.match(messages, /Connect another agent/);
   assert.match(source, /canStartAgentConnection/);
-  assert.match(messages, /Copy one message into the agent chat you want to connect/);
+  assert.doesNotMatch(source, /t\("descriptionAnother"\)|t\("description"\)/);
   assert.match(messages, /cannot spend, publish, read private workspace content, or change/);
   assert.doesNotMatch(source, /No connection is currently in progress/);
   assert.doesNotMatch(source, /No approved agent integration exists yet/);
@@ -201,6 +201,7 @@ test("a saved agent with only an unusable OAuth integration can reconnect withou
   );
   assert.match(messages, /Reconnect your agent/);
   assert.match(messages, /Reconnect a saved agent without changing its review settings\./);
+  assert.match(source, /<InfoPopover label=\{t\("aboutReconnect"\)\}>\{t\("descriptionReconnect"\)\}<\/InfoPopover>/);
   assert.match(source, /copyConnectionMessage\(integration\.integrationId\)/);
   assert.match(source, /t\("reconnectNamed", \{ name: integration\.agentDisplayName \|\| t\("agentFallback"\) \}\)/);
 });

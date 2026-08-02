@@ -319,6 +319,7 @@
     "description": "Copy one message into the agent chat you want to connect.",
     "descriptionAnother": "Copy one message into the additional agent chat you want to connect.",
     "descriptionReconnect": "Reconnect a saved agent without changing its review settings.",
+    "aboutReconnect": "About reconnecting",
     "copyMessage": "Copy connection message",
     "creatingCopying": "Creating and copying…",
     "safeAccess": "About safe agent access",
