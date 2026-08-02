@@ -16,33 +16,25 @@ const DOCS_PATHS = [
   {
     number: "01",
     title: "Connect an agent",
-    description: "Add RateLoop to the agent host your team already uses.",
     href: "/agents/connections",
-    label: "Connections",
     color: "var(--rateloop-blue)",
   },
   {
     number: "02",
     title: "Set review policy",
-    description: "Choose when the agent asks for review and who can respond.",
     href: "/agents/review-setup",
-    label: "Review setup",
     color: "var(--rateloop-green)",
   },
   {
     number: "03",
     title: "Complete a review",
-    description: "Open assigned work, answer independently, and add a useful reason.",
     href: "/human/review",
-    label: "Review work",
     color: "var(--rateloop-pink)",
   },
   {
     number: "04",
     title: "Verify evidence",
-    description: "Inspect completed review records and export the evidence you need.",
     href: "/agents/results#evidence-packets-heading",
-    label: "View evidence in Results",
     color: "var(--rateloop-yellow)",
   },
 ] as const;
@@ -56,11 +48,11 @@ export default function DocsPage({ params }: { params?: PublicLocaleParams } = {
 
         <h2>Choose a task</h2>
 
-        <div className="not-prose my-8 grid gap-x-8 gap-y-10 sm:grid-cols-2">
+        <nav aria-label="Choose a task" className="not-prose my-8 grid gap-x-8 gap-y-6 sm:grid-cols-2">
           {DOCS_PATHS.map(path => (
             <DocsPathCard key={path.title} {...path} />
           ))}
-        </div>
+        </nav>
 
         <h2>How one review works</h2>
         <ol>
@@ -98,21 +90,23 @@ export default function DocsPage({ params }: { params?: PublicLocaleParams } = {
   );
 }
 
-function DocsPathCard({ number, title, description, href, label, color }: (typeof DOCS_PATHS)[number]) {
+function DocsPathCard({ number, title, href, color }: (typeof DOCS_PATHS)[number]) {
   return (
-    <section className="flex min-h-[12rem] flex-col border-l-2 py-2 pl-5" style={{ borderColor: color }}>
+    <Link
+      href={href}
+      prefetch={false}
+      className="group flex min-h-32 flex-col border-l-2 py-3 pl-5 no-underline"
+      style={{ borderColor: color }}
+    >
       <span className="font-mono text-sm font-semibold tracking-widest" style={{ color }}>
         {number}
       </span>
-      <h3 className="mt-4 text-[1.45rem] font-bold leading-tight text-base-content">{title}</h3>
-      <p className="mt-4 text-base leading-7 text-base-content/62">{description}</p>
-      <Link
-        href={href}
-        prefetch={false}
-        className="btn btn-sm rateloop-secondary-action mt-auto w-fit px-3 text-sm no-underline"
-      >
-        {label}
-      </Link>
-    </section>
+      <span className="mt-auto flex items-end justify-between gap-4 pt-6">
+        <h3 className="text-[1.45rem] font-bold leading-tight text-base-content">{title}</h3>
+        <span aria-hidden="true" className="pb-0.5 text-xl text-base-content/55 transition group-hover:translate-x-1">
+          →
+        </span>
+      </span>
+    </Link>
   );
 }

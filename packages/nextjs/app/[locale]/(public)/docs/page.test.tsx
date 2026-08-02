@@ -16,6 +16,10 @@ test("documentation introduction presents the hosted task paths", async () => {
   assert.match(html, /Human.*rateloop-text-gradient.*Assurance/i);
   assert.doesNotMatch(html, /Start with the task you need|Connect the agent first/i);
   assert.match(html, /Connect an agent.*Set review policy.*Complete a review.*Verify evidence/i);
+  assert.doesNotMatch(
+    html,
+    /Add RateLoop to the agent host|Choose when the agent asks|Open assigned work|Inspect completed review records/i,
+  );
   assert.match(html, /Set policy:.*Request:.*Review:.*Decide:/i);
   assert.match(html, /href="\/agents\/connections"/i);
   assert.match(html, /href="\/agents\/review-setup"/i);
@@ -25,7 +29,7 @@ test("documentation introduction presents the hosted task paths", async () => {
   assert.match(html, /href="\/docs\/evidence"/i);
   assert.match(html, /href="\/docs\/how-it-works"/i);
   assert.match(html, /href="\/docs\/human-oversight"/i);
-  assert.match(html, /Connections.*Review setup.*View evidence in Results/i);
+  assert.doesNotMatch(html, />Connections<|>Review setup<|>Review work<|>View evidence in Results</i);
   assert.doesNotMatch(html, /guaranteed pay|bonus|USDC|settlement|budget/i);
   const visibleWords = html
     .replace(/<[^>]+>/g, " ")
