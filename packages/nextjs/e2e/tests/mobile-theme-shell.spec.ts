@@ -11,22 +11,21 @@ for (const expected of themeCases) {
     await page.emulateMedia({ colorScheme: expected.colorScheme });
     await page.goto("/human/review", { waitUntil: "domcontentloaded" });
     await expect(page.locator("html")).toHaveAttribute("data-theme", expected.colorScheme);
+    await expect(page.getByRole("heading", { name: "Review work", exact: true })).toBeVisible();
 
-    await page.getByRole("button", { name: "Open navigation", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Close navigation", exact: true })).toBeVisible();
+    const menuDetails = page.locator("header details");
+    const menu = menuDetails.locator("nav.dropdown-content");
+    await menuDetails.locator("summary").click();
+    await expect(menuDetails).toHaveAttribute("open", "");
+    await expect(menu).toBeVisible();
 
-    const backgrounds = await page.evaluate(() => {
-      const header = document.querySelector<HTMLElement>("header");
-      const menu = header?.querySelector<HTMLElement>('nav[aria-label="Primary"]');
-      const shell = document.querySelector<HTMLElement>("#main-content")?.parentElement;
-      if (!header || !menu || !shell) throw new Error("The mobile themed navigation did not render.");
-
-      return {
-        header: getComputedStyle(header).backgroundColor,
-        menu: getComputedStyle(menu).backgroundColor,
-        shell: getComputedStyle(shell).backgroundColor,
-      };
-    });
+    const backgrounds = {
+      header: await page.locator("header").evaluate(element => getComputedStyle(element).backgroundColor),
+      menu: await menu.evaluate(element => getComputedStyle(element).backgroundColor),
+      shell: await page
+        .locator("#main-content")
+        .evaluate(element => getComputedStyle(element.parentElement!).backgroundColor),
+    };
 
     expect(backgrounds).toEqual({
       header: expected.shellBackground,
