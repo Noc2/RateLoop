@@ -1,6 +1,5 @@
 import { Inter, Space_Grotesk } from "next/font/google";
 import { cookies, headers } from "next/headers";
-import Script from "next/script";
 import { DEFAULT_LOCALE, isLocale } from "~~/i18n/config";
 import { getMessagesForLocale } from "~~/i18n/messages";
 import { THEME_COOKIE_NAME, createThemeBootstrapScript, parseThemePreference } from "~~/lib/ui/themePreference";
@@ -45,10 +44,13 @@ const RootLayout = async ({ children }: { children: React.ReactNode }) => {
       suppressHydrationWarning
       style={explicitTheme ? { colorScheme: explicitTheme } : undefined}
     >
-      <Script id="rateloop-theme-bootstrap" nonce={nonce} strategy="beforeInteractive">
-        {createThemeBootstrapScript()}
-      </Script>
       <body suppressHydrationWarning>
+        <script
+          id="rateloop-theme-bootstrap"
+          nonce={nonce}
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{ __html: createThemeBootstrapScript() }}
+        />
         <AppProviders notificationDismissLabel={getMessagesForLocale(locale).shared.notifications.dismiss}>
           {children}
         </AppProviders>

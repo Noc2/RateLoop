@@ -64,9 +64,10 @@ test("system color preference is the default and explicit choices are limited to
   assert.match(rootLayout, /parseThemePreference\(cookieStore\.get\(THEME_COOKIE_NAME\)\?\.value\)/);
   assert.match(rootLayout, /data-theme=\{explicitTheme\}/);
   assert.match(rootLayout, /id="rateloop-theme-bootstrap"/);
-  assert.match(rootLayout, /strategy="beforeInteractive"/);
   assert.match(rootLayout, /nonce=\{nonce\}/);
-  assert.match(rootLayout, /createThemeBootstrapScript\(\)/);
+  assert.match(rootLayout, /suppressHydrationWarning/);
+  assert.match(rootLayout, /dangerouslySetInnerHTML=\{\{ __html: createThemeBootstrapScript\(\) \}\}/);
+  assert.doesNotMatch(rootLayout, /from ["']next\/script["']/u);
   assert.doesNotMatch(rootLayout, /data-theme="(?:light|dark)"/);
 });
 

@@ -17,6 +17,12 @@ const themeCases = [
 
 for (const expected of themeCases) {
   test(`initial ${expected.colorScheme} theme keeps the shell and human navbar in sync`, async ({ context, page }) => {
+    const hydrationErrors: string[] = [];
+    page.on("console", message => {
+      if (message.type() === "error" && /hydration|did not match|validateDOMNesting/iu.test(message.text())) {
+        hydrationErrors.push(message.text());
+      }
+    });
     await context.clearCookies();
     await page.emulateMedia({ colorScheme: expected.colorScheme });
 
@@ -45,5 +51,19 @@ for (const expected of themeCases) {
       railBackground: "rgb(5, 5, 5)",
       shellBackground: expected.shellBackground,
     });
+    expect(hydrationErrors).toEqual([]);
   });
 }
+
+test("dark theme is parser-applied before Next.js framework chunks run", async ({ context, page }) => {
+  await context.clearCookies();
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.route("**/_next/**", route =>
+    route.request().resourceType() === "script" ? route.abort("blockedbyclient") : route.continue(),
+  );
+
+  const response = await page.goto("/de/human/review", { waitUntil: "domcontentloaded" });
+  expect(response?.status()).toBeLessThan(500);
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.locator("html")).toHaveCSS("color-scheme", "dark");
+});
