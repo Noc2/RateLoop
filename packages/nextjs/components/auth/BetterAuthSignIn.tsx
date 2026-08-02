@@ -47,6 +47,23 @@ export function maskedEmailDestination(value: string, fallback = "your email add
   return `${visible}@${domain}`;
 }
 
+export function visibleSignInMethods(methods: {
+  emailOtp: boolean;
+  passkey: boolean;
+  google: boolean;
+  apple: boolean;
+  sso: boolean;
+}) {
+  return {
+    emailForm: methods.emailOtp || methods.sso,
+    emailCode: methods.emailOtp,
+    passkey: methods.passkey,
+    google: methods.google,
+    apple: methods.apple,
+    sso: methods.sso,
+  };
+}
+
 function GoogleIcon() {
   return (
     <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
@@ -292,8 +309,8 @@ export function BetterAuthSignIn() {
     );
   }
 
-  const hasAlternativeSignIn =
-    configuration.methods.passkey || configuration.methods.google || configuration.methods.apple;
+  const visibleMethods = visibleSignInMethods(configuration.methods);
+  const hasAlternativeSignIn = visibleMethods.passkey || visibleMethods.google || visibleMethods.apple;
 
   return (
     <div className="space-y-5">
@@ -311,7 +328,7 @@ export function BetterAuthSignIn() {
             {t("addPasskey")}
           </button>
         </div>
-      ) : otpSent ? (
+      ) : otpSent && visibleMethods.emailCode ? (
         <div className="space-y-4">
           <p className="text-sm leading-6 text-base-content/65" role="status">
             {t("sentCode", { email: maskedEmailDestination(email, t("maskedEmailFallback")) })}
@@ -359,7 +376,7 @@ export function BetterAuthSignIn() {
             </button>
           </div>
         </div>
-      ) : (
+      ) : visibleMethods.emailForm ? (
         <form className="space-y-4" onSubmit={sendCode}>
           <Field
             id="rateloop-email"
@@ -374,13 +391,12 @@ export function BetterAuthSignIn() {
               setEmail(event.target.value);
             }}
           />
-          <button
-            className="rateloop-gradient-action min-h-11 w-full px-4"
-            disabled={busy || !configuration.methods.emailOtp}
-          >
-            {t("emailCode")}
-          </button>
-          {configuration.methods.sso ? (
+          {visibleMethods.emailCode ? (
+            <button className="rateloop-gradient-action min-h-11 w-full px-4" disabled={busy}>
+              {t("emailCode")}
+            </button>
+          ) : null}
+          {visibleMethods.sso ? (
             <button
               className="btn btn-outline min-h-11 w-full"
               disabled={busy || !email.includes("@")}
@@ -391,16 +407,18 @@ export function BetterAuthSignIn() {
             </button>
           ) : null}
         </form>
-      )}
+      ) : null}
 
       {!verified && hasAlternativeSignIn ? (
         <>
-          <div className="flex items-center gap-3 text-xs uppercase tracking-wider text-base-content/35">
-            <span className="h-px grow bg-base-content/10" />
-            {t("or")}
-            <span className="h-px grow bg-base-content/10" />
-          </div>
-          {configuration.methods.passkey ? (
+          {visibleMethods.emailForm ? (
+            <div className="flex items-center gap-3 text-xs uppercase tracking-wider text-base-content/35">
+              <span className="h-px grow bg-base-content/10" />
+              {t("or")}
+              <span className="h-px grow bg-base-content/10" />
+            </div>
+          ) : null}
+          {visibleMethods.passkey ? (
             <button
               className="btn btn-outline min-h-11 w-full"
               disabled={busy}
@@ -409,9 +427,9 @@ export function BetterAuthSignIn() {
               {t("passkey")}
             </button>
           ) : null}
-          {configuration.methods.google || configuration.methods.apple ? (
+          {visibleMethods.google || visibleMethods.apple ? (
             <div className="grid gap-3 sm:grid-cols-2">
-              {configuration.methods.google ? (
+              {visibleMethods.google ? (
                 <button
                   className="btn rateloop-secondary-action gap-3"
                   disabled={busy}
@@ -421,7 +439,7 @@ export function BetterAuthSignIn() {
                   {t("google")}
                 </button>
               ) : null}
-              {configuration.methods.apple ? (
+              {visibleMethods.apple ? (
                 <button
                   className="btn rateloop-secondary-action gap-3"
                   disabled={busy}

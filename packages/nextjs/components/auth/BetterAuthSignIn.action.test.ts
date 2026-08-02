@@ -1,4 +1,4 @@
-import { maskedEmailDestination, runBetterAuthAction } from "./BetterAuthSignIn";
+import { maskedEmailDestination, runBetterAuthAction, visibleSignInMethods } from "./BetterAuthSignIn";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -25,4 +25,33 @@ test("email code destinations keep the domain recognizable without repeating the
   assert.equal(maskedEmailDestination("david@example.com"), "d••••@example.com");
   assert.equal(maskedEmailDestination("a@example.com"), "•@example.com");
   assert.equal(maskedEmailDestination("invalid"), "your email address");
+});
+
+test("sign-in renders only methods enabled by the server configuration", () => {
+  const base = { emailOtp: false, passkey: false, google: false, apple: false, sso: false };
+
+  assert.deepEqual(visibleSignInMethods({ ...base, passkey: true }), {
+    emailForm: false,
+    emailCode: false,
+    passkey: true,
+    google: false,
+    apple: false,
+    sso: false,
+  });
+  assert.deepEqual(visibleSignInMethods({ ...base, sso: true }), {
+    emailForm: true,
+    emailCode: false,
+    passkey: false,
+    google: false,
+    apple: false,
+    sso: true,
+  });
+  assert.deepEqual(visibleSignInMethods({ ...base, emailOtp: true, google: true, apple: true }), {
+    emailForm: true,
+    emailCode: true,
+    passkey: false,
+    google: true,
+    apple: true,
+    sso: false,
+  });
 });
