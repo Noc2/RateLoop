@@ -258,7 +258,7 @@ function ReviewOutcomeTrend({ overview }: { overview: AgentOverview }) {
                         width={barWidth}
                         height={endorsedHeight}
                         rx="1.5"
-                        className="fill-emerald-300/80"
+                        className="fill-[var(--rateloop-green)]"
                       />
                       <rect
                         x={x}
@@ -266,7 +266,7 @@ function ReviewOutcomeTrend({ overview }: { overview: AgentOverview }) {
                         width={barWidth}
                         height={rejectedHeight}
                         rx="1.5"
-                        className="fill-rose-300/80"
+                        className="fill-[var(--rateloop-pink)]"
                       />
                       <rect
                         x={x}
@@ -274,7 +274,7 @@ function ReviewOutcomeTrend({ overview }: { overview: AgentOverview }) {
                         width={barWidth}
                         height={inconclusiveHeight}
                         rx="1.5"
-                        className="fill-amber-200/75"
+                        className="fill-[var(--rateloop-yellow)]"
                       />
                       {index === 0 || index === trend.points.length - 1 ? (
                         <text
@@ -304,13 +304,13 @@ function ReviewOutcomeTrend({ overview }: { overview: AgentOverview }) {
           </p>
           <div className="mt-3 flex flex-wrap gap-4 text-xs text-base-content/55" aria-hidden="true">
             <span className="flex items-center gap-2">
-              <span className="h-2.5 w-2.5 rounded-sm bg-success/80" /> <AgentText id="translated049" />
+              <span className="h-2.5 w-2.5 rounded-sm bg-[var(--rateloop-green)]" /> <AgentText id="translated049" />
             </span>
             <span className="flex items-center gap-2">
-              <span className="h-2.5 w-2.5 rounded-sm bg-rose-300/80" /> <AgentText id="translated050" />
+              <span className="h-2.5 w-2.5 rounded-sm bg-[var(--rateloop-pink)]" /> <AgentText id="translated050" />
             </span>
             <span className="flex items-center gap-2">
-              <span className="h-2.5 w-2.5 rounded-sm bg-warning/75" /> <AgentText id="translated051" />
+              <span className="h-2.5 w-2.5 rounded-sm bg-[var(--rateloop-yellow)]" /> <AgentText id="translated051" />
             </span>
           </div>
         </>

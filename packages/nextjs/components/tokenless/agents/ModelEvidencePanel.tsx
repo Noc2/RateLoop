@@ -154,7 +154,7 @@ function EvaluationVolumeChart({ profile }: { profile: EvaluationModelProfile })
                   height={opportunityHeight}
                   rx="2"
                   fill="currentColor"
-                  fillOpacity="0.25"
+                  fillOpacity="0.7"
                 />
                 <rect
                   x={x}
@@ -188,7 +188,7 @@ function EvaluationVolumeChart({ profile }: { profile: EvaluationModelProfile })
       )}
       <div className="mt-2 flex flex-wrap gap-4 text-xs text-base-content/55" aria-hidden="true">
         <span className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-sm bg-[var(--rateloop-blue)]/25" /> <AgentText id="translated200" />
+          <span className="h-2.5 w-2.5 rounded-sm bg-[var(--rateloop-blue)]/70" /> <AgentText id="translated200" />
         </span>
         <span className="flex items-center gap-2">
           <span className="h-2.5 w-2.5 rounded-sm bg-[var(--rateloop-blue)]" /> <AgentText id="translated201" />
@@ -226,8 +226,8 @@ function AgreementChart({ profile }: { profile: EvaluationModelProfile }) {
           })}
         >
           <div className="flex h-5 overflow-hidden rounded-full bg-base-content/[0.06]">
-            <div className="bg-success/80" style={{ width: agreedWidth }} />
-            <div className="bg-rose-300/75" style={{ width: disagreedWidth }} />
+            <div className="bg-[var(--rateloop-green)]" style={{ width: agreedWidth }} />
+            <div className="bg-[var(--rateloop-pink)]" style={{ width: disagreedWidth }} />
           </div>
           <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
             <div>
