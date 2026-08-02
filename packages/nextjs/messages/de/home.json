@@ -23,9 +23,9 @@
     }
   },
   "loop": {
-    "titleLine1": "Menschliche",
-    "titleLine2": "Absicherungs-",
-    "titleLine3": "schleife",
+    "titleLine1": "Geprüft",
+    "titleLine2": "von",
+    "titleLine3": "Menschen.",
     "stages": {
       "policy": {
         "title": "Verantwortliche legen Regeln fest",
@@ -43,7 +43,7 @@
       },
       "evaluate": {
         "title": "Auswertung",
-        "body": "Liefert Feedback und nutzbare Kennzahlen zur menschlichen Bewertung von KI-Abläufen."
+        "body": "Liefert Feedback und nutzbare Kennzahlen zur Bewertung von KI-Abläufen durch Menschen."
       }
     }
   }

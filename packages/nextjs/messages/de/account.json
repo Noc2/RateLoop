@@ -12,27 +12,27 @@
   },
   "notifications": {
     "groups": {
-      "review": "Review-Aufgaben",
+      "review": "Prüfaufgaben",
       "payments": "Zahlungen",
       "workspace": "Workspace",
       "account": "Konto"
     },
     "options": {
       "assignmentAvailable": {
-        "label": "Neues Review",
-        "description": "Wenn eine Review-Aufgabe für dich bereitsteht."
+        "label": "Neue Prüfung",
+        "description": "Wenn eine Prüfaufgabe für dich bereitsteht."
       },
       "assignmentCompleted": {
-        "label": "Review-Ergebnis",
-        "description": "Wenn ein eingereichtes Review angenommen oder geschlossen wurde."
+        "label": "Prüfergebnis",
+        "description": "Wenn eine eingereichte Prüfung angenommen oder geschlossen wurde."
       },
       "paymentUpdates": {
         "label": "Zahlungsaktualisierungen",
-        "description": "Wenn Geld aus bezahlten Reviews bereitsteht oder eine Aktion erfordert."
+        "description": "Wenn Geld aus bezahlten Prüfungen bereitsteht oder eine Aktion erfordert."
       },
       "askResults": {
         "label": "Workspace-Ergebnisse",
-        "description": "Wenn ein Workspace-Review ein Ergebnis hat oder einen weiteren Schritt erfordert."
+        "description": "Wenn eine Workspace-Prüfung ein Ergebnis hat oder einen weiteren Schritt erfordert."
       },
       "accountSecurity": {
         "label": "Kontosicherheit",
@@ -40,7 +40,7 @@
       },
       "oversightAlerts": {
         "label": "Workspace-Warnungen",
-        "description": "Wenn Review-Arbeit blockiert ist, fehlschlägt, abläuft oder gestoppt wird."
+        "description": "Wenn Prüfarbeit blockiert ist, fehlschlägt, abläuft oder gestoppt wird."
       }
     },
     "verified": "E-Mail bestätigt. RateLoop kann jetzt Benachrichtigungen an diese Adresse senden.",
@@ -153,7 +153,7 @@
     "noExpiry": "Kein Ablaufdatum",
     "workspaceAccepted": "Workspace-Einladung angenommen.",
     "accepted": "Einladung angenommen.",
-    "reviewerAccepted": "Reviewer-Einladung angenommen.",
+    "reviewerAccepted": "Einladung für Prüfende angenommen.",
     "invalid": "Gib einen gültigen RateLoop-Einladungscode ein.",
     "checkFailed": "Die Einladung konnte nicht geprüft werden.",
     "acceptFailed": "Die Einladung konnte nicht angenommen werden.",
@@ -162,11 +162,11 @@
     "placeholder": "Einladungscode einfügen",
     "checking": "Wird geprüft…",
     "continue": "Weiter",
-    "reviewerTitle": "Reviewer-Einladung",
+    "reviewerTitle": "Einladung für Prüfende",
     "description": "Prüfe zugewiesene private Arbeit, ohne dem Workspace beizutreten.",
     "materialLimit": "Limit für privates Material",
     "invitationExpires": "Einladung läuft ab",
-    "accessExpires": "Reviewer-Zugriff läuft ab",
+    "accessExpires": "Prüfzugriff läuft ab",
     "accepting": "Wird angenommen…",
     "accept": "Einladung annehmen",
     "cancel": "Abbrechen"
@@ -194,7 +194,7 @@
     "metadataDescription": "Richte eine Wallet für Finanzierung oder Auszahlungen ein.",
     "back": "Zurück zum Profil",
     "title": "Wallets",
-    "description": "Füge nur dann eine Wallet hinzu, wenn du einen Auftrag bezahlen oder Reviewer-Verdienste erhalten möchtest. Eine Wallet ersetzt niemals deine RateLoop-Anmeldung."
+    "description": "Füge nur dann eine Wallet hinzu, wenn du einen Auftrag bezahlen oder Verdienste aus Prüfungen erhalten möchtest. Eine Wallet ersetzt niemals deine RateLoop-Anmeldung."
   },
   "walletBinding": {
     "purpose": {
@@ -206,8 +206,8 @@
         "saved": "Wallet für öffentliche Aufträge gespeichert."
       },
       "payout": {
-        "title": "Reviewer-Auszahlungen erhalten",
-        "description": "Sende zukünftige Verdienste aus bezahlten Reviews an diese Wallet.",
+        "title": "Prüfvergütung erhalten",
+        "description": "Künftige Verdienste aus bezahlten Prüfungen gehen an diese Wallet.",
         "action": "Auszahlungen einrichten",
         "confirmation": "Für Auszahlungen verwenden",
         "saved": "Auszahlungs-Wallet gespeichert."
@@ -243,7 +243,7 @@
     "metadataDescription": "Wähle deinen Einstieg in RateLoop.",
     "heading": "Womit möchtest du beginnen?",
     "reviewTitle": "KI-Arbeit prüfen",
-    "reviewDescription": "Finde verfügbare Reviews oder verwende die Einladung eines Workspaces.",
+    "reviewDescription": "Finde verfügbare Prüfungen oder verwende die Einladung eines Workspaces.",
     "reviewAction": "Mit dem Prüfen beginnen",
     "invitationAction": "Ich habe eine Einladung",
     "agentTitle": "Agent verbinden",
