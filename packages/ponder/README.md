@@ -24,7 +24,7 @@ Copy `.env.example` to `.env.local` and set:
 - `PONDER_TOKENLESS_START_BLOCK`
 - `PONDER_RPC_URL_<chainId>`
 - `PONDER_RPC_FALLBACK_URLS_<chainId>` (one to three ordered, independent HTTPS fallbacks on live networks)
-- `CORS_ORIGIN`, and in production `PONDER_KEEPER_WORK_TOKEN`
+- In production, `PONDER_KEEPER_WORK_TOKEN`
 
 Run `yarn codegen`, `yarn check-types`, and `yarn test` from this package. Production runs through `node scripts/start.mjs`, which derives a database schema from the stable deployment identity.
 
@@ -39,6 +39,10 @@ Run `yarn codegen`, `yarn check-types`, and `yarn test` from this package. Produ
 Round creation and commit handlers read the immutable contract record at the event block because the compact events do not repeat every term. A transient RPC failure fails the handler and is retried by Ponder; no partial default record is persisted.
 
 ## API
+
+The read-only indexed-chain API is public and permits cross-origin browser
+reads. CORS is not an authorization boundary. `/keeper/work` remains protected
+by `PONDER_KEEPER_WORK_TOKEN` and must be called only by the keeper service.
 
 - `GET /deployment`
 - `GET /status/tokenless`

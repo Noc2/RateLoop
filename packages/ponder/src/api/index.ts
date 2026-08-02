@@ -155,16 +155,10 @@ function keeperAuthorization(header: string | undefined) {
   return header === `Bearer ${token}` ? null : "invalid";
 }
 
-const origins = process.env.CORS_ORIGIN?.split(",")
-  .map((value) => value.trim())
-  .filter(Boolean);
-if (
-  process.env.NODE_ENV === "production" &&
-  (!origins || origins.length === 0)
-) {
-  throw new Error("CORS_ORIGIN is required in production.");
-}
-app.use("/*", cors({ origin: origins ?? ["http://localhost:3000"] }));
+// Indexed contract state is a public API. CORS is deliberately permissive and
+// is not an authorization boundary; /keeper/work still requires its bearer
+// token before returning operational work.
+app.use("/*", cors({ origin: "*" }));
 
 app.onError((error, c) => {
   console.error("[tokenless-ponder]", error);
