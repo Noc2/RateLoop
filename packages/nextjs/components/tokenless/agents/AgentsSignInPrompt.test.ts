@@ -4,6 +4,8 @@ import test from "node:test";
 
 const promptSource = readFileSync(new URL("./AgentsSignInPrompt.tsx", import.meta.url), "utf8");
 const sharedSurfaceSource = readFileSync(new URL("../../auth/SignInSurface.tsx", import.meta.url), "utf8");
+const englishMessages = readFileSync(new URL("../../../messages/en/agents.json", import.meta.url), "utf8");
+const germanMessages = readFileSync(new URL("../../../messages/de/agents.json", import.meta.url), "utf8");
 const pageSource = readFileSync(
   new URL("../../../app/[locale]/(app)/agents/AgentsSectionPage.tsx", import.meta.url),
   "utf8",
@@ -21,6 +23,8 @@ test("anonymous visitors see the Agents sign-in prompt without exposing workspac
   assert.match(promptSource, /title=\{t\("title"\)\}/);
   assert.doesNotMatch(promptSource, /For Agents/);
   assert.match(promptSource, /description=\{t\("description"\)\}/);
+  assert.match(englishMessages, /Sign in to manage agents and reviews\./);
+  assert.match(germanMessages, /Melde dich an, um Agenten und Prüfungen zu verwalten\./);
   assert.doesNotMatch(promptSource, /AgentWorkspaceExample|Example workspace|preview=/);
   assert.match(promptSource, /href="\/docs\/ai"/);
   assert.match(promptSource, /\{t\("docs"\)\}/);

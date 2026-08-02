@@ -19,7 +19,7 @@
   },
   "signIn": {
     "title": "Agenten",
-    "description": "Melde dich an, um einen Agenten zu verbinden, Prüfungen durch Menschen einzurichten, Prüfende zu verwalten und die Leistung auszuwerten.",
+    "description": "Melde dich an, um Agenten und Prüfungen zu verwalten.",
     "docs": "Agent-Dokumentation"
   },
   "workspace": {

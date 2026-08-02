@@ -19,7 +19,7 @@
   },
   "signIn": {
     "title": "Agents",
-    "description": "Sign in to connect an agent, configure human review, manage reviewers, and evaluate performance.",
+    "description": "Sign in to manage agents and reviews.",
     "docs": "Agent docs"
   },
   "workspace": {
