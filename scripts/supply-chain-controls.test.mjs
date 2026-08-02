@@ -22,6 +22,10 @@ const keeperRailway = readFileSync(
   new URL("../packages/keeper/railway.toml", import.meta.url),
   "utf8",
 );
+const vercelIgnore = readFileSync(
+  new URL("../.vercelignore", import.meta.url),
+  "utf8",
+);
 
 test("JavaScript and TypeScript CodeQL runs on tokenless changes and a weekly schedule", () => {
   assert.match(codeql, /languages: javascript-typescript/);
@@ -72,12 +76,41 @@ test("dependency updates cover packages, actions, and each Dockerfile", () => {
 
 test("the keeper container runs unprivileged and probes operational readiness", () => {
   assert.match(keeperDockerfile, /^USER node$/mu);
-  assert.match(keeperDockerfile, /HEALTHCHECK .*--start-period=(?:[6-9]\d|\d{3,})s/u);
+  assert.match(
+    keeperDockerfile,
+    /HEALTHCHECK .*--start-period=(?:[6-9]\d|\d{3,})s/u,
+  );
   assert.match(keeperDockerfile, /path:\s*['"]\/ready['"]/u);
   assert.doesNotMatch(keeperDockerfile, /^ENTRYPOINT\b/mu);
   assert.equal(
-    existsSync(new URL("../packages/keeper/docker-entrypoint.sh", import.meta.url)),
+    existsSync(
+      new URL("../packages/keeper/docker-entrypoint.sh", import.meta.url),
+    ),
     false,
   );
   assert.match(keeperRailway, /^healthcheckPath = "\/ready"$/mu);
+});
+
+test("Vercel source uploads exclude local agent, database, and generated-output state", () => {
+  const ignored = new Set(
+    vercelIgnore
+      .split("\n")
+      .map((value) => value.trim())
+      .filter(Boolean),
+  );
+  for (const path of [
+    ".claude",
+    ".local",
+    "automation-artifacts",
+    "outputs",
+    "tmp",
+    "packages/foundry/broadcast",
+    "packages/foundry/cache",
+    "packages/foundry/out",
+  ]) {
+    assert.ok(
+      ignored.has(path),
+      `${path} must stay out of Vercel source uploads`,
+    );
+  }
 });

@@ -1,8 +1,16 @@
 .git
+.claude
+.local
 .yarn/cache
 .yarn/unplugged
+automation-artifacts
+outputs
+tmp
 **/node_modules
 **/.next
 **/coverage
 **/test-results
 **/playwright-report
+packages/foundry/broadcast
+packages/foundry/cache
+packages/foundry/out
