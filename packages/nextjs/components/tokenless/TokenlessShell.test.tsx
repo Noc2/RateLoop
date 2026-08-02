@@ -30,10 +30,10 @@ test("tokenless shell exposes Humans, Agents, and Docs without the legacy produc
   assert.doesNotMatch(source, /href: "\/(rate|ask|settings)"|Validate|Earn|Start a validation/);
 });
 
-test("mobile navigation follows the page theme while the desktop rail stays dark", () => {
+test("mobile navigation shares the page canvas while the desktop rail stays dark", () => {
   const source = shellSource;
 
-  assert.match(source, /<header className="[^"]*bg-base-100/);
+  assert.match(source, /<header className="[^"]*bg-base-200/);
   assert.match(source, /dropdown-content[^"\n]*bg-base-100/);
   assert.match(source, /<aside[\s\S]*data-rateloop-rail[\s\S]*bg-base-100/);
   assert.match(globalStyles, /--rateloop-rail-surface: #050505/);
