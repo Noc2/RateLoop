@@ -8,7 +8,9 @@ const progressSource = readFileSync(new URL("./AgentSetupProgress.tsx", import.m
 
 test("setup progress reuses the canonical homepage spectrum without local colors", () => {
   for (const token of [
+    "--color-base-content",
     "--rateloop-blue",
+    "--rateloop-control-idle",
     "--rateloop-green",
     "--rateloop-yellow",
     "--rateloop-pink",
@@ -16,6 +18,7 @@ test("setup progress reuses the canonical homepage spectrum without local colors
   ]) {
     assert.match(progressSource, new RegExp(token));
   }
+  assert.doesNotMatch(progressSource, /--rateloop-warm-white|rgb\(245_245_245/);
   assert.doesNotMatch(progressSource, /#[\da-f]{3,8}/iu);
 });
 

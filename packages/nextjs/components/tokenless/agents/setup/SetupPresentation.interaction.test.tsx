@@ -44,7 +44,7 @@ test("setup uses the homepage palette in its canonical order", () => {
     assert.ok(index > previousIndex, `${color} should follow the homepage spectrum order`);
     previousIndex = index;
   }
-  assert.match(progressSource, /people:[\s\S]*color: "var\(--rateloop-warm-white\)"/);
+  assert.match(progressSource, /people:[\s\S]*color: "var\(--color-base-content\)"/);
   assert.doesNotMatch(progressSource, /#[\da-f]{3,8}/iu);
 });
 

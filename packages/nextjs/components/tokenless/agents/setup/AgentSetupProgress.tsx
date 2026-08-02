@@ -37,7 +37,7 @@ export const AGENT_SETUP_STAGE_VISUALS: Record<
   },
   people: {
     number: "05",
-    color: "var(--rateloop-warm-white)",
+    color: "var(--color-base-content)",
     nextColor: "var(--rateloop-shell-border-strong)",
   },
 };
@@ -109,7 +109,7 @@ export function AgentSetupProgress({
               <span
                 className={`relative z-10 flex h-6 w-6 items-center justify-center rounded-full border-2 bg-[var(--rateloop-surface-elevated)] ${
                   stage.key === currentStep
-                    ? "shadow-[0_0_0_4px_rgb(245_245_245/0.08)]"
+                    ? "shadow-[0_0_0_4px_var(--rateloop-control-idle)]"
                     : stage.status === "not_started"
                       ? "border-[color:var(--rateloop-shell-border-strong)]"
                       : ""
