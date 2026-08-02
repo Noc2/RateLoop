@@ -15,7 +15,7 @@ test("terms state service limits and accepted-work protection", async () => {
 
   assert.match(html, /At a glance/i);
   assert.match(html, /aria-label="On this page"/i);
-  assert.match(html, /complete terms below provide the details/i);
+  assert.doesNotMatch(html, /summary helps you navigate|complete terms below provide the details/i);
   for (const href of [
     "#service-scope",
     "#who-may-use",

@@ -14,6 +14,13 @@ async function render(page: string) {
   return renderToStaticMarkup(<Page />).replace(/\s+/g, " ");
 }
 
+test("legal index cards explain their destinations without repeated navigation copy", async () => {
+  const html = await render("./page");
+  assert.match(html, /Rules, responsibilities, payment terms, and service limitations\./i);
+  assert.match(html, /What RateLoop stores, why it is processed/i);
+  assert.doesNotMatch(html, /These documents explain|Read document/i);
+});
+
 test("DPA includes the Article 28 processing contract essentials", async () => {
   const html = await render("./dpa/page");
   assert.match(html, /intended to satisfy Article 28 GDPR/i);

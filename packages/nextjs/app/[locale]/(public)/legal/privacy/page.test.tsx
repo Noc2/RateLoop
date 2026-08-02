@@ -15,7 +15,7 @@ test("privacy notice explains subscription processor data and retention", async 
 
   assert.match(html, /At a glance/i);
   assert.match(html, /aria-label="On this page"/i);
-  assert.match(html, /complete notice below provides the details/i);
+  assert.doesNotMatch(html, /summary helps you navigate|complete notice below provides the details/i);
   for (const href of [
     "#controller",
     "#service-data",

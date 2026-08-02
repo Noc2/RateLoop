@@ -35,9 +35,6 @@ export default function PrivacyPage({ params }: { params?: PublicLocaleParams } 
               Paid public-chain interactions, where used, create records the interface operator generally cannot erase.
             </li>
           </ul>
-          <p className="mt-4 text-xs leading-5 text-base-content/55">
-            This summary helps you navigate. The complete notice below provides the details.
-          </p>
           <ul className="mt-4 flex flex-wrap gap-2">
             {[
               ["Controller", "#controller"],

@@ -31,16 +31,7 @@ export default function LegalPage({ params }: { params?: PublicLocaleParams } = 
   return (
     <LocalizedPublicContent locale={locale} section="legal">
       <div className="mx-auto w-full max-w-5xl px-4 py-10 sm:py-14">
-        <PageHeading
-          accent="pink"
-          heading="Legal"
-          subtitle={
-            <span className="block max-w-3xl text-lg leading-8">
-              These documents explain the RateLoop service, its privacy boundaries, payment and reviewer
-              responsibilities, public-chain records, and the operator behind the application.
-            </span>
-          }
-        />
+        <PageHeading accent="pink" heading="Legal" />
         <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {documents.map(([title, href, description], index) => (
             <Card
@@ -55,7 +46,6 @@ export default function LegalPage({ params }: { params?: PublicLocaleParams } = 
             >
               <h2 className="text-lg font-semibold transition-colors group-hover:text-base-content">{title}</h2>
               <p className="mt-3 text-sm leading-6 text-base-content/50">{description}</p>
-              <span className="mt-5 inline-block text-sm text-base-content/70">Read document →</span>
             </Card>
           ))}
         </div>

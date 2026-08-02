@@ -30,9 +30,6 @@ export default function TermsPage({ params }: { params?: PublicLocaleParams } = 
             <li>Workspace subscriptions renew until cancelled under the displayed billing terms.</li>
             <li>Fund-backed review and public-chain terms apply only where those features are offered.</li>
           </ul>
-          <p className="mt-4 text-xs leading-5 text-base-content/55">
-            This summary helps you navigate. The complete terms below provide the details.
-          </p>
           <ul className="mt-4 flex flex-wrap gap-2">
             {[
               ["Service scope", "#service-scope"],
