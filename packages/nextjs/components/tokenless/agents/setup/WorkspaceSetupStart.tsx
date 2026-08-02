@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { useAgentTranslations } from "../AgentsLocaleProvider";
 import { AgentSetupProgress } from "./AgentSetupProgress";
 import { SetupActionBar } from "./SetupActionBar";
@@ -23,9 +23,12 @@ const INITIAL_STAGES = [
 export function WorkspaceSetupStart() {
   const t = useAgentTranslations("setup");
   const router = useRouter();
+  const [hydrated, setHydrated] = useState(false);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const { capture, clear, fieldErrors, formError } = useFormErrors();
+
+  useEffect(() => setHydrated(true), []);
 
   async function createWorkspace(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -75,7 +78,7 @@ export function WorkspaceSetupStart() {
           />
         </div>
         <SetupActionBar>
-          <Button className="min-h-11 w-full sm:w-auto" type="submit" disabled={busy}>
+          <Button className="min-h-11 w-full sm:w-auto" type="submit" disabled={busy || !hydrated}>
             {busy ? t("creating") : t("createWorkspace")}
           </Button>
         </SetupActionBar>

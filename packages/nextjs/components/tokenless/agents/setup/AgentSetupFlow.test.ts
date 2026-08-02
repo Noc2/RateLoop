@@ -24,6 +24,12 @@ test("setup uses one canonical URL and a focused workspace creation stage", () =
   assert.doesNotMatch(startSource, /billing|publishing|API key/i);
 });
 
+test("workspace creation cannot fall through to a native GET before hydration", () => {
+  assert.match(startSource, /const \[hydrated, setHydrated\] = useState\(false\)/);
+  assert.match(startSource, /useEffect\(\(\) => setHydrated\(true\), \[\]\)/);
+  assert.match(startSource, /disabled=\{busy \|\| !hydrated\}/);
+});
+
 test("progress is semantic, textual, keyboard-operable, and marks only the current step", () => {
   assert.match(progressSource, /<nav aria-label=\{t\("progress"\)\}>/);
   assert.match(progressSource, /<ol/);
