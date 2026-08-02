@@ -18,7 +18,10 @@ test("setup wizard creates a workspace and reaches agent connection", async ({ p
     await expect(page).toHaveURL(/\/agents\/connections\?workspace=.+&step=connect/u);
   }
   await expect(connectHeading).toBeVisible();
-  await expect(page.getByRole("link", { name: /Connection guide/ })).toHaveAttribute("href", "/docs/connect");
+  await expect(page.getByRole("link", { name: /Connection guide/ })).toHaveAttribute(
+    "href",
+    /^\/docs\/connect\?from=workspace&returnTo=/u,
+  );
   await expectNoAxeViolations(page);
 });
 
@@ -32,8 +35,10 @@ test("workspace owner configures human review", async ({ page }) => {
   const frequency = page.getByRole("combobox", { name: "When should RateLoop require human review?" });
   await expect(frequency).toBeVisible();
   await frequency.selectOption("always");
-  await page.getByRole("combobox", { name: /^Reviewers/u }).selectOption("private_invited");
-  await page.getByRole("combobox", { name: /^Guaranteed bounty/u }).selectOption("unpaid");
+  const reviewerTiming = page.getByRole("region", { name: "Reviewers and timing" });
+  await expect(reviewerTiming.getByText("Invited reviewers", { exact: true })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: /^Reviewers/u })).toHaveCount(0);
+  await expect(page.getByRole("combobox", { name: /^Guaranteed bounty/u })).toHaveCount(0);
   await page.getByRole("radio", { name: "Check only" }).check();
   page.once("dialog", dialog => dialog.accept());
   await page.getByRole("button", { name: "Save changes" }).click();
@@ -426,6 +431,7 @@ test("workspace owner inspects and exports a signed decision packet", async ({ p
     }),
   );
   await page.route(`**/assurance/runs/${runId}/evidence`, route => json(route, packet));
+  await page.route(`**/assurance/runs/${runId}/evidence/shares`, route => json(route, { shares: [] }));
   await page.route("**/assurance/attestations?**", route =>
     json(route, {
       attestations: [
@@ -481,13 +487,13 @@ test("workspace owner inspects and exports a signed decision packet", async ({ p
   await expect(
     page.getByRole("region", { name: "Decision packets" }).getByRole("heading", { name: "Production readiness" }),
   ).toBeVisible();
+  await page.getByText("Verification details", { exact: true }).click();
   await expect(page.getByText("release gate")).toBeVisible();
   await expect(page.getByText("blocking")).toBeVisible();
   await expect(page.getByText(/3 of 3 assigned; 3 responded; 3 complete; 0 paid/iu)).toBeVisible();
   await expect(page.getByText(/release-engineering \(3\)/u)).toBeVisible();
   await expect(page.getByText(/No reviewer compensation was due/iu)).toBeVisible();
   await expect(page.getByText("Transparency receipt recorded")).toBeVisible();
-  await page.getByText("Anchor details", { exact: true }).click();
   await expect(page.getByText("rekor-playwright-01")).toBeVisible();
   await expect(page.getByRole("link", { name: "Audit log" })).toHaveAttribute(
     "href",
