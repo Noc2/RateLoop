@@ -37,7 +37,7 @@ test("public tokenless journeys render read-only without browser or server failu
     }
   });
 
-  for (const path of ["/", "/agents", "/rate", "/docs/connect"]) {
+  for (const path of ["/", "/agents/overview", "/rate", "/docs/connect"]) {
     const response = await page.goto(path, { waitUntil: "domcontentloaded" });
     expect(response?.status(), path).toBeLessThan(500);
     await expect(page.locator("main")).toBeVisible();
@@ -47,6 +47,13 @@ test("public tokenless journeys render read-only without browser or server failu
   await expect(page.getByRole("heading", { name: "Connect Your Agent Host" })).toBeVisible();
   expect(serverFailures).toEqual([]);
   expect(browserErrors).toEqual([]);
+});
+
+test("critical agent and maintenance server modules load before authorization", async ({ request }) => {
+  for (const path of ["/api/agent/v1/mcp", "/api/cron/tokenless-maintenance"]) {
+    const response = await request.get(path, { failOnStatusCode: false });
+    expect(response.status(), path).toBeLessThan(500);
+  }
 });
 
 test("hosted authentication is configured while account data stays signed-out", async ({ request }) => {
