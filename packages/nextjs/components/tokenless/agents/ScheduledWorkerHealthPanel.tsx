@@ -74,6 +74,7 @@ export function ScheduledWorkerHealthPanel({ workspaceId }: { workspaceId: strin
     );
   }
   const { health } = panelState;
+  if (health.state === "healthy" && health.signals.length === 0) return null;
   const content = CONTENT_KEYS[health.state];
   const lastCompleted = health.lastCompletedAt
     ? t("lastCompleted", {

@@ -4,6 +4,27 @@ import { test } from "node:test";
 import { ScheduledWorkerHealthPanel } from "~~/components/tokenless/agents/ScheduledWorkerHealthPanel";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
+test("healthy maintenance stays out of the overview", async () => {
+  const restoreDom = installTestDom();
+  const { cleanup, render, waitFor } = await import("@testing-library/react");
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    Response.json({
+      state: "healthy",
+      currentRun: "idle",
+      lastCompletedAt: "2026-07-26T11:59:00.000Z",
+      signals: [],
+    });
+  try {
+    const view = render(<ScheduledWorkerHealthPanel workspaceId="workspace_health" />);
+    await waitFor(() => assert.equal(view.container.textContent, ""));
+  } finally {
+    globalThis.fetch = previousFetch;
+    cleanup();
+    restoreDom();
+  }
+});
+
 test("workspace maintenance health renders actionable redacted signals", async () => {
   const restoreDom = installTestDom();
   const { cleanup, render, waitFor } = await import("@testing-library/react");
