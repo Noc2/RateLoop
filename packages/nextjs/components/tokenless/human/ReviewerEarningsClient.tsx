@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useFormatter, useTranslations } from "next-intl";
+import { InfoPopover } from "~~/components/tokenless/InfoPopover";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import { Card } from "~~/components/tokenless/ui/Card";
 import type { ReviewerEarning } from "~~/lib/tokenless/raterSettlementService";
@@ -55,11 +56,11 @@ export function ReviewerEarningsClient() {
   return (
     <Card as="section" className="rounded-2xl p-5" aria-labelledby="reviewer-earnings-title">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+        <div className="flex items-center gap-2">
           <h2 id="reviewer-earnings-title" className="text-xl font-semibold">
             {t("title")}
           </h2>
-          <p className="mt-2 text-sm leading-6 text-base-content/60">{t("description")}</p>
+          <InfoPopover label={t("about")}>{t("description")}</InfoPopover>
         </div>
         <button
           type="button"

@@ -44,6 +44,7 @@
   },
   "earnings": {
     "title": "Verdienste aus Prüfungen",
+    "about": "Über Verdienste aus Prüfungen",
     "description": "Historische Commits, Ergebnisse, verdiente Beträge, Auszahlungen und Anspruchsfristen aus dem festgelegten öffentlichen Abrechnungsindex.",
     "refreshing": "Wird aktualisiert…",
     "refresh": "Aktualisieren",

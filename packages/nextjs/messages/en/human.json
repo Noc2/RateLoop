@@ -44,6 +44,7 @@
   },
   "earnings": {
     "title": "Reviewer earnings",
+    "about": "About reviewer earnings",
     "description": "Historical commits, outcomes, earned amounts, payouts, and claim deadlines from the pinned public settlement index.",
     "refreshing": "Refreshing…",
     "refresh": "Refresh",

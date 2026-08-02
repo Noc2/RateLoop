@@ -9,6 +9,7 @@ const source = [
 
 test("reviewers can see historical earnings, outcomes, payouts, and deadlines", () => {
   assert.match(source, /Reviewer earnings/u);
+  assert.match(source, /<InfoPopover label=\{t\("about"\)\}>\{t\("description"\)\}<\/InfoPopover>/u);
   assert.match(source, /\/api\/rater\/earnings/u);
   assert.match(source, /Earned/u);
   assert.match(source, /Paid/u);
