@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { readApiRequestText } from "~~/lib/tokenless/apiRequestBody";
+import { privateNoStoreJson } from "~~/lib/tokenless/privateHttpResponse";
 import { type RaterCommitRequest, relayPaidRaterCommit } from "~~/lib/tokenless/raterService";
 import { requireRaterSession } from "~~/lib/tokenless/raterSession";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
@@ -25,7 +26,7 @@ export async function POST(request: NextRequest) {
     if (!idempotencyKey || !body.voucherId || !body.authorization || !body.response) {
       throw new TokenlessServiceError("Commit request is incomplete.", 400, "invalid_commit_request");
     }
-    return NextResponse.json(
+    return privateNoStoreJson(
       await relayPaidRaterCommit({
         principalId: session.principalId,
         request: {
@@ -39,6 +40,6 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     const response = tokenlessErrorResponse(error);
-    return NextResponse.json(response.body, { status: response.status });
+    return privateNoStoreJson(response.body, { status: response.status });
   }
 }

@@ -59,6 +59,7 @@ test("every account assignment handler imports and rejects an unauthenticated re
     responses.map(response => response.status),
     [401, 401, 403, 401, 403, 403, 401],
   );
+  assert.equal(responses[4]?.headers.get("cache-control"), "private, no-store, max-age=0");
 });
 
 test("an exact authenticated same-origin content self-identification report hides an unknown assignment", async () => {

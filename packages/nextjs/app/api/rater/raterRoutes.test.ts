@@ -45,6 +45,10 @@ test("every rater handler imports and enforces its route-level authentication or
   assert.equal(callback.status, 400);
   assert.equal((await callback.json()).code, "invalid_provider_result");
   for (const response of [...authenticatedHandlers, callback]) {
-    assert.match(response.headers.get("cache-control") ?? "no-store", /no-store/u);
+    const cacheControl = response.headers.get("cache-control");
+    assert.ok(cacheControl, "each rater response must explicitly set Cache-Control");
+    assert.match(cacheControl, /no-store/u);
   }
+  assert.equal(authenticatedHandlers[3]?.headers.get("cache-control"), "private, no-store, max-age=0");
+  assert.equal(authenticatedHandlers[4]?.headers.get("cache-control"), "private, no-store, max-age=0");
 });

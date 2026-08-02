@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
 import { API_JSON_REQUEST_BODY_MAX_BYTES, readApiRequestText } from "~~/lib/tokenless/apiRequestBody";
 import { recoverExpiredAudienceAssignment } from "~~/lib/tokenless/audienceAssignments";
+import { privateNoStoreJson } from "~~/lib/tokenless/privateHttpResponse";
 import { isDirectPrivateReviewAssignmentId } from "~~/lib/tokenless/privateReviewResponses";
 import { recoverPrivateUnpaidReviewAssignment } from "~~/lib/tokenless/privateUnpaidReviewAdapter";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest, context: Context) {
         throw new TokenlessServiceError("Recovery body must be valid JSON.", 400, "invalid_assignment_recovery");
       }
     }
-    return NextResponse.json(
+    return privateNoStoreJson(
       isDirectPrivateReviewAssignmentId(assignmentId)
         ? await recoverPrivateUnpaidReviewAssignment({
             assignmentId,
@@ -43,6 +44,6 @@ export async function POST(request: NextRequest, context: Context) {
     );
   } catch (error) {
     const response = tokenlessErrorResponse(error);
-    return NextResponse.json(response.body, { status: response.status });
+    return privateNoStoreJson(response.body, { status: response.status });
   }
 }

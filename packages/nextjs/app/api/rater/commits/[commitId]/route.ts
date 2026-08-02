@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { privateNoStoreJson } from "~~/lib/tokenless/privateHttpResponse";
 import { getPaidRaterCommit } from "~~/lib/tokenless/raterService";
 import { requireRaterSession } from "~~/lib/tokenless/raterSession";
 import { tokenlessErrorResponse } from "~~/lib/tokenless/server";
@@ -10,9 +11,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ com
   try {
     const session = await requireRaterSession(request, false);
     const { commitId } = await context.params;
-    return NextResponse.json(await getPaidRaterCommit({ principalId: session.principalId, commitId }));
+    return privateNoStoreJson(await getPaidRaterCommit({ principalId: session.principalId, commitId }));
   } catch (error) {
     const response = tokenlessErrorResponse(error);
-    return NextResponse.json(response.body, { status: response.status });
+    return privateNoStoreJson(response.body, { status: response.status });
   }
 }
