@@ -4273,9 +4273,12 @@ __metadata:
   resolution: "@rateloop/nextjs@workspace:packages/nextjs"
   dependencies:
     "@axe-core/playwright": 4.12.1
+    "@better-auth/core": 1.6.23
     "@better-auth/passkey": 1.6.23
     "@better-auth/scim": 1.6.23
     "@better-auth/sso": 1.6.23
+    "@better-auth/utils": 0.4.2
+    "@better-fetch/fetch": 1.3.1
     "@img/sharp-libvips-linux-x64": 1.3.2
     "@img/sharp-linux-x64": 0.35.3
     "@next/bundle-analyzer": ^16.1.6
@@ -4298,6 +4301,7 @@ __metadata:
     "@worldcoin/idkit-core": 4.2.1
     axe-core: 4.11.2
     better-auth: 1.6.23
+    better-call: 1.3.7
     daisyui: 5.0.9
     drizzle-kit: ^0.31.10
     drizzle-orm: ~0.45.2
@@ -4308,7 +4312,10 @@ __metadata:
     eslint-plugin-prettier: ~5.2.4
     fast-check: ^4.9.0
     gsap: ^3.14.2
+    jose: 6.2.3
     jsdom: 29.1.1
+    kysely: 0.29.3
+    nanostores: 1.4.0
     next: 15.5.21
     next-intl: ^4.3.12
     pg: ^8.20.0
@@ -14063,7 +14070,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"kysely@npm:^0.28.17 || ^0.29.0":
+"kysely@npm:0.29.3, kysely@npm:^0.28.17 || ^0.29.0":
   version: 0.29.3
   resolution: "kysely@npm:0.29.3"
   checksum: 4289bcad2d81cb2b6a52c184f85d50c60f52f5f9440916b0f94b0112a28cad211cdd37b0d4c35f4c14c2f65d5f119d834ba20c2d15b7e2da933badc2c3a27d6e
@@ -14783,7 +14790,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"nanostores@npm:^1.1.1":
+"nanostores@npm:1.4.0, nanostores@npm:^1.1.1":
   version: 1.4.0
   resolution: "nanostores@npm:1.4.0"
   checksum: 32d747e9b66a8efb82711370283eeae67dd9a4d673b53dcc6fa2dc8737db5cb8c06c775dea14c2a217944552cf43be9229622aa1a6ffb9c45bcbadda8b14b541
