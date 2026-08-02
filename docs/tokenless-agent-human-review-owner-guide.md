@@ -72,27 +72,21 @@ credibly fill the selected panel within that window. Editing a default does not 
 
 ## Configure compensation
 
-**Guaranteed bounty** and **Feedback Bonus** are independent controls:
-
-| Guaranteed bounty | Feedback Bonus | Result                                                                                        |
-| ----------------- | -------------- | --------------------------------------------------------------------------------------------- |
-| Off               | Off            | Invited unpaid review                                                                         |
-| On                | Off            | Accepted review work has guaranteed USDC compensation                                         |
-| Off               | On             | Invited review is otherwise unpaid; selected written feedback may receive the prefunded bonus |
-| On                | On             | Guaranteed compensation plus a separate possible human-awarded bonus                          |
-
-The guaranteed bounty is optional for invited reviewers and required for the RateLoop network or hybrid audience. It is
+An invited review without a guaranteed bounty is unpaid. Where a paid lane has been separately activated, a
+**guaranteed bounty** is optional for invited reviewers and required for the RateLoop network or hybrid audience. It is
 not conditional on whether the owner likes the answer. Paid review economics separately include the deterministic
-protocol **response quality reward**; that mechanism is not the Feedback Bonus.
+protocol **response quality reward**.
 
-The **Feedback Bonus** is optional and off by default. Enabling it sets a separate USDC pool and a human awarder. The
-requester is the default awarder, or the requester may designate another authenticated human. If either control can pay
-a reviewer, paid eligibility must complete before assignment.
+**Feedback Bonus is not an ordinary owner or agent setting.** It is retained as a separately governed experiment, is
+off by default, and cannot be enabled through normal workspace configuration. It requires its own benchmark activation
+and applicable external release evidence. Any method that can pay a reviewer must complete paid eligibility before the
+assignment.
 
-After eligible written feedback arrives, the configured awarder sees **Award Feedback Bonus** on the Agents page. The
-awarder chooses **Award this feedback** and enters an amount up to the pool balance. The awarder may make partial and
-multiple awards to different eligible feedback; the unawarded remainder returns to the immutable refund recipient after
-the disclosed deadline. The connected agent, automatic score, and RateLoop operator cannot select or execute an award.
+Only after that governed activation may Feedback Bonus use a separate prefunded USDC pool and a human awarder. The
+requester is the default awarder, or the requester may designate another authenticated human. Eligible written feedback
+then exposes **Award Feedback Bonus** to that awarder on the Agents page. The awarder may make partial and multiple
+awards up to the pool balance; the unawarded remainder returns to the immutable refund recipient after the disclosed
+deadline. The connected agent, automatic score, and RateLoop operator cannot select or execute an award.
 
 ## Choose the agent's authority
 
@@ -100,8 +94,9 @@ the disclosed deadline. The connected agent, automatic score, and RateLoop opera
 - **Prepare for approval** saves the exact request and economics for a workspace human to approve. Nothing is assigned,
   published, reserved, or spent before approval.
 - **Ask automatically** lets the agent ask only within the active grant's exact workflow, audience, material, timing,
-  panel, expiry, and publishing limits. Private invited review with no bounty or Feedback Bonus needs no funding
-  permission. A bounty or Feedback Bonus additionally requires the exact funding permission and budget limits.
+  panel, expiry, and publishing limits. Private invited review without a bounty needs no funding permission. A bounty
+  requires the exact funding permission and budget limits; a separately governed Feedback Bonus activation must bind
+  the same controls before it can be used.
 
 When **Manual handoff only** is selected, Agent authority is hidden and safely reset to **Check only**. Selecting another
 frequency does not restore an earlier automatic grant.

@@ -121,3 +121,16 @@ test("network mechanics stay unreachable until their own benchmark evidence exis
     crowdForecast: false,
   });
 });
+
+test("the owner guide keeps Feedback Bonus behind the governed activation boundary", () => {
+  const guide = readFileSync(
+    new URL("../../../../docs/tokenless-agent-human-review-owner-guide.md", import.meta.url),
+    "utf8",
+  );
+
+  assert.equal(GOVERNED_REVIEWER_EXPERIMENTS.feedbackBonus, false);
+  assert.match(guide, /Feedback Bonus is not an ordinary owner or agent setting/u);
+  assert.match(guide, /requires its own benchmark activation/u);
+  assert.match(guide, /Only after that governed activation/u);
+  assert.doesNotMatch(guide, /The \*\*Feedback Bonus\*\* is optional and off by default/u);
+});
