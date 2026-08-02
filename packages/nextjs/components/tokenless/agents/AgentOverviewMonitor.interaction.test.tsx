@@ -332,7 +332,7 @@ test("the overview renders four fixed answers and expands lifetime scope evidenc
     assert.ok(view.getByText("95th percentile"));
     assert.ok(view.getByText(/Each included case met its frozen privacy threshold \(3 reviewers\)/));
     assert.equal(view.queryByText(/reviewer-[0-9a-f]+/iu), null);
-    assert.ok(view.getByText("Lifetime by scope"));
+    assert.equal(view.queryByText("Lifetime by scope"), null);
     assert.ok(view.getByText("65.0%"));
     assert.ok(view.getByRole("heading", { name: "Attention" }));
     assert.ok(view.getByText("2 blocked reviews cannot settle."));

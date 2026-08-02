@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useState } from "react";
 import { AgentText } from "./AgentText";
 import { useAgentLocale, useAgentTranslations } from "./AgentsLocaleProvider";
+import { localizeOverviewPeriod, localizeOverviewReason, localizeQualityBucket } from "./agentOverviewLocalization";
 import { agentTabHref } from "./agentWorkspaceState";
 import { InfoPopover } from "~~/components/tokenless/InfoPopover";
 import { SelectField } from "~~/components/tokenless/forms/Field";
@@ -443,13 +444,14 @@ function DecisionTimeTrend({ overview }: { overview: AgentOverview }) {
 }
 
 function TrendPanels({ overview }: { overview: AgentOverview }) {
+  const ui = useAgentTranslations("ui");
   return (
     <section aria-labelledby="agent-overview-trends-heading">
       <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
         <h2 id="agent-overview-trends-heading" className="text-xl font-semibold">
           <AgentText id="translated056" />
         </h2>
-        <span className="text-xs text-base-content/55">{overview.trends.periodLabel}</span>
+        <span className="text-xs text-base-content/55">{localizeOverviewPeriod(overview.trends.periodLabel, ui)}</span>
       </div>
       <div className="grid gap-5 xl:grid-cols-2">
         <ReviewOutcomeTrend overview={overview} />
@@ -459,12 +461,12 @@ function TrendPanels({ overview }: { overview: AgentOverview }) {
   );
 }
 
-function privacyThresholdLabel(overview: AgentOverview) {
+function privacyThresholdLabel(overview: AgentOverview, t: AgentTranslate) {
   const threshold = overview.reviewQuality.privacyThreshold;
   if (!threshold) return null;
   return threshold.minimum === threshold.maximum
-    ? `${threshold.minimum} reviewers`
-    : `${threshold.minimum}–${threshold.maximum} reviewers`;
+    ? t("reviewerCount", { count: threshold.minimum })
+    : t("reviewerRange", { minimum: threshold.minimum, maximum: threshold.maximum });
 }
 
 function QualityDistribution({
@@ -475,24 +477,28 @@ function QualityDistribution({
   unit: "cases" | "decisions";
 }) {
   const locale = useAgentLocale();
+  const ui = useAgentTranslations("ui");
   return (
     <div className="mt-4 space-y-3">
-      {rows.map(row => (
-        <div key={row.key}>
-          <div className="mb-1 flex items-center justify-between gap-3 text-xs text-base-content/60">
-            <span>{row.label}</span>
-            <span className="font-mono">
-              {percent(row.shareBps)} · n = {row.count.toLocaleString(locale)}
-            </span>
+      {rows.map(row => {
+        const label = localizeQualityBucket(row.key, row.label, unit, ui);
+        return (
+          <div key={row.key}>
+            <div className="mb-1 flex items-center justify-between gap-3 text-xs text-base-content/60">
+              <span>{label}</span>
+              <span className="font-mono">
+                {percent(row.shareBps)} · n = {row.count.toLocaleString(locale)}
+              </span>
+            </div>
+            <progress
+              className="progress progress-primary h-1.5 w-full"
+              max={10_000}
+              value={row.shareBps}
+              aria-label={`${label}: ${percent(row.shareBps)}, ${row.count} ${ui(unit === "cases" ? "cases" : "decisions")}`}
+            />
           </div>
-          <progress
-            className="progress progress-primary h-1.5 w-full"
-            max={10_000}
-            value={row.shareBps}
-            aria-label={`${row.label}: ${percent(row.shareBps)}, ${row.count} ${unit}`}
-          />
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -519,7 +525,7 @@ function ReviewQualityPanel({ overview }: { overview: AgentOverview }) {
   const locale = useAgentLocale();
   const ui = useAgentTranslations("ui");
   const quality = overview.reviewQuality;
-  const threshold = privacyThresholdLabel(overview);
+  const threshold = privacyThresholdLabel(overview, ui);
   const privacyCopy = threshold ? ui("privacyThresholdMet", { threshold }) : ui("privacyThresholdPending");
   return (
     <section aria-labelledby="agent-review-quality-heading">
@@ -539,7 +545,11 @@ function ReviewQualityPanel({ overview }: { overview: AgentOverview }) {
             {quality.availability === "suppressed" ? <AgentText id="dynamic009" /> : <AgentText id="dynamic005" />}
           </p>
           <p className="mt-2 text-sm text-base-content/55">
-            {quality.consensus.available ? <AgentText id="dynamic010" /> : quality.consensus.reason}
+            {quality.consensus.available ? (
+              <AgentText id="dynamic010" />
+            ) : (
+              localizeOverviewReason(quality.consensus.reason, ui)
+            )}
           </p>
           <p className="mt-2 text-xs text-base-content/55">{privacyCopy}</p>
         </Card>
@@ -584,7 +594,9 @@ function ReviewQualityPanel({ overview }: { overview: AgentOverview }) {
                   </p>
                 </>
               ) : (
-                <p className="mt-4 text-sm text-base-content/55">{quality.reviewerConsistency.reason}</p>
+                <p className="mt-4 text-sm text-base-content/55">
+                  {localizeOverviewReason(quality.reviewerConsistency.reason, ui)}
+                </p>
               )}
             </Card>
             <Card as="article" className="rounded-2xl p-5 xl:col-span-2">
@@ -649,7 +661,9 @@ function ReviewQualityPanel({ overview }: { overview: AgentOverview }) {
                   </p>
                 </>
               ) : (
-                <p className="mt-4 text-sm text-base-content/55">{quality.decisionTime.reason}</p>
+                <p className="mt-4 text-sm text-base-content/55">
+                  {localizeOverviewReason(quality.decisionTime.reason, ui)}
+                </p>
               )}
             </Card>
             <Card as="article" className="rounded-2xl p-5">
@@ -784,12 +798,9 @@ function AgentVersionTable({
   return (
     <Card as="section" className="rounded-2xl p-5" aria-busy={loading} aria-labelledby="agent-version-monitor-heading">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 id="agent-version-monitor-heading" className="text-xl font-semibold">
-            <AgentText id="translated071" />
-          </h2>
-          <p className="mt-1 text-sm text-base-content/55">{overview.agentVersions.periodLabel}</p>
-        </div>
+        <h2 id="agent-version-monitor-heading" className="text-xl font-semibold">
+          <AgentText id="translated071" />
+        </h2>
         <span className="badge border-base-content/10 bg-base-content/[0.04]">
           <AgentText id="currentVersions" />
         </span>
@@ -935,14 +946,9 @@ function AttentionList({ overview, workspaceId }: { overview: AgentOverview; wor
   const ui = useAgentTranslations("ui");
   return (
     <Card as="section" className="rounded-2xl p-5" aria-labelledby="agent-attention-heading">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 id="agent-attention-heading" className="text-xl font-semibold">
-            <AgentText id="translated077" />
-          </h2>
-        </div>
-        <span className="text-xs text-base-content/55">{overview.attention.periodLabel}</span>
-      </div>
+      <h2 id="agent-attention-heading" className="text-xl font-semibold">
+        <AgentText id="translated077" />
+      </h2>
       {overview.attention.items.length === 0 ? (
         <p className="mt-5 text-sm text-base-content/55">
           <AgentText id="noAttention" />
