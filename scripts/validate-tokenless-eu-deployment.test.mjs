@@ -175,6 +175,7 @@ test("the manifest cannot omit governed resources, processors, or public-chain l
   const manifest = structuredClone(tokenlessEuDeploymentManifest);
   delete manifest.resources.platformSecrets;
   delete manifest.externalProcessors.email;
+  delete manifest.externalProcessors.rekor;
   manifest.publicChainExceptions[0].customerContentAllowed = true;
   const output = (
     await validateTokenlessEuDeployment({
@@ -185,6 +186,7 @@ test("the manifest cannot omit governed resources, processors, or public-chain l
   ).join("\n");
   assert.match(output, /inventory the platformSecrets resource/);
   assert.match(output, /inventory the email processor/);
+  assert.match(output, /inventory the rekor processor/);
   assert.match(output, /exact Base Sepolia public-chain exception/);
 });
 

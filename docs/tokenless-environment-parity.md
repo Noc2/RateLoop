@@ -73,6 +73,8 @@ Next.js:
 - server-only `BETTER_AUTH_SECRET`; the hosted target also requires `RESEND_API_KEY` and `RESEND_FROM_EMAIL` for email OTP
 - `TOKENLESS_EMAIL_DELIVERY_REGION=eu-west-1` plus approved processor/transfer evidence; Resend's account metadata and
   logs remain in the US even when mail is dispatched from Ireland
+- `TOKENLESS_REKOR_PROCESSOR_EVIDENCE_ID` identifying the approved processor/transfer record for the mandatory public
+  decision-packet witness; only cryptographic digests and limited witness metadata may cross this boundary
 - optional Better Auth Google/Apple credential pairs and `BETTER_AUTH_PASSKEY_RP_ID`
 - `NEXT_PUBLIC_THIRDWEB_CLIENT_ID` for self-custodial funding and payout connections, independently of managed issuance;
   `TOKENLESS_THIRDWEB_WALLET_ENABLED=false` is mandatory until verifiable export and recovery are implemented

@@ -119,10 +119,10 @@ and must not relabel paid reviewer feedback as unsolicited customer or consumer 
    an independently selected Base RPC or indexer. The packet also records settlement mode, statement, and links; it does
    not embed a complete transaction receipt or independently recompute chain accounting. Missing chain evidence remains
    an explicit packet limitation.
-4. Validate optional external receipts only when they are present. For a non-null Rekor bundle, select the intended log
-   independently and check its UUID, index, inclusion data, and signed entry time. An absent bundle means there is no
-   Rekor receipt. For a non-null TSA field, validate its RFC 3161 message imprint, certificate path, policy, and time
-   against trust roots selected by your organization. An absent token means there is no TSA receipt.
+4. Every completed decision-packet attestation includes a Rekor bundle. Select the intended log independently and check
+   its UUID, index, authenticated checkpoint, inclusion data, and signed entry time. A missing or invalid bundle makes
+   the witness incomplete. For a non-null TSA field, validate its RFC 3161 message imprint, certificate path, policy,
+   and time against trust roots selected by your organization. An absent token means there is no TSA receipt.
 
 Download a completed witness from its public attestation URL. Select the signer, Rekor log key, and TSA certificate
 chain independently, pin the witness signer key ID, then run:
@@ -137,8 +137,8 @@ yarn workspace @rateloop/nextjs attestation:verify ./attestation-witness.json \
 ```
 
 The TSA arguments are required when `rfc3161` is non-null; omit them for a witness without a timestamp. The verifier
-checks the DSSE signature and statement binding, Rekor body, signed entry timestamp and inclusion proof, and the RFC 3161
-token when present.
+checks the DSSE signature and statement binding, Rekor body, signed entry timestamp, authenticated checkpoint, inclusion
+proof, and the RFC 3161 token when present.
 
 The workspace audit chain is separate. Pin the expected head from another trusted record when possible:
 

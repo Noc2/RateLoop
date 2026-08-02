@@ -314,11 +314,11 @@ export default function EvidencePage({ params }: { params?: PublicLocaleParams }
             limitation.
           </li>
           <li>
-            <strong>Optional external receipts.</strong> When a completed attestation includes a non-null Rekor bundle,
-            select the intended log independently and check its UUID, index, inclusion data, and signed entry time. An
-            absent bundle means there is no Rekor receipt. When the separate TSA field is non-null, validate its RFC
-            3161 message imprint, certificate path, policy, and time against trust roots selected by your organization.
-            An absent token means there is no TSA receipt.
+            <strong>External witness receipts.</strong> Every completed decision-packet attestation includes a Rekor
+            bundle. Select the intended log independently and check its UUID, index, authenticated checkpoint, inclusion
+            data, and signed entry time. A missing or invalid bundle makes the witness incomplete. When the separate TSA
+            field is non-null, validate its RFC 3161 message imprint, certificate path, policy, and time against trust
+            roots selected by your organization. An absent token means there is no TSA receipt.
           </li>
         </ol>
         <p>
@@ -335,8 +335,8 @@ export default function EvidencePage({ params }: { params?: PublicLocaleParams }
         </pre>
         <p>
           The TSA arguments are required when <code>rfc3161</code> is non-null; omit them for a witness without a
-          timestamp. The verifier checks the DSSE signature and statement binding, Rekor body, signed entry timestamp
-          and inclusion proof, and the RFC 3161 token when present.
+          timestamp. The verifier checks the DSSE signature and statement binding, Rekor body, signed entry timestamp,
+          authenticated checkpoint, inclusion proof, and the RFC 3161 token when present.
         </p>
         <p>
           The workspace audit chain is a separate export. Pin its expected head from another trusted record when

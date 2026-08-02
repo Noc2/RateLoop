@@ -105,6 +105,10 @@
     "rpc": {
       "dataScope": "public-chain-requests-without-private-artifacts",
       "evidenceEnv": "TOKENLESS_RPC_PROCESSOR_EVIDENCE_ID"
+    },
+    "rekor": {
+      "dataScope": "public-evidence-digests-and-cryptographic-witness-metadata",
+      "evidenceEnv": "TOKENLESS_REKOR_PROCESSOR_EVIDENCE_ID"
     }
   },
   "publicChainExceptions": [
@@ -122,6 +126,6 @@
   },
   "integrity": {
     "algorithm": "SHA-256",
-    "canonicalContentSha256": "aa2fe3055e523b7faa90e4c3276b762ed6581fe6f0682a6836139ce2c02cf038"
+    "canonicalContentSha256": "792ccb0d5627b522e55d59ebafc02a2c433932c62ffe3229b6fdfb3c8e0bb69a"
   }
 }

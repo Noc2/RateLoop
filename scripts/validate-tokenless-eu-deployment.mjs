@@ -55,7 +55,7 @@ const REQUIRED_RESOURCES = Object.freeze([
   "backups",
   "auth",
 ]);
-const REQUIRED_PROCESSORS = Object.freeze(["email", "billing", "rpc"]);
+const REQUIRED_PROCESSORS = Object.freeze(["email", "billing", "rpc", "rekor"]);
 
 function readJson(file) {
   return JSON.parse(readFileSync(file, "utf8"));

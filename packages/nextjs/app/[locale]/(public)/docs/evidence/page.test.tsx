@@ -83,7 +83,10 @@ test("evidence docs explain exact artifacts, checks, mappings, and boundaries", 
   assert.match(html, /attestation:verify.*--signer-public-key.*--signer-key-id.*--rekor-public-key.*--tsa-ca/is);
   assert.match(html, /independently selected Base RPC or indexer/i);
   assert.match(html, /does not embed a complete transaction receipt/i);
-  assert.match(html, /absent bundle means there is no Rekor receipt/i);
+  assert.match(html, /Every completed decision-packet attestation includes a Rekor bundle/i);
+  assert.match(html, /authenticated checkpoint/i);
+  assert.match(html, /missing or invalid bundle makes the witness incomplete/i);
+  assert.doesNotMatch(html, /absent bundle means there is no Rekor receipt/i);
   assert.match(html, /absent token means there is no TSA receipt/i);
   assert.match(html, /assurance\/coverage\/export/i);
   assert.match(html, /assurance\/trusted-keys/i);

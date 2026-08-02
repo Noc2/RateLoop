@@ -23,6 +23,11 @@ const coreProviders = [
     purpose: "Isolated runtime services and managed PostgreSQL used by the tokenless service, indexer, and keeper.",
     condition: "Core hosted data and worker runtime.",
   },
+  {
+    provider: "Sigstore public Rekor service",
+    purpose: "Public transparency-log witnessing of cryptographic digests and limited evidence metadata.",
+    condition: "Every completed decision-packet attestation.",
+  },
 ] as const;
 
 const conditionalProviders = [
@@ -45,11 +50,6 @@ const conditionalProviders = [
     provider: "Google LLC / Google Ireland Limited or Apple distribution affiliates",
     purpose: "Optional federated account sign-in.",
     condition: "Only when the provider is configured and the user selects it.",
-  },
-  {
-    provider: "Sigstore public Rekor service",
-    purpose: "Optional public transparency-log receipt for evidence witness metadata and cryptographic digests.",
-    condition: "Only when Rekor witnessing is configured for the customer's evidence pipeline.",
   },
   {
     provider: "Drata, Inc. or Vanta Inc.",
@@ -101,8 +101,7 @@ function ProviderTable({
   );
 }
 
-export default function SubprocessorsPage({ params }: { params?: PublicLocaleParams } = {}) {
-  const locale = usePublicLocale(params);
+export function SubprocessorsContent({ locale = "en" }: { locale?: Locale }) {
   return (
     <LocalizedPublicContent locale={locale} section="legal">
       <article className="prose legal-prose mx-auto max-w-5xl px-4 py-12">
@@ -152,4 +151,8 @@ export default function SubprocessorsPage({ params }: { params?: PublicLocalePar
       </article>
     </LocalizedPublicContent>
   );
+}
+
+export default function SubprocessorsPage({ params }: { params?: PublicLocaleParams } = {}) {
+  return <SubprocessorsContent locale={usePublicLocale(params)} />;
 }

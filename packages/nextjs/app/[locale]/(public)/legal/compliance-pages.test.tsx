@@ -14,6 +14,12 @@ async function render(page: string) {
   return renderToStaticMarkup(<Page />).replace(/\s+/g, " ");
 }
 
+async function renderGermanSubprocessors() {
+  (globalThis as typeof globalThis & { React: typeof React }).React = React;
+  const { SubprocessorsContent } = await import("./subprocessors/page");
+  return renderToStaticMarkup(<SubprocessorsContent locale="de" />).replace(/\s+/g, " ");
+}
+
 test("legal index cards explain their destinations without repeated navigation copy", async () => {
   const html = await render("./page");
   assert.match(html, /Rules, responsibilities, payment terms, and service limitations\./i);
@@ -45,10 +51,13 @@ test("DPA includes the Article 28 processing contract essentials", async () => {
 test("subprocessor notice distinguishes core, conditional, and independent services", async () => {
   const html = await render("./subprocessors/page");
   assert.match(html, /Vercel, Inc/i);
+  assert.match(html, /Vercel, Inc.*Core hosted application\./i);
   assert.match(html, /Railway Corp/i);
   assert.match(html, /Resend, Inc/i);
   assert.match(html, /Stripe Payments Europe/i);
   assert.match(html, /Sigstore public Rekor service/i);
+  assert.match(html, /Sigstore public Rekor service.*Every completed decision-packet attestation\./i);
+  assert.doesNotMatch(html, /Only when Rekor witnessing is configured|Optional public transparency-log receipt/i);
   assert.match(html, /Customer-approved RFC 3161 timestamp authority/i);
   assert.match(html, /Drata, Inc\. or Vanta Inc\./i);
   assert.match(html, /Customer-designated S3-compatible storage provider/i);
@@ -56,6 +65,14 @@ test("subprocessor notice distinguishes core, conditional, and independent servi
   assert.doesNotMatch(html, /Amazon Web Services EMEA/i);
   assert.match(html, /Services that may be independent recipients/i);
   assert.match(html, /object within 14 days/i);
+});
+
+test("subprocessor conditions render in German without leaking English fallback copy", async () => {
+  const html = await renderGermanSubprocessors();
+  assert.match(html, /Vercel, Inc.*Zentrale gehostete Anwendung\./i);
+  assert.match(html, /Öffentlicher Sigstore-Rekor-Dienst/i);
+  assert.match(html, /Bei jeder abgeschlossenen Bestätigung eines Entscheidungspakets\./i);
+  assert.doesNotMatch(html, /Core hosted application\.|Every completed decision-packet attestation\./i);
 });
 
 test("cookie policy discloses every first-party storage category and no analytics", async () => {
