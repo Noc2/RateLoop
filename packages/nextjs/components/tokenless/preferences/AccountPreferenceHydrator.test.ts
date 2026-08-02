@@ -1,6 +1,9 @@
 import {
+  __resetLocalAccountPreferenceRevisionsForTests,
   loadAuthenticatedAccountPreferences,
+  markLocalAccountPreferenceChange,
   persistAuthenticatedAccountPreference,
+  readLocalAccountPreferenceRevision,
 } from "./authenticatedAccountPreferences";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -79,11 +82,38 @@ test("authenticated preference changes PATCH only after session confirmation", a
   ]);
 });
 
+test("local preference revisions distinguish a user change from an older hydration response", () => {
+  __resetLocalAccountPreferenceRevisionsForTests();
+  const themeRevision = readLocalAccountPreferenceRevision("preferredTheme");
+  const localeRevision = readLocalAccountPreferenceRevision("preferredLocale");
+
+  markLocalAccountPreferenceChange("preferredTheme");
+  assert.notEqual(readLocalAccountPreferenceRevision("preferredTheme"), themeRevision);
+  assert.equal(readLocalAccountPreferenceRevision("preferredLocale"), localeRevision);
+
+  markLocalAccountPreferenceChange("preferredLocale");
+  assert.notEqual(readLocalAccountPreferenceRevision("preferredLocale"), localeRevision);
+  __resetLocalAccountPreferenceRevisionsForTests();
+});
+
 test("global preference controls share auth-gated persistence", () => {
   for (const file of ["LocaleToggle.tsx", "ThemeToggle.tsx"]) {
     const source = readFileSync(new URL(file, import.meta.url), "utf8");
     assert.match(source, /persistAuthenticatedAccountPreference/u, file);
     assert.doesNotMatch(source, /fetch\("\/api\/account\/profile"/u, file);
+  }
+});
+
+test("hydration and both controls share the local preference ordering invariant", () => {
+  const consumers = [
+    ["AccountPreferenceHydrator.tsx", "readLocalAccountPreferenceRevision"],
+    ["LocaleToggle.tsx", "markLocalAccountPreferenceChange"],
+    ["ThemeToggle.tsx", "markLocalAccountPreferenceChange"],
+  ] as const;
+
+  for (const [file, sharedImplementation] of consumers) {
+    const source = readFileSync(new URL(file, import.meta.url), "utf8");
+    assert.match(source, new RegExp(`\\b${sharedImplementation}\\b`, "u"), file);
   }
 });
 

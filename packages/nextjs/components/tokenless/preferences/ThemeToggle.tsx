@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { persistAuthenticatedAccountPreference } from "./authenticatedAccountPreferences";
+import {
+  markLocalAccountPreferenceChange,
+  persistAuthenticatedAccountPreference,
+} from "./authenticatedAccountPreferences";
 import {
   type Theme,
   applyThemePreference,
@@ -88,6 +91,7 @@ export function ThemeToggle({
   const toggleTheme = () => {
     const renderedTheme = theme ?? parseThemePreference(document.documentElement.dataset.theme) ?? currentSystemTheme();
     const nextTheme = renderedTheme === "dark" ? "light" : "dark";
+    markLocalAccountPreferenceChange("preferredTheme");
     applyThemePreference(document.documentElement, nextTheme);
     document.cookie = serializeThemePreferenceCookie(nextTheme, window.location.protocol === "https:");
     setTheme(nextTheme);

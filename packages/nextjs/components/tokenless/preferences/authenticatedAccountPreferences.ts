@@ -12,6 +12,21 @@ type AccountPreferenceUpdate = {
   preferredTheme?: string;
 };
 
+type AccountPreferenceKey = keyof AccountPreferenceUpdate;
+
+const localPreferenceRevisions: Record<AccountPreferenceKey, number> = {
+  preferredLocale: 0,
+  preferredTheme: 0,
+};
+
+export function readLocalAccountPreferenceRevision(preference: AccountPreferenceKey) {
+  return localPreferenceRevisions[preference];
+}
+
+export function markLocalAccountPreferenceChange(preference: AccountPreferenceKey) {
+  localPreferenceRevisions[preference] += 1;
+}
+
 function requestInit(signal?: AbortSignal): RequestInit {
   return {
     cache: "no-store",
@@ -52,4 +67,9 @@ export async function persistAuthenticatedAccountPreference(
     body: JSON.stringify(update),
   });
   return response.ok;
+}
+
+export function __resetLocalAccountPreferenceRevisionsForTests() {
+  localPreferenceRevisions.preferredLocale = 0;
+  localPreferenceRevisions.preferredTheme = 0;
 }

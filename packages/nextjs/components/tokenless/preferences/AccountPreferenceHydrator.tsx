@@ -2,7 +2,10 @@
 
 import { useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { loadAuthenticatedAccountPreferences } from "./authenticatedAccountPreferences";
+import {
+  loadAuthenticatedAccountPreferences,
+  readLocalAccountPreferenceRevision,
+} from "./authenticatedAccountPreferences";
 import { useLocale } from "next-intl";
 import { isLocale } from "~~/i18n/config";
 import { usePathname, useRouter } from "~~/i18n/navigation";
@@ -20,6 +23,8 @@ export function AccountPreferenceHydrator() {
   useEffect(() => {
     if (preferenceSyncCompleted) return;
     const controller = new AbortController();
+    const startingLocaleRevision = readLocalAccountPreferenceRevision("preferredLocale");
+    const startingThemeRevision = readLocalAccountPreferenceRevision("preferredTheme");
 
     void loadAuthenticatedAccountPreferences({ signal: controller.signal })
       .then(preferences => {
@@ -28,7 +33,7 @@ export function AccountPreferenceHydrator() {
 
         const theme =
           typeof preferences.preferredTheme === "string" ? parseThemePreference(preferences.preferredTheme) : undefined;
-        if (theme) {
+        if (theme && readLocalAccountPreferenceRevision("preferredTheme") === startingThemeRevision) {
           applyThemePreference(document.documentElement, theme);
           document.cookie = serializeThemePreferenceCookie(theme, window.location.protocol === "https:");
         }
@@ -37,7 +42,11 @@ export function AccountPreferenceHydrator() {
           typeof preferences.preferredLocale === "string" && isLocale(preferences.preferredLocale)
             ? preferences.preferredLocale
             : undefined;
-        if (locale && locale !== activeLocale) {
+        if (
+          locale &&
+          locale !== activeLocale &&
+          readLocalAccountPreferenceRevision("preferredLocale") === startingLocaleRevision
+        ) {
           router.replace(`${pathname}${search ? `?${search}` : ""}${window.location.hash}`, {
             locale,
             scroll: false,

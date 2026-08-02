@@ -1,7 +1,10 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { persistAuthenticatedAccountPreference } from "./authenticatedAccountPreferences";
+import {
+  markLocalAccountPreferenceChange,
+  persistAuthenticatedAccountPreference,
+} from "./authenticatedAccountPreferences";
 import { useLocale, useTranslations } from "next-intl";
 import { type Locale, isLocale } from "~~/i18n/config";
 import { usePathname, useRouter } from "~~/i18n/navigation";
@@ -25,6 +28,7 @@ export function LocaleToggle({ className = "" }: { className?: string }) {
   const nextLabel = nextLocale === "de" ? t("german") : t("english");
 
   function switchLocale() {
+    markLocalAccountPreferenceChange("preferredLocale");
     void persistAuthenticatedLocale(nextLocale);
     const query = searchParams.toString();
     const hash = window.location.hash;

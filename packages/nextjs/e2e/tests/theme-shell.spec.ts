@@ -67,3 +67,45 @@ test("dark theme is parser-applied before Next.js framework chunks run", async (
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await expect(page.locator("html")).toHaveCSS("color-scheme", "dark");
 });
+
+test("an older account preference response cannot overwrite a newer theme choice", async ({ context, page }) => {
+  let releaseProfile!: () => void;
+  let markProfileRequested!: () => void;
+  const profileGate = new Promise<void>(resolve => (releaseProfile = resolve));
+  const profileRequested = new Promise<void>(resolve => (markProfileRequested = resolve));
+  const patches: unknown[] = [];
+
+  await page.route("**/api/auth/session", route =>
+    route.fulfill({ contentType: "application/json", body: JSON.stringify({ authenticated: true }) }),
+  );
+  await page.route("**/api/account/profile", async route => {
+    if (route.request().method() === "PATCH") {
+      patches.push(route.request().postDataJSON());
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true }) });
+      return;
+    }
+    markProfileRequested();
+    await profileGate;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ preferredLocale: "de", preferredTheme: "dark" }),
+    });
+  });
+
+  await context.clearCookies();
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.goto("/de/human/review", { waitUntil: "domcontentloaded" });
+  await profileRequested;
+  await page.locator(".rateloop-theme-toggle:visible").first().click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+
+  const profileResponse = page.waitForResponse(
+    response => response.url().endsWith("/api/account/profile") && response.request().method() === "GET",
+  );
+  releaseProfile();
+  await profileResponse;
+  await page.waitForTimeout(100);
+
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  expect(patches).toContainEqual({ preferredTheme: "light" });
+});
