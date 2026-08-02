@@ -26,7 +26,6 @@
     "chooseTitle": "Choose a workspace",
     "chooseDescription": "The workspace in this link is unavailable. Choose one you can access.",
     "versionsTitle": "Agent versions",
-    "versionsDescription": "Update workflow versions or view archived agents when needed.",
     "done": "Done",
     "updateVersion": "Update agent version"
   },

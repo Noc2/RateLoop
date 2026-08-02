@@ -26,7 +26,6 @@
     "chooseTitle": "Arbeitsbereich auswählen",
     "chooseDescription": "Der Arbeitsbereich in diesem Link ist nicht verfügbar. Wähle einen Arbeitsbereich aus, auf den du zugreifen kannst.",
     "versionsTitle": "Agent-Versionen",
-    "versionsDescription": "Aktualisiere Workflow-Versionen oder zeige bei Bedarf archivierte Agenten an.",
     "done": "Fertig",
     "updateVersion": "Agent-Version aktualisieren"
   },

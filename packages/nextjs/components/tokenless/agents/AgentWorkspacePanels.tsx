@@ -152,12 +152,9 @@ export function AgentWorkspacePanels({
         {hasConnectedAgent && resolvedTab === "connect" ? (
           <Card as="section" className="rounded-2xl p-5" aria-labelledby="agent-version-management-heading">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 id="agent-version-management-heading" className="font-semibold">
-                  {t("versionsTitle")}
-                </h2>
-                <p className="mt-1 text-sm text-base-content/60">{t("versionsDescription")}</p>
-              </div>
+              <h2 id="agent-version-management-heading" className="font-semibold">
+                {t("versionsTitle")}
+              </h2>
               <Button
                 type="button"
                 size="sm"

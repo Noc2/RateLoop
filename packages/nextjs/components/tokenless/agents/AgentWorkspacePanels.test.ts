@@ -262,6 +262,12 @@ test("concise agent tabs and the workspace selector share one desktop row", () =
   assert.equal(tabsSource.match(/<select/g)?.length, undefined);
 });
 
+test("agent-version management is identified by its heading and action", () => {
+  assert.match(panelsSource, /t\("versionsTitle"\)/);
+  assert.match(panelsSource, /t\("updateVersion"\)/);
+  assert.doesNotMatch(panelsSource, /versionsDescription/);
+});
+
 test("the server resolves onboarding before the client renders downstream panels", () => {
   assert.match(pageSource, /listProductWorkspaces\(session\.principalId\)/);
   assert.match(pageSource, /selectRequestedWorkspace\(workspaces, requestedWorkspaceId\)/);
