@@ -6,24 +6,13 @@ import { Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { betterAuthClient, issueAccountDeletionProof, readBrowserAuthConfiguration } from "~~/lib/auth/client";
+import type {
+  AccountDeletionPreview,
+  AccountDeletionPreviewItem,
+  AccountDeletionRetainedRecordCode,
+  AccountDeletionWarningCode,
+} from "~~/lib/privacy/accountDeletionPreview";
 import { readJson } from "~~/lib/tokenless/http";
-
-type DeletionBlocker = {
-  code: string;
-  message: string;
-};
-
-type DeletionPreview = {
-  blockers: DeletionBlocker[];
-  impact: {
-    ownedWorkspaces: number;
-    sharedWorkspaces: number;
-    acceptedAssignments: number;
-    managedWallets: number;
-    retainedRecords: string[];
-  };
-  warnings: string[];
-};
 
 class DeletionFieldError extends Error {
   field: string;
@@ -39,7 +28,7 @@ export function AccountDeletionPanel() {
   const locale = useLocale();
   const t = useTranslations("account.deletion");
   const [reviewing, setReviewing] = useState(false);
-  const [preview, setPreview] = useState<DeletionPreview | null>(null);
+  const [preview, setPreview] = useState<AccountDeletionPreview | null>(null);
   const [confirmation, setConfirmation] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -58,7 +47,7 @@ export function AccountDeletionPanel() {
     setLoading(true);
     setError(null);
     try {
-      const body = await readJson<DeletionPreview>(
+      const body = await readJson<AccountDeletionPreview>(
         await fetch("/api/account/deletion", { credentials: "same-origin", cache: "no-store" }),
       );
       setPreview(body);
@@ -160,6 +149,45 @@ export function AccountDeletionPanel() {
 
   const blocked = !preview || preview.blockers.length > 0;
 
+  function blockerText(item: AccountDeletionPreview["blockers"][number]) {
+    switch (item.code) {
+      case "owned_workspaces_require_resolution":
+        return t("blockerMessages.ownedWorkspaces");
+      case "accepted_assignments_require_completion":
+        return t("blockerMessages.acceptedAssignments");
+      case "managed_wallet_recovery_required":
+        return t("blockerMessages.managedWallets");
+      default:
+        return item.message;
+    }
+  }
+
+  function retainedRecordText(item: AccountDeletionPreviewItem<AccountDeletionRetainedRecordCode>) {
+    switch (item.code) {
+      case "completed_paid_work":
+        return t("retainedRecordMessages.completedPaidWork");
+      case "referenced_private_quotes":
+        return t("retainedRecordMessages.referencedPrivateQuotes");
+      case "paid_assignment_commitments":
+        return t("retainedRecordMessages.paidAssignmentCommitments");
+      case "security_and_deletion_receipts":
+        return t("retainedRecordMessages.securityAndDeletionReceipts");
+      default:
+        return item.message;
+    }
+  }
+
+  function warningText(item: AccountDeletionPreviewItem<AccountDeletionWarningCode>) {
+    switch (item.code) {
+      case "fresh_account_after_sign_in":
+        return t("warningMessages.freshAccount");
+      case "public_blockchain_records_remain":
+        return t("warningMessages.publicBlockchainRecords");
+      default:
+        return item.message;
+    }
+  }
+
   return (
     <Card as="section" className="rounded-2xl p-6" aria-labelledby="account-deletion-heading">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -201,7 +229,7 @@ export function AccountDeletionPanel() {
                   <h3 className="text-sm font-semibold">{t("retainedRecords")}</h3>
                   <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-base-content/60">
                     {preview.impact.retainedRecords.map(record => (
-                      <li key={record}>{record}</li>
+                      <li key={record.code}>{retainedRecordText(record)}</li>
                     ))}
                   </ul>
                 </div>
@@ -210,7 +238,7 @@ export function AccountDeletionPanel() {
               {preview.warnings.length > 0 ? (
                 <ul className="rounded-lg border border-warning/20 bg-warning/5 px-4 py-3 text-sm leading-6 text-warning">
                   {preview.warnings.map(warning => (
-                    <li key={warning}>{warning}</li>
+                    <li key={warning.code}>{warningText(warning)}</li>
                   ))}
                 </ul>
               ) : null}
@@ -220,7 +248,7 @@ export function AccountDeletionPanel() {
                   <p className="text-sm font-semibold text-error">{t("blockers")}</p>
                   <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-error">
                     {preview.blockers.map(blocker => (
-                      <li key={blocker.code}>{blocker.message}</li>
+                      <li key={blocker.code}>{blockerText(blocker)}</li>
                     ))}
                   </ul>
                 </div>

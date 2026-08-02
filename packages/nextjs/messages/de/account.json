@@ -128,7 +128,22 @@
     "acceptedAssignments": "{count, plural, one {# angenommene Aufgabe} other {# angenommene Aufgaben}}",
     "managedWallets": "{count, plural, one {# verwaltete Wallet} other {# verwaltete Wallets}}",
     "retainedRecords": "Soweit erforderlich aufbewahrte Datensätze",
+    "retainedRecordMessages": {
+      "completedPaidWork": "Abgeschlossene bezahlte Arbeit und Abrechnungsbelege für die geltende gesetzliche Aufbewahrungsfrist",
+      "referencedPrivateQuotes": "Referenzierte private Angebotszusagen ohne Klartext und mit anonymisierter Verknüpfung zum Eigentümer",
+      "paidAssignmentCommitments": "Abrechnungszusagen für bezahlte Aufgaben ohne direkte Identität der prüfenden Person",
+      "securityAndDeletionReceipts": "Sicherheits- und Löschbelege ohne deine E-Mail-Adresse oder wiederverwendbare Zugangsdaten"
+    },
+    "warningMessages": {
+      "freshAccount": "Eine erneute Anmeldung erstellt ein neues Konto und stellt weder dieses Konto noch seine Zugriffe oder seinen Verlauf wieder her.",
+      "publicBlockchainRecords": "Einträge in öffentlichen Blockchains können nicht gelöscht werden. RateLoop entfernt jedoch die off-chain gespeicherte Verknüpfung zur Anmeldung."
+    },
     "blockers": "Behebe diese Punkte, bevor du das Konto löschst:",
+    "blockerMessages": {
+      "ownedWorkspaces": "Lösche oder übertrage zuerst jeden Workspace, dessen Eigentümer du bist.",
+      "acceptedAssignments": "Schließe angenommene Prüfaufgaben ab, bevor du das Konto löschst, damit verdiente Zahlungen nicht unterbrochen werden.",
+      "managedWallets": "Stelle jede verwaltete Wallet wieder her oder trenne sie, bevor du das Konto löschst."
+    },
     "confirmation": "Zur Bestätigung DELETE eingeben",
     "verifyDelete": "Bestätigen und löschen",
     "cancel": "Abbrechen",

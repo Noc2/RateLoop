@@ -2,13 +2,12 @@ import React from "react";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
+import { AgentTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 test("account deletion starts from a visible action and loads its review on demand", async () => {
   const restoreDom = installTestDom();
   const { cleanup, render: baseRender, waitFor } = await import("@testing-library/react");
-  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { AccountDeletionPanel } = await import("./AccountDeletionPanel");
   const previousFetch = globalThis.fetch;
@@ -16,33 +15,58 @@ test("account deletion starts from a visible action and loads its review on dema
   globalThis.fetch = async input => {
     calls.push(String(input));
     return Response.json({
-      blockers: [],
+      blockers: [
+        {
+          code: "owned_workspaces_require_resolution",
+          message: "Delete or transfer every workspace you own first.",
+        },
+      ],
       impact: {
         ownedWorkspaces: 0,
         sharedWorkspaces: 1,
         acceptedAssignments: 0,
         managedWallets: 0,
-        retainedRecords: ["Tax records"],
+        retainedRecords: [
+          {
+            code: "completed_paid_work",
+            message: "Completed paid-work and settlement evidence for the applicable legal retention period",
+          },
+        ],
       },
-      warnings: [],
+      warnings: [
+        {
+          code: "fresh_account_after_sign_in",
+          message:
+            "Signing in again creates a new account and does not restore this account, its access, or its history.",
+        },
+      ],
     });
   };
 
   try {
-    const view = render(<AccountDeletionPanel />);
+    const view = baseRender(<AccountDeletionPanel />, {
+      wrapper: ({ children }) => <AgentTestProviders locale="de">{children}</AgentTestProviders>,
+    });
     const user = userEvent.setup({ document });
     assert.equal(view.container.querySelector("details"), null);
     assert.equal(view.queryByLabelText("Type DELETE to confirm"), null);
 
-    await user.click(view.getByRole("button", { name: "Review account deletion" }));
+    await user.click(view.getByRole("button", { name: "Kontolöschung prüfen" }));
 
-    await waitFor(() => assert.ok(view.getByLabelText("Type DELETE to confirm")));
+    await waitFor(() => assert.ok(view.getByText("Abgeschlossene bezahlte Arbeit", { exact: false })));
     assert.deepEqual(calls, ["/api/account/deletion"]);
-    assert.ok(view.getByText("Tax records"));
+    assert.ok(view.getByText("Lösche oder übertrage zuerst jeden Workspace", { exact: false }));
+    assert.ok(view.getByText("Eine erneute Anmeldung erstellt ein neues Konto", { exact: false }));
+    assert.equal(view.queryByText("Delete or transfer every workspace you own first."), null);
+    assert.equal(
+      view.queryByText(
+        "Signing in again creates a new account and does not restore this account, its access, or its history.",
+      ),
+      null,
+    );
 
-    await user.click(view.getByRole("button", { name: "Cancel" }));
-    assert.equal(view.queryByLabelText("Type DELETE to confirm"), null);
-    assert.ok(view.getByRole("button", { name: "Review account deletion" }));
+    await user.click(view.getByRole("button", { name: "Abbrechen" }));
+    assert.ok(view.getByRole("button", { name: "Kontolöschung prüfen" }));
   } finally {
     cleanup();
     globalThis.fetch = previousFetch;

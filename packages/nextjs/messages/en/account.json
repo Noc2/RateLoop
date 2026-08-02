@@ -128,7 +128,22 @@
     "acceptedAssignments": "{count, plural, one {# accepted assignment} other {# accepted assignments}}",
     "managedWallets": "{count, plural, one {# managed wallet} other {# managed wallets}}",
     "retainedRecords": "Records retained where required",
+    "retainedRecordMessages": {
+      "completedPaidWork": "Completed paid-work and settlement evidence for the applicable legal retention period",
+      "referencedPrivateQuotes": "Referenced private quote commitments with plaintext removed and the owner link anonymized",
+      "paidAssignmentCommitments": "Paid-assignment settlement commitments with direct reviewer identity removed",
+      "securityAndDeletionReceipts": "Security and deletion receipts without your email address or reusable credentials"
+    },
+    "warningMessages": {
+      "freshAccount": "Signing in again creates a new account and does not restore this account, its access, or its history.",
+      "publicBlockchainRecords": "Public blockchain records cannot be erased, but RateLoop removes the off-chain sign-in link."
+    },
     "blockers": "Resolve these items before deleting the account:",
+    "blockerMessages": {
+      "ownedWorkspaces": "Delete or transfer every workspace you own first.",
+      "acceptedAssignments": "Complete accepted review work before deleting the account so earned payment is not interrupted.",
+      "managedWallets": "Recover or disconnect each managed wallet before deleting the account."
+    },
     "confirmation": "Type DELETE to confirm",
     "verifyDelete": "Verify and delete",
     "cancel": "Cancel",

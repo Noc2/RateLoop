@@ -614,7 +614,9 @@ test("account deletion deletes unused private quotes and anonymizes retained quo
     args: [now, now],
   });
   assert.match(
-    (await getAccountDeletionPreview(identity.principalId)).impact.retainedRecords.join(" "),
+    (await getAccountDeletionPreview(identity.principalId)).impact.retainedRecords
+      .map(record => record.message)
+      .join(" "),
     /owner link anonymized/iu,
   );
 

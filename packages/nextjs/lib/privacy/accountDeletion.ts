@@ -1,3 +1,8 @@
+import type {
+  AccountDeletionPreview,
+  AccountDeletionPreviewItem,
+  AccountDeletionRetainedRecordCode,
+} from "./accountDeletionPreview";
 import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
@@ -17,7 +22,6 @@ const SECURITY_GUARD_RETENTION_MS = 35 * 86_400_000;
 const LEGAL_RECORD_RETENTION_MS = 3_650 * 86_400_000;
 
 type Row = Record<string, unknown>;
-type DeletionBlocker = { code: string; message: string };
 type DeletionCategoryEvidence = Record<string, unknown>;
 type DirectAccessErasureEvidence = {
   enterpriseMembersUnlinked: number;
@@ -122,18 +126,6 @@ type OauthAuthorizationErasureEvidence = {
 type HybridNetworkExclusionErasureEvidence = {
   deletedRows: number;
   remainingRows: number;
-};
-
-export type AccountDeletionPreview = {
-  blockers: DeletionBlocker[];
-  impact: {
-    ownedWorkspaces: number;
-    sharedWorkspaces: number;
-    acceptedAssignments: number;
-    managedWallets: number;
-    retainedRecords: string[];
-  };
-  warnings: string[];
 };
 
 function rowNumber(row: Row | undefined, key: string) {
@@ -255,22 +247,34 @@ async function loadPreview(client: PoolClient, principalId: string, lock = false
     rowNumber(row, "accepted_private_assignments") +
     rowNumber(row, "active_network_settlements");
   const managedWallets = rowNumber(row, "managed_wallets");
-  const retainedRecords: string[] = [];
+  const retainedRecords: AccountDeletionPreviewItem<AccountDeletionRetainedRecordCode>[] = [];
   if (
     rowNumber(row, "completed_assignments") > 0 ||
     rowNumber(row, "completed_private_assignments") > 0 ||
     rowNumber(row, "paid_vouchers") > 0
   ) {
-    retainedRecords.push("Completed paid-work and settlement evidence for the applicable legal retention period");
+    retainedRecords.push({
+      code: "completed_paid_work",
+      message: "Completed paid-work and settlement evidence for the applicable legal retention period",
+    });
   }
   if (rowNumber(row, "retained_private_quotes") > 0) {
-    retainedRecords.push("Referenced private quote commitments with plaintext removed and the owner link anonymized");
+    retainedRecords.push({
+      code: "referenced_private_quotes",
+      message: "Referenced private quote commitments with plaintext removed and the owner link anonymized",
+    });
   }
   if (rowNumber(row, "paid_assignment_seats") > 0) {
-    retainedRecords.push("Paid-assignment settlement commitments with direct reviewer identity removed");
+    retainedRecords.push({
+      code: "paid_assignment_commitments",
+      message: "Paid-assignment settlement commitments with direct reviewer identity removed",
+    });
   }
-  retainedRecords.push("Security and deletion receipts without your email address or reusable credentials");
-  const blockers: DeletionBlocker[] = [];
+  retainedRecords.push({
+    code: "security_and_deletion_receipts",
+    message: "Security and deletion receipts without your email address or reusable credentials",
+  });
+  const blockers: AccountDeletionPreview["blockers"] = [];
   if (ownedWorkspaces > 0) {
     blockers.push({
       code: "owned_workspaces_require_resolution",
@@ -293,8 +297,15 @@ async function loadPreview(client: PoolClient, principalId: string, lock = false
     blockers,
     impact: { ownedWorkspaces, sharedWorkspaces, acceptedAssignments, managedWallets, retainedRecords },
     warnings: [
-      "Signing in again creates a new account and does not restore this account, its access, or its history.",
-      "Public blockchain records cannot be erased, but RateLoop removes the off-chain sign-in link.",
+      {
+        code: "fresh_account_after_sign_in",
+        message:
+          "Signing in again creates a new account and does not restore this account, its access, or its history.",
+      },
+      {
+        code: "public_blockchain_records_remain",
+        message: "Public blockchain records cannot be erased, but RateLoop removes the off-chain sign-in link.",
+      },
     ],
   };
 }
