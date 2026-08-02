@@ -12,19 +12,23 @@ const routeSource = readFileSync(
 );
 const projectionSource = readFileSync(new URL("../../../lib/tokenless/agentOverview.ts", import.meta.url), "utf8");
 
-test("the connected-agent overview mounts the fixed monitor", () => {
+test("the connected-agent overview leads with filters and decision evidence", () => {
   assert.match(workspaceSource, /<AgentOverviewMonitor workspaceId=\{workspaceId\} \/>/);
   assert.match(localizedSource, /Completed decisions/);
   assert.match(localizedSource, /Reviewer endorsement/);
   assert.match(localizedSource, /Median time to decision/);
   assert.match(localizedSource, /Cost per decision/);
-  assert.match(source, /overview\.window\.label/);
+  assert.doesNotMatch(source, /agent-monitor-heading/);
+  assert.doesNotMatch(source, /translated088/);
   assert.match(localizedSource, /Review outcome trend/);
   assert.match(localizedSource, /Decision-time trend/);
   assert.match(localizedSource, /Review quality/);
   assert.match(localizedSource, /Reviewer consensus/);
   assert.match(localizedSource, /Reviewer consistency \(α\)/);
   assert.match(localizedSource, /Panel-split distribution/);
+  assert.match(source, /<InfoPopover label=\{ui\("aboutReviewOutcomes"\)\}>/);
+  assert.match(source, /<InfoPopover label=\{ui\("aboutReviewerConsistency"\)\}>/);
+  assert.match(source, /<InfoPopover label=\{ui\("aboutPanelSplit"\)\}>/);
   assert.match(localizedSource, /Workflow hotspots/);
   assert.match(localizedSource, /Risk-tier hotspots/);
   assert.match(localizedSource, /Time to decision/);
@@ -69,7 +73,7 @@ test("production overview defaults to current versions with active assurance bin
 });
 
 test("agent-version parents disclose bounded scope evidence without reviewer axes or a scope average", () => {
-  assert.match(messages, /Parent rows show scope composition and the lowest observed scope bound, never an average/);
+  assert.doesNotMatch(source, /translated072/);
   assert.match(source, /overview\.agentVersions\.parents\.map/);
   assert.match(source, /parent\.lowestEndorsement\.lower95Bps/);
   assert.match(source, /parent\.scopes\.map/);

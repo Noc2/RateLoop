@@ -4,6 +4,7 @@ import { Fragment, useEffect, useState } from "react";
 import { AgentText } from "./AgentText";
 import { useAgentLocale, useAgentTranslations } from "./AgentsLocaleProvider";
 import { agentTabHref } from "./agentWorkspaceState";
+import { InfoPopover } from "~~/components/tokenless/InfoPopover";
 import { SelectField } from "~~/components/tokenless/forms/Field";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { Link } from "~~/i18n/navigation";
@@ -197,15 +198,18 @@ function replaceOverviewUrlState(state: AgentOverviewUrlState) {
 
 function ReviewOutcomeTrend({ overview }: { overview: AgentOverview }) {
   const locale = useAgentLocale();
+  const ui = useAgentTranslations("ui");
   const trend = overview.trends.outcomes;
   return (
     <Card as="article" className="rounded-2xl p-5">
-      <h3 className="text-base font-semibold">
-        <AgentText id="reviewOutcomes" />
-      </h3>
-      <p className="mt-1 text-sm text-base-content/55">
-        <AgentText id="reviewOutcomesDescription" />
-      </p>
+      <div className="flex items-center gap-2">
+        <h3 className="text-base font-semibold">
+          <AgentText id="reviewOutcomes" />
+        </h3>
+        <InfoPopover label={ui("aboutReviewOutcomes")}>
+          <AgentText id="reviewOutcomesDescription" /> <AgentText id="translated048" />
+        </InfoPopover>
+      </div>
       {!trend.available ? (
         <p className="mt-6 text-sm text-base-content/55">{trend.reason}</p>
       ) : (
@@ -299,9 +303,6 @@ function ReviewOutcomeTrend({ overview }: { overview: AgentOverview }) {
             {trend.rejectedCount.toLocaleString(locale)} <AgentText id="translated046" />{" "}
             {trend.inconclusiveCount.toLocaleString(locale)} <AgentText id="translated047" />
           </p>
-          <p className="mt-2 text-xs text-base-content/55">
-            <AgentText id="translated048" />
-          </p>
           <div className="mt-3 flex flex-wrap gap-4 text-xs text-base-content/55" aria-hidden="true">
             <span className="flex items-center gap-2">
               <span className="h-2.5 w-2.5 rounded-sm bg-[var(--rateloop-green)]" /> <AgentText id="translated049" />
@@ -350,9 +351,6 @@ function DecisionTimeTrend({ overview }: { overview: AgentOverview }) {
       <h3 className="text-base font-semibold">
         <AgentText id="decisionTime" />
       </h3>
-      <p className="mt-1 text-sm text-base-content/55">
-        <AgentText id="decisionTimeDescription" />
-      </p>
       {!trend.available ? (
         <p className="mt-6 text-sm text-base-content/55">{trend.reason}</p>
       ) : (
@@ -566,12 +564,14 @@ function ReviewQualityPanel({ overview }: { overview: AgentOverview }) {
               ) : null}
             </Card>
             <Card as="article" className="rounded-2xl p-5">
-              <h3 className="text-base font-semibold">
-                <AgentText id="reviewerConsistency" />
-              </h3>
-              <p className="mt-1 text-sm text-base-content/55">
-                <AgentText id="translated064" />
-              </p>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-semibold">
+                  <AgentText id="reviewerConsistency" />
+                </h3>
+                <InfoPopover label={ui("aboutReviewerConsistency")}>
+                  <AgentText id="translated064" />
+                </InfoPopover>
+              </div>
               {quality.reviewerConsistency.available ? (
                 <>
                   <p className="mt-2 text-3xl font-semibold">
@@ -588,12 +588,14 @@ function ReviewQualityPanel({ overview }: { overview: AgentOverview }) {
               )}
             </Card>
             <Card as="article" className="rounded-2xl p-5 xl:col-span-2">
-              <h3 className="text-base font-semibold">
-                <AgentText id="panelSplit" />
-              </h3>
-              <p className="mt-1 text-sm text-base-content/55">
-                <AgentText id="translated067" />
-              </p>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-semibold">
+                  <AgentText id="panelSplit" />
+                </h3>
+                <InfoPopover label={ui("aboutPanelSplit")}>
+                  <AgentText id="translated067" />
+                </InfoPopover>
+              </div>
               {quality.panelSplit.available ? (
                 <QualityDistribution
                   unit="cases"
@@ -786,10 +788,7 @@ function AgentVersionTable({
           <h2 id="agent-version-monitor-heading" className="text-xl font-semibold">
             <AgentText id="translated071" />
           </h2>
-          <p className="mt-1 text-sm text-base-content/55">
-            {overview.agentVersions.periodLabel}
-            <AgentText id="translated072" />
-          </p>
+          <p className="mt-1 text-sm text-base-content/55">{overview.agentVersions.periodLabel}</p>
         </div>
         <span className="badge border-base-content/10 bg-base-content/[0.04]">
           <AgentText id="currentVersions" />
@@ -941,9 +940,6 @@ function AttentionList({ overview, workspaceId }: { overview: AgentOverview; wor
           <h2 id="agent-attention-heading" className="text-xl font-semibold">
             <AgentText id="translated077" />
           </h2>
-          <p className="mt-1 text-sm text-base-content/55">
-            <AgentText id="translated078" />
-          </p>
         </div>
         <span className="text-xs text-base-content/55">{overview.attention.periodLabel}</span>
       </div>
@@ -1041,16 +1037,11 @@ function OverviewControls({
   const labelClassName = "mb-1 text-xs text-base-content/65";
   return (
     <Card as="section" className="rounded-2xl p-5" aria-labelledby="agent-overview-filters-heading">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 id="agent-overview-filters-heading" className="text-base font-semibold">
-            <AgentText id="translated087" />
-          </h2>
-          <p className="mt-1 text-sm text-base-content/55">
-            <AgentText id="translated088" />
-          </p>
-        </div>
-        {hasFilters ? (
+      <h2 id="agent-overview-filters-heading" className="sr-only">
+        <AgentText id="translated087" />
+      </h2>
+      {hasFilters ? (
+        <div className="mb-3 flex justify-end">
           <button
             type="button"
             className="btn btn-ghost btn-sm"
@@ -1059,9 +1050,9 @@ function OverviewControls({
           >
             <AgentText id="translated089" />
           </button>
-        ) : null}
-      </div>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        </div>
+      ) : null}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <SelectField
           label={<AgentText id="attribute001" />}
           labelClassName={labelClassName}
@@ -1234,19 +1225,6 @@ export function AgentOverviewMonitor({ workspaceId }: { workspaceId: string }) {
   }
   return (
     <div className="space-y-5">
-      <Card as="section" className="rounded-2xl p-5" aria-labelledby="agent-monitor-heading">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 id="agent-monitor-heading" className="text-2xl font-semibold">
-              <AgentText id="translated092" />
-            </h2>
-            <p className="mt-1 text-sm text-base-content/55">
-              <AgentText id="translated093" />
-            </p>
-          </div>
-          <span className="badge border-base-content/10 bg-base-content/[0.04]">{overview.window.label}</span>
-        </div>
-      </Card>
       <OverviewControls loading={loading} overview={overview} query={query} onChange={updateQuery} />
       <HeadlineCards overview={overview} />
       {error ? (

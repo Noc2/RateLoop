@@ -302,7 +302,8 @@ test("the overview renders four fixed answers and expands lifetime scope evidenc
     const view = render(<AgentOverviewMonitor workspaceId="workspace-overview" />, {
       wrapper: EnglishAgentTestProviders,
     });
-    assert.ok(await view.findByRole("heading", { name: "Agent monitor" }));
+    assert.ok(await view.findByLabelText("Period"));
+    assert.equal(view.queryByRole("heading", { name: "Agent monitor" }), null);
     for (const label of [
       "Completed decisions",
       "Reviewer endorsement",
@@ -311,7 +312,7 @@ test("the overview renders four fixed answers and expands lifetime scope evidenc
     ]) {
       assert.ok(view.getByText(label));
     }
-    assert.equal(view.getAllByText("Last 30 days").length, 2);
+    assert.equal(view.getAllByText("Last 30 days").length, 1);
     assert.ok(view.getByText("75.0% endorsed"));
     assert.ok(view.getByText(/61\.0%–86\.0% · n = 12 · too few cases to be reliable/));
     assert.ok(view.getByText("3.0 sec"));
@@ -322,13 +323,16 @@ test("the overview renders four fixed answers and expands lifetime scope evidenc
     assert.ok(view.getByRole("heading", { name: "Review quality" }));
     assert.ok(view.getByText("60.0% unanimous"));
     assert.ok(view.getByRole("heading", { name: "Reviewer consistency (α)" }));
+    assert.equal(view.queryByText("Agreement beyond chance across baseline, candidate, and tie."), null);
+    await userEvent.setup({ document }).click(view.getByRole("button", { name: "About reviewer consistency" }));
+    assert.ok(view.getByText("Agreement beyond chance across baseline, candidate, and tie."));
     assert.ok(view.getByText("α = 0.396"));
     assert.ok(view.getByRole("heading", { name: "Panel-split distribution" }));
     assert.ok(view.getByText("Ambiguous refund"));
     assert.ok(view.getByText("95th percentile"));
     assert.ok(view.getByText(/Each included case met its frozen privacy threshold \(3 reviewers\)/));
     assert.equal(view.queryByText(/reviewer-[0-9a-f]+/iu), null);
-    assert.ok(view.getByText(/Lifetime by scope.*never an average/));
+    assert.ok(view.getByText("Lifetime by scope"));
     assert.ok(view.getByText("65.0%"));
     assert.ok(view.getByRole("heading", { name: "Attention" }));
     assert.ok(view.getByText("2 blocked reviews cannot settle."));
@@ -346,7 +350,7 @@ test("the overview renders four fixed answers and expands lifetime scope evidenc
 
     await userEvent.setup({ document }).selectOptions(view.getByLabelText("Period"), "90");
     assert.equal(new URL(window.location.href).searchParams.get("period"), "90");
-    assert.ok((await view.findAllByText("Last 90 days")).length > 0);
+    assert.equal((view.getByLabelText("Period") as HTMLSelectElement).value, "90");
     await userEvent.setup({ document }).selectOptions(view.getByLabelText("Risk tier"), "high");
     assert.equal(new URL(window.location.href).searchParams.get("overviewRisk"), "high");
 
