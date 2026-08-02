@@ -23,7 +23,9 @@ import { projectPrivateHumanReviewResultEnvelope } from "~~/lib/tokenless/humanR
 import { directPrivateReviewForecastRequired } from "~~/lib/tokenless/reviewCapabilities";
 import {
   type ReviewerAssignmentQueueView,
+  paidReviewCompletionSql,
   privateAssignmentQueueIncludesPaid,
+  reviewerAssignmentDisplayStatus,
 } from "~~/lib/tokenless/reviewerAssignmentSurfaces";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -192,10 +194,12 @@ export async function listDirectPrivateReviewAssignments(input: {
     throw new TokenlessServiceError("Assignment view is unsupported.", 400, "invalid_assignment_view");
   }
   const includePaidAssignments = privateAssignmentQueueIncludesPaid(view);
+  const paidReviewCompleted = paidReviewCompletionSql("rp.compensation_mode", "paid_commit.state");
   const result = await dbClient.execute({
     sql: `SELECT a.assignment_id,a.status,a.reservation_expires_at,a.assignment_expires_at,
                  a.response_deadline,a.created_at,a.updated_at,d.private_group_policy_hash,
-                 p.name AS project_name,p.data_classification,rp.compensation_mode,rp.criterion
+                 p.name AS project_name,p.data_classification,rp.compensation_mode,rp.criterion,
+                 paid_commit.state AS paid_commit_state
           FROM tokenless_private_unpaid_review_assignments a
           JOIN tokenless_private_unpaid_review_deliveries d ON d.delivery_id=a.delivery_id
           JOIN tokenless_assurance_projects p ON p.project_id=a.project_id
@@ -215,6 +219,10 @@ export async function listDirectPrivateReviewAssignments(input: {
           LEFT JOIN tokenless_workspace_reviewer_access_grant_projects grant_project
             ON grant_project.workspace_id=a.workspace_id AND grant_project.grant_id=access_grant.grant_id
            AND grant_project.project_id=a.project_id
+          LEFT JOIN tokenless_paid_assignment_seats paid_seat ON paid_seat.assignment_id=a.assignment_id
+          LEFT JOIN tokenless_paid_review_voucher_issuances paid_issuance
+            ON paid_issuance.issuance_id=paid_seat.voucher_issuance_id
+          LEFT JOIN tokenless_rater_commits paid_commit ON paid_commit.voucher_id=paid_issuance.voucher_id
           WHERE (
               a.reviewer_account_address=?
               OR a.assignment_id IN (
@@ -255,7 +263,8 @@ export async function listDirectPrivateReviewAssignments(input: {
                 OR (a.status='expired' AND a.response_deadline>? AND d.status='pending' AND l.state='pending')
               ))
               OR (?='history' AND (
-                a.status='completed'
+                ${paidReviewCompleted}
+                OR a.status='completed'
                 OR (a.status='reserved' AND a.reservation_expires_at<=?)
                 OR (a.status='accepted' AND (a.response_deadline<=? OR a.lease_state<>'issued'))
                 OR (a.status='expired' AND (a.response_deadline<=? OR d.status<>'pending' OR l.state<>'pending'))
@@ -288,14 +297,19 @@ export async function listDirectPrivateReviewAssignments(input: {
   });
   return result.rows.map(value => {
     const row = value as Row;
+    const paidAssignment = text(row, "compensation_mode") === "usdc";
     return {
       assignmentId: text(row, "assignment_id"),
       projectId: null,
       projectName: text(row, "project_name"),
       dataClassification: text(row, "data_classification"),
       source: "customer_invited",
-      status: text(row, "status"),
-      paidAssignment: text(row, "compensation_mode") === "usdc",
+      status: reviewerAssignmentDisplayStatus({
+        paidAssignment,
+        paidCommitState: text(row, "paid_commit_state"),
+        persistedStatus: text(row, "status"),
+      }),
+      paidAssignment,
       confidentialityTermsHash: text(row, "private_group_policy_hash"),
       privateGroup: null,
       reservationExpiresAt: date(row, "reservation_expires_at").toISOString(),

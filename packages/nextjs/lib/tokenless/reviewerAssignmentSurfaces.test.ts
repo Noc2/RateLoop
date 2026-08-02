@@ -1,7 +1,9 @@
 import {
   filterPrivateAssignmentsForView,
+  paidReviewCompletionSql,
   privateAssignmentBelongsInView,
   privateAssignmentQueueIncludesPaid,
+  reviewerAssignmentDisplayStatus,
 } from "./reviewerAssignmentSurfaces";
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
@@ -64,6 +66,39 @@ test("the shared queue invariant gives active paid work to the paid task surface
   ]);
 });
 
+test("a confirmed paid commit projects the invited assignment as completed", () => {
+  assert.equal(
+    reviewerAssignmentDisplayStatus({
+      paidAssignment: true,
+      paidCommitState: "confirmed",
+      persistedStatus: "accepted",
+    }),
+    "completed",
+  );
+  for (const paidCommitState of [null, "prepared", "submitted", "failed"]) {
+    assert.equal(
+      reviewerAssignmentDisplayStatus({
+        paidAssignment: true,
+        paidCommitState,
+        persistedStatus: "accepted",
+      }),
+      "accepted",
+    );
+  }
+  assert.equal(
+    reviewerAssignmentDisplayStatus({
+      paidAssignment: false,
+      paidCommitState: "confirmed",
+      persistedStatus: "expired",
+    }),
+    "expired",
+  );
+  assert.equal(
+    paidReviewCompletionSql("rp.compensation_mode", "paid_commit.state"),
+    "(rp.compensation_mode='usdc' AND paid_commit.state IN ('confirmed'))",
+  );
+});
+
 test("the server listing and browser queue apply the same paid-assignment boundary", async () => {
   const principalId = "rlp_reviewer_surface_test";
   const active = await listReviewerAssignments({ accountAddress: principalId, view: "active" });
@@ -104,7 +139,50 @@ test("the server listing and browser queue apply the same paid-assignment bounda
   for (const input of directListings) {
     assert.ok(typeof input !== "string");
     assert.match(input.sql, /\(\? OR rp\.compensation_mode='unpaid'\)/u);
+    assert.match(input.sql, /rp\.compensation_mode='usdc' AND paid_commit\.state IN \('confirmed'\)/u);
   }
   assert.equal((directListings[0] as Exclude<QueryInput, string>).args?.[3], false);
   assert.equal((directListings[1] as Exclude<QueryInput, string>).args?.[3], true);
+});
+
+test("review history returns a confirmed invited paid commit as completed", async () => {
+  const principalId = "rlp_reviewer_surface_confirmed_paid";
+  __setDatabaseResourcesForTests({
+    client: {
+      async execute(input: QueryInput) {
+        const sql = typeof input === "string" ? input : input.sql;
+        if (sql.includes("FROM tokenless_assurance_assignments a")) return { rowCount: 0, rows: [] };
+        if (sql.includes("FROM tokenless_private_unpaid_review_assignments a")) {
+          return {
+            rowCount: 1,
+            rows: [
+              {
+                assignment_id: "assignment_paid_confirmed",
+                status: "accepted",
+                paid_commit_state: "confirmed",
+                compensation_mode: "usdc",
+                project_name: "Paid review",
+                data_classification: "synthetic",
+                private_group_policy_hash: `sha256:${"a".repeat(64)}`,
+                reservation_expires_at: "2026-08-02T10:00:00.000Z",
+                assignment_expires_at: "2026-08-02T12:00:00.000Z",
+                response_deadline: "2026-08-02T12:00:00.000Z",
+                created_at: "2026-08-02T09:00:00.000Z",
+                updated_at: "2026-08-02T10:30:00.000Z",
+                criterion: "Review the result",
+              },
+            ],
+          };
+        }
+        throw new Error(`Unexpected query: ${sql}`);
+      },
+    },
+    database: {},
+    pool: {},
+  } as unknown as DatabaseResources);
+
+  const history = await listReviewerAssignments({ accountAddress: principalId, view: "history" });
+  assert.equal(history.length, 1);
+  assert.equal(history[0]?.paidAssignment, true);
+  assert.equal(history[0]?.status, "completed");
 });
