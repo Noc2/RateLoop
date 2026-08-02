@@ -136,7 +136,7 @@ test("model evidence renders its display labels and values in German", () => {
     </AgentsLocaleProvider>,
   );
 
-  assert.match(html, /Ausführungsevidenz/);
+  assert.match(html, /Ausführungsnachweise/);
   assert.match(html, /Geeignete Ausgaben/);
   assert.match(html, /Zur menschlichen Prüfung gesendet/);
   assert.match(html, /Hohe Abdeckung/);
