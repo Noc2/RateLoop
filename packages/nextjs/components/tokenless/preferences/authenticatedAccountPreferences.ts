@@ -1,10 +1,8 @@
+import { readBrowserSession } from "~~/lib/auth/client";
+
 type AccountPreferences = {
   preferredLocale?: unknown;
   preferredTheme?: unknown;
-};
-
-type AuthSession = {
-  authenticated?: unknown;
 };
 
 type AccountPreferenceUpdate = {
@@ -36,10 +34,11 @@ function requestInit(signal?: AbortSignal): RequestInit {
 }
 
 async function hasAuthenticatedSession(fetcher: typeof fetch, signal?: AbortSignal) {
-  const response = await fetcher("/api/auth/session", requestInit(signal));
-  if (!response.ok) return false;
-  const session = (await response.json()) as AuthSession;
-  return session.authenticated === true;
+  try {
+    return (await readBrowserSession(signal, fetcher)) !== null;
+  } catch {
+    return false;
+  }
 }
 
 export async function loadAuthenticatedAccountPreferences({

@@ -2,14 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
+import { readBrowserSession, subscribeToBrowserAuthSessionChanges } from "~~/lib/auth/client";
 import { isReviewerLifecycleNotification } from "~~/lib/notifications/reviewerInbox";
 
 type InboxResponse = {
   notifications?: Array<{ readAt?: string | null; sourceType?: string | null }>;
-};
-
-type SessionResponse = {
-  authenticated?: boolean;
 };
 
 function unreadReviewerNotifications(value: InboxResponse) {
@@ -24,11 +21,10 @@ export function HumanInboxBadge() {
   const [unread, setUnread] = useState(0);
   const refresh = useCallback(async () => {
     try {
-      const sessionResponse = await fetch("/api/auth/session", {
-        cache: "no-store",
-        credentials: "same-origin",
-      });
-      if (!sessionResponse.ok || !((await sessionResponse.json()) as SessionResponse).authenticated) return;
+      if (!(await readBrowserSession())) {
+        setUnread(0);
+        return;
+      }
       const response = await fetch("/api/notifications/inbox?scope=reviewer&limit=100", {
         cache: "no-store",
         credentials: "same-origin",
@@ -42,9 +38,7 @@ export function HumanInboxBadge() {
 
   useEffect(() => {
     void refresh();
-    const onFocus = () => void refresh();
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
+    return subscribeToBrowserAuthSessionChanges(() => void refresh());
   }, [refresh]);
 
   if (unread === 0) return null;

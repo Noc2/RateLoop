@@ -24,7 +24,7 @@ import {
 import { ChoiceInput, Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { Link } from "~~/i18n/navigation";
-import { subscribeToBrowserAuthSessionChanges } from "~~/lib/auth/client";
+import { readBrowserSession, subscribeToBrowserAuthSessionChanges } from "~~/lib/auth/client";
 
 const HANDOFF_VERSION = "rateloop.handoff.v1" as const;
 const MAX_FRAGMENT_LENGTH = 16 * 1024;
@@ -509,19 +509,14 @@ export function TokenlessHandoffClient() {
   const loadSession = useCallback(
     async (signal: AbortSignal) => {
       try {
-        const sessionBody = record(
-          await readApiJson(
-            await fetch("/api/auth/session", { cache: "no-store", credentials: "same-origin", signal }),
-          ),
-          "session",
-        );
-        if (sessionBody.authenticated !== true || typeof sessionBody.principalId !== "string") {
+        const sessionBody = await readBrowserSession(signal);
+        if (!sessionBody) {
           if (sessionPrincipalRef.current !== undefined && sessionPrincipalRef.current !== null) clearPrincipalState();
           sessionPrincipalRef.current = null;
           setSession({ status: "anonymous" });
           return;
         }
-        if (typeof sessionBody.expiresAt !== "string") {
+        if (typeof sessionBody.principalId !== "string" || typeof sessionBody.expiresAt !== "string") {
           throw new Error("RateLoop returned an invalid signed-in session.");
         }
         // Only a genuine switch between two principals may discard the review work. The first
