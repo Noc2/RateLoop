@@ -33,7 +33,7 @@ test("landing and signed-out hubs retain their visual hierarchy", async ({ page 
     maxDiffPixelRatio: 0.01,
   });
 
-  await page.goto("/agents");
+  await page.goto("/agents/overview");
   await settleVisuals(page);
   const agentGate = await signedOutGateTreatment(page, "agents-sign-in-title");
   await expect(page.locator("main")).toHaveScreenshot("agents-hub.png", { maxDiffPixelRatio: 0.01 });
@@ -42,7 +42,7 @@ test("landing and signed-out hubs retain their visual hierarchy", async ({ page 
   await page.route("**/api/account/assurance/assignments?**", route =>
     json(route, { message: "Authentication required." }, 401),
   );
-  await page.goto("/human");
+  await page.goto("/human/review");
   await expect(page.getByRole("heading", { name: "Sign in to view assigned work" })).toBeVisible();
   await settleVisuals(page);
   const humanGate = await signedOutGateTreatment(page, "human-discover-sign-in-title");
