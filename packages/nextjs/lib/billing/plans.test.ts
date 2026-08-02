@@ -3,6 +3,7 @@ import {
   EARLY_ACCESS_PRICE_VERSION,
   LEGACY_EARLY_ACCESS_PRICE_VERSION,
   TOKENLESS_BILLING_PLANS,
+  TOKENLESS_HOSTED_REVIEW_COPY,
   formatUsdPrice,
   getBillingPlan,
   getPlanByPriceVersion,
@@ -11,6 +12,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 test("billing plan definitions freeze the launch limits and price versions", () => {
+  assert.deepEqual(TOKENLESS_HOSTED_REVIEW_COPY, {
+    planBenefit: "Invited unpaid reviews",
+    planSummary: "Workspace plans cover completed review decisions with invited, unpaid reviewers.",
+  });
   assert.deepEqual(TOKENLESS_BILLING_PLANS.free, {
     key: "free",
     priceVersion: DEFAULT_FREE_PRICE_VERSION,

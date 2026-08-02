@@ -21,6 +21,16 @@ export type TokenlessBillingPlan = {
   paidPanels: boolean;
 };
 
+/**
+ * The hosted product currently delivers workspace-plan decisions through
+ * customer-invited, unpaid reviewers. `paidPanels` is an entitlement boundary
+ * for a separately gated lane, not a claim that the lane is generally live.
+ */
+export const TOKENLESS_HOSTED_REVIEW_COPY = {
+  planBenefit: "Invited unpaid reviews",
+  planSummary: "Workspace plans cover completed review decisions with invited, unpaid reviewers.",
+} as const;
+
 export const TOKENLESS_BILLING_PLANS = {
   free: {
     key: "free",

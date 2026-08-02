@@ -2,7 +2,7 @@ import { LocalizedPublicContent } from "~~/components/docs/LocalizedPublicConten
 import { PublicLink as Link } from "~~/components/docs/PublicLink";
 import { Card } from "~~/components/tokenless/ui/Card";
 import type { Locale } from "~~/i18n/config";
-import { TOKENLESS_BILLING_PLANS, formatUsdPrice } from "~~/lib/billing/plans";
+import { TOKENLESS_BILLING_PLANS, TOKENLESS_HOSTED_REVIEW_COPY, formatUsdPrice } from "~~/lib/billing/plans";
 
 const freePlan = TOKENLESS_BILLING_PLANS.free;
 const earlyAccessPlan = TOKENLESS_BILLING_PLANS.early_access;
@@ -54,9 +54,7 @@ export function WorkspacePlanOverview({ locale = "en" }: { locale?: Locale }) {
           </Card>
         </div>
 
-        <p className="mt-5 text-sm leading-6 text-base-content/60">
-          Workspace plans cover completed review decisions with invited, unpaid reviewers.
-        </p>
+        <p className="mt-5 text-sm leading-6 text-base-content/60">{TOKENLESS_HOSTED_REVIEW_COPY.planSummary}</p>
         <div className="mt-6">
           <Link href="/pricing" className="btn rateloop-secondary-action min-h-11 px-5">
             Compare plans

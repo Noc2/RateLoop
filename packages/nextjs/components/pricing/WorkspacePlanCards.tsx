@@ -3,7 +3,7 @@ import { LocalizedPublicContent } from "~~/components/docs/LocalizedPublicConten
 import { PublicLink as Link } from "~~/components/docs/PublicLink";
 import { Card } from "~~/components/tokenless/ui/Card";
 import type { Locale } from "~~/i18n/config";
-import { TOKENLESS_BILLING_PLANS, formatUsdPrice } from "~~/lib/billing/plans";
+import { TOKENLESS_BILLING_PLANS, TOKENLESS_HOSTED_REVIEW_COPY, formatUsdPrice } from "~~/lib/billing/plans";
 
 type WorkspacePlanCardsProps = {
   subscriptionsEnabled: boolean;
@@ -53,7 +53,7 @@ export function WorkspacePlanCards({
           features={[
             `${freePlan.decisionsPerPeriod} completed review decisions each calendar month`,
             `${freePlan.activeAgents} active agent`,
-            "Unpaid reviews with workspace reviewers",
+            TOKENLESS_HOSTED_REVIEW_COPY.planBenefit,
           ]}
           footer={
             <Link

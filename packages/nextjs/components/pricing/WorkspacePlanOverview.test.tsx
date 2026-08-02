@@ -1,9 +1,12 @@
 import React from "react";
+import { WorkspacePlanCards } from "./WorkspacePlanCards";
 import { WorkspacePlanOverview } from "./WorkspacePlanOverview";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import test from "node:test";
-import { TOKENLESS_BILLING_PLANS, formatUsdPrice } from "~~/lib/billing/plans";
+import { WorkspaceSettingsClient } from "~~/components/tokenless/WorkspaceSettingsClient";
+import { TOKENLESS_BILLING_PLANS, TOKENLESS_HOSTED_REVIEW_COPY, formatUsdPrice } from "~~/lib/billing/plans";
 
 const require = createRequire(import.meta.url);
 const { renderToStaticMarkup } = require("react-dom/server") as {
@@ -44,4 +47,17 @@ test("workspace plan overview keeps its concise pricing path localized in German
   assert.match(html, /Individuelle Volumen und Bedingungen/);
   assert.match(html, /Tarife vergleichen/);
   assert.equal(html.match(/href="\/de\/pricing"/g)?.length, 1);
+});
+
+test("all workspace plan consumers share the hosted invited-unpaid availability rule", () => {
+  (globalThis as typeof globalThis & { React: typeof React }).React = React;
+  const overview = renderToStaticMarkup(<WorkspacePlanOverview />).replace(/\s+/g, " ");
+  const cards = renderToStaticMarkup(<WorkspacePlanCards subscriptionsEnabled={false} />).replace(/\s+/g, " ");
+  const settingsSource = readFileSync(new URL("../tokenless/WorkspaceSettingsClient.tsx", import.meta.url), "utf8");
+
+  assert.equal(typeof WorkspaceSettingsClient, "function");
+  assert.match(overview, new RegExp(TOKENLESS_HOSTED_REVIEW_COPY.planSummary));
+  assert.match(cards, new RegExp(TOKENLESS_HOSTED_REVIEW_COPY.planBenefit));
+  assert.equal(settingsSource.match(/TOKENLESS_HOSTED_REVIEW_COPY\.planBenefit/g)?.length, 2);
+  assert.doesNotMatch(settingsSource, /Paid (?:reviewer )?panels? available/);
 });

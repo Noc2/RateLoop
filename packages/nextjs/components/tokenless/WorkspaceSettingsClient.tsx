@@ -12,7 +12,7 @@ import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { WorkspacePublicContentLink } from "~~/components/tokenless/navigation/WorkspacePublicContentLink";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { ConfirmDialog } from "~~/components/tokenless/ui/ConfirmDialog";
-import { TOKENLESS_BILLING_PLANS, formatUsdPrice } from "~~/lib/billing/plans";
+import { TOKENLESS_BILLING_PLANS, TOKENLESS_HOSTED_REVIEW_COPY, formatUsdPrice } from "~~/lib/billing/plans";
 import type { WorkspaceBillingSummary } from "~~/lib/billing/workspaceBillingTypes";
 import { WorkspaceRequestScope } from "~~/lib/tokenless/workspaceRequestScope";
 
@@ -946,7 +946,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                       <span>
                         {billing.limits.activeAgents} active {billing.limits.activeAgents === 1 ? "agent" : "agents"}
                       </span>
-                      <span>{billing.limits.paidPanels ? "Paid panels available" : "Private unpaid reviews"}</span>
+                      <span>{TOKENLESS_HOSTED_REVIEW_COPY.planBenefit}</span>
                     </div>
                     {billing.periodEnd ? (
                       <p className="mt-3 text-xs text-base-content/55">
@@ -1070,7 +1070,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                               <li>
                                 {plan.activeAgents} active {plan.activeAgents === 1 ? "agent" : "agents"}
                               </li>
-                              <li>{plan.paidPanels ? "Paid reviewer panels available" : "Invited unpaid reviews"}</li>
+                              <li>{TOKENLESS_HOSTED_REVIEW_COPY.planBenefit}</li>
                             </ul>
                           </article>
                         ))}

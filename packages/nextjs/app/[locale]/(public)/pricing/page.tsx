@@ -6,7 +6,7 @@ import {
 } from "~~/components/docs/LocalizedPublicContent";
 import { WorkspacePlanCards } from "~~/components/pricing/WorkspacePlanCards";
 import { Card } from "~~/components/tokenless/ui/Card";
-import { TOKENLESS_BILLING_PLANS, formatUsdPrice } from "~~/lib/billing/plans";
+import { TOKENLESS_BILLING_PLANS, TOKENLESS_HOSTED_REVIEW_COPY, formatUsdPrice } from "~~/lib/billing/plans";
 import { resolveDemoBookingUrl } from "~~/lib/marketing/demoBooking";
 
 export async function generateMetadata({ params }: { params: Promise<{ locale?: string }> }): Promise<Metadata> {
@@ -50,7 +50,7 @@ export default async function PricingPage({
               Start free. <span className="rateloop-text-gradient">Scale when you need it.</span>
             </h1>
             <p className="mt-7 max-w-3xl text-lg leading-8 text-base-content/65 sm:text-xl">
-              Workspace plans cover completed review decisions with invited, unpaid reviewers.
+              {TOKENLESS_HOSTED_REVIEW_COPY.planSummary}
             </p>
           </header>
 
