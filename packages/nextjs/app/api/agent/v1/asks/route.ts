@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { JsonRequestBodyError, readJsonRequestBody } from "~~/lib/mcp/requestBody";
+import { privateNoStoreJson } from "~~/lib/tokenless/privateHttpResponse";
 import {
   attachProductAsk,
   authenticateProductPrincipal,
@@ -51,10 +52,10 @@ export async function POST(request: NextRequest) {
     );
     await attachProductAsk(prepared, response);
     attached = true;
-    return NextResponse.json(response);
+    return privateNoStoreJson(response);
   } catch (error) {
     if (prepared && !attached) await releasePreparedProductAsk(prepared);
     const response = tokenlessErrorResponse(error);
-    return NextResponse.json(response.body, { status: response.status });
+    return privateNoStoreJson(response.body, { status: response.status });
   }
 }

@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { privateNoStoreJson } from "~~/lib/tokenless/privateHttpResponse";
 import { authenticateProductPrincipal, authorizeAskAccess, getProductSessionToken } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError, tokenlessErrorResponse, waitForTokenlessAsk } from "~~/lib/tokenless/server";
 
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ ope
     }
     const { operationKey } = await context.params;
     await authorizeAskAccess(principal, operationKey);
-    return NextResponse.json(
+    return privateNoStoreJson(
       await waitForTokenlessAsk(operationKey, request.nextUrl.origin, {
         cursor: request.nextUrl.searchParams.get("cursor") ?? undefined,
         signal: request.signal,
@@ -26,6 +27,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ ope
     );
   } catch (error) {
     const response = tokenlessErrorResponse(error);
-    return NextResponse.json(response.body, { status: response.status });
+    return privateNoStoreJson(response.body, { status: response.status });
   }
 }

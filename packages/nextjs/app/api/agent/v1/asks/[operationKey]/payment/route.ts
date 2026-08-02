@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { apiRequestBodyFallback, readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import {
   attachX402Authorization,
@@ -6,6 +6,7 @@ import {
   executeServerChainPayment,
   prepareChainPayment,
 } from "~~/lib/tokenless/chain/payments";
+import { privateNoStoreJson } from "~~/lib/tokenless/privateHttpResponse";
 import {
   authenticateProductPrincipal,
   authorizeAskAccess,
@@ -40,10 +41,10 @@ async function authorizedPaymentMutation(request: NextRequest, context: { params
 export async function GET(request: NextRequest, context: { params: Promise<{ operationKey: string }> }) {
   try {
     const operationKey = await authorizedOperation(request, context);
-    return NextResponse.json(await prepareChainPayment(operationKey));
+    return privateNoStoreJson(await prepareChainPayment(operationKey));
   } catch (error) {
     const response = tokenlessErrorResponse(error);
-    return NextResponse.json(response.body, { status: response.status });
+    return privateNoStoreJson(response.body, { status: response.status });
   }
 }
 
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ op
           "invalid_transaction_hash",
         );
       }
-      return NextResponse.json(await confirmWalletChainPayment(operationKey, body.transactionHash));
+      return privateNoStoreJson(await confirmWalletChainPayment(operationKey, body.transactionHash));
     }
     if (prepared.paymentMode === "x402") {
       const body = (await readApiJsonRequestBody(request).catch(error => apiRequestBodyFallback(error, {}))) as {
@@ -68,9 +69,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ op
       };
       if (body.authorization !== undefined) await attachX402Authorization(operationKey, body.authorization);
     }
-    return NextResponse.json(await executeServerChainPayment(operationKey));
+    return privateNoStoreJson(await executeServerChainPayment(operationKey));
   } catch (error) {
     const response = tokenlessErrorResponse(error);
-    return NextResponse.json(response.body, { status: response.status });
+    return privateNoStoreJson(response.body, { status: response.status });
   }
 }
