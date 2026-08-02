@@ -56,6 +56,7 @@ export function AgentWorkspacePanels({
   workspaces: Workspace[];
 }) {
   const t = useAgentTranslations("workspace");
+  const tabLabels = useAgentTranslations("tabs");
   const router = useRouter();
   const searchParams = useSearchParams();
   const workspaceId = initialWorkspaceId;
@@ -124,6 +125,7 @@ export function AgentWorkspacePanels({
           router.push(agentTabHref(resolvedTab, nextWorkspaceId, agentWorkspaceSwitchSearch(searchParams)))
         }
       />
+      {!setupIncomplete ? <h1 className="sr-only">{tabLabels(resolvedTab)}</h1> : null}
       {/* Persistent across every agents tab while the workspace stop is engaged. */}
       <WorkspaceStopBanner workspaceId={workspaceId} />
       {setupIncomplete && initialSetup ? <AgentSetupFlow initialSetup={initialSetup} /> : null}

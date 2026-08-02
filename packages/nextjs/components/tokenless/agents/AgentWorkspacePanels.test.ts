@@ -334,8 +334,10 @@ test("zero-agent setup stays focused without a reviewer invitation banner above 
   assert.doesNotMatch(panelsSource, /ReviewerInvitationStart|You can invite reviewers now/);
 });
 
-test("agent tabs are the route identity without a duplicate page heading", () => {
+test("agent tabs remain the visible route identity while every completed-workspace route has an accessible h1", () => {
   assert.doesNotMatch(pageSource, /PageHeading|agentPageTitle/);
+  assert.match(panelsSource, /const tabLabels = useAgentTranslations\("tabs"\)/);
+  assert.match(panelsSource, /!setupIncomplete \? <h1 className="sr-only">\{tabLabels\(resolvedTab\)\}<\/h1> : null/);
 });
 
 test("the Reviews tab opens the canonical human-review editor directly", () => {
