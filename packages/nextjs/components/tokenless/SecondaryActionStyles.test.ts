@@ -4,6 +4,7 @@ import test from "node:test";
 
 const styles = readFileSync(new URL("../../styles/globals.css", import.meta.url), "utf8");
 const landingPage = readFileSync(new URL("../../app/[locale]/(public)/page.tsx", import.meta.url), "utf8");
+const workspacePlanOverview = readFileSync(new URL("../pricing/WorkspacePlanOverview.tsx", import.meta.url), "utf8");
 const setupFlow = readFileSync(new URL("./agents/setup/AgentSetupFlow.tsx", import.meta.url), "utf8");
 
 test("secondary app actions reuse the legacy solid treatment", () => {
@@ -25,5 +26,5 @@ test("landing page calls to action keep their dedicated styling", () => {
     landingPage.indexOf("<SupportedAgentsSection"),
   );
   assert.doesNotMatch(heroActions, /rateloop-secondary-action/);
-  assert.match(landingPage, /href="\/pricing" className="btn rateloop-secondary-action/);
+  assert.match(workspacePlanOverview, /href="\/pricing" className="btn rateloop-secondary-action/);
 });
