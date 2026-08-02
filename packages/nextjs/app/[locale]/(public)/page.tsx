@@ -7,7 +7,7 @@ import { TokenlessOrb } from "~~/components/home/TokenlessOrb";
 import { WorkspacePlanOverview } from "~~/components/pricing/WorkspacePlanOverview";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { getMessagesForLocale } from "~~/i18n/messages";
-import type { LandingSocialProofItem } from "~~/lib/home/socialProof";
+import { type LandingSocialProofItem, formatLandingSocialProofItem } from "~~/lib/home/socialProof";
 import { getLandingPageSocialProofItems } from "~~/lib/home/socialProofServer";
 
 export const revalidate = 300;
@@ -144,16 +144,18 @@ export function TokenlessLandingPage({
               </div>
               {socialProofItems.length > 0 ? (
                 <div className="mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-center text-sm text-base-content/76 sm:text-[0.95rem] lg:justify-start lg:text-left">
-                  {socialProofItems.map(({ value, labelKey }, index) => (
-                    <div key={labelKey} className="flex items-center">
-                      <span
-                        className={`whitespace-nowrap ${index < socialProofItems.length - 1 ? "sm:after:ml-3 sm:after:text-base-content/70 sm:after:content-['•']" : ""}`}
-                      >
-                        <span className="font-semibold text-base-content">{value}</span>{" "}
-                        {homeMessages.socialProof[labelKey]}
-                      </span>
-                    </div>
-                  ))}
+                  {socialProofItems.map((item, index) => {
+                    const formatted = formatLandingSocialProofItem(item, locale, homeMessages.socialProof);
+                    return (
+                      <div key={item.labelKey} className="flex items-center">
+                        <span
+                          className={`whitespace-nowrap ${index < socialProofItems.length - 1 ? "sm:after:ml-3 sm:after:text-base-content/70 sm:after:content-['•']" : ""}`}
+                        >
+                          <span className="font-semibold text-base-content">{formatted.value}</span> {formatted.label}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               ) : null}
             </div>

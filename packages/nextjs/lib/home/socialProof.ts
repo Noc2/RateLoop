@@ -4,9 +4,14 @@ export type LandingSocialProofStats = {
   totalVerifiedHumans: string | number;
 };
 
-export type LandingSocialProofItem = {
-  labelKey: "verifiedHumans" | "reviewResponses" | "usdcPaid";
-  value: string;
+export type LandingSocialProofItem =
+  | { labelKey: "verifiedHumans" | "reviewResponses"; value: number }
+  | { labelKey: "usdcPaid"; value: string };
+
+export type LandingSocialProofLabels = {
+  verifiedHumans: { one: string; other: string };
+  reviewResponses: { one: string; other: string };
+  usdcPaid: string;
 };
 
 function nonNegativeInteger(value: unknown) {
@@ -37,19 +42,25 @@ export function formatUsdcPaidOut(rawAmount: unknown) {
 }
 
 export function buildLandingPageSocialProofItems(stats: LandingSocialProofStats): LandingSocialProofItem[] {
+  const verifiedHumans = nonNegativeInteger(stats.totalVerifiedHumans);
+  const reviewResponses = nonNegativeInteger(stats.totalRatings);
+  const usdcPaid = formatUsdcPaidOut(stats.totalPaidAtomic);
   const items: LandingSocialProofItem[] = [
-    {
-      value: nonNegativeInteger(stats.totalVerifiedHumans).toLocaleString("en-US"),
-      labelKey: "verifiedHumans",
-    },
-    {
-      value: nonNegativeInteger(stats.totalRatings).toLocaleString("en-US"),
-      labelKey: "reviewResponses",
-    },
-    {
-      value: formatUsdcPaidOut(stats.totalPaidAtomic),
-      labelKey: "usdcPaid",
-    },
+    ...(verifiedHumans > 0 ? [{ value: verifiedHumans, labelKey: "verifiedHumans" as const }] : []),
+    ...(reviewResponses > 0 ? [{ value: reviewResponses, labelKey: "reviewResponses" as const }] : []),
+    ...(usdcPaid !== "$0" ? [{ value: usdcPaid, labelKey: "usdcPaid" as const }] : []),
   ];
-  return items.filter(item => item.value !== "0" && item.value !== "$0");
+  return items;
+}
+
+export function formatLandingSocialProofItem(
+  item: LandingSocialProofItem,
+  locale: string,
+  labels: LandingSocialProofLabels,
+) {
+  if (item.labelKey === "usdcPaid") return { value: item.value, label: labels.usdcPaid };
+  return {
+    value: new Intl.NumberFormat(locale).format(item.value),
+    label: labels[item.labelKey][item.value === 1 ? "one" : "other"],
+  };
 }

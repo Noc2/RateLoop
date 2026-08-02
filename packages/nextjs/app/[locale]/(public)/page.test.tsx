@@ -14,8 +14,8 @@ test("landing page presents the tokenless human-assurance story", async () => {
   const html = renderToStaticMarkup(
     <TokenlessLandingPage
       socialProofItems={[
-        { value: "10", labelKey: "verifiedHumans" },
-        { value: "21", labelKey: "reviewResponses" },
+        { value: 10, labelKey: "verifiedHumans" },
+        { value: 21, labelKey: "reviewResponses" },
         { value: "$12", labelKey: "usdcPaid" },
       ]}
     />,
@@ -168,8 +168,8 @@ test("landing social proof uses precise localized labels", async () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
   const { TokenlessLandingPage } = await import("./page");
   const socialProofItems = [
-    { value: "10", labelKey: "verifiedHumans" as const },
-    { value: "21", labelKey: "reviewResponses" as const },
+    { value: 10, labelKey: "verifiedHumans" as const },
+    { value: 21, labelKey: "reviewResponses" as const },
     { value: "$12", labelKey: "usdcPaid" as const },
   ];
 

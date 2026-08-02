@@ -1,8 +1,14 @@
 {
   "supportedAgents": "Funktioniert mit den Agenten, die Ihr Team bereits nutzt",
   "socialProof": {
-    "verifiedHumans": "verifizierte Personen",
-    "reviewResponses": "Prüfantworten",
+    "verifiedHumans": {
+      "one": "verifizierte Person",
+      "other": "verifizierte Personen"
+    },
+    "reviewResponses": {
+      "one": "Prüfantwort",
+      "other": "Prüfantworten"
+    },
     "usdcPaid": "USDC ausgezahlt"
   },
   "sections": {

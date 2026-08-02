@@ -1,8 +1,14 @@
 {
   "supportedAgents": "Works with the agents your team already uses",
   "socialProof": {
-    "verifiedHumans": "Verified humans",
-    "reviewResponses": "Review responses",
+    "verifiedHumans": {
+      "one": "Verified human",
+      "other": "Verified humans"
+    },
+    "reviewResponses": {
+      "one": "Review response",
+      "other": "Review responses"
+    },
     "usdcPaid": "USDC paid"
   },
   "sections": {
