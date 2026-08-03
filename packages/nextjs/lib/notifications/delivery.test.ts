@@ -568,6 +568,34 @@ test("verified preferences enqueue once and delivery uses a signed unsubscribe l
   assert.equal(subscription.rows.length, 0);
 });
 
+test("completed-review email repairs a persisted legacy queue link to history", async () => {
+  await seedVerifiedSubscription();
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_notifications
+          (notification_id, principal_address, kind, title, body, href, preference_key,
+           source_type, source_key, created_at)
+          VALUES ('notification-completed-legacy', ?, 'assignmentCompleted', 'Response recorded',
+                  'Your human-assurance response was recorded.', ?, 'assignmentCompleted',
+                  'assignment.completed', 'assignment-completed-legacy', ?)`,
+    args: [PRINCIPAL, "/human?tab=discover", NOW],
+  });
+  assert.deepEqual(await enqueueTokenlessNotificationEmails({ now: NOW }), { candidates: 1, inserted: 1 });
+
+  let action: string | undefined;
+  const outcomes = await deliverPendingTokenlessNotificationEmails({
+    appOrigin: "https://tokenless.example.test",
+    now: NOW,
+    unsubscribeSecret: SECRET,
+    async send(params) {
+      action = params.actionUrl;
+      return { id: "resend-message-completed" };
+    },
+  });
+
+  assert.equal(outcomes[0]?.state, "delivered");
+  assert.equal(action, "https://tokenless.example.test/human/history");
+});
+
 test("delivery rechecks preferences and suppresses mail disabled after enqueue", async () => {
   await seedVerifiedSubscription();
   await insertGenericLifecycleNotification();

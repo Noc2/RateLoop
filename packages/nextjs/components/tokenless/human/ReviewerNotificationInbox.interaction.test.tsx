@@ -47,6 +47,11 @@ test("the reviewer inbox separates urgent actions and marks notifications read o
     assert.ok(await view.findByRole("heading", { name: "Deadline and payment actions" }));
     assert.ok(view.getByRole("heading", { name: "Review updates" }));
     assert.ok(view.getByText("Payment deadline"));
+    assert.equal(
+      view.getByRole("link", { name: "Open: Review payment expiring" }).getAttribute("href"),
+      "/human/profile?section=paid-settlement",
+    );
+    assert.equal(view.getByRole("link", { name: "Open: Assignment available" }).getAttribute("href"), "/human/review");
     assert.equal(requests.filter(request => request.method === "POST").length, 0);
 
     await userEvent.setup({ document }).click(view.getByRole("button", { name: "Mark read: Review payment expiring" }));
@@ -76,7 +81,7 @@ test("the reviewer inbox localizes persisted notification copy from its source t
           kind: "assignmentCompleted",
           title: "stale stored title",
           body: "stale stored body",
-          href: "/human/review",
+          href: "/human?tab=discover",
           sourceType: "assignment.completed",
           createdAt: "2026-07-28T08:00:00.000Z",
           readAt: null,
@@ -94,7 +99,7 @@ test("the reviewer inbox localizes persisted notification copy from its source t
     assert.ok(view.getByText("Deine Antwort zur menschlichen Prüfung wurde erfasst."));
     assert.equal(view.queryByText("stale stored title"), null);
     assert.equal(view.queryByText("stale stored body"), null);
-    assert.ok(view.getByRole("link", { name: "Öffnen: Antwort erfasst" }));
+    assert.equal(view.getByRole("link", { name: "Öffnen: Antwort erfasst" }).getAttribute("href"), "/de/human/history");
   } finally {
     await act(async () => cleanup());
     globalThis.fetch = previousFetch;

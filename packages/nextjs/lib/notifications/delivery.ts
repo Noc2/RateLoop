@@ -2,6 +2,10 @@ import { createHash } from "node:crypto";
 import "server-only";
 import { dbClient } from "~~/lib/db";
 import { isResendConfigured, sendTokenlessNotificationEmail } from "~~/lib/notifications/resend";
+import {
+  REVIEWER_LIFECYCLE_NOTIFICATION_HREFS,
+  canonicalReviewerNotificationHref,
+} from "~~/lib/notifications/reviewerInbox";
 import { type TokenlessNotificationKey, buildTokenlessSignedUnsubscribeToken } from "~~/lib/notifications/tokenless";
 import { deliverPendingWorkspaceReviewerInvitationEmails } from "~~/lib/notifications/workspaceReviewerInvitations";
 import { maintenanceCancellationRequested } from "~~/lib/tokenless/maintenanceCancellation";
@@ -274,14 +278,14 @@ async function loadLifecycleCandidates(
     [
       rowsToCandidates([...available.rows, ...directAvailable.rows] as Row[], {
         body: "A human-assurance assignment is ready for review.",
-        href: "/human/review",
+        href: REVIEWER_LIFECYCLE_NOTIFICATION_HREFS["assignment.available"],
         preferenceKey: "assignmentAvailable",
         sourceType: "assignment.available",
         title: "Assignment available",
       }),
       rowsToCandidates(completed.rows as Row[], {
         body: "Your human-assurance response was recorded.",
-        href: "/human/review",
+        href: REVIEWER_LIFECYCLE_NOTIFICATION_HREFS["assignment.completed"],
         preferenceKey: "assignmentCompleted",
         sourceType: "assignment.completed",
         title: "Response recorded",
@@ -302,7 +306,7 @@ async function loadLifecycleCandidates(
       }),
       revealNotices.map(candidate => ({
         body: "Your committed review needs a self-reveal before its recovery deadline.",
-        href: "/human/profile?section=paid-settlement",
+        href: REVIEWER_LIFECYCLE_NOTIFICATION_HREFS["settlement.reveal_required"],
         preferenceKey: "paymentUpdates" as const,
         principalAddress: candidate.principalAddress,
         sourceKey: candidate.sourceKey,
@@ -311,7 +315,7 @@ async function loadLifecycleCandidates(
       })),
       claimNotices.map(candidate => ({
         body: "A review payment is nearing its claim deadline.",
-        href: "/human/profile?section=paid-settlement",
+        href: REVIEWER_LIFECYCLE_NOTIFICATION_HREFS["settlement.claim_expiring"],
         preferenceKey: "paymentUpdates" as const,
         principalAddress: candidate.principalAddress,
         sourceKey: candidate.sourceKey,
@@ -510,7 +514,7 @@ export async function deliverPendingTokenlessNotificationEmails(input: {
   const due = await dbClient.execute({
     sql: `SELECT d.delivery_id, d.notification_id, d.principal_address, d.preference_key, d.attempt_count,
                  d.recovery_count,
-                 n.title, n.body, n.href,
+                 n.title, n.body, n.href, n.source_type,
                  s.email, s.verified_at, s.unsubscribe_token_hash,
                  s.assignment_available, s.assignment_completed, s.payment_updates, s.ask_results, s.account_security,
                  s.oversight_alerts
@@ -567,7 +571,13 @@ export async function deliverPendingTokenlessNotificationEmails(input: {
       unsubscribeUrl.searchParams.set("token", token);
       const sent = await (input.send ?? sendTokenlessNotificationEmail)(
         {
-          actionUrl: actionUrl(configuration.origin!, rowString(row, "href")),
+          actionUrl: actionUrl(
+            configuration.origin!,
+            canonicalReviewerNotificationHref({
+              href: rowString(row, "href"),
+              sourceType: rowString(row, "source_type"),
+            }),
+          ),
           body: rowString(row, "body") ?? "A RateLoop update is ready.",
           email: rowString(row, "email")!,
           idempotencyKey: id,

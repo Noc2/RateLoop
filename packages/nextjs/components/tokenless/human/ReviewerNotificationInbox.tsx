@@ -8,6 +8,7 @@ import { Card } from "~~/components/tokenless/ui/Card";
 import { Link } from "~~/i18n/navigation";
 import {
   type ReviewerInboxNotification,
+  canonicalReviewerNotificationHref,
   isReviewerDeadlineOrMoneyNotification,
   isReviewerLifecycleNotification,
 } from "~~/lib/notifications/reviewerInbox";
@@ -33,6 +34,7 @@ function NotificationList({
     <ol className="mt-3 space-y-2">
       {notifications.map(notification => {
         const urgent = isReviewerDeadlineOrMoneyNotification(notification);
+        const href = canonicalReviewerNotificationHref(notification);
         const title = t(`copy.${notification.sourceType}.title`);
         const body = t(`copy.${notification.sourceType}.body`);
         return (
@@ -65,9 +67,9 @@ function NotificationList({
                 </time>
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
-                {notification.href ? (
+                {href ? (
                   <Link
-                    href={notification.href}
+                    href={href}
                     className="btn btn-sm rateloop-secondary-action px-3"
                     aria-label={t("openLabel", { title })}
                   >

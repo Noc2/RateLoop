@@ -7,6 +7,13 @@ export const REVIEWER_LIFECYCLE_NOTIFICATION_SOURCE_TYPES = [
 
 export type ReviewerLifecycleNotificationSourceType = (typeof REVIEWER_LIFECYCLE_NOTIFICATION_SOURCE_TYPES)[number];
 
+export const REVIEWER_LIFECYCLE_NOTIFICATION_HREFS: Record<ReviewerLifecycleNotificationSourceType, string> = {
+  "assignment.available": "/human/review",
+  "assignment.completed": "/human/history",
+  "settlement.reveal_required": "/human/profile?section=paid-settlement",
+  "settlement.claim_expiring": "/human/profile?section=paid-settlement",
+};
+
 export type ReviewerInboxNotification = {
   notificationId: string;
   kind: string;
@@ -28,4 +35,14 @@ export function isReviewerDeadlineOrMoneyNotification(notification: Pick<Reviewe
   return (
     notification.sourceType === "settlement.reveal_required" || notification.sourceType === "settlement.claim_expiring"
   );
+}
+
+/**
+ * Lifecycle type, not persisted copy, owns the destination. This repairs old
+ * legacy-tab links and keeps in-app and email actions on the same route.
+ */
+export function canonicalReviewerNotificationHref(notification: { href?: string | null; sourceType?: string | null }) {
+  return isReviewerLifecycleNotification(notification)
+    ? REVIEWER_LIFECYCLE_NOTIFICATION_HREFS[notification.sourceType]
+    : (notification.href ?? null);
 }
