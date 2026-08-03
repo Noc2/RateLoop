@@ -1,15 +1,50 @@
 # RateLoop tokenless — what to build next
 
-Written 29 July 2026 against `d49862fa3`. Companion to
-[business-plan.md](business-plan.md). This is the "make it more interesting" list:
-work that would change what a customer can do or decide to pay for.
+Written 29 July 2026 against `d49862fa3`; re-verified 3 August 2026 against `8e9a01e4a`.
+Companion to [business-plan.md](business-plan.md). This is the "make it more interesting"
+list: work that would change what a customer can do or decide to pay for.
 
 Defects and honesty fixes live in [remediation-plan.md](remediation-plan.md). This list
 assumes those are handled separately.
 
-**Ordering principle:** revenue mechanics first, because a product that cannot take
-money has no other priorities. Then the things that make it worth paying for. Then the
-things that make it survivable at scale.
+**Ordering principle:** the price levers first — the work that changes what a buyer is
+willing to pay, ranked in §6a of [implementation-plan.md](implementation-plan.md). Then
+revenue mechanics, because a product that cannot take money has no other priorities.
+Then the things that make it worth paying for, then the things that make it survivable
+at scale.
+
+Compliance software is paid for because it **transfers legal risk**, because it is
+**mandatory by a date**, or because **removing it is a deliberate act with a named
+owner**. Items are judged against those three levers, not against feature count.
+
+---
+
+## 0. The price levers, in order
+
+Full argument and citations in §6a of [implementation-plan.md](implementation-plan.md).
+Summarised here so this list can be read alone:
+
+| #   | Work                                                       | Lever                       | Size             |
+| --- | ---------------------------------------------------------- | --------------------------- | ---------------- |
+| P1  | Operator entry point for the closed-frame draw (2.1)       | Risk transfer — Art. 37     | Days             |
+| P2  | Qualified timestamp anchor (eIDAS Art. 41(2))              | Risk transfer — burden flip | Purchase order   |
+| P3  | Name the AI Act Art. 72 post-market monitoring product     | Mandatory, recurring        | Mapping + export |
+| P4  | A compliance-officer-reachable UI over the finished routes | Perceived value             | Presentation     |
+| P5  | Sell the auditor a scoped seat                             | Switching cost              | Builds on 2.7    |
+| P6  | Distinct CI exit states                                    | Switching cost              | Hours            |
+
+**P1 is the finding of this pass.** `commitDsaReferenceSamplingEpoch`,
+`freezeDsaReferenceSamplingEpoch`, `loadDsaReferenceSamplingEpochSources` and the whole
+of `dsaPopulationLedger` have **zero non-test callers** — no route, no script, no admin
+action. The pre-committed, beacon-seeded draw is the one artefact an Article 37 auditor
+can rely on instead of re-performing, it is written and tested, and nothing in the
+product can invoke it.
+
+**P3 is the largest unclaimed market.** Article 72 binds every high-risk **provider**
+(not deployer) to a continuous, documented performance record inside Annex IV technical
+documentation. That is what this product already produces. It appears in
+[business-plan.md](business-plan.md), is absent from the implementation plan, and has no
+code that names it.
 
 ---
 
@@ -52,13 +87,26 @@ This is the differentiator. Nothing else in the product is unmatched.
 
 ### B1. Ship the verifier as a standalone open-source package
 
-**Correction:** an earlier draft called for an async-hash refactor and unifying a
-duplicated implementation. Neither is needed. The core has **zero `node:` imports**,
-already uses `globalThis.crypto.subtle`, and a test enforces that; the browser page
-already delegates to the same module. The real work is a canonicalization defect —
-key ordering uses `localeCompare`, which is locale- and ICU-sensitive, so an `en-US`
-browser and a `LANG=C` server can produce different digests for the same packet. An
-open-source verifier cannot ship that, and fixing it changes digests.
+**Correction, twice over.** An earlier draft called for an async-hash refactor and
+unifying a duplicated implementation. Neither is needed: the core has **zero `node:`
+imports**, already uses `globalThis.crypto.subtle`, and a test enforces that; the browser
+page already delegates to the same module.
+
+That draft then named a canonicalization defect — key ordering by `localeCompare`, which
+is locale- and ICU-sensitive, so an `en-US` browser and a `LANG=C` server can produce
+different digests for the same input. **Task 2.8 fixed this for evidence packets** by
+moving them to RFC 8785, which mandates sorting by UTF-16 code units. Re-verified 3
+August 2026: the evidence-packet and DSA paths are clean.
+
+The defect survives elsewhere. Roughly eight other hand-rolled canonicalizers still sort
+with `localeCompare`, including
+[`privacy/audit.ts:69`](../packages/nextjs/lib/privacy/audit.ts:69),
+`auth/enterpriseIdentity.ts`, `tokenless/transparency.ts` and
+`tokenless/paidAssignmentOperations.ts`. These feed audit records and assignment
+operations rather than published packets, so the blast radius is smaller — but the same
+argument that justified 2.8 applies to them, and "our hashes are reproducible" is
+awkward to claim while locale-sensitive digests remain anywhere in the system. Fold them
+into the RFC 8785 producer.
 
 A browser verifier exists and the SDK is already MIT with npm provenance — but there is
 no separately installable verifier with its own README, and no marketing that says _you
@@ -92,10 +140,12 @@ with one rather than competing; the moat is the review semantics, not the hash c
 
 ### B3. Stop hiding capabilities that work
 
-**Fourteen of seventeen** capabilities are hardcoded false in the public-claim map (the
-other three derive from lane readiness and are also false). An earlier draft said
-"roughly five". Several of the fourteen are shipped and working and therefore cannot be mentioned publicly: managed evidence signing, the
-offline packet verifier, OTLP ingest, and the attestation paths.
+**Sixteen of nineteen** capabilities are hardcoded false in the public-claim map; the
+other three derive from lane readiness and are also false. Earlier drafts said "roughly
+five", then "fourteen of seventeen" — the map has since grown, so re-count it rather than
+quoting this line. Several of the sixteen are shipped and working and therefore cannot be
+mentioned publicly: managed evidence signing, the offline packet verifier, OTLP ingest,
+RFC 3161 timestamping and the attestation paths.
 
 The claim gate is a genuine asset and should not be weakened — but it now makes the
 product look _less_ capable than it is. Flip the flags for what is genuinely deployed
@@ -273,13 +323,21 @@ there is no evidence of it appearing in European tenders. Revisit in 2027.
 
 | Phase | Items        | Rationale                                                                     |
 | ----- | ------------ | ----------------------------------------------------------------------------- |
-| 1     | A1–A3        | Revenue is impossible until these land, and A3 waits on the pricing decision. |
-| 2     | C0, C0b, C0c | Make the evaluation pitch true before anyone hears it. Days each.             |
-| 3     | C3           | The only real switching cost in the list. Moved up from last.                 |
-| 4     | B1, B3, B4   | Cheap, compounding, and they make the product presentable.                    |
-| 5     | C1, C2       | The largest gap between what the code does and what a customer reaches.       |
-| 6     | B2, B5, B3b  | Procurement unlocks. B2 is a purchase order; B3b is drafting.                 |
-| 7     | C4–C8        | Real value, no deadline.                                                      |
+| 0     | P1           | Days of work, and every downstream gate is blocked behind it.                 |
+| 1     | P2, P6       | A purchase order and a few hours. Best price-per-effort in the document.      |
+| 2     | A1–A3        | Revenue is impossible until these land, and A3 waits on the pricing decision. |
+| 3     | C0, C0b, C0c | Make the evaluation pitch true before anyone hears it. Days each.             |
+| 4     | P3           | Article 72 is the largest unclaimed market and mostly a mapping exercise.     |
+| 5     | P4, B3, B1   | Make the finished machinery visible and describable. Presentation, not build. |
+| 6     | P5, B4       | Auditor access and the free STAR self-assessment. Procurement credibility.    |
+| 7     | C1, C2       | The largest gap between what the code does and what a customer reaches.       |
+| 8     | B2, B5, B3b  | Remaining procurement unlocks. B3b is drafting, not engineering.              |
+| 9     | C4–C8        | Real value, no deadline.                                                      |
+
+**Why P1 moved to phase 0.** It is not the biggest item, but it is the only one that
+blocks other people's work: without an operator entry point there is no artefact for an
+audit partner to accept, so the external validation gate cannot even start. Everything
+else in this table can proceed in parallel; that one cannot be started late.
 
 Engineering defects and honesty fixes are in [remediation-plan.md](remediation-plan.md)
 and deliberately not repeated here.

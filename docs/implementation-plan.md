@@ -433,8 +433,8 @@ The concrete draw protocol is:
 
 | #    | Task                                                            | Days     | Repository status                                                                                                    |
 | ---- | --------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------- |
-| 2.1  | Closed-frame sampling epochs and witnessed commitments          | 8–10     | Persistence foundation implemented; hosted exercise remains a release gate                                           |
-| 2.2  | Future-beacon verification and domain-separated seed derivation | 3–4      | Shared verified core implemented; hosted exercise remains a release gate                                             |
+| 2.1  | Closed-frame sampling epochs and witnessed commitments          | 8–10     | Persistence foundation implemented; **no production caller — nothing can invoke it** (see below)                     |
+| 2.2  | Future-beacon verification and domain-separated seed derivation | 3–4      | Shared verified core implemented; reachable only through 2.1, which has no caller                                    |
 | 2.3  | Reviewer/scope override detector with employment-data gate      | 2–3      | Implemented                                                                                                          |
 | 2.4  | Auditable engagement events with aggregate-only mode            | 3–4      | Implemented                                                                                                          |
 | 2.5  | Separate reference-sampling channel for automated pass and fail | 7–8      | Named-panel and closed-network provenance consumers implemented; hosted pilot remains                                |
@@ -443,6 +443,26 @@ The concrete draw protocol is:
 | 2.7  | Least-privileged compliance evidence share and bounded view     | 5        | Durable share, strict threshold-safe projection and hash-only retry binding implemented; hosted exercise remains     |
 | 2.9  | Contractual public-safe benchmark research grant                | 3–5      | Durable derivation-bound grant, exact-byte access and hash-only retry binding implemented; hosted exercise remains   |
 | 2.10 | Statutory Article 40 vetted-researcher access                   | External | Not implemented; requires a project-specific DSC decision (normally up to 80 working days, with justified extension) |
+
+**2.1 is the single largest price lever in the repository, and today nothing can call
+it.** Verified 3 August 2026 against `8e9a01e4a`: `commitDsaReferenceSamplingEpoch`,
+`freezeDsaReferenceSamplingEpoch` and `loadDsaReferenceSamplingEpochSources` in
+[`dsaReferenceSamplingEpochs`](../packages/nextjs/lib/tokenless/dsaReferenceSamplingEpochs.ts),
+together with the whole of
+[`dsaPopulationLedger`](../packages/nextjs/lib/tokenless/dsaPopulationLedger.ts), have
+**zero non-test callers** — no route, no script, no admin action, no scheduled job. An
+earlier revision of this table described the remaining work as a "hosted exercise", which
+understates it: a hosted exercise presupposes something to invoke, and there is nothing.
+The gap is an operator entry point, not a staging run.
+
+This matters commercially more than any other open item. DSA Article 37 audits must be
+performed to a **reasonable level of assurance** — the auditor needs "a high, but not
+absolute, level of confidence" that no material misstatement went undetected. An auditor
+cannot reach that level on a sample the audited party drew, retained the seed for, and
+could have redrawn. A frame frozen and committed *before* a future beacon exists is the
+artefact that lets the auditor place reliance on the sample rather than re-perform it.
+That distinction is what separates assurance pricing from dashboard pricing, and the code
+for it is already written and tested.
 
 **2.3 and 2.4 are the Uber and Cigna findings turned into features, but the foundation is
 not release approval.** Scope/reviewer override patterns have a minimum denominator and
@@ -462,6 +482,97 @@ repository already implements DSSE pre-authentication encoding correctly. Replac
 divergent hand-rolled canonical JSON implementations with one RFC 8785 producer/verifier
 implementation, bump the packet version and retain verification of immutable legacy
 packets.
+
+---
+
+## 6a. What would let you charge more
+
+Verified 3 August 2026 against `8e9a01e4a`. Compliance software commands a higher price
+for three reasons and effectively no others: it **transfers legal risk**, it is
+**mandatory by a date**, and it is **removed only by a deliberate act with a named
+owner**. Feature count does not appear on that list. The items below are ordered by how
+much each moves one of those three levers per unit of work, and every one of them is
+mostly built already.
+
+### P1. Give 2.1 an operator entry point — days, not weeks
+
+Covered above. The pre-committed, beacon-seeded, frozen-frame draw is the only thing in
+the product that an Article 37 auditor can rely on instead of re-performing. It is
+written, tested, and unreachable. Nothing else on this list changes the price as much.
+
+### P2. Anchor evidence to a qualified timestamp — a purchase order, not a project
+
+Signed evidence today is admissible and nothing more, which leaves the customer proving
+hash construction, key custody and clock source with RateLoop in the witness box. Under
+**eIDAS Article 41(2)** a qualified electronic timestamp carries a presumption of both
+the accuracy of the time and **the integrity of the data bound to it**, and the burden
+falls on the party disputing it, in all 27 member states.
+
+The pipeline in
+[`assuranceAttestationPipeline`](../packages/nextjs/lib/tokenless/assuranceAttestationPipeline.ts)
+already implements RFC 3161, and ETSI EN 319 422 is a profile of RFC 3161. This is closer
+to changing a trust anchor and signing a supplier contract than to building anything.
+Roughly €0.50–2.50 per token.
+
+This is the clearest risk-transfer purchase available: it converts "our vendor says this
+happened" into "the challenger must prove it did not."
+
+### P3. Name the Article 72 post-market monitoring product — the largest unclaimed market
+
+AI Act **Article 72** requires providers of high-risk systems to "actively and
+systematically collect, document and analyse relevant data ... on the performance of
+high-risk AI systems throughout their lifetime", against a **post-market monitoring plan
+that forms part of the Annex IV technical documentation**. The Commission's implementing
+act laying down the plan template was due 2 February 2026.
+
+That obligation describes what this product already produces — a continuous, sampled,
+signed performance record — and it is currently discussed only in
+[business-plan.md](business-plan.md), is absent from this plan, and has no code that
+names it. Two properties make it a better commercial wedge than the DSA lane:
+
+- it binds **every** high-risk provider rather than the few dozen VLOPs; and
+- it is **recurring and inspected**, because the plan sits inside the technical
+  documentation a market-surveillance authority can demand.
+
+Article 72 binds the **provider**, not the deployer. Deployer-facing Article 72 citations
+are a defect this document set has flagged before and must not reintroduce. The work is
+largely a mapping and export shaped to the Annex IV template, not new measurement.
+
+### P4. Make the compliance surface reachable by a compliance officer
+
+The repository has **229 API routes and 42 pages**. DSA Part 8 report versioning and
+publication exist as routes with no page; auditor project access is API-only. The
+reference-panel adjudication UI at
+[`/reference-panel`](../packages/nextjs/app/[locale]/(app)/reference-panel/page.tsx) is
+the exception that shows the pattern works.
+
+The buyer for this product is a compliance officer, not a developer. An annual
+transparency report with a statutory deadline that can only be produced by calling an API
+is not perceived as a product feature, and it cannot be demonstrated in a sales meeting.
+This is presentation work over finished machinery, and it gates whether anyone recognises
+what they are paying for.
+
+### P5. Sell the auditor a seat
+
+An independent auditor with scoped, read-only, least-privileged access to the evidence —
+building on 2.7 — turns RateLoop from a report generator into part of the audit workflow.
+Auditor-facing access prices well above an ordinary seat, and it creates the switching
+cost the rest of the product lacks: once an auditor's own working papers cite these
+artefacts, removing them becomes the audited party's problem rather than a silent
+cancellation.
+
+### P6. Distinct CI exit states — hours
+
+`wait --until-ready` already blocks. Every error path returns exit code 1, so a pipeline
+cannot distinguish a failed review from a timeout from a network error. Distinct codes
+are the difference between a gate someone trusts in CI and one they route around. This is
+the only item in this document that creates a switching cost through daily use rather
+than through contract.
+
+### What does not raise the price
+
+More adapters, more dashboards, and more evaluation surface area. They compete against
+better-resourced products on their ground and move none of the three levers.
 
 ---
 
@@ -675,7 +786,7 @@ shipped native approve-and-resume.
 | 4     | 1.5, 1.6 — decision view, disclosure and fail-closed claims        | Done                                                                          |
 | 5     | 2.3, 2.4 — governance and engagement foundations                   | Done                                                                          |
 | 6     | 2.8, 2.6 — canonical v4 packets and witnessed audit heads          | Done                                                                          |
-| 7     | 3.1, 2.1, 2.2 — population and persisted witnessed draw foundation | Implemented; integration verification active                                  |
+| 7     | 3.1, 2.1, 2.2 — population and persisted witnessed draw foundation | Modules implemented and tested, but **no production caller**; see §6a P1      |
 | 8     | 2.5, 3.2–3.5 — system evaluations, labels and durable reports      | Code present through `0188`; final engineering and external validation remain |
 | 9     | 2.7, 2.9 — persist separate compliance and research grants         | Implemented through migration `0181`; hosted exercise remains                 |
 | 10    | 3.6 — audit-partner review and two provider pilots                 | Release gate                                                                  |
@@ -684,6 +795,12 @@ shipped native approve-and-resume.
 Rows two and three ship useful provider-side measurement without claiming independence.
 Rows six through nine build the DSA artifact. Row ten decides whether the evidence product
 has a market. Row eleven decides separately whether the closed network deserves activation.
+
+**Row 7 is the bottleneck and is mis-stated as verification work.** The modules exist and
+pass their tests; nothing in the application can call them. Until an operator entry point
+lands, phase 4's hosted exercise cannot be attempted, row 10's audit partner has no
+artefact to accept, and the pricing argument in §6a has nothing behind it. Treat P1 in
+§6a as the immediate next commit rather than as integration polish.
 
 ### Concrete release phases
 
