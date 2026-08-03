@@ -111,7 +111,7 @@ describe("RateLoop Codex Stop hook", () => {
       hooks: {
         PreToolUse: [
           {
-            matcher: "^(?!mcp__rateloop[-_]workspace__rateloop_).+",
+            matcher: ".+",
             hooks: [
               {
                 type: "command",

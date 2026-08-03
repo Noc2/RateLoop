@@ -191,7 +191,9 @@ describe("RateLoop Claude PreToolUse adapter", () => {
     const config = JSON.parse(
       await readFile(join(hookRoot, "hooks.json"), "utf8"),
     ) as Record<string, any>;
-    expect(config.hooks.PreToolUse[0].matcher).toContain("mcp__rateloop");
+    // Keep this matcher compatible with Codex's Rust regex engine. The hook
+    // itself ignores RateLoop progress tools before it reads any gate state.
+    expect(config.hooks.PreToolUse[0].matcher).toBe(".+");
     expect(config.hooks.PreToolUse[0].hooks[0].command).toContain(
       "rateloop-claude-pre-tool-use.mjs",
     );
