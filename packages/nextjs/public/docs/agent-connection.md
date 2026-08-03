@@ -36,6 +36,13 @@ handoff tools. Its marketplace entry authenticates during installation rather th
 normally starts only after OAuth is complete and can see the protected tools immediately. The same message works for a
 first connection and after a previous workspace has been deleted.
 
+If the protected plugin is absent from Codex's native plugin inventory, install it from the isolated tokenless line:
+
+```sh
+codex plugin marketplace add Noc2/RateLoop@tokenless --sparse .agents/plugins --sparse plugins/rateloop --sparse plugins/rateloop-workspace
+codex plugin add rateloop-workspace@rateloop
+```
+
 OAuth approval is a one-time action for the connection attempt. Existing or revoked plugin installations can still need
 host reauthorization. Follow only the continuation, restart, or new-task action the host actually presents; Codex's
 structured plugin setup offers **Continue** when same-task resumption is available.
@@ -49,9 +56,10 @@ publishing and spending remain separately classified and approval-bound.
 
 A host page that says **Authentication complete** confirms the OAuth callback, not a verified RateLoop workspace
 connection. Return to the same task and use **Continue** if offered. Only if the protected tools are still missing on a
-later active turn and the host offers no native action should you uninstall every existing RateLoop plugin, including
-`rateloop` and `rateloop-workspace`. Then resume the same task with the original connection message. Do not remove
-unrelated plugins or create a replacement link.
+later active turn and the host offers no native action should you inspect the native plugin inventory. Run the protected
+tokenless setup above once only when `rateloop-workspace@rateloop` is absent. If it is already installed and enabled, do
+not reinstall or uninstall plugins, start another login or nested agent, edit MCP configuration, or create a replacement
+link. Preserve the original connection intent and check the tool inventory again on the next active turn.
 
 ### Codex is connected to another workspace
 

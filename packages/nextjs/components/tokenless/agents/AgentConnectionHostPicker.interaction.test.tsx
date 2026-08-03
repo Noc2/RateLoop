@@ -2,7 +2,11 @@ import React from "react";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
-import { TOKENLESS_HOST_CAPABILITIES, type TokenlessHostId } from "~~/lib/tokenless/hostCapabilities";
+import {
+  CODEX_WORKSPACE_PLUGIN_SETUP_COMMAND,
+  TOKENLESS_HOST_CAPABILITIES,
+  type TokenlessHostId,
+} from "~~/lib/tokenless/hostCapabilities";
 
 test("every registry host renders as a chip; selecting tunes and reselecting deselects", async () => {
   const restoreDom = installTestDom();
@@ -78,16 +82,29 @@ test("cli-command affordances render as code with their own copy action", async 
   }
 });
 
-test("supported plugin hosts mention the existing plugin path without extra friction", async () => {
+test("Codex shows both the plugin reference and a copyable protected setup command", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, within } = await import("@testing-library/react");
+  const { cleanup, fireEvent, render, within } = await import("@testing-library/react");
   const { AgentConnectionHostPicker } = await import("./AgentConnectionHostPicker");
+  const copies: string[] = [];
+  Object.defineProperty(window.navigator, "clipboard", {
+    configurable: true,
+    value: { writeText: async (value: string) => copies.push(value) },
+  });
 
   try {
     render(<AgentConnectionHostPicker selectedHostId="codex-desktop" onSelectHost={() => undefined} />);
     const screen = within(document.body);
     assert.ok(screen.getByText("supported"));
     assert.ok(screen.getByText("plugin://rateloop-workspace@rateloop"));
+    assert.ok(
+      screen.getByText((_, element) =>
+        Boolean(element?.tagName === "CODE" && element.textContent === CODEX_WORKSPACE_PLUGIN_SETUP_COMMAND),
+      ),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Copy" }));
+    assert.ok(await screen.findByRole("button", { name: "Copied" }));
+    assert.deepEqual(copies, [CODEX_WORKSPACE_PLUGIN_SETUP_COMMAND]);
   } finally {
     cleanup();
     restoreDom();

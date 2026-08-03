@@ -65,6 +65,13 @@ export type TokenlessInstallAffordance = {
 /** The one workspace MCP server URL every documented affordance points at. */
 const WORKSPACE_MCP_URL = "https://rateloop-tokenless.vercel.app/api/agent/v1/mcp";
 
+/** Native Codex setup for the protected workspace plugin on the isolated tokenless line. */
+export const CODEX_WORKSPACE_PLUGIN_MARKETPLACE_COMMAND =
+  "codex plugin marketplace add Noc2/RateLoop@tokenless --sparse .agents/plugins --sparse plugins/rateloop --sparse plugins/rateloop-workspace";
+export const CODEX_WORKSPACE_PLUGIN_INSTALL_COMMAND = "codex plugin add rateloop-workspace@rateloop";
+export const CODEX_WORKSPACE_PLUGIN_SETUP_COMMAND = `${CODEX_WORKSPACE_PLUGIN_MARKETPLACE_COMMAND}\n${CODEX_WORKSPACE_PLUGIN_INSTALL_COMMAND}`;
+export const CODEX_WORKSPACE_PLUGIN_VERSION = "rateloop-workspace@0.1.3+codex.20260803000000";
+
 /**
  * Per-host syntax below was checked against the named vendors' documentation on
  * 2026-07-17. That research did not pin client versions, so these affordances
@@ -130,8 +137,15 @@ export const TOKENLESS_HOST_CAPABILITIES = [
         kind: "plugin-marketplace",
         label: "RateLoop Workspace plugin from the tokenless-pinned Noc2/RateLoop marketplace",
         value: "plugin://rateloop-workspace@rateloop",
-        checkedAt: "2026-07-21",
-        clientVersion: "rateloop-workspace@0.1.2+codex.20260721222513",
+        checkedAt: "2026-08-03",
+        clientVersion: CODEX_WORKSPACE_PLUGIN_VERSION,
+      },
+      {
+        kind: "cli-command",
+        label: "Install the protected workspace plugin from the tokenless-pinned marketplace",
+        value: CODEX_WORKSPACE_PLUGIN_SETUP_COMMAND,
+        checkedAt: "2026-08-03",
+        clientVersion: CODEX_WORKSPACE_PLUGIN_VERSION,
       },
     ],
     humanActions: [
@@ -155,8 +169,8 @@ export const TOKENLESS_HOST_CAPABILITIES = [
         kind: "plugin-marketplace",
         label: "RateLoop Workspace plugin from the tokenless-pinned Noc2/RateLoop marketplace",
         value: "plugin://rateloop-workspace@rateloop",
-        checkedAt: "2026-07-21",
-        clientVersion: "rateloop-workspace@0.1.2",
+        checkedAt: "2026-08-03",
+        clientVersion: "rateloop-workspace@0.1.3",
       },
       // The org managed-settings snippet is intentionally absent: no repo doc or
       // hooks contract pins its shape yet, and unverified shapes are never published.

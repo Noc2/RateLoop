@@ -1,4 +1,8 @@
 import {
+  CODEX_WORKSPACE_PLUGIN_INSTALL_COMMAND,
+  CODEX_WORKSPACE_PLUGIN_MARKETPLACE_COMMAND,
+  CODEX_WORKSPACE_PLUGIN_SETUP_COMMAND,
+  CODEX_WORKSPACE_PLUGIN_VERSION,
   TOKENLESS_CONNECTION_LANES,
   TOKENLESS_HOST_CAPABILITIES,
   TOKENLESS_HOST_CATEGORIES,
@@ -126,19 +130,22 @@ test("plugin hosts keep the bundled marketplace path as the primary affordance",
   }
 
   const codex = tokenlessHostCapability("codex-desktop");
-  assert.equal(codex?.installAffordances[0].checkedAt, "2026-07-21");
-  assert.match(codex?.installAffordances[0].clientVersion ?? "", /^rateloop-workspace@0\.1\.2\+codex\./);
+  assert.equal(codex?.installAffordances[0].checkedAt, "2026-08-03");
+  assert.equal(codex?.installAffordances[0].clientVersion, CODEX_WORKSPACE_PLUGIN_VERSION);
+  assert.equal(codex?.installAffordances[1].kind, "cli-command");
+  assert.equal(codex?.installAffordances[1].value, CODEX_WORKSPACE_PLUGIN_SETUP_COMMAND);
   assert.match(codex?.notes ?? "", /authentication runs during install/i);
 });
 
-test("every cli-command targets the isolated tokenless deployment and no deep link is published", () => {
+test("every cli-command targets the isolated tokenless deployment line and no deep link is published", () => {
   for (const host of HOSTS) {
     for (const affordance of host.installAffordances) {
       assert.notEqual(affordance.kind, "deep-link", `${host.id} must not publish install deep links`);
       if (affordance.kind === "cli-command") {
         assert.ok(
-          affordance.value.includes("rateloop-tokenless.vercel.app"),
-          `${host.id} cli-command must name the real server host`,
+          affordance.value.includes("rateloop-tokenless.vercel.app") ||
+            affordance.value === CODEX_WORKSPACE_PLUGIN_SETUP_COMMAND,
+          `${host.id} cli-command must name the real server host or tokenless-pinned marketplace`,
         );
       }
     }
@@ -147,6 +154,9 @@ test("every cli-command targets the isolated tokenless deployment and no deep li
 
 test("documented per-host shapes match the published connect guide verbatim", () => {
   const guide = readFileSync(new URL("../../public/docs/agent-connection.md", import.meta.url), "utf8");
+  assert.ok(guide.includes(CODEX_WORKSPACE_PLUGIN_MARKETPLACE_COMMAND));
+  assert.ok(guide.includes(CODEX_WORKSPACE_PLUGIN_INSTALL_COMMAND));
+
   const claudeCli = tokenlessHostCapability("claude-code")?.installAffordances.find(a => a.kind === "cli-command");
   assert.ok(claudeCli);
   assert.equal(

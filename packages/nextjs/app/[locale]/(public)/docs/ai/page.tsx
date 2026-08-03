@@ -9,6 +9,7 @@ import {
 import { PublicLink as Link } from "~~/components/docs/PublicLink";
 import { Card } from "~~/components/tokenless/ui/Card";
 import type { Locale } from "~~/i18n/config";
+import { CODEX_WORKSPACE_PLUGIN_SETUP_COMMAND } from "~~/lib/tokenless/hostCapabilities";
 
 export function generateMetadata({ params }: { params: PublicLocaleParams }): Promise<Metadata> {
   return getLocalizedPublicMetadata({ params, section: "docs", title: "Agent integration guide" });
@@ -87,10 +88,10 @@ export function TokenlessAgentDocsContent({ locale }: { locale: Locale }) {
         <h2>Connect with Codex</h2>
         <p>
           Open <Link href="/agents/connections">Connections</Link> and copy the workspace connection message. If the
-          public plugin is not installed yet, pin the marketplace to the isolated tokenless branch and add it first:
+          protected workspace plugin is not installed yet, pin the marketplace to the isolated tokenless branch and add
+          it first:
         </p>
-        <CodeBlock>{`codex plugin marketplace add Noc2/RateLoop@tokenless --sparse .agents/plugins --sparse plugins/rateloop --sparse plugins/rateloop-workspace
-codex plugin add rateloop@rateloop`}</CodeBlock>
+        <CodeBlock>{CODEX_WORKSPACE_PLUGIN_SETUP_COMMAND}</CodeBlock>
         <p>
           The copied message targets <code>rateloop-workspace@rateloop</code>. It lets Codex install the protected
           workspace plugin and complete OAuth before the connection task begins.
@@ -101,8 +102,9 @@ codex plugin add rateloop@rateloop`}</CodeBlock>
           Codex&apos;s <strong>Authentication complete</strong> page confirms the OAuth callback, not RateLoop
           verification. Return to the same task and use <strong>Continue</strong> if Codex offers it. Treat the first
           missing-tool check as activation pending. If the protected tools are still missing on a later active turn and
-          no native action is available, uninstall all existing RateLoop plugins before resuming the same task. Do not
-          remove unrelated plugins or create a replacement connection link.
+          no native action is available, inspect the native plugin inventory and run the setup above only when the
+          protected workspace plugin is absent. Do not reinstall or uninstall an enabled plugin, start another login, or
+          create a replacement connection link.
         </p>
 
         <details className="not-prose mt-8 rounded-xl border border-base-content/10 bg-base-200/40 p-4">

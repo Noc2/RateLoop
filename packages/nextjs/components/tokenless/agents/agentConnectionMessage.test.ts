@@ -1,7 +1,7 @@
 import { buildAgentConnectionMessage, buildAgentConnectionMessageForHost } from "./agentConnectionMessage";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { TOKENLESS_HOST_CAPABILITIES } from "~~/lib/tokenless/hostCapabilities";
+import { CODEX_WORKSPACE_PLUGIN_SETUP_COMMAND, TOKENLESS_HOST_CAPABILITIES } from "~~/lib/tokenless/hostCapabilities";
 
 const CONNECTION_URL = "https://rateloop-tokenless.vercel.app/connect/aci_123#claim=short-lived-claim";
 
@@ -12,7 +12,7 @@ const REVIEW_LOOP_BLOCK =
   "After RateLoop verifies the connection, use $rateloop-human-review-loop before releasing every eligible output. Connection alone does not submit or hold an output; if review is required, request it and wait for a terminal result.";
 const CORE_CLOSING = `Report success only after RateLoop verifies the connection: ${CONNECTION_URL}`;
 
-const UNIVERSAL_MESSAGE = `[@RateLoop Workspace](plugin://rateloop-workspace@rateloop) Use $rateloop-workspace-connection to connect this agent to my workspace and finish automatically in this task. Treat this as a new connection if a previous RateLoop workspace was deleted. Preserve this link privately. Only interrupt me for a host-presented install, trust, or OAuth action. Treat the first missing RateLoop workspace-tool check as activation pending and do not ask me to uninstall then, including when this task resumes after host setup. On that first check, do not tell me to start a new task or paste the link. After I complete the action, resume through the host's Continue action when offered, check for RateLoop workspace tools on the next active turn, and continue automatically. Only if the tools are still missing on a later active turn and the host offers no action, tell me once to uninstall all existing RateLoop plugins, preserve this task, and check again after I return; never tell me to reinstall a plugin, repeat that recovery, paste the link, or approve the same action again. ${REVIEW_LOOP_BLOCK} Report success only after RateLoop verifies the connection: ${CONNECTION_URL}`;
+const UNIVERSAL_MESSAGE = `[@RateLoop Workspace](plugin://rateloop-workspace@rateloop) Use $rateloop-workspace-connection to connect this agent to my workspace and finish automatically in this task. Treat this as a new connection if a previous RateLoop workspace was deleted. Preserve this link privately. Only interrupt me for a host-presented install, trust, or OAuth action. Treat the first missing RateLoop workspace-tool check as activation pending, including when this task resumes after host setup. On that first check, do not tell me to start a new task or paste the link. After I complete any host-presented action, resume through Continue when offered, check for RateLoop workspace tools on the next active turn, and continue automatically. If the tools are still missing on a later active turn and the host offers no action, inspect the native plugin inventory. Only when rateloop-workspace@rateloop is absent, run this protected tokenless setup once:\n${CODEX_WORKSPACE_PLUGIN_SETUP_COMMAND}\nThen preserve this task and check again on the next active turn. If it is already installed and enabled, do not reinstall or uninstall plugins, start a second login or nested agent, edit MCP configuration, repeat the setup, paste the link, or claim the connection succeeded. ${REVIEW_LOOP_BLOCK} Report success only after RateLoop verifies the connection: ${CONNECTION_URL}`;
 
 const EXPECTED_VARIANT_MESSAGES = {
   plugin: UNIVERSAL_MESSAGE,
@@ -44,14 +44,14 @@ test("connection message contains one intent URL and no operational credential i
   assert.match(message, /Preserve this link privately/);
   assert.match(message, /Only interrupt me for a host-presented install, trust, or OAuth action/);
   assert.match(message, /first missing RateLoop workspace-tool check as activation pending/);
-  assert.match(message, /do not ask me to uninstall then/);
   assert.match(message, /do not tell me to start a new task or paste the link/);
-  assert.match(message, /host's Continue action when offered/);
+  assert.match(message, /resume through Continue when offered/);
   assert.match(message, /check for RateLoop workspace tools on the next active turn/);
   assert.match(message, /still missing on a later active turn and the host offers no action/);
-  assert.match(message, /tell me once to uninstall all existing RateLoop plugins/);
-  assert.match(message, /never tell me to reinstall a plugin/);
-  assert.match(message, /repeat that recovery, paste the link, or approve the same action again/);
+  assert.match(message, /inspect the native plugin inventory/);
+  assert.match(message, /codex plugin add rateloop-workspace@rateloop/);
+  assert.match(message, /do not reinstall or uninstall plugins/);
+  assert.match(message, /start a second login or nested agent/);
   assert.match(message, /use \$rateloop-human-review-loop before releasing every eligible output/);
   assert.match(message, /Connection alone does not submit or hold an output/);
   assert.match(message, /wait for a terminal result/);

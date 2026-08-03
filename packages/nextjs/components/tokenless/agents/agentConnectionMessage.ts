@@ -1,4 +1,8 @@
-import { type TokenlessHostMessageVariant, tokenlessHostMessageVariant } from "~~/lib/tokenless/hostCapabilities";
+import {
+  CODEX_WORKSPACE_PLUGIN_SETUP_COMMAND,
+  type TokenlessHostMessageVariant,
+  tokenlessHostMessageVariant,
+} from "~~/lib/tokenless/hostCapabilities";
 
 export type AgentConnectionMessageInput = {
   connectionUrl: string;
@@ -31,9 +35,8 @@ export const AGENT_CONNECTION_MESSAGE_PLUGIN_REFERENCE_BLOCK =
 export const AGENT_CONNECTION_MESSAGE_REVIEW_LOOP_BLOCK =
   "After RateLoop verifies the connection, use $rateloop-human-review-loop before releasing every eligible output. Connection alone does not submit or hold an output; if review is required, request it and wait for a terminal result.";
 
-/** Full install/resume/uninstall choreography for plugin hosts and the universal floor. */
-const PLUGIN_RECOVERY_BLOCK =
-  "Treat the first missing RateLoop workspace-tool check as activation pending and do not ask me to uninstall then, including when this task resumes after host setup. On that first check, do not tell me to start a new task or paste the link. After I complete the action, resume through the host's Continue action when offered, check for RateLoop workspace tools on the next active turn, and continue automatically. Only if the tools are still missing on a later active turn and the host offers no action, tell me once to uninstall all existing RateLoop plugins, preserve this task, and check again after I return; never tell me to reinstall a plugin, repeat that recovery, paste the link, or approve the same action again.";
+/** Full native install/resume choreography for plugin hosts and the universal floor. */
+const PLUGIN_RECOVERY_BLOCK = `Treat the first missing RateLoop workspace-tool check as activation pending, including when this task resumes after host setup. On that first check, do not tell me to start a new task or paste the link. After I complete any host-presented action, resume through Continue when offered, check for RateLoop workspace tools on the next active turn, and continue automatically. If the tools are still missing on a later active turn and the host offers no action, inspect the native plugin inventory. Only when rateloop-workspace@rateloop is absent, run this protected tokenless setup once:\n${CODEX_WORKSPACE_PLUGIN_SETUP_COMMAND}\nThen preserve this task and check again on the next active turn. If it is already installed and enabled, do not reinstall or uninstall plugins, start a second login or nested agent, edit MCP configuration, repeat the setup, paste the link, or claim the connection succeeded.`;
 
 /** Shorter OAuth-retry recovery for hosts without plugin install choreography. */
 const GENERIC_MCP_RECOVERY_BLOCK =

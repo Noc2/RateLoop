@@ -24,11 +24,12 @@ test("agent docs lead with the hosted connected-workspace path", async () => {
     html,
     /codex plugin marketplace add Noc2\/RateLoop@tokenless --sparse \.agents\/plugins --sparse plugins\/rateloop --sparse plugins\/rateloop-workspace/,
   );
-  assert.match(html, /codex plugin add rateloop@rateloop/);
+  assert.match(html, /codex plugin add rateloop-workspace@rateloop/);
+  assert.doesNotMatch(html, /codex plugin add rateloop@rateloop/);
   assert.match(html, /rateloop-workspace@rateloop/);
   assert.match(html, /complete OAuth before the connection task begins/);
-  assert.match(html, /uninstall all existing RateLoop plugins/);
-  assert.match(html, /do not remove unrelated plugins/i);
+  assert.match(html, /inspect the native plugin inventory/i);
+  assert.match(html, /do not reinstall or uninstall an enabled plugin/i);
   assert.match(html, /Continue/);
   assert.match(html, /Authentication finished, but the task is still waiting\?/);
   assert.match(html, /Authentication complete/);

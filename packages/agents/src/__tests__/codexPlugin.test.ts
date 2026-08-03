@@ -2,6 +2,11 @@ import { access, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import {
+  CODEX_WORKSPACE_PLUGIN_SETUP_COMMAND,
+  CODEX_WORKSPACE_PLUGIN_VERSION,
+  tokenlessHostCapability,
+} from "../../../nextjs/lib/tokenless/hostCapabilities";
 
 const repoRoot = fileURLToPath(new URL("../../../../", import.meta.url));
 const pluginRoot = join(repoRoot, "plugins", "rateloop");
@@ -65,8 +70,8 @@ describe("RateLoop agent host assets", () => {
       },
     });
     expect(workspaceManifest.name).toBe("rateloop-workspace");
-    expect(workspaceManifest.version).toMatch(
-      /^0\.1\.2\+codex\.[0-9A-Za-z.-]+$/,
+    expect(`rateloop-workspace@${workspaceManifest.version}`).toBe(
+      CODEX_WORKSPACE_PLUGIN_VERSION,
     );
     expect(workspaceManifest.skills).toBe("./skills/");
     expect(workspaceManifest.mcpServers).toBe("./.mcp.json");
@@ -238,14 +243,17 @@ describe("RateLoop agent host assets", () => {
       "The RateLoop connection is pending host activation",
     );
     expect(skill).toContain("Do not ask the user to start a new task");
-    expect(skill).toContain("Uninstall every existing RateLoop plugin");
+    expect(skill).toContain("inspect the native plugin inventory");
+    for (const command of CODEX_WORKSPACE_PLUGIN_SETUP_COMMAND.split("\n")) {
+      expect(skill).toContain(command);
+    }
     expect(skill).toContain(
       "Only if a later active turn still lacks the workspace tools after the first missing-tool check",
     );
     expect(skill).toContain(
-      "Never tell the user to reinstall a plugin, start a new task",
+      "do not reinstall or uninstall plugins, start a second login or nested agent",
     );
-    expect(skill).toContain("Never tell them to remove unrelated plugins");
+    expect(skill).toContain("remove unrelated plugins");
     expect(skill).toContain("host actually presents");
     expect(skill).toContain(
       "On the next active turn after the first missing-tool check, check the workspace tool inventory once more",
@@ -253,9 +261,6 @@ describe("RateLoop agent host assets", () => {
     expect(skill).toContain("Do not run a second login");
     expect(skill).toContain(
       "If no prompt is visible, do not claim that one is pending",
-    );
-    expect(skill).toContain(
-      "The RateLoop workspace tools are still unavailable",
     );
     expect(skill).toContain(
       "Never report the workspace connected or ready unless `rateloop_connect_workspace` returned `connected: true` with a successful `verification`",
@@ -281,10 +286,13 @@ describe("RateLoop agent host assets", () => {
       expect.objectContaining({
         name: "rateloop-workspace",
         displayName: "RateLoop Workspace",
-        version: "0.1.2",
+        version: "0.1.3",
         skills: "./skills/",
         mcpServers: "./.mcp.json",
       }),
+    );
+    expect(tokenlessHostCapability("claude-code")?.installAffordances[0].clientVersion).toBe(
+      `rateloop-workspace@${claudeManifest.version}`,
     );
   });
 
@@ -396,8 +404,11 @@ describe("RateLoop agent host assets", () => {
     expect(guide).toContain(workspaceMcpUrl);
     expect(guide).toContain("host-native OAuth");
     expect(guide).toMatch(/standard OAuth\s+authorization challenge/);
-    expect(guide).toMatch(/uninstall every existing RateLoop plugin/i);
-    expect(guide).toMatch(/do not remove\s+unrelated plugins/i);
+    expect(guide).toMatch(/inspect the native plugin inventory/i);
+    for (const command of CODEX_WORKSPACE_PLUGIN_SETUP_COMMAND.split("\n")) {
+      expect(guide).toContain(command);
+    }
+    expect(guide).toMatch(/do\s+not reinstall or uninstall plugins/i);
     expect(guide).toContain(
       "native VS Code manifest will be published only after",
     );
