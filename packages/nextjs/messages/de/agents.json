@@ -418,6 +418,9 @@
     "safeSummary": "Kann prüfen, wann eine menschliche Prüfung erforderlich ist. Darf weder Geld ausgeben noch veröffentlichen, private Dateien lesen oder den Arbeitsbereich verwalten.",
     "recoveryAction": "Führe den Wiederherstellungsschritt in dem Agent aus, der diese Verbindung gestartet hat.",
     "rotatedCredential": "Rotierte Agent-Zugangsdaten",
+    "authorizationSavedOne": "{name} in RateLoop autorisiert",
+    "authorizationSavedMany": "{count} Agentenautorisierungen in RateLoop gespeichert",
+    "hostToolStateUnverified": "Die Verfügbarkeit im Host ist davon getrennt. Diese Seite kann nicht prüfen, ob die aktuelle Agentenaufgabe die Workspace-Werkzeuge geladen hat.",
     "connectedOne": "{name} verbunden",
     "connectedMany": "{count} Agenten verbunden"
   },

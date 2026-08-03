@@ -135,6 +135,12 @@ test("polling reports the connection state once instead of on every refresh", as
     );
     const screen = within(document.body);
     await screen.findByRole("heading", { name: "Waiting for the agent to open your connection" });
+    assert.ok(screen.getByRole("heading", { name: "Codex authorized in RateLoop" }));
+    assert.ok(
+      screen.getByText(
+        "Host availability is separate. This page cannot verify that the current agent task loaded the workspace tools.",
+      ),
+    );
     assert.deepEqual(reported, [true]);
 
     // Three more polls land while the connection state is unchanged. Each one used to be reported

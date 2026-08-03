@@ -418,6 +418,9 @@
     "safeSummary": "Can check when human review is needed. Cannot spend, publish, read private files, or administer the workspace.",
     "recoveryAction": "Follow the recovery step in the agent that initiated this connection.",
     "rotatedCredential": "Rotated agent credential",
+    "authorizationSavedOne": "{name} authorized in RateLoop",
+    "authorizationSavedMany": "{count} agent authorizations saved in RateLoop",
+    "hostToolStateUnverified": "Host availability is separate. This page cannot verify that the current agent task loaded the workspace tools.",
     "connectedOne": "{name} connected",
     "connectedMany": "{count} agents connected"
   },

@@ -1592,16 +1592,25 @@ export function AgentConnectionPanel({
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <h2 id="connected-agents-heading" className="text-xl font-semibold">
-                {activeIntegrations.length === 1
-                  ? t("connectedOne", {
-                      name: activeIntegrations[0].agentDisplayName || t("agentFallback"),
-                    })
-                  : t("connectedMany", { count: activeIntegrations.length })}
+                {allActiveIntegrationsUseSafeAccess
+                  ? activeIntegrations.length === 1
+                    ? t("authorizationSavedOne", {
+                        name: activeIntegrations[0].agentDisplayName || t("agentFallback"),
+                      })
+                    : t("authorizationSavedMany", { count: activeIntegrations.length })
+                  : activeIntegrations.length === 1
+                    ? t("connectedOne", {
+                        name: activeIntegrations[0].agentDisplayName || t("agentFallback"),
+                      })
+                    : t("connectedMany", { count: activeIntegrations.length })}
               </h2>
               {allActiveIntegrationsUseSafeAccess ? (
-                <p className="mt-2 text-sm leading-6 text-base-content/55">
-                  <AgentText id="translated024" />
-                </p>
+                <div className="mt-2 space-y-1 text-sm leading-6 text-base-content/55">
+                  <p>
+                    <AgentText id="translated024" />
+                  </p>
+                  <p>{t("hostToolStateUnverified")}</p>
+                </div>
               ) : null}
             </div>
             <div className="flex flex-wrap gap-2">
