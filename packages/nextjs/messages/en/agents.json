@@ -790,7 +790,6 @@
     "translated025": "needs its connection restored",
     "translated026": "This revokes its current access tokens and restores the existing safe OAuth credential.",
     "translated027": "Rotate legacy credential",
-    "translated028": "Reconnect",
     "translated029": "Disconnect",
     "translated030": "Connection details",
     "translated031": ": advisory.",

@@ -233,6 +233,46 @@ test("mixed OAuth and legacy access keeps host readiness separate and reports se
   }
 });
 
+test("multiple OAuth reconnect actions name the agent they target", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup, fireEvent, render: baseRender, within } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
+  const { RateLoopNotificationProvider } = await import("~~/components/tokenless/RateLoopNotificationProvider");
+  const { AgentConnectionPanel } = await import("./AgentConnectionPanel");
+  const previousFetch = globalThis.fetch;
+  const integrations = [
+    connectedIntegration({ integrationId: "oauth-a", agentId: "agent-a", displayName: "Codex A" }),
+    connectedIntegration({ integrationId: "oauth-b", agentId: "agent-b", displayName: "Codex B" }),
+  ];
+
+  globalThis.fetch = async input => {
+    const url = String(input);
+    if (url.endsWith("/agent-connections")) return Response.json({ intents: [] });
+    if (url.endsWith("/agent-pairings")) return Response.json({ pairings: [] });
+    if (url.endsWith("/agent-integrations")) return Response.json({ integrations });
+    if (url.endsWith("/agent-publishing-policies")) return Response.json({ policies: [] });
+    throw new Error(`Unexpected request: ${url}`);
+  };
+
+  try {
+    render(
+      <RateLoopNotificationProvider>
+        <AgentConnectionPanel workspaceId="workspace-1" />
+      </RateLoopNotificationProvider>,
+    );
+    const screen = within(document.body);
+    assert.ok(await screen.findByRole("heading", { name: "2 agents have active RateLoop access" }));
+    fireEvent.click(screen.getByRole("button", { name: "Manage agent access" }));
+    assert.ok(screen.getByRole("button", { name: "Reconnect Codex A" }));
+    assert.ok(screen.getByRole("button", { name: "Reconnect Codex B" }));
+    assert.equal(screen.queryByRole("button", { name: "Reconnect" }), null);
+  } finally {
+    await act(async () => cleanup());
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});
+
 test("replay-revoked OAuth stays inactive until its restore completes", async () => {
   const restoreDom = installTestDom();
   const { act, cleanup, fireEvent, render: baseRender, waitFor, within } = await import("@testing-library/react");

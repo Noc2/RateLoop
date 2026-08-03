@@ -1702,7 +1702,9 @@ export function AgentConnectionPanel({
                               disabled={Boolean(busyAction) || activeConnectionIntents.length > 0}
                               onClick={() => void copyConnectionMessage(integration.integrationId)}
                             >
-                              <AgentText id="translated028" />
+                              {t("reconnectNamed", {
+                                name: integration.agentDisplayName || t("agentFallback"),
+                              })}
                             </button>
                           ) : null}
                           <button
