@@ -1,11 +1,9 @@
+import { TOKENLESS_VERCEL_PROJECT, tokenlessVercelProjectLinkError } from "./tokenless-vercel-project.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const TOKENLESS_VERCEL_PROJECT = {
-  projectId: "prj_H6C2pfWKEAupFroHbLfzhquaNCLm",
-  projectName: "rateloop-tokenless",
-};
+export { TOKENLESS_VERCEL_PROJECT };
 
 function normalizedHost(value) {
   if (!value) return null;
@@ -98,16 +96,11 @@ export function validateIdentityDeployment({ env, projectLinks = [], hosted = fa
       : null;
   const links = systemLink ? [...projectLinks, systemLink] : projectLinks;
   if (links.length === 0) {
-    errors.push("The Vercel project link is unavailable; expected rateloop-tokenless.");
+    errors.push(tokenlessVercelProjectLinkError(null));
   }
   for (const link of links) {
-    const projectIdMismatch = !link.projectId || link.projectId !== TOKENLESS_VERCEL_PROJECT.projectId;
-    const projectNameMismatch = link.projectName != null && link.projectName !== TOKENLESS_VERCEL_PROJECT.projectName;
-    if (projectIdMismatch || projectNameMismatch) {
-      errors.push(
-        `Unexpected Vercel project ${link.projectName ?? "unknown"} (${link.projectId ?? "unknown"}); expected ${TOKENLESS_VERCEL_PROJECT.projectName} (${TOKENLESS_VERCEL_PROJECT.projectId}).`,
-      );
-    }
+    const error = tokenlessVercelProjectLinkError(link, { requireProjectName: false });
+    if (error) errors.push(error);
   }
   return errors;
 }
