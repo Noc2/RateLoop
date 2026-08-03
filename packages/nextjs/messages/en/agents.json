@@ -1520,6 +1520,8 @@
       "superseded": "superseded",
       "insufficientResponses": "Insufficient responses",
       "waitingForResponses": "Waiting for responses",
+      "suppressedSampleWaiting": "Result hidden until {count} reviewers respond.",
+      "suppressedSampleTerminal": "Result remains hidden because fewer than {count} reviewers responded.",
       "candidateChoice": "{percent} chose the candidate",
       "failureSummaryFallback": "The run failed. Open case detail for the available evidence and reviewer reasons.",
       "evidenceAvailable": "Available",

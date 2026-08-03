@@ -17,7 +17,7 @@ function run(overrides: Record<string, unknown> = {}) {
     candidateSelectionIntervalBps: null,
     distinctReviewers: 12,
     validResponses: 12,
-    sampleStatus: "ok",
+    sampleStatus: "sufficient",
     minimumAggregationSize: 3,
     caseCount: 8,
     calibrationCaseCount: 2,
@@ -151,6 +151,42 @@ test("the panel renders no workspace selector of its own", async () => {
     const view = await mount();
     await view.findByRole("heading", { name: "No evaluations yet" });
     assert.ok(view.queryByRole("combobox") === null, "the panel should render no workspace selector");
+  } finally {
+    await act(async () => cleanup());
+    restoreFetch();
+    restoreDom();
+  }
+});
+
+test("suppressed results distinguish an active wait from a terminal shortfall", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup } = await import("@testing-library/react");
+  const restoreFetch = installFetch(
+    dashboard({
+      runs: [
+        run({
+          runId: "run_waiting",
+          status: "review_requested",
+          evidencePacketAvailable: false,
+          sampleStatus: "suppressed",
+          validResponses: 1,
+          distinctReviewers: 1,
+        }),
+        run({
+          runId: "run_terminal",
+          evidencePacketAvailable: false,
+          sampleStatus: "suppressed",
+          validResponses: 1,
+          distinctReviewers: 1,
+        }),
+      ],
+    }),
+  );
+
+  try {
+    const view = await mount();
+    assert.ok(await view.findByText("Result hidden until 3 reviewers respond."));
+    assert.ok(view.getByText("Result remains hidden because fewer than 3 reviewers responded."));
   } finally {
     await act(async () => cleanup());
     restoreFetch();

@@ -7,6 +7,12 @@ import { AdaptiveCoverageSummary } from "~~/components/tokenless/agents/Adaptive
 import { ModelEvidencePanel } from "~~/components/tokenless/agents/ModelEvidencePanel";
 import { agentTabHref } from "~~/components/tokenless/agents/agentWorkspaceState";
 import {
+  evaluationRunNeedsDecision,
+  evaluationRunPresentationStatus,
+  evaluationRunResultState,
+  evaluationRunTerminalOutcome,
+} from "~~/components/tokenless/agents/evaluationRunPresentation";
+import {
   DEFAULT_EVALUATION_URL_STATE,
   type EvaluationUrlState,
   evaluationUrlHref,
@@ -67,17 +73,6 @@ function humanDuration(seconds: number, copy: Translate) {
   if (seconds < 3_600) return copy("durationMinutes", { count: Math.round(seconds / 60) });
   if (seconds < 86_400) return copy("durationHours", { count: Math.round(seconds / 3_600) });
   return copy("durationDays", { count: Math.round(seconds / 86_400) });
-}
-
-function runNeedsDecision(run: EvaluationRun) {
-  return run.status === "completed" && run.evidencePacketAvailable && !run.clientDecision;
-}
-
-function runPresentationStatus(run: EvaluationRun) {
-  if (runNeedsDecision(run)) return "needs_action";
-  if (["failed", "dead"].includes(run.status)) return "failed";
-  if (["completed", "cancelled"].includes(run.status)) return "completed";
-  return "waiting";
 }
 
 function evidenceHrefForRun(workspaceId: string, runId: string, currentSearch: string) {
@@ -168,10 +163,13 @@ function AssuranceMetricsSummary({ snapshot }: { snapshot: AssuranceMetricsSnaps
 }
 
 function SampleNote({ run }: { run: EvaluationRun }) {
+  const copy = useAgentTranslations("evidencePanels.evaluation");
   if (run.sampleStatus === "suppressed") {
     return (
       <p className="mt-2 text-xs leading-5 text-warning/80" role="status">
-        <AgentText id="translated104" /> {run.minimumAggregationSize} <AgentText id="translated105" />
+        {copy(evaluationRunTerminalOutcome(run.status) ? "suppressedSampleTerminal" : "suppressedSampleWaiting", {
+          count: run.minimumAggregationSize,
+        })}
       </p>
     );
   }
@@ -646,20 +644,25 @@ function RunCard({
   const [clientDecision, setClientDecision] = useState(run.clientDecision);
   const [overrideOpen, setOverrideOpen] = useState(false);
   const decision = decisionLabel(clientDecision, copy);
-  const decidable = runNeedsDecision({ ...run, clientDecision });
-  const presentationStatus = decidable
-    ? { label: copy("status.needsAction"), className: "bg-warning/10 text-warning" }
-    : ["completed", "cancelled"].includes(run.status)
-      ? { label: copy("status.completed"), className: "bg-success/10 text-success" }
-      : ["failed", "dead"].includes(run.status)
-        ? { label: copy("status.failed"), className: "bg-error/10 text-error" }
-        : { label: copy("status.waiting"), className: "bg-base-content/[0.06] text-base-content/65" };
+  const decidable = evaluationRunNeedsDecision({ ...run, clientDecision });
+  const status = evaluationRunPresentationStatus({ ...run, clientDecision });
+  const presentationStatus =
+    status === "needs_action"
+      ? { label: copy("status.needsAction"), className: "bg-warning/10 text-warning" }
+      : status === "completed"
+        ? { label: copy("status.completed"), className: "bg-success/10 text-success" }
+        : status === "failed"
+          ? { label: copy("status.failed"), className: "bg-error/10 text-error" }
+          : { label: copy("status.waiting"), className: "bg-base-content/[0.06] text-base-content/65" };
+  const resultState = evaluationRunResultState(run);
   const currentResult =
-    share === null
-      ? run.status === "completed"
+    resultState === "candidate"
+      ? copy("candidateChoice", { percent: percent(share, copy, locale) })
+      : resultState === "insufficient"
         ? copy("insufficientResponses")
-        : copy("waitingForResponses")
-      : copy("candidateChoice", { percent: percent(share, copy, locale) });
+        : resultState === "failed"
+          ? copy("notAvailable")
+          : copy("waitingForResponses");
   return (
     <Card as="article" className="rounded-2xl p-5" aria-labelledby={`evaluation-${run.runId}`}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -1018,7 +1021,7 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
           return false;
         }
         if (urlState.workflowKey && run.workflowKey !== urlState.workflowKey) return false;
-        if (urlState.status !== "all" && runPresentationStatus(run) !== urlState.status) return false;
+        if (urlState.status !== "all" && evaluationRunPresentationStatus(run) !== urlState.status) return false;
         if (cutoff !== null) {
           const timestamp = new Date(run.completedAt ?? run.createdAt).getTime();
           if (!Number.isFinite(timestamp) || timestamp < cutoff) return false;
@@ -1026,7 +1029,7 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
         return true;
       })
       .sort((left, right) => {
-        const actionDifference = Number(runNeedsDecision(right)) - Number(runNeedsDecision(left));
+        const actionDifference = Number(evaluationRunNeedsDecision(right)) - Number(evaluationRunNeedsDecision(left));
         if (actionDifference !== 0) return actionDifference;
         return (
           new Date(right.completedAt ?? right.createdAt).getTime() -

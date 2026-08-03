@@ -1525,6 +1525,8 @@
       "superseded": "ersetzt",
       "insufficientResponses": "Nicht genügend Antworten",
       "waitingForResponses": "Warten auf Antworten",
+      "suppressedSampleWaiting": "Das Ergebnis bleibt ausgeblendet, bis {count} Prüfende geantwortet haben.",
+      "suppressedSampleTerminal": "Das Ergebnis bleibt ausgeblendet, weil weniger als {count} Prüfende geantwortet haben.",
       "candidateChoice": "{percent} wählten den Kandidaten",
       "failureSummaryFallback": "Der Durchlauf ist fehlgeschlagen. Öffne die Falldetails für verfügbare Nachweise und Begründungen.",
       "evidenceAvailable": "Verfügbar",

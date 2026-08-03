@@ -3,9 +3,9 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const source = `${readFileSync(new URL("./EvaluationDashboardPanel.tsx", import.meta.url), "utf8")}\n${readFileSync(
-  new URL("../../../messages/en/agents.json", import.meta.url),
+  new URL("./evaluationRunPresentation.ts", import.meta.url),
   "utf8",
-)}`;
+)}\n${readFileSync(new URL("../../../messages/en/agents.json", import.meta.url), "utf8")}`;
 
 test("evaluation dashboard leads with results and progressively discloses detail", () => {
   assert.match(source, /dashboard\?\.runs\.length === 0/);
@@ -20,17 +20,17 @@ test("evaluation dashboard leads with results and progressively discloses detail
   assert.match(source, /label: copy\("status\.completed"\)/);
   assert.match(source, /label: copy\("status\.failed"\)/);
   assert.match(source, /label: copy\("status\.waiting"\)/);
-  assert.match(source, /\["completed", "cancelled"\]\.includes\(run\.status\)/);
-  assert.match(source, /\["failed", "dead"\]\.includes\(run\.status\)/);
+  assert.match(source, /status === "completed" \|\| status === "cancelled"/);
+  assert.match(source, /status === "failed" \|\| status === "dead"/);
   assert.doesNotMatch(source, /\["failed", "dead", "cancelled"\]/);
   assert.match(source, /const orderedRuns = useMemo/);
   assert.match(
     source,
-    /const actionDifference = Number\(runNeedsDecision\(right\)\) - Number\(runNeedsDecision\(left\)\)/,
+    /const actionDifference = Number\(evaluationRunNeedsDecision\(right\)\) - Number\(evaluationRunNeedsDecision\(left\)\)/,
   );
   assert.match(source, /orderedRuns\.map\(run =>/);
   assert.match(source, /Insufficient responses/);
-  assert.match(source, /run\.status === "completed"[\s\S]*copy\("insufficientResponses"\)/);
+  assert.match(source, /evaluationRunResultState\(run\)/);
   assert.match(source, /Evidence and run details/);
   assert.match(source, /Calibration items/);
   assert.match(source, /Quorum-case unanimity/);
@@ -51,6 +51,7 @@ test("evaluation dashboard leads with results and progressively discloses detail
   assert.match(populatedDashboard.slice(workspaceDetails), /Publishing limits/);
   assert.match(source, /Small sample/);
   assert.match(source, /Result hidden until/);
+  assert.match(source, /Result remains hidden because fewer than/);
   assert.match(source, /Assurance operations/);
   assert.match(source, /Sampling rate/);
   assert.match(source, /Mean verdict latency/);
@@ -113,7 +114,7 @@ test("run cards submit go/revise/stop and record per-output overrides without a 
   assert.match(source, /\["go", "revise", "stop"\] as const/);
   assert.match(source, /no choice is preselected/i);
   assert.match(source, /evidence\/decision/);
-  assert.match(source, /return run\.status === "completed" && run\.evidencePacketAvailable && !run\.clientDecision/);
+  assert.match(source, /evaluationRunNeedsDecision\(\{ \.\.\.run, clientDecision \}\)/);
   assert.doesNotMatch(
     source,
     /defaultChecked|defaultValue=\{?"(go|revise|stop|accepted|disregarded|overridden|reversed)/,
