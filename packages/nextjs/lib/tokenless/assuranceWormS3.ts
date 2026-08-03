@@ -68,10 +68,20 @@ function xmlValue(xml: string, tag: string) {
   return match?.[1]?.trim() ?? null;
 }
 
+// AWS SigV4 requires canonical headers and query parameters ordered by code
+// point, not by locale collation. `localeCompare` uses the host's default ICU
+// collation, which varies with the Node build, the ICU version and LANG, and
+// which treats punctuation as ignorable at primary strength — so a header set
+// containing both `x-amz-meta-a` and `x-amz-metaa` can order differently
+// between environments and produce a signature the service rejects.
+function byCodePoint(left: string, right: string) {
+  return left === right ? 0 : left < right ? -1 : 1;
+}
+
 function canonicalHeaders(headers: Record<string, string>) {
   const normalized = Object.entries(headers)
     .map(([name, value]) => [name.toLowerCase(), value.trim().replace(/\s+/g, " ")] as const)
-    .sort(([left], [right]) => left.localeCompare(right));
+    .sort(([left], [right]) => byCodePoint(left, right));
   return {
     names: normalized.map(([name]) => name).join(";"),
     value: `${normalized.map(([name, value]) => `${name}:${value}\n`).join("")}`,
@@ -93,7 +103,7 @@ async function signedRequest(input: {
   const endpoint = new URL(input.spec.endpointOrigin);
   const pathname = `/${encodePath(input.spec.bucketName)}${input.objectKey ? `/${encodePath(input.objectKey)}` : ""}`;
   const query = Object.entries(input.query ?? {})
-    .sort(([left], [right]) => left.localeCompare(right))
+    .sort(([left], [right]) => byCodePoint(left, right))
     .map(([key, value]) => `${awsEncode(key)}=${awsEncode(value)}`)
     .join("&");
   const url = new URL(pathname, endpoint);
