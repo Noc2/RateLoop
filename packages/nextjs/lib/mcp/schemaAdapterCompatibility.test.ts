@@ -356,7 +356,7 @@ const KNOWN_ADAPTER_BASELINE: Record<string, ToolBaseline> = {
   rateloop_wait_for_review: {
     openai: {
       droppedConstraints: [
-        '$.cursor: pattern "^[0-9]{1,16}$" dropped (outside the strict-mode keyword floor)',
+        '$.cursor: pattern "^[0-9]{1,16}(?::[0-9]{1,16})?$" dropped (outside the strict-mode keyword floor)',
         "$.opportunityId: maxLength 160 dropped (outside the strict-mode keyword floor)",
         "$.opportunityId: minLength 1 dropped (outside the strict-mode keyword floor)",
         "$.timeoutMs: maximum 60000 dropped (outside the strict-mode keyword floor)",
@@ -369,7 +369,7 @@ const KNOWN_ADAPTER_BASELINE: Record<string, ToolBaseline> = {
     },
     gemini: {
       droppedConstraints: [
-        '$.cursor: pattern "^[0-9]{1,16}$" dropped (sanitizer strips pattern constraints)',
+        '$.cursor: pattern "^[0-9]{1,16}(?::[0-9]{1,16})?$" dropped (sanitizer strips pattern constraints)',
         "$: additionalProperties:false dropped (closed-object constraint not representable after sanitization)",
       ],
       semanticChanges: ['$.cursor: type ["string","null"] rewritten to nullable string'],

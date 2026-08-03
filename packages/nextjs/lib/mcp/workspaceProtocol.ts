@@ -37,6 +37,7 @@ import { projectHumanReviewAdvisoryTrustedKeyring } from "~~/lib/tokenless/human
 import { projectHumanReviewMcpEnvelope } from "~~/lib/tokenless/humanReviewMcpEnvelope";
 import { routeHumanReviewRequest } from "~~/lib/tokenless/humanReviewRequestRouter";
 import { listOpenHumanReviewOpportunities } from "~~/lib/tokenless/openHumanReviewOpportunities";
+import { PRIVATE_REVIEW_WAIT_CURSOR_PATTERN_SOURCE } from "~~/lib/tokenless/privateReviewWaitCursor";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type JsonRecord = Record<string, unknown>;
@@ -338,7 +339,7 @@ export const workspaceMcpTools = [
       additionalProperties: false,
       properties: {
         opportunityId: identifierSchema,
-        cursor: { pattern: "^[0-9]{1,16}$", type: ["string", "null"] },
+        cursor: { pattern: PRIVATE_REVIEW_WAIT_CURSOR_PATTERN_SOURCE, type: ["string", "null"] },
         timeoutMs: { maximum: 60_000, minimum: 1, type: "integer" },
       },
       required: ["opportunityId"],

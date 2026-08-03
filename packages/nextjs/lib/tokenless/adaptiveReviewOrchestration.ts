@@ -18,6 +18,7 @@ import {
   getDirectPrivateReviewState,
   reconcileDirectPrivateReviewDeadline,
 } from "~~/lib/tokenless/privateReviewResponses";
+import { formatPrivateReviewWaitCursor, parsePrivateReviewWaitCursor } from "~~/lib/tokenless/privateReviewWaitCursor";
 import { authorizeAskAccess, requireProductPrincipalScope } from "~~/lib/tokenless/productCore";
 import {
   type PublicPaidHumanReviewPublication,
@@ -296,25 +297,18 @@ function normalizePrivateWaitOptions(options: {
   if (!Number.isSafeInteger(pollIntervalMs) || pollIntervalMs < 1 || pollIntervalMs > MAX_PRIVATE_WAIT_TIMEOUT_MS) {
     throw new TokenlessServiceError("pollIntervalMs must be between 1 and 60000.", 400, "invalid_wait_timeout");
   }
-  const cursor = options.cursor?.trim();
-  if (cursor && !/^\d{1,16}(?::\d{1,16})?$/u.test(cursor)) {
+  const cursor = parsePrivateReviewWaitCursor(options.cursor);
+  if (cursor === undefined) {
     throw new TokenlessServiceError("cursor is invalid.", 400, "invalid_wait_cursor");
   }
-  const [revisionValue, responseCountValue] = cursor?.split(":") ?? [];
-  const revision = revisionValue === undefined ? null : Number(revisionValue);
-  const responseCount = responseCountValue === undefined ? 0 : Number(responseCountValue);
-  if (
-    (revision !== null && !Number.isSafeInteger(revision)) ||
-    !Number.isSafeInteger(responseCount) ||
-    responseCount < 0
-  ) {
-    throw new TokenlessServiceError("cursor is invalid.", 400, "invalid_wait_cursor");
-  }
-  return { cursor: revision === null ? null : { responseCount, revision }, pollIntervalMs, timeoutMs };
+  return { cursor, pollIntervalMs, timeoutMs };
 }
 
 function privateReviewCursor(state: DirectPrivateReviewState) {
-  return `${state.lifecycle.revision}:${state.responseCount}`;
+  return formatPrivateReviewWaitCursor({
+    revision: state.lifecycle.revision,
+    responseCount: state.responseCount,
+  });
 }
 
 function privateReviewChangedSince(
@@ -489,6 +483,7 @@ export async function getAdaptiveHumanReviewResult(input: {
 }
 
 export const __adaptiveReviewOrchestrationTestUtils = {
+  normalizePrivateWaitOptions,
   normalizePublicationDeclaration: normalizePublicPaidReviewPublication,
   parseAudienceSource,
   setBeforePrivateWaitPollForTests(value: null | (() => Promise<void>)) {
