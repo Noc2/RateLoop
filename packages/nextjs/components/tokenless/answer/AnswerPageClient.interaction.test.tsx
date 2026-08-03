@@ -123,6 +123,62 @@ test("the assigned inbox renders principal-bound paid work", async () => {
   }
 });
 
+test("public tasks with the same round on different panels keep distinct card and control identities", async () => {
+  const restoreDom = installTestDom();
+  const { cleanup, render: baseRender, waitFor, within } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
+  const { AppRouterContext } = await import("next/dist/shared/lib/app-router-context.shared-runtime");
+  const { AnswerPageClient } = await import("./AnswerPageClient");
+  const firstTask: PublicAnswerTask = {
+    ...publicTask,
+    reviewerSource: "rateloop_network",
+    assignmentId: "hasn_same-round-panel-one",
+    assignmentStatus: "reserved",
+    assignmentExpiresAt: "2099-07-17T09:00:00.000Z",
+    confidentialityTermsHash: `sha256:${"4".repeat(64)}`,
+    selectionBindingHash: `sha256:${"5".repeat(64)}`,
+    question: { ...publicTask.question, prompt: "Panel one review" },
+  };
+  const secondTask: PublicAnswerTask = {
+    ...firstTask,
+    operationKey: "public-task-queue-2",
+    panelAddress: `0x${"6".repeat(40)}`,
+    assignmentId: "hasn_same-round-panel-two",
+    question: { ...firstTask.question, prompt: "Panel two review" },
+  };
+  const restoreFetch = installQueueFetch({ assignments: [], tasks: [firstTask, secondTask] });
+  const previousConsoleError = console.error;
+  const reactErrors: unknown[][] = [];
+  console.error = (...args: unknown[]) => {
+    reactErrors.push(args);
+  };
+
+  try {
+    render(
+      <AppRouterContext.Provider value={router as never}>
+        <AnswerPageClient />
+      </AppRouterContext.Provider>,
+    );
+    const screen = within(document.body);
+    await waitFor(() => assert.equal(screen.getAllByRole("checkbox").length, 2));
+
+    const [firstTerms, secondTerms] = screen.getAllByRole<HTMLInputElement>("checkbox");
+    assert.notEqual(firstTerms.id, secondTerms.id);
+    assert.equal(document.querySelectorAll(`#${firstTerms.id}`).length, 1);
+    assert.equal(document.querySelectorAll(`#${secondTerms.id}`).length, 1);
+    assert.equal(
+      reactErrors.some(args => args.map(String).join(" ").includes("same key")),
+      false,
+    );
+  } finally {
+    console.error = previousConsoleError;
+    cleanup();
+    await settle();
+    restoreFetch();
+    restoreDom();
+  }
+});
+
 test("history renders assigned private work", async () => {
   const restoreDom = installTestDom();
   const { cleanup, render: baseRender, waitFor, within } = await import("@testing-library/react");

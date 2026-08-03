@@ -128,7 +128,7 @@ test("a reserved network seat must be accepted with its exact terms before publi
   }
 });
 
-test("accepted paid-review terms survive a queue reload of the same round and reset for another round", async () => {
+test("accepted paid-review terms survive a queue reload and reset for the same round on another panel", async () => {
   const restoreDom = installTestDom();
   const { cleanup, render: baseRender, within } = await import("@testing-library/react");
   const render = withEnglishAppTestProviders(baseRender);
@@ -169,8 +169,15 @@ test("accepted paid-review terms survive a queue reload of the same round and re
     view.rerender(card(JSON.parse(JSON.stringify(task)) as PublicAnswerTask));
     assert.ok(screen.getByText(task.question.prompt));
 
-    // A different round is a different legal acceptance and must start unticked.
-    view.rerender(card({ ...reserved, roundId: "18", assignmentId: "hasn_public-task-2" }));
+    // The same round number on another panel is a different legal acceptance and must start unticked.
+    view.rerender(
+      card({
+        ...reserved,
+        operationKey: "public-task-2",
+        panelAddress: `0x${"5".repeat(40)}`,
+        assignmentId: "hasn_public-task-2",
+      }),
+    );
     assert.equal(terms().checked, false);
     assert.equal(accept().disabled, true);
   } finally {

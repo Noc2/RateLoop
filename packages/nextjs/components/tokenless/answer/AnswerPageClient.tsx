@@ -21,6 +21,7 @@ import { Card } from "~~/components/tokenless/ui/Card";
 import { usePathname } from "~~/i18n/navigation";
 import { readBrowserSession, subscribeToBrowserAuthSessionChanges } from "~~/lib/auth/client";
 import { AnswerRequestError, loadAnswerQueues, readAccountBoundAssignments } from "~~/lib/tokenless/answerQueue";
+import { publicTaskIdentity } from "~~/lib/tokenless/publicTaskIdentity";
 
 type ReviewView = "active" | "history";
 
@@ -229,7 +230,7 @@ export function AnswerPageClient({
         {!loading && !signedOut && principalId && view === "active"
           ? tasks.map((task, index) => (
               <PublicQuestionCard
-                key={task.roundId}
+                key={publicTaskIdentity(task)}
                 task={task}
                 paidAccess={paidAccess}
                 principalId={principalId}

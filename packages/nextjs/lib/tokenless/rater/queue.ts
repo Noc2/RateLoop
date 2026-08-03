@@ -9,6 +9,7 @@ export type TokenlessQueuedCommit = {
   schemaVersion: "rateloop.tokenless.commit-queue.v2";
   queueId: string;
   principalId: string;
+  taskIdentity?: string;
   roundId: string;
   commitDeadline: string;
   relayPayload: Record<string, unknown>;
@@ -45,6 +46,9 @@ function validateQueuedCommit(record: TokenlessQueuedCommit, now = Date.now()) {
     throw new Error("Unsupported commit queue record.");
   if (!/^[A-Za-z0-9._:-]{8,160}$/.test(record.queueId)) throw new Error("Invalid commit queue id.");
   if (!/^[A-Za-z0-9_-]{8,160}$/.test(record.principalId)) throw new Error("Invalid commit queue owner.");
+  if (record.taskIdentity !== undefined && !/^task_[0-9a-f]{64}$/u.test(record.taskIdentity)) {
+    throw new Error("Invalid public task identity.");
+  }
   if (!/^[1-9][0-9]*$/.test(record.roundId)) throw new Error("Invalid queued round id.");
   const deadline = Date.parse(record.commitDeadline);
   if (!Number.isFinite(deadline) || deadline <= now) throw new Error("The commit deadline has passed.");
@@ -144,6 +148,7 @@ export async function enqueueTokenlessCommit(
   input: {
     queueId: string;
     principalId: string;
+    taskIdentity: string;
     roundId: bigint;
     commitDeadline: Date;
     relayPayload: Record<string, unknown>;
@@ -155,6 +160,7 @@ export async function enqueueTokenlessCommit(
     schemaVersion: "rateloop.tokenless.commit-queue.v2",
     queueId: input.queueId,
     principalId: input.principalId,
+    taskIdentity: input.taskIdentity,
     roundId: input.roundId.toString(),
     commitDeadline: input.commitDeadline.toISOString(),
     relayPayload: input.relayPayload,

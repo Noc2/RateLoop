@@ -14,6 +14,11 @@ import { Link } from "~~/i18n/navigation";
 import { readBrowserSession } from "~~/lib/auth/client";
 import { readJson } from "~~/lib/tokenless/http";
 import {
+  publicTaskDomId,
+  publicTaskIdentity,
+  queuedCommitMatchesPublicTask,
+} from "~~/lib/tokenless/publicTaskIdentity";
+import {
   type TokenlessRaterRoundSecrets,
   createIndexedDbTokenlessCommitQueue,
   createTokenlessRaterRoundSecrets,
@@ -208,6 +213,19 @@ export function PublicQuestionCard({
   const t = useTranslations("review.public");
   const forecastT = useTranslations("review.forecast");
   const format = useFormatter();
+  const taskScope = useMemo(
+    () => ({
+      operationKey: task.operationKey,
+      chainId: task.chainId,
+      panelAddress: task.panelAddress,
+      roundId: task.roundId,
+    }),
+    [task.chainId, task.operationKey, task.panelAddress, task.roundId],
+  );
+  const taskIdentity = publicTaskIdentity(taskScope);
+  const termsControlId = publicTaskDomId(taskScope, "terms");
+  const recordsHeadingId = publicTaskDomId(taskScope, "records");
+  const recoveryConfirmationId = publicTaskDomId(taskScope, "recovery-confirmed");
   const [answer, setAnswer] = useState<"yes" | "no" | null>(null);
   const [prediction, setPrediction] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
@@ -264,23 +282,23 @@ export function PublicQuestionCard({
   const networkAssignmentReady = networkAssignment === null || networkAssignmentStatus === "accepted";
 
   useEffect(() => {
-    const receipt = loadReviewReceipt("public", task.roundId, isPublicSubmissionReceipt, { principalId });
+    const receipt = loadReviewReceipt("public", taskIdentity, isPublicSubmissionReceipt, { principalId });
     setSubmissionReceipt(receipt);
     if (receipt) {
       setStatus(t("recorded"));
       setError(null);
     }
-  }, [principalId, t, task.roundId]);
+  }, [principalId, t, taskIdentity]);
 
-  // Acceptance of the paid-review terms must never carry across a different round or a different
-  // signed-in reviewer. It must survive a re-render caused by a queue reload of the same round,
+  // Acceptance of the paid-review terms must never carry across a different task or a different
+  // signed-in reviewer. It must survive a re-render caused by a queue reload of the same task,
   // which replaces `task` with an equal but freshly parsed object.
   useEffect(() => {
     setNetworkTermsAccepted(false);
-  }, [principalId, task.roundId]);
+  }, [principalId, taskIdentity]);
 
   useEffect(() => {
-    const draft = loadReviewDraft("public", task.roundId, isPublicReviewDraft, publicDraftStorage);
+    const draft = loadReviewDraft("public", taskIdentity, isPublicReviewDraft, publicDraftStorage);
     if (draft) {
       setAnswer(draft.answer);
       setPrediction(draft.prediction);
@@ -290,17 +308,17 @@ export function PublicQuestionCard({
       if (draft.feedbackBody || draft.sourceUrl) setFeedbackOpen(true);
     }
     setDraftRestored(true);
-  }, [publicDraftStorage, task.roundId]);
+  }, [publicDraftStorage, taskIdentity]);
 
   useEffect(() => {
     if (!draftRestored) return;
     saveReviewDraft(
       "public",
-      task.roundId,
+      taskIdentity,
       { answer, prediction, feedbackCategory, feedbackBody, sourceUrl },
       publicDraftStorage,
     );
-  }, [answer, draftRestored, feedbackBody, feedbackCategory, prediction, publicDraftStorage, sourceUrl, task.roundId]);
+  }, [answer, draftRestored, feedbackBody, feedbackCategory, prediction, publicDraftStorage, sourceUrl, taskIdentity]);
 
   useEffect(() => {
     if (!preparedSubmission || preparedSubmission.binding === preparationBinding) return;
@@ -335,7 +353,7 @@ export function PublicQuestionCard({
       if (!active) return;
       const records = await queue.list(principalId);
       if (!active) return;
-      const record = records.find(value => value.roundId === task.roundId) ?? null;
+      const record = records.find(value => queuedCommitMatchesPublicTask(value, taskScope)) ?? null;
       setSavedCommit(record);
       const isDue = Boolean(record && dueRecords.some(value => value.queueId === record.queueId));
       setRetryClock(Date.now());
@@ -352,7 +370,7 @@ export function PublicQuestionCard({
     return () => {
       active = false;
     };
-  }, [principalId, submissionReceipt, t, task.alreadyVouchered, task.roundId, task.voucherDeadline]);
+  }, [principalId, submissionReceipt, t, task.alreadyVouchered, task.voucherDeadline, taskScope]);
 
   useEffect(() => {
     if (!savedCommit || retryAvailable) return;
@@ -474,14 +492,14 @@ export function PublicQuestionCard({
       if (committed.state === "confirmed") {
         await queue.remove(currentRecord.queueId, principalId);
         setSavedCommit(null);
-        clearReviewDraft("public", task.roundId, publicDraftStorage);
+        clearReviewDraft("public", taskIdentity, publicDraftStorage);
         setStatus(t("recorded"));
         const receipt = {
           commitId,
           confirmedAt: typeof committed.confirmedAt === "string" ? committed.confirmedAt : null,
           transactionHash: typeof committed.transactionHash === "string" ? committed.transactionHash : null,
         };
-        saveReviewReceipt("public", task.roundId, receipt, { principalId });
+        saveReviewReceipt("public", taskIdentity, receipt, { principalId });
         setSubmissionReceipt(receipt);
         onSubmitted();
       } else if (committed.state === "failed") {
@@ -602,7 +620,7 @@ export function PublicQuestionCard({
 
   async function saveRecoveryBackup() {
     if (!activePreparedSubmission || !recoveryUrl) return;
-    const fileName = `rateloop-review-${task.roundId}-backup.json`;
+    const fileName = `rateloop-review-${taskIdentity}-backup.json`;
     const file = new File([activePreparedSubmission.recoveryBackup], fileName, { type: "application/json" });
     try {
       const savePicker = (
@@ -661,7 +679,7 @@ export function PublicQuestionCard({
         drandNetwork: task.disclosureBeacon.network,
         beaconRound: task.disclosureBeacon.round,
       });
-      const idempotencyBase = `voucher:web:${task.roundId}`;
+      const idempotencyBase = `voucher:web:${taskIdentity}`;
       const voucherBody = await readAnswerJson(
         await fetch("/api/rater/vouchers", {
           method: "POST",
@@ -688,12 +706,13 @@ export function PublicQuestionCard({
         nullifier: voucher.nullifier,
       });
       const publicAuthorization = { ...authorization, roundId: authorization.roundId.toString() };
-      const idempotencyKey = `commit:web:${task.roundId}:${authorization.voteKey.toLowerCase()}`;
+      const idempotencyKey = `commit:web:${taskIdentity}:${authorization.voteKey.toLowerCase()}`;
       const queue = createIndexedDbTokenlessCommitQueue();
-      const queueId = `commit:${task.roundId}:${authorization.voteKey.toLowerCase()}`;
+      const queueId = `commit:${taskIdentity}:${authorization.voteKey.toLowerCase()}`;
       const queuedCommit = await enqueueTokenlessCommit(queue, {
         queueId,
         principalId: browserSession.principalId,
+        taskIdentity,
         roundId: authorization.roundId,
         commitDeadline: new Date(task.voucherDeadline),
         relayPayload: {
@@ -736,14 +755,14 @@ export function PublicQuestionCard({
       if (current.state === "confirmed") {
         await queue.remove(queueId, browserSession.principalId);
         setSavedCommit(null);
-        clearReviewDraft("public", task.roundId, publicDraftStorage);
+        clearReviewDraft("public", taskIdentity, publicDraftStorage);
         setStatus(t("recorded"));
         const receipt = {
           commitId: committed.commitId,
           confirmedAt: typeof current.confirmedAt === "string" ? current.confirmedAt : null,
           transactionHash: typeof current.transactionHash === "string" ? current.transactionHash : null,
         };
-        saveReviewReceipt("public", task.roundId, receipt, { principalId });
+        saveReviewReceipt("public", taskIdentity, receipt, { principalId });
         setSubmissionReceipt(receipt);
         onSubmitted();
       } else if (current.state === "failed") {
@@ -756,7 +775,7 @@ export function PublicQuestionCard({
       if (preparedForRetry) {
         try {
           const queued = await createIndexedDbTokenlessCommitQueue().list(principalId);
-          const record = queued.find(value => value.roundId === task.roundId);
+          const record = queued.find(value => queuedCommitMatchesPublicTask(value, taskScope));
           if (record) await scheduleRetry(record, "initial_relay_failed");
         } catch {
           setStatus(t("retryUnavailable"));
@@ -823,9 +842,9 @@ export function PublicQuestionCard({
             <dd className="inline break-all font-mono">{networkAssignment.confidentialityTermsHash}</dd>
           </div>
         </dl>
-        <label className="mt-5 flex items-start gap-3 text-sm" htmlFor={`public-review-terms-${task.roundId}`}>
+        <label className="mt-5 flex items-start gap-3 text-sm" htmlFor={termsControlId}>
           <ChoiceInput
-            id={`public-review-terms-${task.roundId}`}
+            id={termsControlId}
             type="checkbox"
             className="checkbox checkbox-sm mt-0.5"
             checked={networkTermsAccepted}
@@ -1017,9 +1036,9 @@ export function PublicQuestionCard({
               {answer ? (
                 <section
                   className="mt-5 rounded-lg border border-[var(--rateloop-blue)]/30 bg-[var(--rateloop-blue)]/[0.06] p-3 text-xs leading-5"
-                  aria-labelledby={`public-records-${task.roundId}`}
+                  aria-labelledby={recordsHeadingId}
                 >
-                  <h3 id={`public-records-${task.roundId}`} className="font-semibold">
+                  <h3 id={recordsHeadingId} className="font-semibold">
                     {t("publicTitle")}
                   </h3>
                   <p className="mt-2 text-base-content/70">{t("publicDescription")}</p>
@@ -1036,7 +1055,7 @@ export function PublicQuestionCard({
                   <p className="mt-2 text-xs leading-5 text-base-content/60">{t("backupDescription")}</p>
                   <a
                     href={recoveryUrl}
-                    download={`rateloop-review-${task.roundId}-backup.json`}
+                    download={`rateloop-review-${taskIdentity}-backup.json`}
                     className="mt-3 block text-center text-xs font-medium underline underline-offset-4"
                     onClick={event => {
                       event.preventDefault();
@@ -1045,12 +1064,9 @@ export function PublicQuestionCard({
                   >
                     {t("downloadBackup")}
                   </a>
-                  <label
-                    className="mt-3 flex items-start gap-2 text-xs leading-5"
-                    htmlFor={`public-review-recovery-confirmed-${task.roundId}`}
-                  >
+                  <label className="mt-3 flex items-start gap-2 text-xs leading-5" htmlFor={recoveryConfirmationId}>
                     <ChoiceInput
-                      id={`public-review-recovery-confirmed-${task.roundId}`}
+                      id={recoveryConfirmationId}
                       type="checkbox"
                       className="checkbox checkbox-xs mt-0.5"
                       checked={recoveryConfirmed}

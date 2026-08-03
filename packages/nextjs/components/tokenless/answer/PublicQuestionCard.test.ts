@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
+import { publicTaskDomId, publicTaskIdentity } from "~~/lib/tokenless/publicTaskIdentity";
 
 const reviewMessages = readFileSync(new URL("../../../messages/en/review.json", import.meta.url), "utf8");
 const source = [readFileSync(new URL("./PublicQuestionCard.tsx", import.meta.url), "utf8"), reviewMessages].join("\n");
@@ -96,12 +97,28 @@ test("the blind crowd forecast accepts the full one-percent RBTS grid without a 
   assert.doesNotMatch(crowdForecastSource, /\[10, 30, 50, 70, 90\]/);
 });
 
-test("confirmation control ids are scoped per task so queued cards cannot cross-toggle", () => {
+test("public task identities and confirmation controls separate equal round ids on different panels", () => {
   const source = readFileSync(new URL("./PublicQuestionCard.tsx", import.meta.url), "utf8");
-  // AnswerPageClient renders one card per queued task. A literal id makes every `htmlFor` bind to
-  // the first card in tree order, so clicking the second card's confirmation toggles the first.
-  assert.doesNotMatch(source, /"public-review-terms"/u);
-  assert.doesNotMatch(source, /"public-review-recovery-confirmed"/u);
-  assert.match(source, /public-review-terms-\$\{task\.roundId\}/u);
-  assert.match(source, /public-review-recovery-confirmed-\$\{task\.roundId\}/u);
+  const first = {
+    operationKey: "public-task-one",
+    chainId: 84532,
+    panelAddress: `0x${"a".repeat(40)}`,
+    roundId: "17",
+  };
+  const variants = [
+    { ...first, operationKey: "public-task-two" },
+    { ...first, chainId: 8453 },
+    { ...first, panelAddress: `0x${"b".repeat(40)}` },
+    { ...first, roundId: "18" },
+  ];
+
+  assert.equal(new Set([first, ...variants].map(publicTaskIdentity)).size, 5);
+  assert.equal(
+    publicTaskIdentity(first),
+    publicTaskIdentity({ ...first, panelAddress: first.panelAddress.toUpperCase() }),
+  );
+  assert.notEqual(publicTaskDomId(first, "terms"), publicTaskDomId(variants[2], "terms"));
+  assert.notEqual(publicTaskDomId(first, "recovery-confirmed"), publicTaskDomId(variants[2], "recovery-confirmed"));
+  assert.match(source, /htmlFor=\{termsControlId\}/u);
+  assert.match(source, /htmlFor=\{recoveryConfirmationId\}/u);
 });
