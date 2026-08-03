@@ -699,6 +699,8 @@
     "evaluationsWorkspace": "Auswertungen gehören zu einem Arbeitsbereich.",
     "resultsAfterReview": "Ergebnisse erscheinen, nachdem dein Agent eine menschliche Prüfung anfordert.",
     "allAgents": "Alle Agenten",
+    "resultStatus": "Status",
+    "allStatuses": "Alle Statuswerte",
     "allOutcomes": "Alle Ergebnisse",
     "needsAction": "Aktion erforderlich",
     "failed": "Fehlgeschlagen",

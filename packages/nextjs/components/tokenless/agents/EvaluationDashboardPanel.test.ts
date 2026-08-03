@@ -55,6 +55,8 @@ test("evaluation dashboard leads with results and progressively discloses detail
   assert.ok(results >= 0 && results < workspaceDetails);
   assert.doesNotMatch(source, /evaluation-runs-heading/);
   assert.doesNotMatch(source, /<AgentText id="translated125"/);
+  assert.match(source, /<AgentText id="resultStatus"/);
+  assert.match(source, /<AgentText id="allStatuses"/);
   assert.ok(publishingLimits > workspaceDetails);
   assert.match(populatedDashboard.slice(workspaceDetails), /Publishing limits/);
   assert.match(source, /Small sample/);

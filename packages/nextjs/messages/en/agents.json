@@ -699,6 +699,8 @@
     "evaluationsWorkspace": "Evaluations belong to a workspace.",
     "resultsAfterReview": "Results appear after your agent requests human review.",
     "allAgents": "All agents",
+    "resultStatus": "Status",
+    "allStatuses": "All statuses",
     "allOutcomes": "All outcomes",
     "needsAction": "Needs action",
     "failed": "Failed",

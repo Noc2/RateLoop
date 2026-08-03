@@ -401,7 +401,7 @@ test("result filters restore from the URL and every evidence-backed result links
     assert.ok(await view.findByText("Failed release"));
     assert.equal(view.queryByText("Release gate"), null);
     assert.ok(view.getByText("Showing 1 of 2 results"));
-    assert.equal((view.getByRole("combobox", { name: "Outcome" }) as HTMLSelectElement).value, "failed");
+    assert.equal((view.getByRole("combobox", { name: "Status" }) as HTMLSelectElement).value, "failed");
     const evidence = view.getByRole("link", { name: "Open evidence" });
     const href = new URL(evidence.getAttribute("href") ?? "", "https://rateloop.local");
     assert.equal(href.pathname, "/agents/results");

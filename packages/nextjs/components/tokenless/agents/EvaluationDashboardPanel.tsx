@@ -1136,14 +1136,14 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
                   ))}
                 </SelectField>
                 <SelectField
-                  label={<AgentText id="attribute011" />}
+                  label={<AgentText id="resultStatus" />}
                   value={urlState.status}
                   onChange={event =>
                     updateUrlState({ status: event.target.value as EvaluationUrlState["status"], runId: null })
                   }
                 >
                   <option value="all">
-                    <AgentText id="allOutcomes" />
+                    <AgentText id="allStatuses" />
                   </option>
                   <option value="needs_action">
                     <AgentText id="needsAction" />
