@@ -216,6 +216,29 @@ Private customer-invited and individually named panels remain the ordinary revie
 work assigned to their authenticated principal through an invitation, named seat, or other policy-bound assignment.
 RateLoop does not expose an open reviewer marketplace, task browsing, self-selection, public rankings, or streaks.
 
+The named/invited reviewer capability is retained; its paid variant is not released. The shared code-release rule keeps
+`private_invited_paid` false regardless of environment flags or external approval evidence, and task discovery omits
+pre-existing paid private assignments. This gate must remain closed until one implementation series completes all of
+the following in order:
+
+1. Bind the browser principal, private assignment, eligibility issuance, voucher, vote key and payout destination to
+   one canonical seat identity. Account-bound private task reads must not reuse the public-network listing or artifact
+   projection.
+2. Render the exact encrypted assignment through a purpose-bound lease, record artifact access, and persist the private
+   response through the existing encrypted direct-response vault. The fixed chain commitment carries no prose.
+3. Make commit acceptance and private-response persistence recoverable as one state machine: a confirmed commit must
+   expose a retryable response-completion action and must not disappear merely because the public chain commit exists.
+4. Bind the private decision, on-chain vote, exact issuance and accepted assignment in both directions. Voucher lookup,
+   idempotent replay and settlement recovery must reject any merely compatible or principal-adjacent record.
+5. Project terminal evidence for deadline and under-quorum outcomes from the exact accepted/expired seat set rather than
+   requiring responses from every originally requested panel seat. Every accepted seat must retain a paid terminal path.
+6. Exercise the complete path in a real hosted browser against the isolated Base Sepolia deployment, including reload,
+   cross-account rejection, expired leases, commit ambiguity, response retry, under-quorum, beacon failure, settlement,
+   claim and Ponder/keeper recovery. The test must verify browser state, API records, database bindings and chain events.
+7. Only after those tests and the applicable privacy, eligibility and funding evidence pass may the shared code-release
+   rule change. The same commit must update runtime activation, UI capability projection, task discovery, hosted
+   readiness and their cross-consumer invariant test; configuration alone can never release the lane.
+
 The ordinary DSA reference-label path is the append-only named panel introduced in migration `0179` and hardened in
 migrations `0182` and `0184`–`0187`. Before a unit can be registered, an active project-auditor principal who is not a workspace member
 freezes one canonical, append-only reference definition for the epoch. This is an access-control separation fact, not
