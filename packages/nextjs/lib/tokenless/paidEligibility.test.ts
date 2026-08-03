@@ -308,6 +308,46 @@ async function openRound() {
   return freezeAdmissionPolicy(admissionPolicy);
 }
 
+async function openInvitedRound(workspaceId: string) {
+  const admissionPolicy = {
+    schemaVersion: HUMAN_ASSURANCE_SCHEMA_VERSION,
+    policyId: "policy_paid_invited",
+    version: 1,
+    reviewerSource: "customer_invited" as const,
+    compensation: "paid" as const,
+    cohorts: [{ cohortId: "cohort_paid_invited", minimumReviewers: 2, maximumReviewers: 15 }],
+    selection: "customer_named" as const,
+    fallbacks: { allowed: false, sources: [] },
+    requiredQualifications: [],
+    assurance: {
+      requirements: [
+        {
+          capability: "customer_invitation" as const,
+          reviewerSources: ["customer_invited" as const],
+          allowedProviders: ["workspace-invitation"],
+        },
+      ],
+    },
+    buyerPrivacy: {
+      visibleFields: ["reviewer_source" as const],
+      minimumAggregationSize: 2,
+      suppressSmallCells: true,
+    },
+    legalEligibilityRequired: true,
+  };
+  await registerVoucherRound({
+    chainId: 84532,
+    panelAddress: PANEL,
+    roundId: "42",
+    contentId: CONTENT_ID,
+    admissionPolicy,
+    maximumCommits: 15,
+    voucherNotBefore: new Date(NOW.getTime() - 60_000),
+    voucherDeadline: new Date(NOW.getTime() + 20 * 60_000),
+    workspaceId,
+  });
+}
+
 test("voucher issuance stops before eligibility or signing when paid-lane activation is withdrawn", async () => {
   delete process.env.NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE;
   await assert.rejects(
@@ -1066,16 +1106,13 @@ test("voucher issuance rejects invalid or caller-mismatched reviewer sources", a
       }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_voucher_request",
   );
+  const { workspaceId } = await createWorkspace({ name: "Source mismatch", ownerAddress: OTHER_PRINCIPAL });
+  await openInvitedRound(workspaceId);
   await assert.rejects(
     () =>
       issuePaidVoucher({
         principalId: PRINCIPAL,
-        request: {
-          ...request,
-          reviewerSource: "customer_invited",
-          assignmentId: "assignment_source_binding",
-          issuanceId: "issuance_source_binding",
-        },
+        request,
         now: NOW,
       }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "voucher_reviewer_source_mismatch",
