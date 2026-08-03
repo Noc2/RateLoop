@@ -14,20 +14,33 @@ type ReviewerInvitationPreview = {
   expiresAt: string | null;
 };
 
+type ReviewerInvitationPreviewState = {
+  invitation: ReviewerInvitationPreview;
+  token: string;
+};
+
 export type InvitationKind = "reviewer" | "workspace";
 
 export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: InvitationKind) => void }) {
   const t = useTranslations("account.invitation");
   const format = useFormatter();
   const [token, setToken] = useState("");
-  const [preview, setPreview] = useState<ReviewerInvitationPreview | null>(null);
+  const [preview, setPreview] = useState<ReviewerInvitationPreviewState | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const fragmentLoaded = useRef(false);
+  const inspectControllerRef = useRef<AbortController | null>(null);
+  const inspectGenerationRef = useRef(0);
   const { capture, clear, fieldErrors, formError } = useFormErrors();
 
   const inspectInvitation = useCallback(
     async (normalized: string) => {
+      inspectControllerRef.current?.abort();
+      const controller = new AbortController();
+      inspectControllerRef.current = controller;
+      const generation = ++inspectGenerationRef.current;
+      const isCurrent = () =>
+        inspectGenerationRef.current === generation && inspectControllerRef.current === controller;
       setBusy(true);
       setStatus(null);
       clear();
@@ -40,8 +53,10 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
               credentials: "same-origin",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ token: normalized }),
+              signal: controller.signal,
             }),
           );
+          if (!isCurrent()) return;
           setToken("");
           setStatus(t("workspaceAccepted"));
           onAccepted?.("workspace");
@@ -54,8 +69,10 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
               credentials: "same-origin",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ token: normalized }),
+              signal: controller.signal,
             }),
           );
+          if (!isCurrent()) return;
           setToken("");
           setStatus(t("accepted"));
           onAccepted?.("reviewer");
@@ -68,16 +85,23 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
               credentials: "same-origin",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ token: normalized }),
+              signal: controller.signal,
             }),
           );
-          setPreview(body.invitation as ReviewerInvitationPreview);
+          if (!isCurrent()) return;
+          setPreview({ invitation: body.invitation as ReviewerInvitationPreview, token: normalized });
           return;
         }
+        if (!isCurrent()) return;
         capture({ field: "token", message: t("invalid") }, t("checkFailed"));
       } catch (cause) {
+        if (!isCurrent() || controller.signal.aborted) return;
         capture(cause, t("checkFailed"));
       } finally {
-        setBusy(false);
+        if (isCurrent()) {
+          inspectControllerRef.current = null;
+          setBusy(false);
+        }
       }
     },
     [capture, clear, onAccepted, t],
@@ -93,15 +117,24 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
     void inspectInvitation(fragmentToken);
   }, [inspectInvitation]);
 
+  useEffect(
+    () => () => {
+      inspectGenerationRef.current += 1;
+      inspectControllerRef.current?.abort();
+      inspectControllerRef.current = null;
+    },
+    [],
+  );
+
   function checkInvitation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const normalized = token.trim();
-    setBusy(true);
     void inspectInvitation(normalized);
   }
 
   async function acceptReviewerInvitation() {
     if (!preview) return;
+    const acceptedToken = preview.token;
     setBusy(true);
     setStatus(null);
     clear();
@@ -111,7 +144,7 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
           method: "POST",
           credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token: token.trim() }),
+          body: JSON.stringify({ token: acceptedToken }),
         }),
       );
       setPreview(null);
@@ -137,8 +170,12 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
             autoComplete="off"
             value={token}
             onChange={event => {
+              inspectGenerationRef.current += 1;
+              inspectControllerRef.current?.abort();
+              inspectControllerRef.current = null;
               setToken(event.target.value);
               setPreview(null);
+              setBusy(false);
               setStatus(null);
               clear("token");
             }}
@@ -155,27 +192,30 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
 
       {preview ? (
         <Card as="div" variant="nested" className="mt-5 rounded-xl p-5">
-          <p className="text-sm text-base-content/55">{preview.workspaceName}</p>
+          <p className="text-sm text-base-content/55">{preview.invitation.workspaceName}</p>
           <h3 className="mt-1 text-lg font-semibold">{t("reviewerTitle")}</h3>
           <p className="mt-2 text-sm text-base-content/60">{t("description")}</p>
           <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
             <div>
               <dt className="text-xs text-base-content/55">{t("materialLimit")}</dt>
-              <dd className="mt-1 capitalize">{preview.maxPrivateSensitivity}</dd>
+              <dd className="mt-1 capitalize">{preview.invitation.maxPrivateSensitivity}</dd>
             </div>
             <div>
               <dt className="text-xs text-base-content/55">{t("invitationExpires")}</dt>
               <dd className="mt-1">
-                {preview.expiresAt
-                  ? format.dateTime(new Date(preview.expiresAt), { dateStyle: "medium", timeStyle: "short" })
+                {preview.invitation.expiresAt
+                  ? format.dateTime(new Date(preview.invitation.expiresAt), { dateStyle: "medium", timeStyle: "short" })
                   : t("noExpiry")}
               </dd>
             </div>
             <div>
               <dt className="text-xs text-base-content/55">{t("accessExpires")}</dt>
               <dd className="mt-1">
-                {preview.accessExpiresAt
-                  ? format.dateTime(new Date(preview.accessExpiresAt), { dateStyle: "medium", timeStyle: "short" })
+                {preview.invitation.accessExpiresAt
+                  ? format.dateTime(new Date(preview.invitation.accessExpiresAt), {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    })
                   : t("noExpiry")}
               </dd>
             </div>

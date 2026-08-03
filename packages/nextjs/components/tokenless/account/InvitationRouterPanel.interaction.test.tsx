@@ -98,6 +98,88 @@ test("workspace reviewer invitations are previewed, redeemed from the body, and 
   }
 });
 
+test("reviewer invitation acceptance stays bound to the latest completed preview", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup, render: baseRender, waitFor } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
+  const userEvent = (await import("@testing-library/user-event")).default;
+  const { InvitationRouterPanel } = await import("./InvitationRouterPanel");
+  const previousFetch = globalThis.fetch;
+  const codeA = "rlri_preview_a";
+  const codeB = "rlri_preview_b";
+  const previewRequests: Array<{
+    body: string;
+    resolve: (response: Response) => void;
+    signal: AbortSignal | null;
+  }> = [];
+  const redeemed: string[] = [];
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url.endsWith("/preview")) {
+      return new Promise<Response>(resolve =>
+        previewRequests.push({ body: String(init?.body), resolve, signal: init?.signal as AbortSignal | null }),
+      );
+    }
+    redeemed.push(String(init?.body));
+    return Response.json({ reviewer: { principalAddress: "rlp_reviewer" } });
+  };
+
+  try {
+    const view = render(<InvitationRouterPanel />);
+    const user = userEvent.setup({ document });
+    const input = view.getByLabelText("Invitation code");
+    await user.type(input, codeA);
+    await user.click(view.getByRole("button", { name: "Continue" }));
+    await waitFor(() => assert.equal(previewRequests.length, 1));
+
+    await user.clear(input);
+    await user.type(input, codeB);
+    assert.equal(previewRequests[0]?.signal?.aborted, true);
+    await act(async () => {
+      previewRequests[0]?.resolve(
+        Response.json({
+          invitation: {
+            accessExpiresAt: null,
+            expiresAt: "2030-01-01T00:00:00.000Z",
+            maxPrivateSensitivity: "internal",
+            workspaceName: "Stale workspace A",
+          },
+        }),
+      );
+      await Promise.resolve();
+    });
+    assert.equal(view.queryByText("Stale workspace A"), null);
+
+    await user.click(view.getByRole("button", { name: "Continue" }));
+    await waitFor(() => assert.equal(previewRequests.length, 2));
+    await act(async () => {
+      previewRequests[1]?.resolve(
+        Response.json({
+          invitation: {
+            accessExpiresAt: null,
+            expiresAt: "2030-01-01T00:00:00.000Z",
+            maxPrivateSensitivity: "confidential",
+            workspaceName: "Current workspace B",
+          },
+        }),
+      );
+      await Promise.resolve();
+    });
+    assert.ok(await view.findByText("Current workspace B"));
+    await user.click(view.getByRole("button", { name: "Accept invitation" }));
+
+    await waitFor(() => assert.deepEqual(redeemed, [JSON.stringify({ token: codeB })]));
+    assert.deepEqual(
+      previewRequests.map(request => request.body),
+      [JSON.stringify({ token: codeA }), JSON.stringify({ token: codeB })],
+    );
+  } finally {
+    cleanup();
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});
+
 test("workspace reviewer invitation links hydrate from the fragment without leaking the token in a request URL", async () => {
   const restoreDom = installTestDom();
   const { cleanup, render: baseRender } = await import("@testing-library/react");
