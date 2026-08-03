@@ -3,6 +3,10 @@ import type { PoolClient } from "pg";
 import "server-only";
 import { dbClient } from "~~/lib/db";
 import { isResendConfigured, sendWorkspaceReviewerInvitationEmail } from "~~/lib/notifications/resend";
+import {
+  type PlatformSecretKeyringConfiguration,
+  loadPlatformSecretKeyringConfiguration,
+} from "~~/lib/privacy/vault/platformSecret";
 import { maintenanceCancellationRequested } from "~~/lib/tokenless/maintenanceCancellation";
 
 type Row = Record<string, unknown>;
@@ -11,6 +15,8 @@ type DeliveryState = "dead" | "delivered" | "parked" | "retry" | "suppressed";
 const MAX_ATTEMPTS = 8;
 const STALE_CLAIM_MS = 10 * 60_000;
 const DEV_ONLY_KEY = createHash("sha256").update("rateloop-invitation-email-development-only").digest();
+const DEV_ONLY_KEY_VERSION = "artifact-v1";
+const PAYLOAD_KEY_PREFIX = "invitation-email-v1:";
 
 function rowString(row: Row | undefined, key: string) {
   const value = row?.[key];
@@ -36,32 +42,40 @@ function retryAt(now: Date, attempt: number) {
   return new Date(now.getTime() + delayMs);
 }
 
-function decodeRootKey(value: string | undefined, env: NodeJS.ProcessEnv) {
-  const normalized = value?.trim();
-  if (!normalized) {
-    if (env.NODE_ENV === "production" || env.VERCEL === "1") {
-      throw new Error("TOKENLESS_ARTIFACT_MASTER_KEY is required for invitation email encryption.");
-    }
-    return DEV_ONLY_KEY;
+function payloadKeyring(env: NodeJS.ProcessEnv): PlatformSecretKeyringConfiguration {
+  const hasConfiguredKey =
+    env.TOKENLESS_ARTIFACT_WRAPPING_KEYS?.trim() ||
+    env.TOKENLESS_ARTIFACT_WRAPPING_KEY_VERSION?.trim() ||
+    env.TOKENLESS_ARTIFACT_MASTER_KEY?.trim() ||
+    env.TOKENLESS_ARTIFACT_KEY_VERSION?.trim() ||
+    env.NEXT_PUBLIC_TOKENLESS_ARTIFACT_WRAPPING_KEYS?.trim() ||
+    env.NEXT_PUBLIC_TOKENLESS_ARTIFACT_WRAPPING_KEY_VERSION?.trim() ||
+    env.NEXT_PUBLIC_TOKENLESS_ARTIFACT_MASTER_KEY?.trim();
+  if (hasConfiguredKey || env.NODE_ENV === "production" || env.VERCEL === "1") {
+    return loadPlatformSecretKeyringConfiguration(env);
   }
-  const decoded = /^[0-9a-fA-F]{64}$/u.test(normalized)
-    ? Buffer.from(normalized, "hex")
-    : Buffer.from(normalized, "base64url");
-  if (decoded.byteLength !== 32) {
-    throw new Error("TOKENLESS_ARTIFACT_MASTER_KEY must encode exactly 32 bytes.");
-  }
-  return decoded;
+  return { activeVersion: DEV_ONLY_KEY_VERSION, keys: new Map([[DEV_ONLY_KEY_VERSION, DEV_ONLY_KEY]]) };
 }
 
-function payloadKey(env: NodeJS.ProcessEnv = process.env) {
-  return createHash("sha256")
-    .update("rateloop-workspace-reviewer-invitation-email-v1\0")
-    .update(decodeRootKey(env.TOKENLESS_ARTIFACT_MASTER_KEY, env))
-    .digest();
+function artifactKeyVersion(payloadVersion: string) {
+  const version = payloadVersion.startsWith(PAYLOAD_KEY_PREFIX) ? payloadVersion.slice(PAYLOAD_KEY_PREFIX.length) : "";
+  if (!version) throw new Error("Invitation email payload key version is unavailable.");
+  return version;
+}
+
+function payloadKey(payloadVersion: string, env: NodeJS.ProcessEnv = process.env) {
+  const version = artifactKeyVersion(payloadVersion);
+  const rootKey = payloadKeyring(env).keys.get(version);
+  if (!rootKey) throw new Error("Invitation email payload key version is unavailable.");
+  return createHash("sha256").update("rateloop-workspace-reviewer-invitation-email-v1\0").update(rootKey).digest();
 }
 
 function payloadKeyVersion(env: NodeJS.ProcessEnv = process.env) {
-  return `invitation-email-v1:${env.TOKENLESS_ARTIFACT_KEY_VERSION?.trim() || "artifact-v1"}`;
+  return `${PAYLOAD_KEY_PREFIX}${payloadKeyring(env).activeVersion}`;
+}
+
+function availablePayloadKeyVersions(env: NodeJS.ProcessEnv = process.env) {
+  return [...payloadKeyring(env).keys.keys()].map(version => `${PAYLOAD_KEY_PREFIX}${version}`);
 }
 
 function payloadAad(workspaceId: string, invitationId: string) {
@@ -72,26 +86,49 @@ function encryptPayload(
   input: { email: string; invitationId: string; token: string; workspaceId: string },
   env: NodeJS.ProcessEnv = process.env,
 ) {
+  const keyVersion = payloadKeyVersion(env);
   const nonce = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", payloadKey(env), nonce);
+  const cipher = createCipheriv("aes-256-gcm", payloadKey(keyVersion, env), nonce);
   cipher.setAAD(payloadAad(input.workspaceId, input.invitationId));
   const ciphertext = Buffer.concat([
     cipher.update(JSON.stringify({ email: input.email, token: input.token }), "utf8"),
     cipher.final(),
   ]);
-  return `v1.${nonce.toString("base64url")}.${cipher.getAuthTag().toString("base64url")}.${ciphertext.toString(
-    "base64url",
-  )}`;
+  return {
+    ciphertext: `v1.${nonce.toString("base64url")}.${cipher.getAuthTag().toString("base64url")}.${ciphertext.toString(
+      "base64url",
+    )}`,
+    keyVersion,
+  };
 }
 
 function decryptPayload(
   ciphertext: string,
-  input: { invitationId: string; workspaceId: string },
+  input: { invitationId: string; payloadKeyVersion: string; workspaceId: string },
   env: NodeJS.ProcessEnv = process.env,
 ) {
-  const [version, nonce, authTag, content] = ciphertext.split(".");
-  if (version !== "v1" || !nonce || !authTag || !content) throw new Error("Invitation email payload is invalid.");
-  const decipher = createDecipheriv("aes-256-gcm", payloadKey(env), Buffer.from(nonce, "base64url"));
+  const parts = ciphertext.split(".");
+  const [version, nonce, authTag, content] = parts;
+  const encoded = /^[A-Za-z0-9_-]+$/u;
+  if (
+    parts.length !== 4 ||
+    version !== "v1" ||
+    !nonce ||
+    !authTag ||
+    !content ||
+    !encoded.test(nonce) ||
+    !encoded.test(authTag) ||
+    !encoded.test(content) ||
+    Buffer.from(nonce, "base64url").byteLength !== 12 ||
+    Buffer.from(authTag, "base64url").byteLength !== 16
+  ) {
+    throw new Error("Invitation email payload is invalid.");
+  }
+  const decipher = createDecipheriv(
+    "aes-256-gcm",
+    payloadKey(input.payloadKeyVersion, env),
+    Buffer.from(nonce, "base64url"),
+  );
   decipher.setAAD(payloadAad(input.workspaceId, input.invitationId));
   decipher.setAuthTag(Buffer.from(authTag, "base64url"));
   const parsed = JSON.parse(
@@ -126,11 +163,12 @@ function configuration(input: {
   const env = input.env ?? process.env;
   try {
     const origin = appOrigin(input.appOrigin);
-    payloadKey(env);
+    const availableKeyVersions = availablePayloadKeyVersions(env);
     if (!input.send && !isResendConfigured()) throw new Error("Resend is not configured");
-    return { error: null, origin };
+    return { availableKeyVersions, error: null, origin };
   } catch (error) {
     return {
+      availableKeyVersions: [] as string[],
       error: error instanceof Error ? error.message : "Invitation email configuration is invalid.",
       origin: null,
     };
@@ -142,7 +180,9 @@ function isConfigurationError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   return (
     message === "Resend is not configured" ||
-    message.startsWith("TOKENLESS_ARTIFACT_MASTER_KEY ") ||
+    message.includes("Artifact wrapping key") ||
+    message.includes("TOKENLESS_ARTIFACT_WRAPPING_") ||
+    message.includes("NEXT_PUBLIC_") ||
     message === "Invitation email app origin is invalid." ||
     message === "Invitation email payload key version is unavailable."
   );
@@ -166,14 +206,14 @@ export async function enqueueWorkspaceReviewerInvitationEmailInTransaction(
   },
 ) {
   const id = deliveryId(input.invitationId);
-  const ciphertext = encryptPayload(input);
+  const payload = encryptPayload(input);
   await client.query(
     `INSERT INTO tokenless_workspace_reviewer_invitation_email_deliveries
      (delivery_id,workspace_id,invitation_id,payload_ciphertext,payload_key_version,state,attempt_count,
       next_attempt_at,created_at,updated_at)
      VALUES ($1,$2,$3,$4,$5,'pending',0,$6,$6,$6)
      ON CONFLICT (invitation_id) DO NOTHING`,
-    [id, input.workspaceId, input.invitationId, ciphertext, payloadKeyVersion(), input.now],
+    [id, input.workspaceId, input.invitationId, payload.ciphertext, payload.keyVersion, input.now],
   );
   return { deliveryId: id, status: "queued" as const };
 }
@@ -189,12 +229,13 @@ export async function deliverPendingWorkspaceReviewerInvitationEmails(input: {
   const now = input.now ?? new Date();
   const limit = bounded(input.limit);
   const configured = configuration(input);
-  if (!configured.error) {
+  if (!configured.error && configured.availableKeyVersions.length > 0) {
+    const placeholders = configured.availableKeyVersions.map(() => "?").join(",");
     await dbClient.execute({
       sql: `UPDATE tokenless_workspace_reviewer_invitation_email_deliveries
             SET state='retry',next_attempt_at=?,last_error=NULL,parked_at=NULL,updated_at=?
-            WHERE state='parked'`,
-      args: [now, now],
+            WHERE state='parked' AND payload_key_version IN (${placeholders})`,
+      args: [now, now, ...configured.availableKeyVersions],
     });
   }
   await dbClient.execute({
@@ -273,12 +314,15 @@ export async function deliverPendingWorkspaceReviewerInvitationEmails(input: {
     }
     const attempt = Number(row.attempt_count) + 1;
     try {
-      if (rowString(row, "payload_key_version") !== payloadKeyVersion(input.env)) {
-        throw new Error("Invitation email payload key version is unavailable.");
-      }
+      const storedKeyVersion = rowString(row, "payload_key_version");
+      if (!storedKeyVersion) throw new Error("Invitation email payload key version is unavailable.");
       const payload = decryptPayload(
         rowString(row, "payload_ciphertext")!,
-        { invitationId: rowString(row, "invitation_id")!, workspaceId: rowString(row, "workspace_id")! },
+        {
+          invitationId: rowString(row, "invitation_id")!,
+          payloadKeyVersion: storedKeyVersion,
+          workspaceId: rowString(row, "workspace_id")!,
+        },
         input.env,
       );
       const destination = destinationUrl(payload.token, configured.origin!);

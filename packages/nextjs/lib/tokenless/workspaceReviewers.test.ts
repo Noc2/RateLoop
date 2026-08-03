@@ -4,7 +4,10 @@ import { afterEach, beforeEach, test } from "node:test";
 import { resolveBetterAuthPrincipal } from "~~/lib/auth/principal";
 import { type DatabaseResources, __setDatabaseResourcesForTests, dbClient, dbPool } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
-import { deliverPendingWorkspaceReviewerInvitationEmails } from "~~/lib/notifications/workspaceReviewerInvitations";
+import {
+  __workspaceReviewerInvitationEmailTestUtils,
+  deliverPendingWorkspaceReviewerInvitationEmails,
+} from "~~/lib/notifications/workspaceReviewerInvitations";
 import { createPrivateGroup, createPrivateGroupInvitationInTransaction } from "~~/lib/tokenless/privateGroups";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -608,6 +611,182 @@ test("reviewer invitation email delivery is encrypted, durable, and resumes afte
   assert.equal(stored.rows[0]?.payload_ciphertext, null);
   assert.equal(stored.rows[0]?.payload_key_version, null);
   assert.equal(stored.rows[0]?.provider_message_id, "resend_invitation_1");
+});
+
+test("reviewer invitation email payloads survive artifact wrapping key rotation", () => {
+  const v1 = Buffer.alloc(32, 1).toString("base64url");
+  const v2 = Buffer.alloc(32, 2).toString("base64url");
+  const legacyEnv = {
+    TOKENLESS_ARTIFACT_KEY_VERSION: "artifact-v1",
+    TOKENLESS_ARTIFACT_MASTER_KEY: v1,
+  } as unknown as NodeJS.ProcessEnv;
+  const rotatedEnv = {
+    TOKENLESS_ARTIFACT_WRAPPING_KEYS: JSON.stringify({ "artifact-v1": v1, "artifact-v2": v2 }),
+    TOKENLESS_ARTIFACT_WRAPPING_KEY_VERSION: "artifact-v2",
+  } as unknown as NodeJS.ProcessEnv;
+  const input = {
+    email: "reviewer@example.test",
+    invitationId: "wri_rotation",
+    token: `rlri_${"a".repeat(16)}_${"b".repeat(43)}`,
+    workspaceId: "workspace_rotation",
+  };
+  const legacyEnvelope = __workspaceReviewerInvitationEmailTestUtils.encryptPayload(input, legacyEnv);
+  assert.equal(legacyEnvelope.keyVersion, "invitation-email-v1:artifact-v1");
+
+  assert.equal(
+    __workspaceReviewerInvitationEmailTestUtils.payloadKeyVersion(rotatedEnv),
+    "invitation-email-v1:artifact-v2",
+  );
+  assert.deepEqual(
+    __workspaceReviewerInvitationEmailTestUtils.decryptPayload(
+      legacyEnvelope.ciphertext,
+      {
+        invitationId: input.invitationId,
+        payloadKeyVersion: "invitation-email-v1:artifact-v1",
+        workspaceId: input.workspaceId,
+      },
+      rotatedEnv,
+    ),
+    { email: input.email, token: input.token },
+  );
+  assert.throws(
+    () =>
+      __workspaceReviewerInvitationEmailTestUtils.decryptPayload(
+        legacyEnvelope.ciphertext,
+        {
+          invitationId: input.invitationId,
+          payloadKeyVersion: "invitation-email-v1:retired-key",
+          workspaceId: input.workspaceId,
+        },
+        rotatedEnv,
+      ),
+    /payload key version is unavailable/u,
+  );
+  assert.throws(
+    () =>
+      __workspaceReviewerInvitationEmailTestUtils.decryptPayload(
+        `${legacyEnvelope.ciphertext}.extra`,
+        {
+          invitationId: input.invitationId,
+          payloadKeyVersion: legacyEnvelope.keyVersion,
+          workspaceId: input.workspaceId,
+        },
+        rotatedEnv,
+      ),
+    /payload is invalid/u,
+  );
+  assert.throws(
+    () =>
+      __workspaceReviewerInvitationEmailTestUtils.decryptPayload(
+        legacyEnvelope.ciphertext,
+        {
+          invitationId: input.invitationId,
+          payloadKeyVersion: legacyEnvelope.keyVersion,
+          workspaceId: "another_workspace",
+        },
+        rotatedEnv,
+      ),
+    /authenticate data|Unsupported state/iu,
+  );
+  assert.throws(
+    () =>
+      __workspaceReviewerInvitationEmailTestUtils.payloadKeyVersion({
+        NEXT_PUBLIC_TOKENLESS_ARTIFACT_WRAPPING_KEYS: "{}",
+      } as unknown as NodeJS.ProcessEnv),
+    /never use NEXT_PUBLIC_/u,
+  );
+  assert.throws(
+    () =>
+      __workspaceReviewerInvitationEmailTestUtils.payloadKeyVersion({
+        TOKENLESS_ARTIFACT_WRAPPING_KEY_VERSION: "artifact-v2",
+      } as unknown as NodeJS.ProcessEnv),
+    /configured together/u,
+  );
+});
+
+test("retired invitation payload keys stay parked without retry churn", async () => {
+  const { workspaceId, owner } = await fixture();
+  const now = new Date("2026-07-21T09:00:00.000Z");
+  const invitation = await createWorkspaceReviewerInvitation({
+    accountAddress: owner,
+    workspaceId,
+    maxPrivateSensitivity: "restricted",
+    intendedEmail: "reviewer@example.test",
+    now,
+  });
+  const retiredEnv = {
+    TOKENLESS_ARTIFACT_WRAPPING_KEYS: JSON.stringify({
+      "artifact-v2": Buffer.alloc(32, 2).toString("base64url"),
+    }),
+    TOKENLESS_ARTIFACT_WRAPPING_KEY_VERSION: "artifact-v2",
+  } as unknown as NodeJS.ProcessEnv;
+  const send = async () => ({ id: "must_not_send" });
+
+  assert.deepEqual(
+    await deliverPendingWorkspaceReviewerInvitationEmails({
+      appOrigin: "https://tokenless.example.test",
+      env: retiredEnv,
+      now,
+      send,
+    }),
+    [{ deliveryId: invitation.emailDelivery.deliveryId, state: "parked" }],
+  );
+  const parked = await dbClient.execute({
+    sql: `SELECT state,attempt_count,payload_ciphertext,payload_key_version,parked_at
+          FROM tokenless_workspace_reviewer_invitation_email_deliveries WHERE invitation_id=?`,
+    args: [invitation.invitationId],
+  });
+  assert.equal(parked.rows[0]?.state, "parked");
+  assert.equal(Number(parked.rows[0]?.attempt_count), 0);
+  assert.equal(parked.rows[0]?.payload_key_version, "invitation-email-v1:artifact-v1");
+
+  assert.deepEqual(
+    await deliverPendingWorkspaceReviewerInvitationEmails({
+      appOrigin: "https://tokenless.example.test",
+      env: retiredEnv,
+      now: new Date(now.getTime() + 60_000),
+      send,
+    }),
+    [],
+  );
+  const stillParked = await dbClient.execute({
+    sql: `SELECT state,attempt_count,payload_ciphertext,payload_key_version,parked_at
+          FROM tokenless_workspace_reviewer_invitation_email_deliveries WHERE invitation_id=?`,
+    args: [invitation.invitationId],
+  });
+  assert.deepEqual(stillParked.rows[0], parked.rows[0]);
+
+  const restoredEnv = {
+    TOKENLESS_ARTIFACT_WRAPPING_KEYS: JSON.stringify({
+      "artifact-v1": createHash("sha256").update("rateloop-invitation-email-development-only").digest("base64url"),
+      "artifact-v2": Buffer.alloc(32, 2).toString("base64url"),
+    }),
+    TOKENLESS_ARTIFACT_WRAPPING_KEY_VERSION: "artifact-v2",
+  } as unknown as NodeJS.ProcessEnv;
+  const sent: string[] = [];
+  assert.deepEqual(
+    await deliverPendingWorkspaceReviewerInvitationEmails({
+      appOrigin: "https://tokenless.example.test",
+      env: restoredEnv,
+      now: new Date(now.getTime() + 120_000),
+      send: async input => {
+        sent.push(input.invitationId);
+        return { id: "resend_restored_key" };
+      },
+    }),
+    [{ deliveryId: invitation.emailDelivery.deliveryId, state: "delivered" }],
+  );
+  assert.deepEqual(sent, [invitation.invitationId]);
+  const delivered = await dbClient.execute({
+    sql: `SELECT state,payload_ciphertext,payload_key_version
+          FROM tokenless_workspace_reviewer_invitation_email_deliveries WHERE invitation_id=?`,
+    args: [invitation.invitationId],
+  });
+  assert.deepEqual(delivered.rows[0], {
+    payload_ciphertext: null,
+    payload_key_version: null,
+    state: "delivered",
+  });
 });
 
 test("reviewer invitation email delivery retries transient failures and dead-letters at its bound", async () => {
