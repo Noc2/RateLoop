@@ -13,6 +13,7 @@ import { NextIntlClientProvider } from "next-intl";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import test from "node:test";
+import { normalizeSignInReturnPath } from "~~/components/auth/signInReturnPath";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 import enAuth from "~~/messages/en/auth.json";
 
@@ -126,6 +127,14 @@ test("German sign-in keeps the locale in both the sign-in page and its return de
 
   const html = renderToStaticMarkup(withIntl(<RateLoopSignInAction returnTo="/human/review?assignment=1" />, "de"));
   assert.match(html, /href="\/de\/sign-in\?returnTo=%2Fde%2Fhuman%2Freview%3Fassignment%3D1"/);
+});
+
+test("sign-in is never its own return destination or repeated shell action", () => {
+  for (const path of ["/sign-in", "/sign-in?returnTo=%2Fhuman%2Freview", "/de/sign-in"] as const) {
+    assert.equal(normalizeSignInReturnPath(path, "https://rateloop-tokenless.vercel.app"), "/welcome");
+    assert.equal(localizedSignInReturnTo(path, "de"), undefined);
+    assert.equal(renderToStaticMarkup(withIntl(<ThirdwebSessionButton compact returnTo={path} />, "de")), "");
+  }
 });
 
 test("the compatibility entry point keeps the original compact RateLoop sign-in treatment", () => {

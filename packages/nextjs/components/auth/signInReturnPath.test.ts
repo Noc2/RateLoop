@@ -10,6 +10,8 @@ test("sign-in return paths preserve only normalized same-origin paths", () => {
   assert.equal(normalizeSignInReturnPath(null, ORIGIN), "/welcome");
   assert.equal(normalizeSignInReturnPath("https://evil.example/phish", ORIGIN), "/welcome");
   assert.equal(normalizeSignInReturnPath("//evil.example/phish", ORIGIN), "/welcome");
+  assert.equal(normalizeSignInReturnPath("/sign-in?returnTo=%2Fagents", ORIGIN), "/welcome");
+  assert.equal(normalizeSignInReturnPath("/de/sign-in", ORIGIN), "/welcome");
 });
 
 test("sign-in return paths reject encoded and mixed backslash redirects", () => {

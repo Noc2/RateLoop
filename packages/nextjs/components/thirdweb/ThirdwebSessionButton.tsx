@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { isSignInPath } from "~~/components/auth/signInReturnPath";
 import { DEFAULT_LOCALE, isLocale } from "~~/i18n/config";
 import { Link } from "~~/i18n/navigation";
 import {
@@ -18,6 +19,7 @@ export const RATELOOP_SIGN_IN_ACTION_CLASS =
   "rateloop-gradient-action rateloop-sign-in-action px-[0.9rem] text-base font-bold leading-none whitespace-nowrap";
 
 export function localizedSignInReturnTo(returnTo: string | undefined, requestedLocale: string) {
+  if (isSignInPath(returnTo)) return undefined;
   if (!returnTo || !returnTo.startsWith("/") || returnTo.startsWith("//") || !isLocale(requestedLocale)) {
     return returnTo;
   }
@@ -183,6 +185,8 @@ export function ThirdwebSessionButton({
   if (session) {
     return <AuthenticatedSessionControl compact={compact} session={session} onSignOut={signOutRateLoopSession} />;
   }
+
+  if (isSignInPath(returnTo)) return null;
 
   return <RateLoopSignInAction fill={!compact} preserveCurrentTab={preserveCurrentTab} returnTo={returnTo} />;
 }
