@@ -102,7 +102,7 @@ test("dynamic registration accepts only public clients with exact secure or loop
   assert.equal(JSON.parse(String(stored.rows[0].redirect_uris_json))[0], REDIRECT_URI);
 });
 
-test("authorization requires exact client, redirect, resource, safe scope, and S256 PKCE bindings", async () => {
+test("authorization requires client, redirect, resource, safe scope, and S256 PKCE bindings", async () => {
   const registered = await registerAgentOAuthClient({
     client_name: "Bound client",
     redirect_uris: [REDIRECT_URI],
@@ -122,7 +122,7 @@ test("authorization requires exact client, redirect, resource, safe scope, and S
       validateAgentOAuthAuthorizationRequest(
         new URLSearchParams({ ...base, redirect_uri: "http://127.0.0.1:43120/oauth/callback" }),
       ),
-    /exactly match/,
+    /does not match/,
   );
   await assert.rejects(
     () =>
@@ -143,6 +143,60 @@ test("authorization requires exact client, redirect, resource, safe scope, and S
   const duplicated = new URLSearchParams(base);
   duplicated.append("resource", getCanonicalAgentMcpResource());
   await assert.rejects(() => validateAgentOAuthAuthorizationRequest(duplicated), /resource must not be repeated/);
+});
+
+test("authorization preserves the registered loopback redirect after Next canonicalizes its hostname", async () => {
+  const registered = await registerAgentOAuthClient({
+    client_name: "Codex loopback client",
+    redirect_uris: [REDIRECT_URI],
+    scope: "connection:claim context:read",
+  });
+  const base = {
+    client_id: registered.client_id,
+    redirect_uri: REDIRECT_URI.replace("127.0.0.1", "localhost"),
+    response_type: "code",
+    code_challenge: CODE_CHALLENGE,
+    code_challenge_method: "S256",
+    resource: getCanonicalAgentMcpResource(),
+    scope: "connection:claim context:read",
+  };
+  const authorization = await validateAgentOAuthAuthorizationRequest(new URLSearchParams(base));
+  assert.equal(authorization.redirectUri, REDIRECT_URI);
+
+  await assert.rejects(
+    () =>
+      validateAgentOAuthAuthorizationRequest(
+        new URLSearchParams({ ...base, redirect_uri: "http://localhost:43120/oauth/callback" }),
+      ),
+    /does not match/,
+  );
+  await assert.rejects(
+    () =>
+      validateAgentOAuthAuthorizationRequest(
+        new URLSearchParams({ ...base, redirect_uri: "http://localhost:43119/other-callback" }),
+      ),
+    /does not match/,
+  );
+  await assert.rejects(
+    () =>
+      validateAgentOAuthAuthorizationRequest(
+        new URLSearchParams({ ...base, redirect_uri: "http://localhost:43119/oauth/callback?changed=1" }),
+      ),
+    /does not match/,
+  );
+
+  const localhostRegistration = await registerAgentOAuthClient({
+    client_name: "Localhost client",
+    redirect_uris: [REDIRECT_URI.replace("127.0.0.1", "localhost")],
+    scope: "connection:claim context:read",
+  });
+  await assert.rejects(
+    () =>
+      validateAgentOAuthAuthorizationRequest(
+        new URLSearchParams({ ...base, client_id: localhostRegistration.client_id, redirect_uri: REDIRECT_URI }),
+      ),
+    /does not match/,
+  );
 });
 
 test("authorization codes are single-use and opaque tokens remain hash-only", async () => {

@@ -145,6 +145,40 @@ function isLoopbackHostname(hostname: string) {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]" || hostname === "::1";
 }
 
+function resolveRegisteredRedirectUri(registeredRedirects: string[], requestedRedirectUri: string) {
+  if (registeredRedirects.includes(requestedRedirectUri)) return requestedRedirectUri;
+
+  let requested: URL;
+  try {
+    requested = new URL(requestedRedirectUri);
+  } catch {
+    return null;
+  }
+  // Next App Router canonicalizes loopback hosts in page search params to
+  // localhost. Accept only that directional rewrite, while retaining the
+  // client's registered URI for the callback and token-code binding.
+  if (requested.protocol !== "http:" || requested.hostname !== "localhost") return null;
+  const equivalent = registeredRedirects.filter(candidate => {
+    try {
+      const registered = new URL(candidate);
+      return (
+        registered.protocol === "http:" &&
+        registered.hostname !== "localhost" &&
+        isLoopbackHostname(registered.hostname) &&
+        !registered.username &&
+        !registered.password &&
+        !registered.hash &&
+        registered.port === requested.port &&
+        registered.pathname === requested.pathname &&
+        registered.search === requested.search
+      );
+    } catch {
+      return false;
+    }
+  });
+  return equivalent.length === 1 ? equivalent[0]! : null;
+}
+
 export function validateAgentOAuthRedirectUri(value: unknown) {
   const raw = requiredString(value, "redirect_uri", 2_048);
   try {
@@ -362,9 +396,9 @@ export async function validateAgentOAuthAuthorizationRequest(
   const row = result.rows[0] as Row | undefined;
   if (!row) throw new AgentOAuthError("invalid_client", "The OAuth client is unknown or inactive.", 401);
   const registeredRedirects = parseJsonList(row.redirect_uris_json, "redirect URIs");
-  if (!registeredRedirects.includes(redirectUri)) {
-    throw new AgentOAuthError("invalid_request", "redirect_uri does not exactly match this client registration.");
-  }
+  const registeredRedirectUri = resolveRegisteredRedirectUri(registeredRedirects, redirectUri);
+  if (!registeredRedirectUri)
+    throw new AgentOAuthError("invalid_request", "redirect_uri does not match this client registration.");
   const allowedScopes = parseJsonList(row.allowed_scopes_json, "allowed scopes");
   if (scopes.some(scope => !allowedScopes.includes(scope))) {
     throw new AgentOAuthError("invalid_scope", "The client is not registered for every requested scope.");
@@ -373,7 +407,7 @@ export async function validateAgentOAuthAuthorizationRequest(
   return {
     clientId,
     clientName: text(row, "client_name")!,
-    redirectUri,
+    redirectUri: registeredRedirectUri,
     responseType: "code",
     codeChallenge,
     codeChallengeMethod: "S256",
