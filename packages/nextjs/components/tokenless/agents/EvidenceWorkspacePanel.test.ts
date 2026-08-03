@@ -75,7 +75,11 @@ test("the evidence workspace keeps verification and export state explicit", () =
   assert.match(source, /parseEvidenceUrlState\(window\.location\.search\)/);
   assert.match(source, /window\.history\.replaceState/);
   assert.match(source, /window\.history\.pushState/);
-  assert.match(source, /patch: \{ runId: packet\.payload\.runId, packetId: packet\.payload\.packetId \}/);
+  assert.match(
+    source,
+    /evidenceLinkHref\(urlSnapshot,\s*\{\s*runId: packet\.payload\.runId,\s*packetId: packet\.payload\.packetId,?\s*\}\)/s,
+  );
+  assert.match(source, /updateUrlState\(\s*\{ runId: packet\.payload\.runId, packetId: packet\.payload\.packetId \}/s);
   assert.match(source, /aria-current=\{selected \? "page" : undefined\}/);
   assert.match(source, /selected \? copy\("linkToPacket"\) : <AgentText id="dynamic027" \/>/);
   assert.match(source, /!loading && packets\.length > 0/);
