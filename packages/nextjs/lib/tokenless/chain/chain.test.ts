@@ -12,7 +12,6 @@ import {
   __chainPaymentTestUtils,
   attachX402Authorization,
   confirmWalletChainPayment,
-  executeServerChainPayment,
   getChainPaymentInstructions,
   prepareChainPayment,
   reconcileChainPayment,
@@ -817,7 +816,7 @@ test("round reconciliation reads back and rejects altered non-event terms", asyn
   );
 });
 
-test("x402 used authorizations reconcile exact receipts or stop as possibly paid without retry", async () => {
+test("x402 authorization inspection reconciles exact receipts and fails unresolved use closed", async () => {
   const { workspaceId } = await createWorkspace({ name: "x402 team", ownerAddress: FUNDER });
   await activatePaidWorkspace(workspaceId);
   const policy = invitedAdmissionPolicy();
@@ -955,46 +954,15 @@ test("x402 used authorizations reconcile exact receipts or stop as possibly paid
     prepared,
     true,
   );
-  await assert.rejects(
-    () => executeServerChainPayment(ask.operationKey, { config: config(), runtime: unresolvedRuntime }),
-    (error: unknown) =>
-      error instanceof TokenlessServiceError &&
-      error.code === "x402_authorization_used_reconciliation_required" &&
-      error.retryable === false,
+  assert.deepEqual(
+    await __chainPaymentTestUtils.inspectX402AuthorizationUsage({
+      authorization: __chainPaymentTestUtils.persistedX402Authorization(authorization, prepared),
+      config: config(),
+      expected: prepared,
+      runtime: unresolvedRuntime,
+    }),
+    {
+      status: "used_unresolved",
+    },
   );
-  const stopped = await dbClient.execute({
-    sql: `SELECT e.state, e.failure_code, e.claim_owner, e.claim_fencing_token,
-                 p.state AS intent_state, o.payment_state
-          FROM tokenless_chain_executions e
-          JOIN tokenless_payment_intents p ON p.payment_intent_id = e.payment_reference
-          JOIN tokenless_ask_ownership o ON o.operation_key = e.operation_key
-          WHERE e.operation_key = ?`,
-    args: [ask.operationKey],
-  });
-  assert.deepEqual(stopped.rows[0], {
-    state: "authorization_reconciliation_required",
-    failure_code: "x402_authorization_used_reconciliation_required",
-    claim_owner: null,
-    claim_fencing_token: 1,
-    intent_state: "possibly_paid",
-    payment_state: "possibly_paid",
-  });
-  await assert.rejects(
-    () => executeServerChainPayment(ask.operationKey, { config: config(), runtime: unresolvedRuntime }),
-    (error: unknown) =>
-      error instanceof TokenlessServiceError && error.code === "x402_authorization_used_reconciliation_required",
-  );
-  await assert.rejects(
-    () => attachX402Authorization(ask.operationKey, authorization),
-    (error: unknown) =>
-      error instanceof TokenlessServiceError && error.code === "x402_authorization_used_reconciliation_required",
-  );
-  const stillStopped = await dbClient.execute({
-    sql: "SELECT state, claim_fencing_token FROM tokenless_chain_executions WHERE operation_key = ?",
-    args: [ask.operationKey],
-  });
-  assert.deepEqual(stillStopped.rows[0], {
-    state: "authorization_reconciliation_required",
-    claim_fencing_token: 1,
-  });
 });
