@@ -98,15 +98,44 @@ different digests for the same input. **Task 2.8 fixed this for evidence packets
 moving them to RFC 8785, which mandates sorting by UTF-16 code units. Re-verified 3
 August 2026: the evidence-packet and DSA paths are clean.
 
-The defect survives elsewhere. Roughly eight other hand-rolled canonicalizers still sort
-with `localeCompare`, including
-[`privacy/audit.ts:69`](../packages/nextjs/lib/privacy/audit.ts:69),
-`auth/enterpriseIdentity.ts`, `tokenless/transparency.ts` and
-`tokenless/paidAssignmentOperations.ts`. These feed audit records and assignment
-operations rather than published packets, so the blast radius is smaller — but the same
-argument that justified 2.8 applies to them, and "our hashes are reproducible" is
-awkward to claim while locale-sensitive digests remain anywhere in the system. Fold them
-into the RFC 8785 producer.
+**The remainder is far larger than an earlier draft of this line claimed.** It said
+"roughly eight other canonicalizers". A full sweep on 3 August 2026 found **82 sites in
+`packages/nextjs` alone**, plus four outside it, and essentially none is
+comparison-only — nearly every one terminates in `createHash("sha256")`, `keccak256`,
+`createHmac`, an Ed25519 `sign`, or a persisted `*_json` column that is later
+byte-compared. Do not quote the number without re-running the sweep.
+
+Seven are critical, because the locale-sensitive bytes are signed or go on-chain:
+
+| Site                                                                                                  | Why critical                                                          |
+| ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| [`tokenless/admissionPolicy.ts:43`](../packages/nextjs/lib/tokenless/admissionPolicy.ts:43)           | `admissionPolicyHash` written on-chain as bytes32                     |
+| [`tokenless/rater/publicResponse.ts:51`](../packages/nextjs/lib/tokenless/rater/publicResponse.ts:51) | `keccak256` on-chain commitment                                       |
+| [`tokenless/integrityEpochs.ts:170`](../packages/nextjs/lib/tokenless/integrityEpochs.ts:170)         | Ed25519-signed epoch manifest                                         |
+| [`privacy/audit.ts:69`](../packages/nextjs/lib/privacy/audit.ts:69)                                   | the tamper-evident audit hash chain, persisted                        |
+| [`scripts/audit-export-core.mjs:11`](../packages/nextjs/scripts/audit-export-core.mjs:11)             | the external verifier for that chain; must match byte-for-byte        |
+| [`tokenless/assuranceWormS3.ts:74`](../packages/nextjs/lib/tokenless/assuranceWormS3.ts:74)           | AWS SigV4 canonical request — a mis-ordered header is an auth failure. **Fixed** |
+| [`sdk/src/tokenless.ts:450`](../packages/sdk/src/tokenless.ts:450)                                    | `intentDigest`, shipped to third parties, must match the server       |
+
+**Why it is wrong:** bare `localeCompare` uses the host's default ICU collation, so
+ordering depends on the Node build (full-icu vs small-icu), the ICU version and
+`LANG`/`LC_ALL`. `"Z".localeCompare("a")` is `-1` under code units and the opposite under
+ICU. RFC 8785 requires UTF-16 code-unit order.
+
+**Why it is not a quick fix.** A correct shared producer already exists —
+`canonicalizeRfc8785` in [`@rateloop/node-utils/jcs`](../packages/node-utils/src/jcs.ts)
+— and about ten modules already use it, so this is a live migration rather than a
+greenfield problem. But every replacement **changes the digest**, so anything already
+persisted needs the v1/v2 dual-path treatment `assuranceAttestations.ts` and
+`assuranceWormExports.ts` already demonstrate. Sequence it as its own project, not as a
+sweep.
+
+Two pieces are safe to take immediately, because nothing durable depends on their
+current bytes: `assuranceWormS3.ts` (SigV4 is recomputed per request) and a
+locale-independence test. No test anywhere currently varies `LANG` or asserts
+case-mixed ordering — `humanReviewRequestPreparation.test.ts:252` uses ASCII-only keys
+and passes under both comparators. One `{ Z: 1, a: 2 }` fixture run against every
+canonicalizer would catch the entire class.
 
 A browser verifier exists and the SDK is already MIT with npm provenance — but there is
 no separately installable verifier with its own README, and no marketing that says _you
