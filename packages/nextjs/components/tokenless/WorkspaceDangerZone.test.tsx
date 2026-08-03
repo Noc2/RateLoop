@@ -1,6 +1,6 @@
 import React from "react";
 import { WorkspaceDangerZone } from "./WorkspaceDangerZone";
-import { EnglishAgentTestProviders } from "./testing/AgentTestProviders";
+import { AgentTestProviders, EnglishAgentTestProviders } from "./testing/AgentTestProviders";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -29,6 +29,21 @@ test("the workspace card exposes one restrained danger zone with both destructiv
   assert.match(dangerSource, /font-mono text-xs uppercase tracking-widest text-error\/80/);
   assert.match(dangerSource, /rounded-xl border border-error\/30/);
   assert.ok(dangerSource.indexOf("<WorkspaceStopPanel") < dangerSource.indexOf("<WorkspaceDeletionPanel"));
+});
+
+test("the German workspace deletion summary states permanence only once", () => {
+  (globalThis as typeof globalThis & { React: typeof React }).React = React;
+  const html = renderToStaticMarkup(
+    <AgentTestProviders locale="de">
+      <WorkspaceDangerZone canDelete workspaceId="workspace-one" workspaceName="Test" />
+    </AgentTestProviders>,
+  ).replace(/\s+/g, " ");
+
+  assert.match(
+    html,
+    /Schließt dauerhaft Test und entfernt seine privaten Daten\. Aufbewahrungspflichtige Datensätze bleiben eingeschränkt\./,
+  );
+  assert.doesNotMatch(html, /dauerhaft Test dauerhaft/);
 });
 
 test("the danger zone sits at the bottom of the selected workspace card", () => {

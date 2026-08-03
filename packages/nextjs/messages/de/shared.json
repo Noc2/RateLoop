@@ -380,7 +380,7 @@
     "Provide both VAT country and VAT ID, or leave both empty.": "Gib sowohl USt.-Land als auch USt.-IdNr. an oder lasse beide Felder leer.",
     "Production agent": "Produktionsagent",
     "this API key": "diesen API-Schlüssel",
-    "and removes its private data. Records that must be retained stay restricted.": "dauerhaft und entfernt seine privaten Daten. Aufbewahrungspflichtige Datensätze bleiben eingeschränkt.",
+    "and removes its private data. Records that must be retained stay restricted.": "und entfernt seine privaten Daten. Aufbewahrungspflichtige Datensätze bleiben eingeschränkt.",
     ". New outputs stay blocked and no review-triggered release can occur.": ". Neue Ausgaben bleiben blockiert und keine prüfbedingte Freigabe kann erfolgen.",
     "Yes": "Ja"
   },
