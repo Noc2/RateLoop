@@ -1139,7 +1139,7 @@ export function PublicQuestionCard({
                   )}
                 </div>
               ) : null}
-              {status ? (
+              {status && !submissionReceipt ? (
                 <p role="status" className="mt-3 text-xs leading-5 text-success">
                   {status}
                 </p>

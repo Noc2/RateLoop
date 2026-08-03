@@ -4,7 +4,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
+import { publicTaskIdentity } from "~~/lib/tokenless/publicTaskIdentity";
 import { TOKENLESS_DRAND_NETWORKS } from "~~/lib/tokenless/rater/tlock";
+import { saveReviewReceipt } from "~~/lib/tokenless/reviewReceipts";
 
 const task: PublicAnswerTask = {
   operationKey: "public-task-1",
@@ -71,6 +73,36 @@ function assertNoRecoveryMaterial(storage: Storage) {
     /recoverySecret|votePrivateKey|payoutPrivateKey|rateloop\.device-recovery-backup/u,
   );
 }
+
+test("a restored receipt shows one recorded confirmation", async () => {
+  const restoreDom = installTestDom();
+  const { cleanup, render: baseRender, waitFor, within } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
+  const { PublicQuestionCard } = await import("./PublicQuestionCard");
+  saveReviewReceipt(
+    "public",
+    publicTaskIdentity(task),
+    { commitId: "commit-restored", confirmedAt: null, transactionHash: null },
+    { principalId: PRINCIPAL_A },
+  );
+
+  try {
+    render(
+      <PublicQuestionCard
+        task={task}
+        paidAccess={{ state: "ready" }}
+        onSubmitted={() => undefined}
+        principalId={PRINCIPAL_A}
+      />,
+    );
+    const screen = within(document.body);
+    await waitFor(() => assert.equal(screen.getAllByText("Rating recorded").length, 1));
+    assert.ok(screen.getByText("commit-restored"));
+  } finally {
+    cleanup();
+    restoreDom();
+  }
+});
 
 test("a reserved network seat must be accepted with its exact terms before public task material opens", async () => {
   const restoreDom = installTestDom();
