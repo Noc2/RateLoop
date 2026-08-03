@@ -37,7 +37,7 @@ test("evaluation dashboard leads with results and progressively discloses detail
     source,
     /runs: current\.runs\.map\(run => \(run\.runId === runId \? \{ \.\.\.run, clientDecision \} : run\)\)/,
   );
-  assert.match(source, /Evidence and run details/);
+  assert.match(source, /Run details/);
   assert.match(source, /Calibration items/);
   assert.match(source, /Quorum-case unanimity/);
   assert.match(source, /Calibration failure rate/);
@@ -77,7 +77,7 @@ test("evaluation dashboard leads with results and progressively discloses detail
   assert.doesNotMatch(source, /agent\.declaredProvider|agent\.declaredModel/);
   assert.doesNotMatch(source, /Registered agents/);
   assert.doesNotMatch(source, /leaderboard|top agent|worst agent/i);
-  assert.match(source, /Record override or corrective action/);
+  assert.match(source, /Record outcome/);
   assert.match(source, /aria-expanded=\{overrideOpen\}/);
   assert.match(source, /overrideOpen \? \(/);
   assert.doesNotMatch(
@@ -87,7 +87,7 @@ test("evaluation dashboard leads with results and progressively discloses detail
 });
 
 test("completed runs expose an oversight case detail that respects lane boundaries", () => {
-  assert.match(source, /Case detail and reviewer reasons/);
+  assert.match(source, /Reviewer responses/);
   // Lazy fetch through the dedicated access-checked endpoint.
   assert.match(source, /\/cases`/);
   assert.match(source, /onToggle=\{event => event\.currentTarget\.open && void load\(\)\}/);
@@ -122,7 +122,7 @@ test("run cards submit go/revise/stop and record per-output overrides without a 
   // Go/revise/stop write control: plain buttons, nothing preselected, wired to
   // the existing decision API and gated on a completed evidence-backed run.
   assert.match(source, /\["go", "revise", "stop"\] as const/);
-  assert.match(source, /no choice is preselected/i);
+  assert.doesNotMatch(source, /no choice is preselected/i);
   assert.match(source, /evidence\/decision/);
   assert.match(source, /evaluationRunNeedsDecision\(run\)/);
   assert.doesNotMatch(
@@ -135,7 +135,7 @@ test("run cards submit go/revise/stop and record per-output overrides without a 
   assert.match(source, /evidence\/overrides/);
   assert.match(source, /Reasons \(required, 10.2000 characters\)/);
   assert.match(source, /Linked corrective action \(optional\)/);
-  assert.match(source, /a new record supersedes, never edits/i);
+  assert.match(source, /Records are append-only; new entries supersede earlier ones/);
   assert.match(source, /reasons\.trim\(\)\.length < 10/);
 });
 
@@ -152,17 +152,17 @@ test("anti-rubber-stamping: signals sit above every decision control and nothing
   assert.ok(decisionRegion.indexOf("<DecisionSignals") < decisionRegion.indexOf("<ClientDecisionButtons"));
   const overrideForm = source.slice(source.indexOf("function OverrideRecordForm"));
   assert.ok(overrideForm.indexOf("<DecisionSignals") < overrideForm.indexOf("OVERRIDE_OUTCOMES.map"));
-  // Sampled explain-this-decision prompt: reasons required even for go, and
-  // the buttons stay disabled until the explanation exists.
+  // Sampled explain-this-decision prompt: reasons are required and the
+  // buttons stay disabled until the explanation exists.
   assert.match(source, /run\.explanationRequired/);
   assert.match(source, /Explain this decision/);
-  assert.match(source, /even for go/);
+  assert.doesNotMatch(source, /even for go/);
   assert.match(source, /explanationMissing = run\.explanationRequired && note\.trim\(\)\.length < 10/);
   assert.match(source, /disabled=\{busy \|\| explanationMissing\}/);
   // The decider's own trend shows beside both forms.
   assert.match(source, /deciderTrendLabel/);
-  assert.match(source, /You chose go on/);
-  assert.match(source, /you accepted/);
+  assert.match(source, /Recent decisions: \{goCount\}\/\{count\} go/);
+  assert.match(source, /Recorded outcomes: \{acceptedCount\}\/\{count\} accepted/);
   assert.match(source, /trend=\{dashboard\.deciderTrend\}/);
   // Nothing anywhere is preselected.
   assert.doesNotMatch(source, /defaultChecked|checked=\{true\}|aria-pressed=\{true\}/);

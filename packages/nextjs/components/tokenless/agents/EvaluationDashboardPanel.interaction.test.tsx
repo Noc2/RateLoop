@@ -79,9 +79,7 @@ test("the ten-character reason rule stays visible while the decider types", asyn
 
   try {
     const view = await mount();
-    await userEvent
-      .setup({ document })
-      .click(await view.findByRole("button", { name: "Record override or corrective action" }));
+    await userEvent.setup({ document }).click(await view.findByRole("button", { name: "Record outcome" }));
     const reasons = (await view.findAllByRole("textbox", { name: /Reasons/ }))[0]!;
     const accepted = view.getByRole("button", { name: "Accepted" });
 
@@ -93,7 +91,7 @@ test("the ten-character reason rule stays visible while the decider types", asyn
     assert.equal(accepted.hasAttribute("disabled"), true);
 
     await userEvent.setup({ document }).type(reasons, " but now long enough");
-    assert.ok(view.getByText("Long enough to record an outcome."));
+    assert.equal(view.queryByText("Long enough to record an outcome."), null);
     assert.equal(accepted.hasAttribute("disabled"), false);
   } finally {
     await act(async () => cleanup());
@@ -118,7 +116,7 @@ test("the explained-decision rule stays visible while the decider types", async 
     assert.equal(go.hasAttribute("disabled"), true);
 
     await userEvent.setup({ document }).type(explanation, "Signed off after review");
-    assert.ok(view.getByText("Long enough to sign off."));
+    assert.equal(view.queryByText("Long enough to sign off."), null);
     assert.equal(go.hasAttribute("disabled"), false);
   } finally {
     await act(async () => cleanup());
@@ -295,7 +293,7 @@ test("per-response details explain run-specific reviewer pseudonyms without expo
 
   try {
     const view = await mount();
-    await userEvent.setup({ document }).click(await view.findByText("Case detail and reviewer reasons"));
+    await userEvent.setup({ document }).click(await view.findByText("Reviewer responses"));
     assert.ok(
       await view.findByText(
         "Reviewer labels are run-specific pseudonyms by design. Responses are not linked here to roster identities.",
@@ -364,7 +362,7 @@ test("a failed run explains the recorded failure and exposes its case reasons", 
     const view = await mount();
     assert.ok(await view.findByRole("heading", { name: "Why this failed" }));
     assert.ok(view.getByText("The run failed. Open case detail for the available evidence and reviewer reasons."));
-    await userEvent.setup({ document }).click(view.getByText("Why this failed: case detail and reviewer reasons"));
+    await userEvent.setup({ document }).click(view.getByText("Failure details"));
     assert.ok(await view.findByText("The candidate did not answer the question."));
   } finally {
     await act(async () => cleanup());
@@ -435,7 +433,7 @@ test("aggregate-only network detail does not render the per-response pseudonym e
 
   try {
     const view = await mount();
-    await userEvent.setup({ document }).click(await view.findByText("Case detail and reviewer reasons"));
+    await userEvent.setup({ document }).click(await view.findByText("Reviewer responses"));
     assert.ok(await view.findByText("Case detail is unavailable. Check your access or try again later."));
     assert.equal(view.queryByText(aggregateNote), null);
     assert.equal(

@@ -246,12 +246,10 @@ function deciderTrendLabel(trend: DeciderDecisionTrend | undefined, copy: Transl
   if (!trend) return null;
   const parts: string[] = [];
   if (trend.clientDecisions.total > 0) {
-    const share = Math.round((trend.clientDecisions.goCount / trend.clientDecisions.total) * 100);
-    parts.push(copy("goTrend", { percent: share, count: trend.clientDecisions.total }));
+    parts.push(copy("goTrend", { goCount: trend.clientDecisions.goCount, count: trend.clientDecisions.total }));
   }
   if (trend.overrides.total > 0) {
-    const share = Math.round((trend.overrides.acceptedCount / trend.overrides.total) * 100);
-    parts.push(copy("acceptedTrend", { percent: share, count: trend.overrides.total }));
+    parts.push(copy("acceptedTrend", { acceptedCount: trend.overrides.acceptedCount, count: trend.overrides.total }));
   }
   return parts.length > 0 ? `${parts.join(" · ")}.` : null;
 }
@@ -301,26 +299,18 @@ function ClientDecisionButtons({
 
   return (
     <div className="mt-3">
-      <p className="text-xs text-base-content/55">
-        <AgentText id="signOff" />
-      </p>
       {trendLabel ? <p className="mt-1 text-xs text-base-content/55">{trendLabel}</p> : null}
       {run.explanationRequired ? (
         <div className="mt-2 rounded-lg border border-warning/20 bg-warning/[0.06] p-3">
           <p className="text-xs font-semibold text-warning/90">
             <AgentText id="explainDecision" />
           </p>
-          <p className="mt-1 text-xs leading-5 text-warning/70">
-            <AgentText id="translated109" />
-          </p>
           <TextareaField
             label={<AgentText id="attribute007" />}
             className="mt-2 w-full border-base-content/10 bg-[var(--rateloop-field)] text-sm"
             placeholder={ui("reasonsRunPlaceholder")}
             hint={
-              explanationMissing
-                ? copy("signOffCharactersRemaining", { count: 10 - note.trim().length })
-                : copy("signOffReady")
+              explanationMissing ? copy("signOffCharactersRemaining", { count: 10 - note.trim().length }) : undefined
             }
             value={note}
             error={fieldErrors.note}
@@ -427,11 +417,7 @@ function OverrideRecordForm({
         label={<AgentText id="attribute007" />}
         className="mt-3 w-full border-base-content/10 bg-[var(--rateloop-field)] text-sm"
         placeholder={ui("reasonsPlaceholder")}
-        hint={
-          reasonsTooShort
-            ? copy("outcomeCharactersRemaining", { count: 10 - reasons.trim().length })
-            : copy("outcomeReady")
-        }
+        hint={reasonsTooShort ? copy("outcomeCharactersRemaining", { count: 10 - reasons.trim().length }) : undefined}
         value={reasons}
         error={fieldErrors.reasons}
         onChange={event => {
