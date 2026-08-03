@@ -14,6 +14,7 @@ import {
   type TokenlessInstallAffordance,
   tokenlessHostCapability,
 } from "~~/lib/tokenless/hostCapabilities";
+import { localizeTokenlessHostCapabilityCopy } from "~~/lib/tokenless/hostCapabilityLocalization";
 
 export const dynamicParams = false;
 
@@ -36,10 +37,15 @@ export async function generateMetadata({ params }: { params: Promise<{ locale?: 
 }
 
 function InstallAffordance({ affordance, locale }: { affordance: TokenlessInstallAffordance; locale: "en" | "de" }) {
+  const label = localizeTokenlessHostCapabilityCopy(affordance.label, locale);
+  const value =
+    affordance.kind === "settings-instructions"
+      ? localizeTokenlessHostCapabilityCopy(affordance.value, locale)
+      : affordance.value;
   return (
     <LocalizedPublicContent locale={locale} section="docs">
       <section>
-        <p>{affordance.label}</p>
+        <p>{label}</p>
         {affordance.kind === "cli-command" || affordance.kind === "config-snippet" ? (
           <HostGuideCodeBlock>{affordance.value}</HostGuideCodeBlock>
         ) : affordance.kind === "deep-link" ? (
@@ -49,7 +55,7 @@ function InstallAffordance({ affordance, locale }: { affordance: TokenlessInstal
             </a>
           </p>
         ) : affordance.kind === "settings-instructions" ? (
-          <p>{affordance.value}</p>
+          <p>{value}</p>
         ) : (
           <p>
             <code>{affordance.value}</code>
@@ -94,7 +100,7 @@ function HostGuide({ host, locale }: { host: TokenlessHostCapability; locale: "e
         <p>The connection asks for your action only at steps this host presents itself:</p>
         <ol>
           {host.humanActions.map(action => (
-            <li key={action}>{action}</li>
+            <li key={action}>{localizeTokenlessHostCapabilityCopy(action, locale)}</li>
           ))}
         </ol>
 

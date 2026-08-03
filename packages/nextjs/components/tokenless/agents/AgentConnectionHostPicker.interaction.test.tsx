@@ -110,3 +110,28 @@ test("Codex shows both the plugin reference and a copyable protected setup comma
     restoreDom();
   }
 });
+
+test("German renders every Codex host prompt and install label without English leakage", async () => {
+  const restoreDom = installTestDom();
+  const { cleanup, render, within } = await import("@testing-library/react");
+  const { AgentConnectionHostPicker } = await import("./AgentConnectionHostPicker");
+  const { AgentsLocaleProvider } = await import("./AgentsLocaleProvider");
+
+  try {
+    render(
+      <AgentsLocaleProvider locale="de">
+        <AgentConnectionHostPicker selectedHostId="codex-desktop" onSelectHost={() => undefined} />
+      </AgentsLocaleProvider>,
+    );
+    const screen = within(document.body);
+    assert.ok(screen.getByText(/Installation des RateLoop-Workspace-Plugins/));
+    assert.ok(screen.getByText(/Vertrauensabfrage des Hosts/));
+    assert.ok(screen.getByText(/RateLoop-OAuth-Einwilligung/));
+    assert.ok(screen.getByText(/RateLoop-Workspace-Plugin aus dem auf Tokenless fixierten/));
+    assert.ok(screen.getByText(/Geschütztes Workspace-Plugin aus dem auf Tokenless fixierten/));
+    assert.equal(screen.queryByText(/Approve the|Install the protected|Workspace plugin from the tokenless/), null);
+  } finally {
+    cleanup();
+    restoreDom();
+  }
+});

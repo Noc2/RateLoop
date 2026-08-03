@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useAgentTranslations } from "./AgentsLocaleProvider";
+import { useAgentLocale, useAgentTranslations } from "./AgentsLocaleProvider";
 import { Badge, type BadgeVariant } from "~~/components/tokenless/ui/Badge";
 import {
   TOKENLESS_HOST_CAPABILITIES,
@@ -11,6 +11,7 @@ import {
   type TokenlessInstallAffordance,
   tokenlessHostCapability,
 } from "~~/lib/tokenless/hostCapabilities";
+import { localizeTokenlessHostCapabilityCopy } from "~~/lib/tokenless/hostCapabilityLocalization";
 
 const HOST_CHOICE_KEY_PREFIX = "rateloop:agent-host-choice:v1:";
 
@@ -90,21 +91,27 @@ function InstallAffordanceRow({
   onCopy: (value: string) => void;
 }) {
   const t = useAgentTranslations("hostPicker");
+  const locale = useAgentLocale();
   // Install deep links are never published until verified at a pinned client version.
   if (affordance.kind === "deep-link") return null;
   if (affordance.kind === "settings-instructions") {
-    return <p className="text-xs leading-5 text-base-content/60">{affordance.value}</p>;
+    return (
+      <p className="text-xs leading-5 text-base-content/60">
+        {localizeTokenlessHostCapabilityCopy(affordance.value, locale)}
+      </p>
+    );
   }
   if (affordance.kind === "plugin-marketplace") {
     return (
       <p className="text-xs leading-5 text-base-content/60">
-        {affordance.label}: <code className="font-mono">{affordance.value}</code>
+        {localizeTokenlessHostCapabilityCopy(affordance.label, locale)}:{" "}
+        <code className="font-mono">{affordance.value}</code>
       </p>
     );
   }
   return (
     <div>
-      <p className="text-xs text-base-content/55">{affordance.label}</p>
+      <p className="text-xs text-base-content/55">{localizeTokenlessHostCapabilityCopy(affordance.label, locale)}</p>
       <div className="mt-1 flex items-start gap-2">
         <pre className="grow overflow-x-auto rounded-lg bg-base-content/[0.055] p-3 font-mono text-xs leading-5">
           <code>{affordance.value}</code>
@@ -131,6 +138,7 @@ function HostDetail({
   onCopyAffordance: (value: string) => void;
 }) {
   const t = useAgentTranslations("hostPicker");
+  const locale = useAgentLocale();
   const tierLabel = {
     "release-tested": t("releaseTested"),
     supported: t("supported"),
@@ -152,7 +160,7 @@ function HostDetail({
       <ol aria-label={t("prompts")} className="flex flex-wrap gap-x-2 gap-y-1 text-xs leading-5 text-base-content/60">
         {host.humanActions.map((action, index) => (
           <li key={action}>
-            {index + 1}. {action}
+            {index + 1}. {localizeTokenlessHostCapabilityCopy(action, locale)}
             {index < host.humanActions.length - 1 ? " ·" : ""}
           </li>
         ))}
