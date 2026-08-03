@@ -171,6 +171,25 @@
     "placeholder": "Paste invitation code",
     "checking": "Checking…",
     "continue": "Continue",
+    "workspaceTitle": "Workspace invitation",
+    "workspaceDescription": "Review the access this invitation will add before joining the workspace.",
+    "workspaceRole": "Workspace access",
+    "workspaceClient": "Client scope",
+    "workspaceGovernanceRole": "Responsibility",
+    "workspaceExistingRole": "Existing access",
+    "workspaceUpgrade": "This changes your access from {current} to {next}.",
+    "accessRoles": {
+      "owner": "Owner",
+      "admin": "Admin",
+      "member": "Member",
+      "billing": "Billing"
+    },
+    "governanceRoles": {
+      "consultant": "Consultant",
+      "end_client": "End client",
+      "decision_owner": "Decision owner",
+      "billing": "Billing"
+    },
     "reviewerTitle": "Reviewer invitation",
     "description": "Review assigned private work without joining the workspace.",
     "materialLimit": "Private material limit",

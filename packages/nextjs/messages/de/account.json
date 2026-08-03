@@ -171,6 +171,25 @@
     "placeholder": "Einladungscode einfügen",
     "checking": "Wird geprüft…",
     "continue": "Weiter",
+    "workspaceTitle": "Workspace-Einladung",
+    "workspaceDescription": "Prüfe vor dem Beitritt, welche Zugriffsrechte diese Einladung hinzufügt.",
+    "workspaceRole": "Workspace-Zugriff",
+    "workspaceClient": "Kundenzuordnung",
+    "workspaceGovernanceRole": "Verantwortung",
+    "workspaceExistingRole": "Bestehender Zugriff",
+    "workspaceUpgrade": "Dein Zugriff ändert sich von {current} zu {next}.",
+    "accessRoles": {
+      "owner": "Eigentümer",
+      "admin": "Admin",
+      "member": "Mitglied",
+      "billing": "Abrechnung"
+    },
+    "governanceRoles": {
+      "consultant": "Beratung",
+      "end_client": "Endkunde",
+      "decision_owner": "Entscheidungsverantwortung",
+      "billing": "Abrechnung"
+    },
     "reviewerTitle": "Einladung für Prüfende",
     "description": "Prüfe zugewiesene private Arbeit, ohne dem Workspace beizutreten.",
     "materialLimit": "Limit für privates Material",

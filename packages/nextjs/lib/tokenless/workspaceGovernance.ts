@@ -599,88 +599,171 @@ const ACCESS_ROLE_RANK: Record<ExistingWorkspaceAccessRole, number> = {
   owner: 3,
 };
 
-export async function redeemWorkspaceMemberInvite(input: { token: string; accountAddress: string }) {
+type ValidatedWorkspaceMemberInvite = {
+  accessRole: WorkspaceInviteAccessRole;
+  accountAddress: string;
+  clientId: string | null;
+  clientName: string | null;
+  effectiveAccessRole: ExistingWorkspaceAccessRole;
+  existingRole: ExistingWorkspaceAccessRole | null;
+  expiresAt: Date;
+  governanceRole: WorkspaceGovernanceRole | null;
+  inviteId: string;
+  row: QueryRow;
+  workspaceId: string;
+  workspaceName: string;
+};
+
+async function requireWorkspaceMemberInvite(
+  client: PoolClient,
+  input: { accountAddress: string; lock: boolean; now?: Date; token: string },
+): Promise<ValidatedWorkspaceMemberInvite> {
   const accountAddress = normalizeAddress(input.accountAddress, "accountAddress");
   const tokenMatch = INVITE_TOKEN_PATTERN.exec(input.token);
   if (!tokenMatch) {
     throw new TokenlessServiceError("Invitation not found.", 404, "invite_not_found", false, "token");
   }
-  const tokenHash = hashToken(input.token);
-  const client = await dbPool.connect();
-  try {
-    await client.query("BEGIN");
-    const result = await client.query(
-      `SELECT i.*, w.status AS workspace_status
-       FROM tokenless_workspace_member_invites i
-       JOIN tokenless_workspaces w ON w.workspace_id = i.workspace_id
-       WHERE i.invite_token_hash = $1
-       LIMIT 1 FOR UPDATE`,
-      [tokenHash],
+  const now = input.now ?? new Date();
+  const result = await client.query(
+    `SELECT i.*, w.status AS workspace_status, w.name AS workspace_name,
+            invited_client.name AS client_name
+     FROM tokenless_workspace_member_invites i
+     JOIN tokenless_workspaces w ON w.workspace_id = i.workspace_id
+     LEFT JOIN tokenless_workspace_clients invited_client
+       ON invited_client.workspace_id=i.workspace_id AND invited_client.client_id=i.client_id
+     WHERE i.invite_token_hash = $1
+     LIMIT 1${input.lock ? " FOR UPDATE OF i" : ""}`,
+    [hashToken(input.token)],
+  );
+  const row = result.rows[0] as QueryRow | undefined;
+  const inviteId = rowString(row, "invite_id");
+  const workspaceId = rowString(row, "workspace_id");
+  const workspaceName = rowString(row, "workspace_name");
+  const clientId = rowString(row, "client_id");
+  const intendedAccountAddress = rowString(row, "intended_account_address");
+  const intendedEmailHash = rowString(row, "intended_email_hash");
+  const accessRole = rowString(row, "access_role") as WorkspaceInviteAccessRole | null;
+  const governanceRole = rowString(row, "governance_role") as WorkspaceGovernanceRole | null;
+  const expiresAt = rowDate(row, "expires_at");
+  if (
+    !inviteId ||
+    !workspaceId ||
+    !workspaceName ||
+    !accessRole ||
+    !INVITE_ACCESS_ROLE_SET.has(accessRole) ||
+    (governanceRole !== null && !GOVERNANCE_ROLE_SET.has(governanceRole)) ||
+    !expiresAt ||
+    rowString(row, "token_prefix") !== tokenMatch[1]
+  ) {
+    throw new TokenlessServiceError("Invitation not found.", 404, "invite_not_found", false, "token");
+  }
+  if (
+    rowString(row, "workspace_status") !== "active" ||
+    rowDate(row, "redeemed_at") ||
+    rowDate(row, "revoked_at") ||
+    expiresAt.getTime() <= now.getTime()
+  ) {
+    throw new TokenlessServiceError("Invitation is no longer available.", 410, "invite_unavailable", false, "token");
+  }
+  if (intendedAccountAddress && intendedAccountAddress !== accountAddress) {
+    throw new TokenlessServiceError(
+      "Invitation is bound to a different signed-in account.",
+      403,
+      "invite_account_mismatch",
+      false,
+      "token",
     );
-    const row = result.rows[0] as QueryRow | undefined;
-    const inviteId = rowString(row, "invite_id");
-    const workspaceId = rowString(row, "workspace_id");
-    const clientId = rowString(row, "client_id");
-    const intendedAccountAddress = rowString(row, "intended_account_address");
-    const intendedEmailHash = rowString(row, "intended_email_hash");
-    const accessRole = rowString(row, "access_role") as WorkspaceInviteAccessRole | null;
-    const governanceRole = rowString(row, "governance_role") as WorkspaceGovernanceRole | null;
-    const expiresAt = rowDate(row, "expires_at");
-    if (!inviteId || !workspaceId || !accessRole || !expiresAt || rowString(row, "token_prefix") !== tokenMatch[1]) {
-      throw new TokenlessServiceError("Invitation not found.", 404, "invite_not_found", false, "token");
-    }
-    if (
-      rowString(row, "workspace_status") !== "active" ||
-      rowDate(row, "redeemed_at") ||
-      rowDate(row, "revoked_at") ||
-      expiresAt.getTime() <= Date.now()
-    ) {
-      throw new TokenlessServiceError("Invitation is no longer available.", 410, "invite_unavailable", false, "token");
-    }
-    if (intendedAccountAddress && intendedAccountAddress !== accountAddress) {
+  }
+  if (intendedEmailHash) {
+    const identity = await client.query(
+      `SELECT u.email, u.email_verified
+       FROM tokenless_identity_bindings b
+       JOIN tokenless_better_auth_users u ON u.id = b.provider_subject
+       WHERE b.principal_id = $1 AND b.provider = 'better_auth' AND b.status = 'active'
+       LIMIT 1${input.lock ? " FOR SHARE" : ""}`,
+      [accountAddress],
+    );
+    const identityRow = identity.rows[0] as QueryRow | undefined;
+    const email = rowString(identityRow, "email")?.trim().toLowerCase() ?? "";
+    const verified =
+      identityRow?.email_verified === true || identityRow?.email_verified === "t" || identityRow?.email_verified === 1;
+    if (!verified || !email || hashToken(`${input.token}\0${email}`) !== intendedEmailHash) {
       throw new TokenlessServiceError(
-        "Invitation is bound to a different signed-in account.",
+        "Invitation is bound to a different verified email.",
         403,
-        "invite_account_mismatch",
+        "invite_email_mismatch",
         false,
         "token",
       );
     }
-    if (intendedEmailHash) {
-      const identity = await client.query(
-        `SELECT u.email, u.email_verified
-         FROM tokenless_identity_bindings b
-         JOIN tokenless_better_auth_users u ON u.id = b.provider_subject
-         WHERE b.principal_id = $1 AND b.provider = 'better_auth' AND b.status = 'active'
-         LIMIT 1 FOR SHARE`,
-        [accountAddress],
-      );
-      const identityRow = identity.rows[0] as QueryRow | undefined;
-      const email = rowString(identityRow, "email")?.trim().toLowerCase() ?? "";
-      const verified =
-        identityRow?.email_verified === true ||
-        identityRow?.email_verified === "t" ||
-        identityRow?.email_verified === 1;
-      if (!verified || !email || hashToken(`${input.token}\0${email}`) !== intendedEmailHash) {
-        throw new TokenlessServiceError(
-          "Invitation is bound to a different verified email.",
-          403,
-          "invite_email_mismatch",
-          false,
-          "token",
-        );
-      }
-    }
+  }
+  const existingMember = await client.query(
+    `SELECT role FROM tokenless_workspace_members
+     WHERE workspace_id = $1 AND account_address = $2
+     LIMIT 1${input.lock ? " FOR UPDATE" : ""}`,
+    [workspaceId, accountAddress],
+  );
+  const existingRole = rowString(
+    existingMember.rows[0] as QueryRow | undefined,
+    "role",
+  ) as ExistingWorkspaceAccessRole | null;
+  if (existingRole !== null && !(existingRole in ACCESS_ROLE_RANK)) {
+    throw new Error("Database returned an invalid workspace access role.");
+  }
+  const effectiveAccessRole =
+    existingRole && ACCESS_ROLE_RANK[accessRole] <= ACCESS_ROLE_RANK[existingRole] ? existingRole : accessRole;
+  return {
+    accessRole,
+    accountAddress,
+    clientId,
+    clientName: rowString(row, "client_name"),
+    effectiveAccessRole,
+    existingRole,
+    expiresAt,
+    governanceRole,
+    inviteId,
+    row: row!,
+    workspaceId,
+    workspaceName,
+  };
+}
 
-    const existingMember = await client.query(
-      `SELECT role FROM tokenless_workspace_members
-       WHERE workspace_id = $1 AND account_address = $2 LIMIT 1 FOR UPDATE`,
-      [workspaceId, accountAddress],
-    );
-    const existingRole = rowString(
-      existingMember.rows[0] as QueryRow | undefined,
-      "role",
-    ) as ExistingWorkspaceAccessRole | null;
+export async function previewWorkspaceMemberInvite(input: { token: string; accountAddress: string }) {
+  const client = await dbPool.connect();
+  try {
+    const invite = await requireWorkspaceMemberInvite(client, { ...input, lock: false });
+    return {
+      workspaceName: invite.workspaceName,
+      clientName: invite.clientName,
+      invitedAccessRole: invite.accessRole,
+      governanceRole: invite.governanceRole,
+      expiresAt: invite.expiresAt.toISOString(),
+      currentAccessRole: invite.existingRole,
+      effectiveAccessRole: invite.effectiveAccessRole,
+      upgradesExistingMembership:
+        invite.existingRole !== null && ACCESS_ROLE_RANK[invite.accessRole] > ACCESS_ROLE_RANK[invite.existingRole],
+    };
+  } finally {
+    client.release();
+  }
+}
+
+export async function redeemWorkspaceMemberInvite(input: { token: string; accountAddress: string }) {
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    const invite = await requireWorkspaceMemberInvite(client, { ...input, lock: true });
+    const {
+      accessRole,
+      accountAddress,
+      clientId,
+      effectiveAccessRole,
+      existingRole,
+      governanceRole,
+      inviteId,
+      row,
+      workspaceId,
+    } = invite;
     if (!existingRole) {
       await client.query(
         `INSERT INTO tokenless_workspace_members (workspace_id, account_address, role, created_at)
@@ -736,8 +819,6 @@ export async function redeemWorkspaceMemberInvite(input: { token: string; accoun
     if (redeemed.rowCount !== 1) {
       throw new TokenlessServiceError("Invitation is no longer available.", 410, "invite_unavailable");
     }
-    const effectiveAccessRole =
-      existingRole && ACCESS_ROLE_RANK[accessRole] <= ACCESS_ROLE_RANK[existingRole] ? existingRole : accessRole;
     await client.query("COMMIT");
     await appendMembershipAuditEvent({
       workspaceId,

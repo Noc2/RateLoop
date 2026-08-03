@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { POST as previewInvitation } from "./workspace-invitations/preview/route";
 import { POST as redeemInvitation } from "./workspace-invitations/redeem/route";
 import { DELETE as revokeInvitation } from "./workspaces/[workspaceId]/member-invitations/[inviteId]/route";
 import { PATCH as changeRole, DELETE as removeMember } from "./workspaces/[workspaceId]/members/[principalId]/route";
@@ -127,6 +128,50 @@ test("workspace member routes invite, redeem, change role, remove, and revoke wi
 
   const memberDenied = await listMembers(browserRequest(membersPath, { token: member.token }), membersContext);
   assert.equal(memberDenied.status, 404);
+
+  const previewCrossOrigin = await previewInvitation(
+    browserRequest("/api/account/workspace-invitations/preview", {
+      body: { token: invitation.token },
+      method: "POST",
+      origin: "https://attacker.example",
+      token: member.token,
+    }),
+  );
+  assert.equal(previewCrossOrigin.status, 403);
+  const invalidPreview = await previewInvitation(
+    browserRequest("/api/account/workspace-invitations/preview", {
+      body: { token: invitation.token, unexpected: true },
+      method: "POST",
+      origin: APP_ORIGIN,
+      token: member.token,
+    }),
+  );
+  assert.equal(invalidPreview.status, 400);
+  const previewed = await previewInvitation(
+    browserRequest("/api/account/workspace-invitations/preview", {
+      body: { token: invitation.token },
+      method: "POST",
+      origin: APP_ORIGIN,
+      token: member.token,
+    }),
+  );
+  assert.equal(previewed.status, 200);
+  assert.equal(previewed.headers.get("cache-control"), NO_STORE);
+  const previewBody = (await previewed.json()).invitation;
+  assert.deepEqual(
+    { ...previewBody, expiresAt: "<date>" },
+    {
+      workspaceName: "Workspace routes",
+      clientName: null,
+      invitedAccessRole: "member",
+      governanceRole: null,
+      expiresAt: "<date>",
+      currentAccessRole: null,
+      effectiveAccessRole: "member",
+      upgradesExistingMembership: false,
+    },
+  );
+  assert.ok(Number.isFinite(Date.parse(previewBody.expiresAt)));
 
   const redeemed = await redeemInvitation(
     browserRequest("/api/account/workspace-invitations/redeem", {

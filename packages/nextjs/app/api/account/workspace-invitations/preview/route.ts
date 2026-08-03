@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
 import { apiRequestBodyFallback, readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
-import { redeemWorkspaceMemberInvite } from "~~/lib/tokenless/workspaceGovernance";
+import { previewWorkspaceMemberInvite } from "~~/lib/tokenless/workspaceGovernance";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
       throw new TokenlessServiceError("Invitation token is required.", 400, "invalid_invite", false, "token");
     }
     return NextResponse.json(
-      await redeemWorkspaceMemberInvite({ token: body.token, accountAddress: session.principalId }),
+      { invitation: await previewWorkspaceMemberInvite({ token: body.token, accountAddress: session.principalId }) },
       { headers: noStore },
     );
   } catch (error) {

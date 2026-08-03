@@ -16,6 +16,7 @@ import {
   listAccessibleWorkspaceCostCenters,
   listWorkspaceMemberInvites,
   listWorkspaceMembers,
+  previewWorkspaceMemberInvite,
   redeemWorkspaceMemberInvite,
   removeWorkspaceMember,
   revokeWorkspaceMemberInvite,
@@ -287,6 +288,45 @@ test("ordinary workspace invitations support opaque principals without granting 
     false,
   );
 
+  const preview = await previewWorkspaceMemberInvite({
+    token: invitation.token,
+    accountAddress: member.principalId,
+  });
+  assert.deepEqual(
+    { ...preview, expiresAt: "<date>" },
+    {
+      workspaceName: "Ordinary members",
+      clientName: null,
+      invitedAccessRole: "member",
+      governanceRole: null,
+      expiresAt: "<date>",
+      currentAccessRole: null,
+      effectiveAccessRole: "member",
+      upgradesExistingMembership: false,
+    },
+  );
+  assert.ok(Math.abs(Date.parse(preview.expiresAt) - Date.parse(invitation.expiresAt)) < 1_000);
+  assert.equal(
+    Number(
+      (
+        await dbClient.execute({
+          sql: "SELECT COUNT(*) AS count FROM tokenless_workspace_members WHERE workspace_id=?",
+          args: [workspaceId],
+        })
+      ).rows[0]?.count,
+    ),
+    1,
+  );
+  assert.equal(
+    (
+      await dbClient.execute({
+        sql: "SELECT redeemed_at FROM tokenless_workspace_member_invites WHERE invite_id=?",
+        args: [invitation.inviteId],
+      })
+    ).rows[0]?.redeemed_at,
+    null,
+  );
+
   const redeemed = await redeemWorkspaceMemberInvite({ token: invitation.token, accountAddress: member.principalId });
   assert.equal(redeemed.accessRole, "member");
   assert.equal(redeemed.governanceRole, null);
@@ -298,12 +338,26 @@ test("ordinary workspace invitations support opaque principals without granting 
   assert.equal(listedMember?.email, "member@workspace.test");
   assert.equal(listedMember?.accessRole, "member");
 
-  await changeWorkspaceMemberAccessRole({
+  const upgradeInvitation = await createWorkspaceMemberInvite({
     accountAddress: owner.principalId,
     workspaceId,
-    principalId: member.principalId,
     accessRole: "admin",
+    intendedAccountAddress: member.principalId,
   });
+  const upgradePreview = await previewWorkspaceMemberInvite({
+    token: upgradeInvitation.token,
+    accountAddress: member.principalId,
+  });
+  assert.equal(upgradePreview.currentAccessRole, "member");
+  assert.equal(upgradePreview.effectiveAccessRole, "admin");
+  assert.equal(upgradePreview.upgradesExistingMembership, true);
+  listed = await listWorkspaceMembers({ accountAddress: owner.principalId, workspaceId });
+  assert.equal(listed.find(value => value.principalId === member.principalId)?.accessRole, "member");
+  const upgraded = await redeemWorkspaceMemberInvite({
+    token: upgradeInvitation.token,
+    accountAddress: member.principalId,
+  });
+  assert.equal(upgraded.accessRole, upgradePreview.effectiveAccessRole);
   listed = await listWorkspaceMembers({ accountAddress: owner.principalId, workspaceId });
   assert.equal(listed.find(value => value.principalId === member.principalId)?.accessRole, "admin");
 

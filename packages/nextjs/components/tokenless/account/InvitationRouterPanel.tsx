@@ -14,10 +14,20 @@ type ReviewerInvitationPreview = {
   expiresAt: string | null;
 };
 
-type ReviewerInvitationPreviewState = {
-  invitation: ReviewerInvitationPreview;
-  token: string;
+type WorkspaceInvitationPreview = {
+  workspaceName: string;
+  clientName: string | null;
+  invitedAccessRole: "admin" | "member" | "billing";
+  governanceRole: "consultant" | "end_client" | "decision_owner" | "billing" | null;
+  expiresAt: string;
+  currentAccessRole: "owner" | "admin" | "member" | "billing" | null;
+  effectiveAccessRole: "owner" | "admin" | "member" | "billing";
+  upgradesExistingMembership: boolean;
 };
+
+type InvitationPreviewState =
+  | { invitation: ReviewerInvitationPreview; kind: "reviewer"; token: string }
+  | { invitation: WorkspaceInvitationPreview; kind: "workspace"; token: string };
 
 export type InvitationKind = "reviewer" | "workspace";
 
@@ -25,7 +35,7 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
   const t = useTranslations("account.invitation");
   const format = useFormatter();
   const [token, setToken] = useState("");
-  const [preview, setPreview] = useState<ReviewerInvitationPreviewState | null>(null);
+  const [preview, setPreview] = useState<InvitationPreviewState | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const fragmentLoaded = useRef(false);
@@ -47,8 +57,8 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
       setPreview(null);
       try {
         if (normalized.startsWith("rlwi_")) {
-          await readJson(
-            await fetch("/api/account/workspace-invitations/redeem", {
+          const body = await readJson(
+            await fetch("/api/account/workspace-invitations/preview", {
               method: "POST",
               credentials: "same-origin",
               headers: { "Content-Type": "application/json" },
@@ -57,9 +67,11 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
             }),
           );
           if (!isCurrent()) return;
-          setToken("");
-          setStatus(t("workspaceAccepted"));
-          onAccepted?.("workspace");
+          setPreview({
+            invitation: body.invitation as WorkspaceInvitationPreview,
+            kind: "workspace",
+            token: normalized,
+          });
           return;
         }
         if (normalized.startsWith("rli_")) {
@@ -89,7 +101,7 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
             }),
           );
           if (!isCurrent()) return;
-          setPreview({ invitation: body.invitation as ReviewerInvitationPreview, token: normalized });
+          setPreview({ invitation: body.invitation as ReviewerInvitationPreview, kind: "reviewer", token: normalized });
           return;
         }
         if (!isCurrent()) return;
@@ -132,25 +144,30 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
     void inspectInvitation(normalized);
   }
 
-  async function acceptReviewerInvitation() {
+  async function acceptInvitation() {
     if (!preview) return;
-    const acceptedToken = preview.token;
+    const acceptedPreview = preview;
     setBusy(true);
     setStatus(null);
     clear();
     try {
       await readJson(
-        await fetch("/api/account/reviewer-invitations/redeem", {
-          method: "POST",
-          credentials: "same-origin",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token: acceptedToken }),
-        }),
+        await fetch(
+          acceptedPreview.kind === "workspace"
+            ? "/api/account/workspace-invitations/redeem"
+            : "/api/account/reviewer-invitations/redeem",
+          {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token: acceptedPreview.token }),
+          },
+        ),
       );
       setPreview(null);
       setToken("");
-      setStatus(t("reviewerAccepted"));
-      onAccepted?.("reviewer");
+      setStatus(t(acceptedPreview.kind === "workspace" ? "workspaceAccepted" : "reviewerAccepted"));
+      onAccepted?.(acceptedPreview.kind);
     } catch (cause) {
       capture(cause, t("acceptFailed"));
     } finally {
@@ -193,40 +210,83 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
       {preview ? (
         <Card as="div" variant="nested" className="mt-5 rounded-xl p-5">
           <p className="text-sm text-base-content/55">{preview.invitation.workspaceName}</p>
-          <h3 className="mt-1 text-lg font-semibold">{t("reviewerTitle")}</h3>
-          <p className="mt-2 text-sm text-base-content/60">{t("description")}</p>
-          <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
-            <div>
-              <dt className="text-xs text-base-content/55">{t("materialLimit")}</dt>
-              <dd className="mt-1 capitalize">{preview.invitation.maxPrivateSensitivity}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-base-content/55">{t("invitationExpires")}</dt>
-              <dd className="mt-1">
-                {preview.invitation.expiresAt
-                  ? format.dateTime(new Date(preview.invitation.expiresAt), { dateStyle: "medium", timeStyle: "short" })
-                  : t("noExpiry")}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs text-base-content/55">{t("accessExpires")}</dt>
-              <dd className="mt-1">
-                {preview.invitation.accessExpiresAt
-                  ? format.dateTime(new Date(preview.invitation.accessExpiresAt), {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    })
-                  : t("noExpiry")}
-              </dd>
-            </div>
-          </dl>
+          <h3 className="mt-1 text-lg font-semibold">
+            {t(preview.kind === "workspace" ? "workspaceTitle" : "reviewerTitle")}
+          </h3>
+          <p className="mt-2 text-sm text-base-content/60">
+            {t(preview.kind === "workspace" ? "workspaceDescription" : "description")}
+          </p>
+          {preview.kind === "workspace" ? (
+            <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+              <div>
+                <dt className="text-xs text-base-content/55">{t("workspaceRole")}</dt>
+                <dd className="mt-1">{t(`accessRoles.${preview.invitation.effectiveAccessRole}`)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-base-content/55">{t("invitationExpires")}</dt>
+                <dd className="mt-1">
+                  {format.dateTime(new Date(preview.invitation.expiresAt), {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  })}
+                </dd>
+              </div>
+              {preview.invitation.clientName ? (
+                <div>
+                  <dt className="text-xs text-base-content/55">{t("workspaceClient")}</dt>
+                  <dd className="mt-1">{preview.invitation.clientName}</dd>
+                </div>
+              ) : null}
+              {preview.invitation.governanceRole ? (
+                <div>
+                  <dt className="text-xs text-base-content/55">{t("workspaceGovernanceRole")}</dt>
+                  <dd className="mt-1">{t(`governanceRoles.${preview.invitation.governanceRole}`)}</dd>
+                </div>
+              ) : null}
+              {preview.invitation.upgradesExistingMembership && preview.invitation.currentAccessRole ? (
+                <div className="sm:col-span-2">
+                  <dt className="text-xs text-base-content/55">{t("workspaceExistingRole")}</dt>
+                  <dd className="mt-1">
+                    {t("workspaceUpgrade", {
+                      current: t(`accessRoles.${preview.invitation.currentAccessRole}`),
+                      next: t(`accessRoles.${preview.invitation.effectiveAccessRole}`),
+                    })}
+                  </dd>
+                </div>
+              ) : null}
+            </dl>
+          ) : (
+            <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+              <div>
+                <dt className="text-xs text-base-content/55">{t("materialLimit")}</dt>
+                <dd className="mt-1 capitalize">{preview.invitation.maxPrivateSensitivity}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-base-content/55">{t("invitationExpires")}</dt>
+                <dd className="mt-1">
+                  {preview.invitation.expiresAt
+                    ? format.dateTime(new Date(preview.invitation.expiresAt), {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })
+                    : t("noExpiry")}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-base-content/55">{t("accessExpires")}</dt>
+                <dd className="mt-1">
+                  {preview.invitation.accessExpiresAt
+                    ? format.dateTime(new Date(preview.invitation.accessExpiresAt), {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })
+                    : t("noExpiry")}
+                </dd>
+              </div>
+            </dl>
+          )}
           <div className="mt-5 flex flex-wrap gap-3">
-            <button
-              type="button"
-              className="rateloop-gradient-action px-5"
-              disabled={busy}
-              onClick={acceptReviewerInvitation}
-            >
+            <button type="button" className="rateloop-gradient-action px-5" disabled={busy} onClick={acceptInvitation}>
               {busy ? t("accepting") : t("accept")}
             </button>
             <button type="button" className="btn rateloop-secondary-action" onClick={() => setPreview(null)}>

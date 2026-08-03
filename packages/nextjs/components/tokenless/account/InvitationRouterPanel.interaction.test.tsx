@@ -4,7 +4,7 @@ import test from "node:test";
 import { withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
-test("workspace invitation codes use the workspace redemption path", async () => {
+test("workspace invitation codes require preview and explicit acceptance before redemption", async () => {
   const restoreDom = installTestDom();
   const { cleanup, render: baseRender, waitFor } = await import("@testing-library/react");
   const render = withEnglishAppTestProviders(baseRender);
@@ -16,6 +16,20 @@ test("workspace invitation codes use the workspace redemption path", async () =>
   const code = "rlwi_example_secret";
   globalThis.fetch = async (input, init) => {
     calls.push({ body: String(init?.body), url: String(input) });
+    if (String(input).endsWith("/preview")) {
+      return Response.json({
+        invitation: {
+          workspaceName: "Example workspace",
+          clientName: "Client Alpha",
+          invitedAccessRole: "admin",
+          governanceRole: "decision_owner",
+          expiresAt: "2030-01-01T00:00:00.000Z",
+          currentAccessRole: "member",
+          effectiveAccessRole: "admin",
+          upgradesExistingMembership: true,
+        },
+      });
+    }
     return Response.json({ workspaceId: "workspace_1" });
   };
 
@@ -25,14 +39,25 @@ test("workspace invitation codes use the workspace redemption path", async () =>
     await user.type(view.getByLabelText("Invitation code"), code);
     await user.click(view.getByRole("button", { name: "Continue" }));
 
+    assert.ok(await view.findByText("Workspace invitation"));
+    assert.ok(view.getByText("Example workspace"));
+    assert.ok(view.getByText("Client Alpha"));
+    assert.ok(view.getByText("Decision owner"));
+    assert.ok(view.getByText("This changes your access from Member to Admin."));
+    assert.deepEqual(accepted, []);
+    await user.click(view.getByRole("button", { name: "Accept invitation" }));
     await waitFor(() => assert.deepEqual(accepted, ["workspace"]));
     assert.deepEqual(calls, [
+      {
+        body: JSON.stringify({ token: code }),
+        url: "/api/account/workspace-invitations/preview",
+      },
       {
         body: JSON.stringify({ token: code }),
         url: "/api/account/workspace-invitations/redeem",
       },
     ]);
-    assert.equal(calls[0]?.url.includes(code), false);
+    assert.ok(calls.every(call => !call.url.includes(code)));
     assert.ok(view.getByRole("status").textContent?.includes("Workspace invitation accepted"));
   } finally {
     cleanup();
