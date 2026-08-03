@@ -9,6 +9,7 @@ import { createRequire } from "node:module";
 import test from "node:test";
 import type { Locale } from "~~/i18n/config";
 import { getMessagesForLocale } from "~~/i18n/messages";
+import { WORKSPACE_API_KEY_SCOPE_DETAILS } from "~~/lib/tokenless/workspaceApiKeyScopes";
 
 const require = createRequire(import.meta.url);
 const { renderToStaticMarkup } = require("react-dom/server") as {
@@ -42,6 +43,36 @@ test("shared client surfaces render nested, dynamic, and accessible German copy"
   assert.match(html, /title="Diesen Workspace-Stopp aufheben\?"/u);
   assert.match(html, />Stopp aufheben</u);
   assert.doesNotMatch(html, /Danger zone|Permissions for|Release stop/u);
+});
+
+test("workspace API key permissions render complete German labels and descriptions", () => {
+  const html = renderWithLocale(
+    "de",
+    <LocalizedSharedContent>
+      <dl>
+        {Object.entries(WORKSPACE_API_KEY_SCOPE_DETAILS).map(([scope, details]) => (
+          <div key={scope}>
+            <dt>{details.label}</dt>
+            <dd>{details.description}</dd>
+          </div>
+        ))}
+      </dl>
+    </LocalizedSharedContent>,
+  );
+
+  for (const expected of [
+    "Prüfangebote anfordern",
+    "Prüfarbeit starten",
+    "Workspace-Guthaben ausgeben",
+    "Prüfergebnisse lesen",
+    "Evaluierungsstatus lesen",
+    "Prüfen, ob eine menschliche Prüfung erforderlich ist",
+    "Evaluierungstelemetrie senden",
+    "Abgeschlossene Prüfentscheidungen und zugehörige Details abrufen.",
+  ]) {
+    assert.match(html, new RegExp(expected, "u"));
+  }
+  assert.doesNotMatch(html, /Request review quotes|Start review work|Read review results|completed review decisions/u);
 });
 
 test("the public evidence client renders its German privacy and form copy through the provider", () => {
