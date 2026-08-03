@@ -51,7 +51,8 @@ test("private rater queue opens one assigned task without unrelated eligibility 
 
   assert.match(html, /Open your assigned review/);
   assert.match(html, /Assignment details/);
-  assert.match(html, /Invitation details loaded/);
+  assert.doesNotMatch(html, /Invitation details loaded|This link identifies your assigned review/);
+  assert.match(html, /Use different details/);
   assert.doesNotMatch(html, />Assignment ID</);
   assert.doesNotMatch(html, />Confidentiality terms hash</);
   assert.match(html, /Only your assigned, blinded cases are returned/);

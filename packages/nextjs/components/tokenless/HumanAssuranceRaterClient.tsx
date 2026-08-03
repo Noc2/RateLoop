@@ -1233,17 +1233,13 @@ export function HumanAssuranceRaterClient({
                   <h2 className="text-xl font-semibold">{t("details")}</h2>
                   <form className="mt-4 space-y-4" onSubmit={openAssignment}>
                     {hasInvitationCredentials && !manualCredentialEntry ? (
-                      <div className="rounded-lg border border-base-content/10 bg-base-content/[0.02] p-4">
-                        <p className="text-sm font-semibold">{t("invitationLoaded")}</p>
-                        <p className="mt-1 text-xs text-base-content/55">{t("linkIdentifies")}</p>
-                        <button
-                          type="button"
-                          className="mt-3 text-xs font-medium underline underline-offset-4"
-                          onClick={() => setManualCredentialEntry(true)}
-                        >
-                          {t("useDifferent")}
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        className="text-left text-xs font-medium underline underline-offset-4"
+                        onClick={() => setManualCredentialEntry(true)}
+                      >
+                        {t("useDifferent")}
+                      </button>
                     ) : manualCredentialEntry ? (
                       <div className="space-y-4">
                         <Field
