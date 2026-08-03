@@ -164,6 +164,13 @@
     "accepted": "Einladung angenommen.",
     "reviewerAccepted": "Einladung für Prüfende angenommen.",
     "invalid": "Gib einen gültigen RateLoop-Einladungscode ein.",
+    "errors": {
+      "notFound": "Dieser Einladungscode wurde nicht gefunden.",
+      "unavailable": "Diese Einladung ist abgelaufen, widerrufen oder bereits verwendet.",
+      "accountMismatch": "Diese Einladung gehört zu einem anderen angemeldeten Konto.",
+      "emailMismatch": "Diese Einladung gehört zu einer anderen bestätigten E-Mail-Adresse.",
+      "roleConflict": "Deine bestehende Workspace-Verantwortung steht im Konflikt mit dieser Einladung."
+    },
     "checkFailed": "Die Einladung konnte nicht geprüft werden.",
     "acceptFailed": "Die Einladung konnte nicht angenommen werden.",
     "title": "Einladung hinzufügen",
@@ -193,6 +200,12 @@
     "reviewerTitle": "Einladung für Prüfende",
     "description": "Prüfe zugewiesene private Arbeit, ohne dem Workspace beizutreten.",
     "materialLimit": "Limit für privates Material",
+    "sensitivities": {
+      "internal": "Intern",
+      "confidential": "Vertraulich",
+      "restricted": "Eingeschränkt",
+      "regulated": "Reguliert"
+    },
     "invitationExpires": "Einladung läuft ab",
     "accessExpires": "Prüfzugriff läuft ab",
     "accepting": "Wird angenommen…",

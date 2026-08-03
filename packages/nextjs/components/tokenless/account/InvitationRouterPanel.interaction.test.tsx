@@ -1,7 +1,7 @@
 import React from "react";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
+import { AgentTestProviders, withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 test("workspace invitation codes require preview and explicit acceptance before redemption", async () => {
@@ -99,7 +99,7 @@ test("workspace reviewer invitations are previewed, redeemed from the body, and 
     await user.click(view.getByRole("button", { name: "Continue" }));
     assert.ok((await view.findByText("Reviewer invitation")).textContent);
     assert.ok(view.getByText("Review assigned private work without joining the workspace."));
-    assert.ok(view.getByText("confidential"));
+    assert.ok(view.getByText("Confidential"));
     assert.equal(accepted.length, 0);
     await user.click(view.getByRole("button", { name: "Accept invitation" }));
 
@@ -267,6 +267,68 @@ test("legacy private-group invitation codes are no longer accepted", async () =>
     await waitFor(() => assert.ok(view.getByRole("alert").textContent?.includes("valid RateLoop invitation code")));
     assert.deepEqual(calls, []);
     assert.equal(view.queryByRole("button", { name: "Accept invitation" }), null);
+  } finally {
+    cleanup();
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});
+
+test("invitation failures map every account-bound lifecycle error to local copy", async () => {
+  const { invitationErrorTranslationKey } = await import("./InvitationRouterPanel");
+  assert.equal(invitationErrorTranslationKey("invite_not_found"), "errors.notFound");
+  assert.equal(invitationErrorTranslationKey("reviewer_invitation_unavailable"), "errors.unavailable");
+  assert.equal(invitationErrorTranslationKey("invite_account_mismatch"), "errors.accountMismatch");
+  assert.equal(invitationErrorTranslationKey("reviewer_invitation_email_mismatch"), "errors.emailMismatch");
+  assert.equal(invitationErrorTranslationKey("membership_role_conflict"), "errors.roleConflict");
+  assert.equal(invitationErrorTranslationKey("unrelated_error"), null);
+});
+
+test("German reviewer invitations translate sensitivity and server lifecycle failures", async () => {
+  const restoreDom = installTestDom();
+  const { cleanup, render } = await import("@testing-library/react");
+  const userEvent = (await import("@testing-library/user-event")).default;
+  const { InvitationRouterPanel } = await import("./InvitationRouterPanel");
+  const previousFetch = globalThis.fetch;
+  let unavailable = false;
+  globalThis.fetch = async () =>
+    unavailable
+      ? Response.json(
+          {
+            code: "reviewer_invitation_unavailable",
+            field: "token",
+            message: "Reviewer invitation is no longer available.",
+          },
+          { status: 410 },
+        )
+      : Response.json({
+          invitation: {
+            accessExpiresAt: null,
+            expiresAt: "2030-01-01T00:00:00.000Z",
+            maxPrivateSensitivity: "confidential",
+            workspaceName: "Beispiel-Workspace",
+          },
+        });
+
+  try {
+    const view = render(
+      <AgentTestProviders locale="de">
+        <InvitationRouterPanel />
+      </AgentTestProviders>,
+    );
+    const user = userEvent.setup({ document });
+    const input = view.getByLabelText("Einladungscode");
+    await user.type(input, "rlri_german_preview");
+    await user.click(view.getByRole("button", { name: "Weiter" }));
+    assert.ok(await view.findByText("Vertraulich"));
+    assert.equal(view.queryByText("confidential"), null);
+
+    unavailable = true;
+    await user.clear(input);
+    await user.type(input, "rlri_expired_preview");
+    await user.click(view.getByRole("button", { name: "Weiter" }));
+    assert.ok(await view.findByText("Diese Einladung ist abgelaufen, widerrufen oder bereits verwendet."));
+    assert.equal(view.queryByText("Reviewer invitation is no longer available."), null);
   } finally {
     cleanup();
     globalThis.fetch = previousFetch;

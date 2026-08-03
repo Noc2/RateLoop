@@ -5,7 +5,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import { Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { Card } from "~~/components/tokenless/ui/Card";
-import { readJson } from "~~/lib/tokenless/http";
+import { HttpJsonError, readJson } from "~~/lib/tokenless/http";
 
 type ReviewerInvitationPreview = {
   workspaceName: string;
@@ -31,6 +31,30 @@ type InvitationPreviewState =
 
 export type InvitationKind = "reviewer" | "workspace";
 
+export function invitationErrorTranslationKey(code: string | null) {
+  switch (code) {
+    case "invite_not_found":
+    case "reviewer_invitation_not_found":
+      return "errors.notFound" as const;
+    case "invite_unavailable":
+    case "reviewer_invitation_unavailable":
+      return "errors.unavailable" as const;
+    case "invite_account_mismatch":
+    case "reviewer_invitation_account_mismatch":
+      return "errors.accountMismatch" as const;
+    case "invite_email_mismatch":
+    case "reviewer_invitation_email_mismatch":
+      return "errors.emailMismatch" as const;
+    case "membership_role_conflict":
+      return "errors.roleConflict" as const;
+    case "invalid_invite":
+    case "invalid_workspace_reviewer":
+      return "invalid" as const;
+    default:
+      return null;
+  }
+}
+
 export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: InvitationKind) => void }) {
   const t = useTranslations("account.invitation");
   const format = useFormatter();
@@ -42,6 +66,16 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
   const inspectControllerRef = useRef<AbortController | null>(null);
   const inspectGenerationRef = useRef(0);
   const { capture, clear, fieldErrors, formError } = useFormErrors();
+  const captureInvitationError = useCallback(
+    (cause: unknown, fallback: string) => {
+      if (cause instanceof HttpJsonError) {
+        const key = invitationErrorTranslationKey(cause.code);
+        if (key) return capture({ field: cause.field, message: t(key) }, fallback);
+      }
+      return capture(cause, fallback);
+    },
+    [capture, t],
+  );
 
   const inspectInvitation = useCallback(
     async (normalized: string) => {
@@ -108,7 +142,7 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
         capture({ field: "token", message: t("invalid") }, t("checkFailed"));
       } catch (cause) {
         if (!isCurrent() || controller.signal.aborted) return;
-        capture(cause, t("checkFailed"));
+        captureInvitationError(cause, t("checkFailed"));
       } finally {
         if (isCurrent()) {
           inspectControllerRef.current = null;
@@ -116,7 +150,7 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
         }
       }
     },
-    [capture, clear, onAccepted, t],
+    [capture, captureInvitationError, clear, onAccepted, t],
   );
 
   useEffect(() => {
@@ -169,7 +203,7 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
       setStatus(t(acceptedPreview.kind === "workspace" ? "workspaceAccepted" : "reviewerAccepted"));
       onAccepted?.(acceptedPreview.kind);
     } catch (cause) {
-      capture(cause, t("acceptFailed"));
+      captureInvitationError(cause, t("acceptFailed"));
     } finally {
       setBusy(false);
     }
@@ -259,7 +293,7 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
             <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
               <div>
                 <dt className="text-xs text-base-content/55">{t("materialLimit")}</dt>
-                <dd className="mt-1 capitalize">{preview.invitation.maxPrivateSensitivity}</dd>
+                <dd className="mt-1">{t(`sensitivities.${preview.invitation.maxPrivateSensitivity}`)}</dd>
               </div>
               <div>
                 <dt className="text-xs text-base-content/55">{t("invitationExpires")}</dt>
