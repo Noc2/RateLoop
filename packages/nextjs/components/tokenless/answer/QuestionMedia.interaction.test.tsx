@@ -115,6 +115,8 @@ test("approval state stays blocked until every image is visible and fails closed
     assert.equal(states.at(-1), "ready");
     fireEvent.error(images[0]!);
     assert.equal(states.at(-1), "error");
+    fireEvent.load(images[0]!);
+    assert.equal(states.at(-1), "ready");
   } finally {
     cleanup();
     restoreDom();

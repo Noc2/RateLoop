@@ -18,6 +18,12 @@ export type QuestionMediaPreviewCapability = {
   previewCapability: string;
 };
 
+export function questionMediaIdentity(media: PublicQuestionMedia) {
+  return media.kind === "youtube"
+    ? `youtube:${media.videoId}`
+    : `images:${media.items.map(item => `${item.assetId}@${item.digest}`).join("|")}`;
+}
+
 export function questionMediaImageSource(
   image: { assetId: string; digest: `sha256:${string}` },
   previewCapabilities: QuestionMediaPreviewCapability[] | undefined,
@@ -50,10 +56,7 @@ export function QuestionMedia({
   const reviewStateListenerRef = useRef(onReviewStateChange);
   // The exact attached context, independent of object identity. A queue reload hands this component
   // an equal but freshly parsed `media` object, which must not discard a loaded video or images.
-  const mediaKey =
-    media.kind === "youtube"
-      ? `youtube:${media.videoId}`
-      : `images:${media.items.map(item => `${item.assetId}@${item.digest}`).join("|")}`;
+  const mediaKey = questionMediaIdentity(media);
   const expectedImageCount = media.kind === "images" ? media.items.length : null;
 
   useEffect(() => {
@@ -122,9 +125,9 @@ export function QuestionMedia({
             allowFullScreen
             referrerPolicy="strict-origin-when-cross-origin"
             sandbox="allow-scripts allow-same-origin allow-presentation"
-            onLoad={() => onReviewStateChange?.({ status: "ready" })}
+            onLoad={() => reviewStateListenerRef.current?.({ status: "ready" })}
             onError={() =>
-              onReviewStateChange?.({
+              reviewStateListenerRef.current?.({
                 status: "error",
                 message: t("youtubeFailed"),
               })
@@ -179,12 +182,17 @@ export function QuestionMedia({
                   return next;
                 })
               }
-              onError={() =>
-                onReviewStateChange?.({
+              onError={() => {
+                setLoadedImages(current => {
+                  const next = new Set(current);
+                  next.delete(image.assetId);
+                  return next;
+                });
+                reviewStateListenerRef.current?.({
                   status: "error",
                   message: t("imageFailed", { index: index + 1 }),
-                })
-              }
+                });
+              }}
             />
           </button>
         ))}

@@ -46,6 +46,9 @@
     "confirmBackupAbove": "Sicherung oben bestätigen",
     "downloadBackupAbove": "Sicherung oben herunterladen",
     "createBackup": "Wiederherstellungssicherung erstellen",
+    "mediaLoadVideo": "Lade das erforderliche Video, um fortzufahren.",
+    "mediaLoadingImages": "Erforderliche Bilder werden geladen…",
+    "retryMedia": "Medien erneut laden",
     "working": "Wird verarbeitet…",
     "publicReview": "Öffentliche Prüfung",
     "guaranteed": "Garantiert {amount}",
@@ -175,11 +178,11 @@
   },
   "media": {
     "youtubeTitle": "YouTube-Kontext für diese Frage",
-    "youtubeFailed": "Der YouTube-Kontext konnte nicht geladen werden. Prüfe ihn, bevor du diesen Auftrag teilst.",
+    "youtubeFailed": "Der YouTube-Kontext konnte nicht geladen werden. Lade ihn erneut, bevor du fortfährst.",
     "loadYoutubeLabel": "YouTube-Video laden und abspielen",
     "loadYoutube": "YouTube-Video laden",
     "openImage": "Bild {index} öffnen: {alt}",
-    "imageFailed": "Bild {index} konnte nicht geladen werden. Prüfe es, bevor du diese Anfrage teilst.",
+    "imageFailed": "Bild {index} konnte nicht geladen werden. Lade es erneut, bevor du fortfährst.",
     "questionPreview": "Vorschau des Fragebilds",
     "closePreview": "Bildvorschau schließen"
   },

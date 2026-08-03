@@ -1,10 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { shouldInspectReservedVoucher } from "./publicSubmissionReceipt";
 import { useFormatter, useTranslations } from "next-intl";
 import type { Hex } from "viem";
-import { type PublicQuestionMedia, QuestionMedia } from "~~/components/tokenless/answer/QuestionMedia";
+import {
+  type PublicQuestionMedia,
+  QuestionMedia,
+  type QuestionMediaReviewState,
+  questionMediaIdentity,
+} from "~~/components/tokenless/answer/QuestionMedia";
 import { ChoiceInput, Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
 import { CrowdForecastField, isCrowdForecastPercent } from "~~/components/tokenless/review/CrowdForecastField";
 import { DeadlineChip } from "~~/components/tokenless/review/DeadlineChip";
@@ -50,6 +55,7 @@ import { loadReviewReceipt, saveReviewReceipt } from "~~/lib/tokenless/reviewRec
 import { formatUsdcAtomic } from "~~/lib/tokenless/usdc";
 
 export const PUBLIC_PAID_REVIEW_PRIVACY_CONTEXT = "public_paid" as const;
+const MEDIA_PENDING = { status: "pending" } as const satisfies QuestionMediaReviewState;
 
 type PublicAnswerTaskBase = {
   operationKey: string;
@@ -246,6 +252,12 @@ export function PublicQuestionCard({
   const [draftRestored, setDraftRestored] = useState(false);
   const [acceptedAssignmentId, setAcceptedAssignmentId] = useState<string | null>(null);
   const [networkTermsAccepted, setNetworkTermsAccepted] = useState(false);
+  const mediaIdentity = task.question.media ? questionMediaIdentity(task.question.media) : null;
+  const [mediaReview, setMediaReview] = useState<{
+    identity: string | null;
+    state: QuestionMediaReviewState;
+  }>(() => ({ identity: mediaIdentity, state: mediaIdentity ? MEDIA_PENDING : { status: "ready" } }));
+  const [mediaRetryAttempt, setMediaRetryAttempt] = useState(0);
   const rationaleRef = useRef<HTMLTextAreaElement>(null);
   const feedbackEnabled = task.question.rationale?.mode !== "off";
   const preparationBinding = publicSubmissionBinding(task, {
@@ -256,6 +268,8 @@ export function PublicQuestionCard({
     sourceUrl,
   });
   const activePreparedSubmission = preparedSubmission?.binding === preparationBinding ? preparedSubmission : null;
+  const currentMediaReview = mediaReview.identity === mediaIdentity ? mediaReview.state : MEDIA_PENDING;
+  const mediaReady = mediaIdentity === null || currentMediaReview.status === "ready";
   const publicDraftStorage = useMemo(() => ({ principalId }), [principalId]);
   const retryAvailable = Boolean(
     savedCommit &&
@@ -280,6 +294,16 @@ export function PublicQuestionCard({
         ? "accepted"
         : task.assignmentStatus;
   const networkAssignmentReady = networkAssignment === null || networkAssignmentStatus === "accepted";
+
+  const handleMediaReview = useCallback(
+    (state: QuestionMediaReviewState) => setMediaReview({ identity: mediaIdentity, state }),
+    [mediaIdentity],
+  );
+
+  function retryMedia() {
+    setMediaReview({ identity: mediaIdentity, state: MEDIA_PENDING });
+    setMediaRetryAttempt(current => current + 1);
+  }
 
   useEffect(() => {
     const receipt = loadReviewReceipt("public", taskIdentity, isPublicSubmissionReceipt, { principalId });
@@ -530,6 +554,7 @@ export function PublicQuestionCard({
       paidAccess.state !== "ready" ||
       !answer ||
       !isPublicPredictionPercent(prediction) ||
+      !mediaReady ||
       publicResponseIssue ||
       task.alreadyVouchered
     ) {
@@ -656,7 +681,13 @@ export function PublicQuestionCard({
   }
 
   async function submitPreparedResponse() {
-    if (paidAccess.state !== "ready" || !activePreparedSubmission || !recoveryConfirmed || task.alreadyVouchered) {
+    if (
+      paidAccess.state !== "ready" ||
+      !activePreparedSubmission ||
+      !recoveryConfirmed ||
+      !mediaReady ||
+      task.alreadyVouchered
+    ) {
       return;
     }
     let preparedForRetry = false;
@@ -879,6 +910,7 @@ export function PublicQuestionCard({
         (!savedCommit &&
           (!answer ||
             !isPublicPredictionPercent(prediction) ||
+            !mediaReady ||
             Boolean(publicResponseIssue) ||
             task.alreadyVouchered ||
             (Boolean(activePreparedSubmission) && !recoveryConfirmed)))
@@ -929,7 +961,30 @@ export function PublicQuestionCard({
             <span>{t("round", { round: task.roundId })}</span>
           </div>
           <h2 className="mt-8 max-w-3xl text-2xl font-semibold leading-tight sm:text-3xl">{task.question.prompt}</h2>
-          {task.question.media ? <QuestionMedia media={task.question.media} /> : null}
+          {task.question.media ? (
+            <>
+              <QuestionMedia
+                key={`${mediaIdentity}:${mediaRetryAttempt}`}
+                media={task.question.media}
+                onReviewStateChange={handleMediaReview}
+              />
+              {currentMediaReview.status === "pending" ? (
+                <p className="mt-3 text-sm text-base-content/55" role="status">
+                  {task.question.media.kind === "youtube" ? t("mediaLoadVideo") : t("mediaLoadingImages")}
+                </p>
+              ) : null}
+              {currentMediaReview.status === "error" ? (
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <p className="text-sm text-error" role="alert">
+                    {currentMediaReview.message}
+                  </p>
+                  <button type="button" className="btn btn-xs rateloop-secondary-action" onClick={retryMedia}>
+                    {t("retryMedia")}
+                  </button>
+                </div>
+              ) : null}
+            </>
+          ) : null}
           <p className="mt-5 text-sm leading-6 text-base-content/55">{t("instructions")}</p>
           <div className="mt-8 flex flex-wrap gap-x-5 gap-y-2 border-t border-base-content/10 pt-4 text-xs text-base-content/55">
             <span>{t("guaranteed", { amount: `$${usdc(task.earnings.guaranteedBaseAtomic)}` })}</span>

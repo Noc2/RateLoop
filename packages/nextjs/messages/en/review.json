@@ -46,6 +46,9 @@
     "confirmBackupAbove": "Confirm backup above",
     "downloadBackupAbove": "Download backup above",
     "createBackup": "Create recovery backup",
+    "mediaLoadVideo": "Load the required video to continue.",
+    "mediaLoadingImages": "Loading required images…",
+    "retryMedia": "Retry media",
     "working": "Working…",
     "publicReview": "Public review",
     "guaranteed": "Guaranteed {amount}",
@@ -175,11 +178,11 @@
   },
   "media": {
     "youtubeTitle": "YouTube context for this question",
-    "youtubeFailed": "The YouTube context could not be loaded. Check it before sharing this ask.",
+    "youtubeFailed": "The YouTube context could not be loaded. Reload it before continuing.",
     "loadYoutubeLabel": "Load and play YouTube video",
     "loadYoutube": "Load YouTube video",
     "openImage": "Open image {index}: {alt}",
-    "imageFailed": "Image {index} could not be loaded. Check it before sharing this ask.",
+    "imageFailed": "Image {index} could not be loaded. Reload it before continuing.",
     "questionPreview": "Question image preview",
     "closePreview": "Close image preview"
   },

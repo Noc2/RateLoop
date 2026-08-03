@@ -179,6 +179,65 @@ test("public tasks with the same round on different panels keep distinct card an
   }
 });
 
+test("assigned public work surfaces required-media failures and blocks submission until retry succeeds", async () => {
+  const restoreDom = installTestDom();
+  const { cleanup, fireEvent, render: baseRender, waitFor, within } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
+  const userEvent = (await import("@testing-library/user-event")).default;
+  const { AppRouterContext } = await import("next/dist/shared/lib/app-router-context.shared-runtime");
+  const { AnswerPageClient } = await import("./AnswerPageClient");
+  const mediaTask: PublicAnswerTask = {
+    ...publicTask,
+    operationKey: "public-task-required-media",
+    panelAddress: `0x${"7".repeat(40)}`,
+    question: {
+      ...publicTask.question,
+      prompt: "Review the attached checkout image",
+      media: {
+        kind: "images",
+        items: [
+          {
+            alt: "Checkout confirmation",
+            assetId: `pqm_${"A".repeat(24)}`,
+            digest: `sha256:${"a".repeat(64)}`,
+          },
+        ],
+      },
+    },
+  };
+  const restoreFetch = installQueueFetch({ assignments: [], tasks: [mediaTask] });
+
+  try {
+    render(
+      <AppRouterContext.Provider value={router as never}>
+        <AnswerPageClient />
+      </AppRouterContext.Provider>,
+    );
+    const screen = within(document.body);
+    const image = await screen.findByRole<HTMLImageElement>("img", { name: "Checkout confirmation" });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Matches" }));
+    fireEvent.change(screen.getByRole("spinbutton", { name: /what percentage/iu }), { target: { value: "73" } });
+
+    const advance = () => screen.getByRole<HTMLButtonElement>("button", { name: "Create recovery backup" });
+    assert.equal(advance().disabled, true);
+    fireEvent.error(image);
+    assert.match(screen.getByRole("alert").textContent ?? "", /image 1 could not be loaded/iu);
+    assert.equal(advance().disabled, true);
+
+    await user.click(screen.getByRole("button", { name: "Retry media" }));
+    assert.equal(screen.getByText("Loading required images…").getAttribute("role"), "status");
+    fireEvent.load(screen.getByRole("img", { name: "Checkout confirmation" }));
+    await waitFor(() => assert.equal(advance().disabled, false));
+    assert.equal(screen.queryByRole("alert"), null);
+  } finally {
+    cleanup();
+    await settle();
+    restoreFetch();
+    restoreDom();
+  }
+});
+
 test("history renders assigned private work", async () => {
   const restoreDom = installTestDom();
   const { cleanup, render: baseRender, waitFor, within } = await import("@testing-library/react");
