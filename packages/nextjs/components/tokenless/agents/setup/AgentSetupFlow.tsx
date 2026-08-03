@@ -691,6 +691,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
         );
         const next = (await readJson(response)) as unknown as SetupResponse;
         if (stopped) return;
+        setError(null);
         setSetup(next);
         if (next.resumeStep === "agent") {
           setAnnouncement(statusCopy("agentConnected"));

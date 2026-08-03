@@ -143,6 +143,20 @@ function installFormData() {
   };
 }
 
+function showDocument() {
+  Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+  return () => Reflect.deleteProperty(document, "visibilityState");
+}
+
+async function pollUntil(act: (callback: () => Promise<void>) => Promise<unknown>, settled: () => boolean) {
+  for (let attempt = 0; attempt < 100 && !settled(); attempt += 1) {
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+      await new Promise(resolve => globalThis.setTimeout(resolve, 10));
+    });
+  }
+}
+
 function stubRouter() {
   const calls: Array<{ method: "push" | "replace"; url: string }> = [];
   return {
@@ -271,6 +285,49 @@ test("a failed step load surfaces the reason instead of doing nothing", async ()
   } finally {
     await act(async () => cleanup());
     globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});
+
+test("a recovered setup connection poll clears its refresh-failure banner", async () => {
+  const restoreDom = installTestDom();
+  const restoreVisibility = showDocument();
+  const { act, cleanup, within } = await import("@testing-library/react");
+  const previousFetch = globalThis.fetch;
+  const refreshFailure = "Connection status could not refresh. RateLoop will retry while this page is visible.";
+  let failRefresh = true;
+
+  globalThis.fetch = async input => {
+    const url = String(input);
+    if (url.includes("/agent-setup?step=connect")) {
+      if (failRefresh) return Response.json({ message: "Connection service unavailable." }, { status: 503 });
+      return Response.json(
+        setupView("connect", { connection: { ...setupView("connect").connection, status: "issued" } }),
+      );
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  };
+
+  try {
+    await renderFlow(
+      setupView("connect", { connection: { ...setupView("connect").connection, status: "issued" } }),
+      stubRouter().router,
+    );
+    const screen = within(document.body);
+
+    await pollUntil(act, () => screen.queryByText(refreshFailure) !== null);
+    assert.equal(screen.getByText(refreshFailure).getAttribute("role"), "alert");
+
+    failRefresh = false;
+    await pollUntil(act, () => screen.queryByText(refreshFailure) === null);
+    assert.ok(
+      screen.queryByText(refreshFailure) === null,
+      "the successful retry must clear the error it recovered from",
+    );
+  } finally {
+    await act(async () => cleanup());
+    globalThis.fetch = previousFetch;
+    restoreVisibility();
     restoreDom();
   }
 });
