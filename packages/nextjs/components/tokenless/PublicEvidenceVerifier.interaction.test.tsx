@@ -1,7 +1,7 @@
 import React from "react";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
+import { AgentTestProviders, withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 test("invalid pasted JSON fails locally without contacting a server", async () => {
@@ -28,6 +28,27 @@ test("invalid pasted JSON fails locally without contacting a server", async () =
   } finally {
     await act(async () => cleanup());
     globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});
+
+test("invalid pasted JSON renders localized recovery in German", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup, fireEvent, render } = await import("@testing-library/react");
+  const { PublicEvidenceVerifier } = await import("./PublicEvidenceVerifier");
+
+  try {
+    const view = render(
+      <AgentTestProviders locale="de">
+        <PublicEvidenceVerifier />
+      </AgentTestProviders>,
+    );
+    fireEvent.change(view.getByLabelText("Paket-JSON"), { target: { value: "{broken" } });
+    fireEvent.click(view.getByRole("button", { name: "Paket verifizieren" }));
+
+    assert.equal((await view.findByRole("alert")).textContent, "Das Paket enthält kein gültiges JSON.");
+  } finally {
+    await act(async () => cleanup());
     restoreDom();
   }
 });

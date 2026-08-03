@@ -223,6 +223,7 @@
     "The ask is authenticated and still running. Automatic checking stopped; you can check again without resubmitting it.": "The ask is authenticated and still running. Automatic checking stopped; you can check again without resubmitting it.",
     "The customer funded this business research panel and its reviewers. This is not organic consumer feedback, a testimonial, or a measure of general public opinion.": "The customer funded this business research panel and its reviewers. This is not organic consumer feedback, a testimonial, or a measure of general public opinion.",
     "The packet could not be verified.": "The packet could not be verified.",
+    "The packet is not valid JSON.": "The packet is not valid JSON.",
     "The selected file could not be read.": "The selected file could not be read.",
     "This bearer token is shown only once.": "This bearer token is shown only once.",
     "This evidence share is unavailable. Ask the sender for a new link.": "This evidence share is unavailable. Ask the sender for a new link.",

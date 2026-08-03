@@ -223,6 +223,7 @@
     "The ask is authenticated and still running. Automatic checking stopped; you can check again without resubmitting it.": "Die Anfrage ist authentifiziert und läuft noch. Die automatische Prüfung wurde beendet; du kannst erneut prüfen, ohne sie noch einmal abzusenden.",
     "The customer funded this business research panel and its reviewers. This is not organic consumer feedback, a testimonial, or a measure of general public opinion.": "Der Kunde hat dieses geschäftliche Forschungspanel und seine Prüfenden finanziert. Es handelt sich weder um organisches Verbraucherfeedback noch um eine Empfehlung oder ein Maß für die allgemeine öffentliche Meinung.",
     "The packet could not be verified.": "Das Paket konnte nicht verifiziert werden.",
+    "The packet is not valid JSON.": "Das Paket enthält kein gültiges JSON.",
     "The selected file could not be read.": "Die ausgewählte Datei konnte nicht gelesen werden.",
     "This bearer token is shown only once.": "Dieser Bearer-Token wird nur einmal angezeigt.",
     "This evidence share is unavailable. Ask the sender for a new link.": "Diese Nachweisfreigabe ist nicht verfügbar. Bitte den Absender um einen neuen Link.",
