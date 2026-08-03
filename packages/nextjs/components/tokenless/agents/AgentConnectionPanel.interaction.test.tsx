@@ -1,6 +1,7 @@
 import React from "react";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 const REFRESH_FAILURE = "Connection status could not refresh. RateLoop will retry while this page is visible.";
@@ -51,7 +52,8 @@ function connectedIntegration() {
 test("a recovered poll clears its own refresh-failure banner", async () => {
   const restoreDom = installTestDom();
   const restoreVisibility = showDocument();
-  const { act, cleanup, render, within } = await import("@testing-library/react");
+  const { act, cleanup, render: baseRender, within } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const { RateLoopNotificationProvider } = await import("~~/components/tokenless/RateLoopNotificationProvider");
   const { AgentConnectionPanel } = await import("./AgentConnectionPanel");
   const previousFetch = globalThis.fetch;
@@ -102,7 +104,8 @@ test("a recovered poll clears its own refresh-failure banner", async () => {
 test("polling reports the connection state once instead of on every refresh", async () => {
   const restoreDom = installTestDom();
   const restoreVisibility = showDocument();
-  const { act, cleanup, render, within } = await import("@testing-library/react");
+  const { act, cleanup, render: baseRender, within } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const { RateLoopNotificationProvider } = await import("~~/components/tokenless/RateLoopNotificationProvider");
   const { AgentConnectionPanel } = await import("./AgentConnectionPanel");
   const previousFetch = globalThis.fetch;
@@ -152,7 +155,8 @@ test("polling reports the connection state once instead of on every refresh", as
 
 test("copying the visible message clears the clipboard-failure banner it replaced", async () => {
   const restoreDom = installTestDom();
-  const { act, cleanup, fireEvent, render, within } = await import("@testing-library/react");
+  const { act, cleanup, fireEvent, render: baseRender, within } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const { RateLoopNotificationProvider } = await import("~~/components/tokenless/RateLoopNotificationProvider");
   const { AgentConnectionPanel } = await import("./AgentConnectionPanel");
   const previousFetch = globalThis.fetch;
@@ -219,7 +223,8 @@ test("copying the visible message clears the clipboard-failure banner it replace
 
 test("all five consequential connection actions require confirmation before sending their original mutations", async () => {
   const restoreDom = installTestDom();
-  const { act, cleanup, fireEvent, render, waitFor, within } = await import("@testing-library/react");
+  const { act, cleanup, fireEvent, render: baseRender, waitFor, within } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const { RateLoopNotificationProvider } = await import("~~/components/tokenless/RateLoopNotificationProvider");
   const { AgentConnectionPanel } = await import("./AgentConnectionPanel");
   const previousFetch = globalThis.fetch;

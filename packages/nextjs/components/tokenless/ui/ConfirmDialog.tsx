@@ -2,6 +2,7 @@
 
 import { type ReactNode, useEffect, useId, useRef } from "react";
 import { Button } from "./Button";
+import { useTranslations } from "next-intl";
 import { Card } from "~~/components/tokenless/ui/Card";
 
 export function ConfirmDialog({
@@ -9,7 +10,7 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel,
-  cancelLabel = "Cancel",
+  cancelLabel,
   busy = false,
   destructive = true,
   onCancel,
@@ -25,6 +26,7 @@ export function ConfirmDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const t = useTranslations("common.confirmDialog");
   const titleId = useId();
   const descriptionId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -86,10 +88,10 @@ export function ConfirmDialog({
         </div>
         <div className="mt-6 flex flex-wrap justify-end gap-3">
           <Button type="button" variant="secondary" disabled={busy} onClick={onCancel}>
-            {cancelLabel}
+            {cancelLabel ?? t("cancel")}
           </Button>
           <Button type="button" variant={destructive ? "danger" : "primary"} disabled={busy} onClick={onConfirm}>
-            {busy ? "Working…" : confirmLabel}
+            {busy ? t("working") : confirmLabel}
           </Button>
         </div>
       </Card>

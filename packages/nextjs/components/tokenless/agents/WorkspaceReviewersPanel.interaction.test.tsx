@@ -1,11 +1,13 @@
 import React from "react";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 test("an owner can confirm exact specialist areas for an active invited reviewer", async () => {
   const restoreDom = installTestDom();
-  const { act, cleanup, render, waitFor } = await import("@testing-library/react");
+  const { act, cleanup, render: baseRender, waitFor } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { WorkspaceReviewersPanel } = await import("./WorkspaceReviewersPanel");
   const previousFetch = globalThis.fetch;
@@ -91,7 +93,8 @@ test("an owner can confirm exact specialist areas for an active invited reviewer
 
 test("reviewer removal and invitation revocation require their explicit dialogs", async () => {
   const restoreDom = installTestDom();
-  const { act, cleanup, render, waitFor, within } = await import("@testing-library/react");
+  const { act, cleanup, render: baseRender, waitFor, within } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
   const userEvent = (await import("@testing-library/user-event")).default;
   const { WorkspaceReviewersPanel } = await import("./WorkspaceReviewersPanel");
   const previousFetch = globalThis.fetch;

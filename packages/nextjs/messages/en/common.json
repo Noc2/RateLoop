@@ -1,5 +1,9 @@
 {
   "localeName": "English",
+  "confirmDialog": {
+    "cancel": "Cancel",
+    "working": "Working…"
+  },
   "recovery": {
     "usefulDestinations": "Useful destinations",
     "search": "Search",

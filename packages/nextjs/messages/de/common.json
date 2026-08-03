@@ -1,5 +1,9 @@
 {
   "localeName": "Deutsch",
+  "confirmDialog": {
+    "cancel": "Abbrechen",
+    "working": "Wird verarbeitet…"
+  },
   "recovery": {
     "usefulDestinations": "Nützliche Ziele",
     "search": "Suchen",

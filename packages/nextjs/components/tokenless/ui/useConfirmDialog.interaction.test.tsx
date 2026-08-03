@@ -1,7 +1,9 @@
 import React from "react";
+import { NextIntlClientProvider } from "next-intl";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
+import { getMessagesForLocale } from "~~/i18n/messages";
 
 test("the confirmation controller resolves only after an explicit dialog choice", async () => {
   const restoreDom = installTestDom();
@@ -33,7 +35,11 @@ test("the confirmation controller resolves only after an explicit dialog choice"
   }
 
   try {
-    const view = render(<Harness />);
+    const view = render(
+      <NextIntlClientProvider locale="en" messages={getMessagesForLocale("en")} timeZone="UTC">
+        <Harness />
+      </NextIntlClientProvider>,
+    );
     const user = userEvent.setup({ document });
     await user.click(view.getByRole("button", { name: "Save" }));
     assert.equal(choices.length, 0);
