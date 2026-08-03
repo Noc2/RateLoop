@@ -1,14 +1,10 @@
 import type { AgentTab } from "./AgentTabs";
 import { type EvidenceUrlState, updateEvidenceUrlSearch } from "./evidenceUrlState";
+import { type AgentAccessPresentation, hasActiveAgentAccess } from "~~/lib/tokenless/agentAccessPresentation";
 
 type WorkspaceOption = { workspaceId: string };
-type ConnectionOption = {
-  status: string | null;
-  connectionStatus?: string | null;
-  expiresAt?: string | null;
-};
-
-type OAuthConnectionOption = ConnectionOption & {
+type OAuthConnectionOption = {
+  access: AgentAccessPresentation;
   agentId: string;
   oauthClientId?: string | null;
 };
@@ -18,26 +14,15 @@ export function selectRequestedWorkspace<T extends WorkspaceOption>(workspaces: 
   return workspaces.find(workspace => workspace.workspaceId === requestedWorkspaceId) ?? null;
 }
 
-export function isUsableAgentConnection(connection: ConnectionOption, now = Date.now()) {
-  if (connection.status !== "active") return false;
-  if (connection.connectionStatus && connection.connectionStatus !== "connected") return false;
-  if (!connection.expiresAt) return true;
-  const expiresAt = new Date(connection.expiresAt).getTime();
-  return Number.isFinite(expiresAt) && expiresAt > now;
-}
-
-export function selectReconnectableOAuthConnections<T extends OAuthConnectionOption>(
-  connections: T[],
-  now = Date.now(),
-) {
+export function selectReconnectableOAuthConnections<T extends OAuthConnectionOption>(connections: T[]) {
   const agentsWithUsableConnections = new Set(
-    connections.filter(connection => isUsableAgentConnection(connection, now)).map(connection => connection.agentId),
+    connections.filter(connection => hasActiveAgentAccess(connection.access)).map(connection => connection.agentId),
   );
   const selectedAgentIds = new Set<string>();
   return connections.filter(connection => {
-    if (!connection.agentId || !connection.oauthClientId) return false;
+    if (!connection.agentId || !connection.oauthClientId || connection.access.credentialKind !== "oauth") return false;
     if (agentsWithUsableConnections.has(connection.agentId)) return false;
-    if (isUsableAgentConnection(connection, now) || selectedAgentIds.has(connection.agentId)) return false;
+    if (connection.access.rateLoopAccessState !== "inactive" || selectedAgentIds.has(connection.agentId)) return false;
     selectedAgentIds.add(connection.agentId);
     return true;
   });

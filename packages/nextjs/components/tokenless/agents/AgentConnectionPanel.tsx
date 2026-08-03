@@ -12,11 +12,7 @@ import { AgentText } from "./AgentText";
 import { useAgentFormatter, useAgentTranslations } from "./AgentsLocaleProvider";
 import type { AgentConnectionHistoryEntry } from "./agentAuditHistory";
 import { buildAgentConnectionMessage, buildAgentConnectionMessageForHost } from "./agentConnectionMessage";
-import {
-  canStartAgentConnection,
-  isUsableAgentConnection,
-  selectReconnectableOAuthConnections,
-} from "./agentWorkspaceState";
+import { canStartAgentConnection, selectReconnectableOAuthConnections } from "./agentWorkspaceState";
 import { useLocalizedReviewPolicyCopy } from "./reviewPolicyCopy";
 import { Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
@@ -27,6 +23,7 @@ import { Card } from "~~/components/tokenless/ui/Card";
 import { ConfirmDialog } from "~~/components/tokenless/ui/ConfirmDialog";
 import {
   type AgentAccessPresentation,
+  hasActiveAgentAccess,
   normalizeAgentAccessPresentation,
 } from "~~/lib/tokenless/agentAccessPresentation";
 import { type TokenlessHostId } from "~~/lib/tokenless/hostCapabilities";
@@ -72,7 +69,6 @@ type AgentIntegration = {
   credentialExpiresAt: string | null;
   connectionStatus: string | null;
   oauthClientId: string;
-  oauthRecoveryAvailable: boolean;
   access: AgentAccessPresentation;
 };
 
@@ -278,7 +274,6 @@ export function normalizeAgentIntegration(value: unknown): AgentIntegration {
     credentialExpiresAt: nullableStringField(row, "credentialExpiresAt", "expiresAt"),
     connectionStatus: nullableStringField(row, "connectionStatus"),
     oauthClientId: stringField(row, "oauthClientId"),
-    oauthRecoveryAvailable: row.oauthRecoveryAvailable === true,
     access: normalizeAgentAccessPresentation(row.access),
   };
 }
@@ -772,13 +767,7 @@ export function AgentConnectionPanel({
       setIntegrations(nextIntegrations);
       reportConnectionState(
         selectedWorkspaceId,
-        nextIntegrations.some(integration =>
-          isUsableAgentConnection({
-            status: integration.status,
-            connectionStatus: integration.connectionStatus,
-            expiresAt: integration.credentialExpiresAt,
-          }),
-        ),
+        nextIntegrations.some(integration => hasActiveAgentAccess(integration.access)),
       );
       setPublishingPolicies(
         responseList(policyBody, "policies")
@@ -1154,18 +1143,13 @@ export function AgentConnectionPanel({
     isActiveAgentConnectionIntent(intent, connectionClock),
   );
   const activePairings = pairings.filter(pairing => isPendingAgentPairing(pairing, connectionClock));
-  const activeIntegrations = integrations.filter(integration =>
-    isUsableAgentConnection(
-      {
-        status: integration.status,
-        connectionStatus: integration.connectionStatus,
-        expiresAt: integration.credentialExpiresAt,
-      },
-      connectionClock,
-    ),
+  const activeIntegrations = integrations.filter(integration => hasActiveAgentAccess(integration.access));
+  const recoveryIntegrations = integrations.filter(
+    integration => integration.access.rateLoopAccessState === "recovery_required",
   );
+  const managedIntegrations = [...activeIntegrations, ...recoveryIntegrations];
   const allActiveIntegrationsUseSafeAccess = activeIntegrations.every(integration => !integration.apiKeyId);
-  const reconnectableIntegrations = selectReconnectableOAuthConnections(integrations, connectionClock);
+  const reconnectableIntegrations = selectReconnectableOAuthConnections(integrations);
   const showConnectionStart = canStartAgentConnection({
     loading,
     activeConnectionIntentCount: activeConnectionIntents.length,
@@ -1593,24 +1577,26 @@ export function AgentConnectionPanel({
         </Card>
       ) : null}
 
-      {!loading && workspaceId && activeIntegrations.length > 0 ? (
+      {!loading && workspaceId && managedIntegrations.length > 0 ? (
         <Card as="section" className="rounded-2xl p-6" aria-labelledby="connected-agents-heading">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <h2 id="connected-agents-heading" className="text-xl font-semibold">
-                {allActiveIntegrationsUseSafeAccess
-                  ? activeIntegrations.length === 1
-                    ? t("authorizationSavedOne", {
-                        name: activeIntegrations[0].agentDisplayName || t("agentFallback"),
-                      })
-                    : t("authorizationSavedMany", { count: activeIntegrations.length })
-                  : activeIntegrations.length === 1
-                    ? t("connectedOne", {
-                        name: activeIntegrations[0].agentDisplayName || t("agentFallback"),
-                      })
-                    : t("connectedMany", { count: activeIntegrations.length })}
+                {activeIntegrations.length === 0
+                  ? t("accessNeedsAttention")
+                  : allActiveIntegrationsUseSafeAccess
+                    ? activeIntegrations.length === 1
+                      ? t("authorizationSavedOne", {
+                          name: activeIntegrations[0].agentDisplayName || t("agentFallback"),
+                        })
+                      : t("authorizationSavedMany", { count: activeIntegrations.length })
+                    : activeIntegrations.length === 1
+                      ? t("connectedOne", {
+                          name: activeIntegrations[0].agentDisplayName || t("agentFallback"),
+                        })
+                      : t("connectedMany", { count: activeIntegrations.length })}
               </h2>
-              {allActiveIntegrationsUseSafeAccess ? (
+              {activeIntegrations.length > 0 && allActiveIntegrationsUseSafeAccess ? (
                 <div className="mt-2 space-y-1 text-sm leading-6 text-base-content/55">
                   <p>
                     <AgentText id="translated024" />
@@ -1643,36 +1629,34 @@ export function AgentConnectionPanel({
               </Button>
             </div>
           </div>
-          {activeIntegrations
-            .filter(integration => integration.oauthRecoveryAvailable)
-            .map(integration => (
-              <div
-                key={`oauth-recovery:${integration.integrationId}`}
-                className="mt-5 flex flex-col gap-3 rounded-xl border border-warning/20 bg-warning/[0.06] p-4 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div>
-                  <p className="font-medium">
-                    {integration.agentDisplayName || "Codex"} <AgentText id="translated025" />
-                  </p>
-                  <p className="mt-1 text-sm text-base-content/60">
-                    <AgentText id="translated026" />
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  disabled={Boolean(busyAction)}
-                  onClick={() => void recoverOAuthIntegration(integration)}
-                >
-                  {busyAction === `recover-oauth:${integration.integrationId}` ? t("restoring") : t("restore")}
-                </Button>
+          {recoveryIntegrations.map(integration => (
+            <div
+              key={`oauth-recovery:${integration.integrationId}`}
+              className="mt-5 flex flex-col gap-3 rounded-xl border border-warning/20 bg-warning/[0.06] p-4 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div>
+                <p className="font-medium">
+                  {integration.agentDisplayName || "Codex"} <AgentText id="translated025" />
+                </p>
+                <p className="mt-1 text-sm text-base-content/60">
+                  <AgentText id="translated026" />
+                </p>
               </div>
-            ))}
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={Boolean(busyAction)}
+                onClick={() => void recoverOAuthIntegration(integration)}
+              >
+                {busyAction === `recover-oauth:${integration.integrationId}` ? t("restoring") : t("restore")}
+              </Button>
+            </div>
+          ))}
           {showConnectionManagement ? (
             <div id="connected-agent-management" className="mt-5 space-y-4">
-              {activeIntegrations.map(integration => {
-                const active = integration.status === "active";
+              {managedIntegrations.map(integration => {
+                const active = hasActiveAgentAccess(integration.access);
                 const legacyCredential = Boolean(integration.apiKeyId);
                 return (
                   <article
@@ -1689,7 +1673,9 @@ export function AgentConnectionPanel({
                           <span
                             className={`badge border-0 ${active ? "bg-success/10 text-success" : "bg-base-content/[0.06] text-base-content/55"}`}
                           >
-                            {integration.status}
+                            {integration.access.rateLoopAccessState === "recovery_required"
+                              ? t("recoveryRequired")
+                              : integration.status}
                           </span>
                           <span className="badge badge-ghost">
                             {integration.enforcementMode === "host_enforced" ? "host-enforced" : "advisory"}

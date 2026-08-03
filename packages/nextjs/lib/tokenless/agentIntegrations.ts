@@ -378,7 +378,6 @@ export async function listAgentConnections(input: { accountAddress: string; work
         activationMode: text(row, "activation_mode"),
         connectionStatus: text(row, "connection_status"),
         oauthClientId: text(row, "oauth_client_id"),
-        oauthRecoveryAvailable,
         access: deriveAgentAccessPresentation({
           activationMode: text(row, "activation_mode"),
           integrationStatus: text(row, "status"),

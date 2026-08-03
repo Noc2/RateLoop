@@ -337,6 +337,8 @@
     "cancelling": "Wird abgebrochen…",
     "restore": "Verbindung wiederherstellen",
     "restoring": "Wird wiederhergestellt…",
+    "accessNeedsAttention": "Agent-Zugriff erfordert Aufmerksamkeit",
+    "recoveryRequired": "Wiederherstellung erforderlich",
     "resolve": "Diese Verbindung klären",
     "closePage": "Du kannst diese Seite schließen.",
     "agentHost": "Agent-Host",

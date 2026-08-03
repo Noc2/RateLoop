@@ -41,6 +41,13 @@ function activeIntent() {
 
 function connectedIntegration() {
   return {
+    access: {
+      credentialKind: "oauth",
+      rateLoopAccessState: "active",
+      hostToolReadiness: "unverified",
+      canPublish: false,
+      canSpend: false,
+    },
     integrationId: "integration-1",
     status: "active",
     connectionStatus: "connected",
@@ -159,6 +166,65 @@ test("polling reports the connection state once instead of on every refresh", as
   }
 });
 
+test("replay-revoked OAuth stays inactive until its restore completes", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup, fireEvent, render: baseRender, waitFor, within } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
+  const { RateLoopNotificationProvider } = await import("~~/components/tokenless/RateLoopNotificationProvider");
+  const { AgentConnectionPanel } = await import("./AgentConnectionPanel");
+  const previousFetch = globalThis.fetch;
+  const reported: boolean[] = [];
+  let recovered = false;
+  const recoveryIntegration = {
+    ...connectedIntegration(),
+    access: {
+      credentialKind: "oauth",
+      rateLoopAccessState: "recovery_required",
+      hostToolReadiness: "unverified",
+      canPublish: false,
+      canSpend: false,
+    },
+  };
+
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (init?.method === "POST" && url.endsWith("/agent-integrations/integration-1/recover-oauth")) {
+      recovered = true;
+      return Response.json({ integration: { oauthRecovered: true } });
+    }
+    if (url.endsWith("/agent-connections")) return Response.json({ intents: [] });
+    if (url.endsWith("/agent-pairings")) return Response.json({ pairings: [] });
+    if (url.endsWith("/agent-integrations")) {
+      return Response.json({ integrations: [recovered ? connectedIntegration() : recoveryIntegration] });
+    }
+    if (url.endsWith("/agent-publishing-policies")) return Response.json({ policies: [] });
+    throw new Error(`Unexpected request: ${url}`);
+  };
+
+  try {
+    render(
+      <RateLoopNotificationProvider>
+        <AgentConnectionPanel
+          workspaceId="workspace-1"
+          onConnectionStateChange={connected => reported.push(connected)}
+        />
+      </RateLoopNotificationProvider>,
+    );
+    const screen = within(document.body);
+    assert.ok(await screen.findByRole("heading", { name: "Agent access needs attention" }));
+    assert.ok(screen.getByText(/needs its connection restored/));
+    assert.deepEqual(reported, [false]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Restore connection" }));
+    await waitFor(() => assert.ok(screen.getByRole("heading", { name: "Codex authorized in RateLoop" })));
+    assert.deepEqual(reported, [false, true]);
+  } finally {
+    await act(async () => cleanup());
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});
+
 test("copying the visible message clears the clipboard-failure banner it replaced", async () => {
   const restoreDom = installTestDom();
   const { act, cleanup, fireEvent, render: baseRender, within } = await import("@testing-library/react");
@@ -256,6 +322,13 @@ test("all five consequential connection actions require confirmation before send
     expiresAt: future,
   };
   const integration = {
+    access: {
+      credentialKind: "legacy",
+      rateLoopAccessState: "active",
+      hostToolReadiness: "unverified",
+      canPublish: true,
+      canSpend: true,
+    },
     integrationId: "integration-1",
     apiKeyId: "api-key-1",
     agentId: "agent-1",

@@ -337,6 +337,8 @@
     "cancelling": "Cancelling…",
     "restore": "Restore connection",
     "restoring": "Restoring…",
+    "accessNeedsAttention": "Agent access needs attention",
+    "recoveryRequired": "recovery required",
     "resolve": "Resolve this connection",
     "closePage": "You can close this page.",
     "agentHost": "Agent host",

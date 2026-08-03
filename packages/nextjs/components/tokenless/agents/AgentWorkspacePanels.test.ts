@@ -6,7 +6,6 @@ import {
   agentWorkspaceSwitchSearch,
   canStartAgentConnection,
   connectedAgentTabs,
-  isUsableAgentConnection,
   legacyAgentRouteHref,
   resolveAgentTabParam,
   resolveAvailableAgentTab,
@@ -53,22 +52,6 @@ test("the requested accessible workspace wins and invalid returning links requir
   assert.doesNotMatch(panelsSource, /find\(entry => entry\.workspaceId === workspaceId\) \?\? workspaces\[0\]/);
 });
 
-test("only active, connected, unexpired integrations complete onboarding", () => {
-  const now = Date.parse("2026-07-15T12:00:00.000Z");
-
-  assert.equal(isUsableAgentConnection({ status: "active", connectionStatus: "connected" }, now), true);
-  assert.equal(isUsableAgentConnection({ status: null, connectionStatus: "connected" }, now), false);
-  assert.equal(isUsableAgentConnection({ status: "revoked", connectionStatus: "connected" }, now), false);
-  assert.equal(isUsableAgentConnection({ status: "active", connectionStatus: "testing" }, now), false);
-  assert.equal(
-    isUsableAgentConnection(
-      { status: "active", connectionStatus: "connected", expiresAt: "2026-07-15T11:59:59.000Z" },
-      now,
-    ),
-    false,
-  );
-});
-
 test("connected workspaces can start another connection when no attempt is pending", () => {
   assert.equal(
     canStartAgentConnection({ loading: false, activeConnectionIntentCount: 0, activePairingCount: 0 }),
@@ -89,51 +72,61 @@ test("connected workspaces can start another connection when no attempt is pendi
 });
 
 test("unusable OAuth integrations reconnect their saved agent unless another usable binding exists", () => {
-  const now = Date.parse("2026-07-15T12:00:00.000Z");
   const connection = (
     overrides: Partial<{
+      access: {
+        credentialKind: "oauth" | "legacy";
+        rateLoopAccessState: "active" | "inactive" | "recovery_required";
+        hostToolReadiness: "unverified";
+        canPublish: boolean;
+        canSpend: boolean;
+      };
       agentId: string;
-      connectionStatus: string;
-      expiresAt: string | null;
       integrationId: string;
       oauthClientId: string;
-      status: string;
     }> = {},
   ) => ({
+    access: {
+      credentialKind: "oauth" as const,
+      rateLoopAccessState: "active" as const,
+      hostToolReadiness: "unverified" as const,
+      canPublish: false,
+      canSpend: false,
+    },
     agentId: "agent-a",
-    connectionStatus: "connected",
-    expiresAt: "2026-07-15T13:00:00.000Z",
     integrationId: "integration-a",
     oauthClientId: "oauth-client",
-    status: "active",
     ...overrides,
   });
+  const inactiveAccess = {
+    credentialKind: "oauth" as const,
+    rateLoopAccessState: "inactive" as const,
+    hostToolReadiness: "unverified" as const,
+    canPublish: false,
+    canSpend: false,
+  };
 
   assert.deepEqual(
-    selectReconnectableOAuthConnections([connection({ connectionStatus: "expired" })], now).map(
-      item => item.integrationId,
-    ),
+    selectReconnectableOAuthConnections([connection({ access: inactiveAccess })]).map(item => item.integrationId),
     ["integration-a"],
   );
+  assert.deepEqual(selectReconnectableOAuthConnections([connection()]), []);
   assert.deepEqual(
-    selectReconnectableOAuthConnections([connection({ connectionStatus: "cancelled" })], now).map(
-      item => item.integrationId,
-    ),
-    ["integration-a"],
+    selectReconnectableOAuthConnections([
+      connection({ access: { ...inactiveAccess, rateLoopAccessState: "recovery_required" } }),
+    ]),
+    [],
   );
-  assert.deepEqual(
-    selectReconnectableOAuthConnections([connection({ expiresAt: "2026-07-15T11:59:59.000Z" })], now).map(
-      item => item.integrationId,
-    ),
-    ["integration-a"],
-  );
-  assert.deepEqual(selectReconnectableOAuthConnections([connection()], now), []);
 
   const connections = [
-    connection({ connectionStatus: "expired", integrationId: "stale-newest" }),
-    connection({ integrationId: "usable-older" }),
+    connection({ access: inactiveAccess, integrationId: "stale-newest" }),
+    connection({
+      access: { ...inactiveAccess, credentialKind: "legacy", rateLoopAccessState: "active" },
+      integrationId: "usable-older",
+      oauthClientId: "",
+    }),
   ];
-  assert.deepEqual(selectReconnectableOAuthConnections(connections, now), []);
+  assert.deepEqual(selectReconnectableOAuthConnections(connections), []);
 });
 
 test("connected navigation splits the owner stack into URL-backed task tabs", () => {

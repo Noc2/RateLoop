@@ -1001,7 +1001,6 @@ test("an owner can recover only a replay-revoked public OAuth integration", asyn
 
   const before = await listAgentConnections({ accountAddress: principalId, workspaceId });
   const beforeIntegration = before.integrations.find(integration => integration.integrationId === integrationId);
-  assert.equal(beforeIntegration?.oauthRecoveryAvailable, true);
   assert.equal(beforeIntegration?.access.rateLoopAccessState, "recovery_required");
   assert.equal(beforeIntegration?.access.canPublish, false);
   assert.equal(beforeIntegration?.access.canSpend, false);
@@ -1016,7 +1015,6 @@ test("an owner can recover only a replay-revoked public OAuth integration", asyn
   assert.equal(recovered.integration.oauthRecovered, true);
   const after = await listAgentConnections({ accountAddress: principalId, workspaceId });
   const afterIntegration = after.integrations.find(integration => integration.integrationId === integrationId);
-  assert.equal(afterIntegration?.oauthRecoveryAvailable, false);
   assert.equal(afterIntegration?.access.rateLoopAccessState, "active");
   assert.equal(hasActiveAgentAccess(normalizeAgentAccessPresentation(afterIntegration?.access)), true);
 

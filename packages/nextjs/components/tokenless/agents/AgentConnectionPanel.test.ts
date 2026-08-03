@@ -145,7 +145,7 @@ test("all five consequential connection actions use the shared confirmation dial
 test("safe OAuth integrations show no bearer rotation or publishing permission", () => {
   assert.match(source, /const legacyCredential = Boolean\(integration\.apiKeyId\)/);
   assert.match(source, /allActiveIntegrationsUseSafeAccess = activeIntegrations\.every/);
-  assert.match(source, /\{allActiveIntegrationsUseSafeAccess \? \(/);
+  assert.match(source, /activeIntegrations\.length > 0 && allActiveIntegrationsUseSafeAccess/);
   assert.match(source, /legacyCredential \? \(/);
   assert.match(messages, /OAuth-managed safe access/);
   assert.match(messages, /No publishing access/);
@@ -154,7 +154,8 @@ test("safe OAuth integrations show no bearer rotation or publishing permission",
 });
 
 test("replay-revoked OAuth integrations expose the owner recovery action", () => {
-  assert.match(source, /oauthRecoveryAvailable/);
+  assert.match(source, /rateLoopAccessState === "recovery_required"/);
+  assert.match(source, /recoveryIntegrations\.map/);
   assert.match(source, /recover-oauth/);
   assert.match(messages, /Restore connection/);
   assert.match(messages, /revokes its current access tokens and restores the existing safe OAuth credential/);
@@ -195,10 +196,7 @@ test("a connected OAuth agent has a direct targeted reconnect path", () => {
 
 test("a saved agent with only an unusable OAuth integration can reconnect without being duplicated", () => {
   assert.match(source, /oauthClientId: stringField\(row, "oauthClientId"\)/);
-  assert.match(
-    source,
-    /const reconnectableIntegrations = selectReconnectableOAuthConnections\(integrations, connectionClock\)/,
-  );
+  assert.match(source, /const reconnectableIntegrations = selectReconnectableOAuthConnections\(integrations\)/);
   assert.match(messages, /Reconnect your agent/);
   assert.match(messages, /Reconnect a saved agent without changing its review settings\./);
   assert.match(source, /<InfoPopover label=\{t\("aboutReconnect"\)\}>\{t\("descriptionReconnect"\)\}<\/InfoPopover>/);
