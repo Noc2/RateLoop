@@ -33,6 +33,8 @@ function NotificationList({
     <ol className="mt-3 space-y-2">
       {notifications.map(notification => {
         const urgent = isReviewerDeadlineOrMoneyNotification(notification);
+        const title = t(`copy.${notification.sourceType}.title`);
+        const body = t(`copy.${notification.sourceType}.body`);
         return (
           <li
             key={notification.notificationId}
@@ -47,7 +49,7 @@ function NotificationList({
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-sm font-semibold">{notification.title}</p>
+                  <p className="text-sm font-semibold">{title}</p>
                   <Badge variant={urgent ? "warning" : "neutral"} className="text-[0.65rem]">
                     {t(`labels.${notification.sourceType}`)}
                   </Badge>
@@ -57,7 +59,7 @@ function NotificationList({
                     </Badge>
                   ) : null}
                 </div>
-                <p className="mt-1 text-sm leading-6 text-base-content/65">{notification.body}</p>
+                <p className="mt-1 text-sm leading-6 text-base-content/65">{body}</p>
                 <time dateTime={notification.createdAt} className="mt-1 block text-xs text-base-content/55">
                   {format.dateTime(new Date(notification.createdAt), { dateStyle: "medium", timeStyle: "short" })}
                 </time>
@@ -67,7 +69,7 @@ function NotificationList({
                   <Link
                     href={notification.href}
                     className="btn btn-sm rateloop-secondary-action px-3"
-                    aria-label={t("openLabel", { title: notification.title })}
+                    aria-label={t("openLabel", { title })}
                   >
                     {t("open")}
                   </Link>
@@ -77,7 +79,7 @@ function NotificationList({
                     type="button"
                     size="sm"
                     variant="ghost"
-                    aria-label={t("markReadLabel", { title: notification.title })}
+                    aria-label={t("markReadLabel", { title })}
                     disabled={markingIds.has(notification.notificationId)}
                     onClick={() => void onMarkRead(notification.notificationId)}
                   >

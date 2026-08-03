@@ -214,6 +214,28 @@
     "openLabel": "Öffnen: {title}",
     "markRead": "Als gelesen markieren",
     "markReadLabel": "Als gelesen markieren: {title}",
+    "copy": {
+      "assignment": {
+        "available": {
+          "title": "Prüfaufgabe verfügbar",
+          "body": "Eine Aufgabe zur menschlichen Prüfung ist bereit."
+        },
+        "completed": {
+          "title": "Antwort erfasst",
+          "body": "Deine Antwort zur menschlichen Prüfung wurde erfasst."
+        }
+      },
+      "settlement": {
+        "reveal_required": {
+          "title": "Offenlegung der Prüfung erforderlich",
+          "body": "Deine zugesagte Prüfung muss vor Ablauf der Wiederherstellungsfrist offengelegt werden."
+        },
+        "claim_expiring": {
+          "title": "Prüfvergütung läuft ab",
+          "body": "Die Frist zum Abrufen einer Prüfvergütung läuft bald ab."
+        }
+      }
+    },
     "labels": {
       "settlement": {
         "reveal_required": "Offenlegungsfrist",

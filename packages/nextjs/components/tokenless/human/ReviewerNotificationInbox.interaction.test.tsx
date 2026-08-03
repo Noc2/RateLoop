@@ -1,7 +1,7 @@
 import React from "react";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
+import { AgentTestProviders, withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 test("the reviewer inbox separates urgent actions and marks notifications read only on request", async () => {
@@ -55,6 +55,46 @@ test("the reviewer inbox separates urgent actions and marks notifications read o
       notificationIds: ["notification-claim"],
     });
     assert.equal(view.queryByRole("button", { name: "Mark read: Review payment expiring" }), null);
+  } finally {
+    await act(async () => cleanup());
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});
+
+test("the reviewer inbox localizes persisted notification copy from its source type", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup, render } = await import("@testing-library/react");
+  const { ReviewerNotificationInbox } = await import("./ReviewerNotificationInbox");
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    Response.json({
+      unreadCount: 1,
+      notifications: [
+        {
+          notificationId: "notification-completed",
+          kind: "assignmentCompleted",
+          title: "stale stored title",
+          body: "stale stored body",
+          href: "/human/review",
+          sourceType: "assignment.completed",
+          createdAt: "2026-07-28T08:00:00.000Z",
+          readAt: null,
+        },
+      ],
+    });
+
+  try {
+    const view = render(
+      <AgentTestProviders locale="de">
+        <ReviewerNotificationInbox />
+      </AgentTestProviders>,
+    );
+    assert.ok(await view.findByText("Antwort erfasst"));
+    assert.ok(view.getByText("Deine Antwort zur menschlichen Prüfung wurde erfasst."));
+    assert.equal(view.queryByText("stale stored title"), null);
+    assert.equal(view.queryByText("stale stored body"), null);
+    assert.ok(view.getByRole("link", { name: "Öffnen: Antwort erfasst" }));
   } finally {
     await act(async () => cleanup());
     globalThis.fetch = previousFetch;

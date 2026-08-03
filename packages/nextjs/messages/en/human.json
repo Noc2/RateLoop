@@ -214,6 +214,28 @@
     "openLabel": "Open: {title}",
     "markRead": "Mark read",
     "markReadLabel": "Mark read: {title}",
+    "copy": {
+      "assignment": {
+        "available": {
+          "title": "Assignment available",
+          "body": "A human-assurance assignment is ready for review."
+        },
+        "completed": {
+          "title": "Response recorded",
+          "body": "Your human-assurance response was recorded."
+        }
+      },
+      "settlement": {
+        "reveal_required": {
+          "title": "Review reveal required",
+          "body": "Your committed review needs a self-reveal before its recovery deadline."
+        },
+        "claim_expiring": {
+          "title": "Review payment expiring",
+          "body": "A review payment is nearing its claim deadline."
+        }
+      }
+    },
     "labels": {
       "settlement": {
         "reveal_required": "Reveal deadline",
