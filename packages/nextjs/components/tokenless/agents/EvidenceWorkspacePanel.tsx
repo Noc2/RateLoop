@@ -22,6 +22,7 @@ import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { WorkspacePublicContentLink } from "~~/components/tokenless/navigation/WorkspacePublicContentLink";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import { Card } from "~~/components/tokenless/ui/Card";
+import { stripLocalePrefix } from "~~/i18n/config";
 import { Link } from "~~/i18n/navigation";
 import type { EvaluationDashboard } from "~~/lib/tokenless/evaluationDashboard";
 import { readJson } from "~~/lib/tokenless/http";
@@ -467,6 +468,15 @@ function resultHrefForRun(workspaceId: string, runId: string, currentSearch: str
     runId,
   });
   return `${route.pathname}${route.search}`;
+}
+
+function evidenceLinkHref(snapshot: EvidenceUrlSnapshot, patch: Partial<EvidenceUrlState>) {
+  return evidenceUrlHref({
+    pathname: stripLocalePrefix(snapshot.pathname),
+    search: snapshot.search,
+    hash: snapshot.hash,
+    patch,
+  });
 }
 
 async function downloadJson(url: string, filename: string) {
@@ -1076,11 +1086,9 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                       <AgentText id="translated149" />
                     </Link>
                     <Link
-                      href={evidenceUrlHref({
-                        pathname: urlSnapshot.pathname,
-                        search: urlSnapshot.search,
-                        hash: urlSnapshot.hash,
-                        patch: { runId: packet.payload.runId, packetId: packet.payload.packetId },
+                      href={evidenceLinkHref(urlSnapshot, {
+                        runId: packet.payload.runId,
+                        packetId: packet.payload.packetId,
                       })}
                       scroll={false}
                       aria-current={selected ? "page" : undefined}
@@ -1273,14 +1281,9 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                       <AgentText id="translated153" />
                     </p>
                     <Link
-                      href={evidenceUrlHref({
-                        pathname: urlSnapshot.pathname,
-                        search: urlSnapshot.search,
-                        hash: urlSnapshot.hash,
-                        patch: {
-                          runId: newerPacket.packet.payload.runId,
-                          packetId: newerPacket.packet.payload.packetId,
-                        },
+                      href={evidenceLinkHref(urlSnapshot, {
+                        runId: newerPacket.packet.payload.runId,
+                        packetId: newerPacket.packet.payload.packetId,
                       })}
                       scroll={false}
                       className="font-semibold underline underline-offset-4"

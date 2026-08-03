@@ -1,7 +1,7 @@
 import React from "react";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { EnglishAgentTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
+import { AgentTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 function dashboard(runs: Record<string, unknown>[] = []) {
@@ -168,11 +168,11 @@ function installFetch(runs: Record<string, unknown>[]) {
   };
 }
 
-async function mount(canManage: boolean) {
+async function mount(canManage: boolean, locale: "de" | "en" = "en") {
   const { render } = await import("@testing-library/react");
   const { EvidenceWorkspacePanel } = await import("./EvidenceWorkspacePanel");
   return render(<EvidenceWorkspacePanel workspaceId="workspace-evidence" canManage={canManage} />, {
-    wrapper: EnglishAgentTestProviders,
+    wrapper: ({ children }) => <AgentTestProviders locale={locale}>{children}</AgentTestProviders>,
   });
 }
 
@@ -497,6 +497,36 @@ test("a stale evidence response cannot replace a newer run selection", async () 
   } finally {
     await act(async () => cleanup());
     globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});
+
+test("German evidence links receive exactly one locale prefix", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup } = await import("@testing-library/react");
+  const restoreFetch = installFetch([
+    {
+      runId: "run-evidence-1",
+      projectId: "project-release-controls",
+      projectName: "Release controls",
+      suiteId: "suite-production-readiness",
+      suiteName: "Production readiness",
+      suiteVersion: 1,
+      evidencePacketAvailable: true,
+    },
+  ]);
+  window.history.replaceState(null, "", "/de/agents/results?workspace=workspace-evidence");
+
+  try {
+    const view = await mount(false, "de");
+    await view.findByText("Production readiness");
+
+    const packetHref = view.getByRole("link", { name: "Link zum Paket" }).getAttribute("href") ?? "";
+    assert.match(packetHref, /^\/de\/agents\/results\?/u);
+    assert.doesNotMatch(packetHref, /\/de\/de\//u);
+  } finally {
+    await act(async () => cleanup());
+    restoreFetch();
     restoreDom();
   }
 });
