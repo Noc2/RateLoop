@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import { __landingSocialProofServerTestUtils } from "~~/lib/home/socialProofServer";
 import {
   __adaptiveReviewOrchestrationTestUtils,
   getAdaptiveHumanReviewResult,
@@ -480,6 +481,7 @@ test("direct private assignments surface in reviewer work and produce a terminal
   assert.equal(terminal?.lifecycle.state, "completed");
   assert.equal(terminal?.envelope?.panel.responseCount, 2);
   assert.equal(terminal?.envelope?.economics.guaranteedBase.mode, "off");
+  assert.equal((await __landingSocialProofServerTestUtils.loadApplicationStats()).totalRatings, "2");
   const queuedProjection = await dbClient.execute({
     sql: `SELECT item_id,state FROM tokenless_scheduled_work_items
           WHERE kind='project_private_review_evidence' AND subject_key=?`,
@@ -514,6 +516,7 @@ test("direct private assignments surface in reviewer work and produce a terminal
   });
   assert.equal(Number(projectedCounts.rows[0]?.assignment_count), 2);
   assert.equal(Number(projectedCounts.rows[0]?.response_count), 2);
+  assert.equal((await __landingSocialProofServerTestUtils.loadApplicationStats()).totalRatings, "2");
   const projectionState = await dbClient.execute({
     sql: `SELECT evidence_projection_state,evidence_projection_next_attempt_at
           FROM tokenless_private_unpaid_review_deliveries WHERE delivery_id=?`,

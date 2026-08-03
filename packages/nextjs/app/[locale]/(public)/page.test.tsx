@@ -8,6 +8,11 @@ const { renderToStaticMarkup } = require("react-dom/server") as {
   renderToStaticMarkup: (element: React.ReactElement) => string;
 };
 
+test("landing social proof is rendered from the current response ledger", async () => {
+  const { dynamic } = await import("./page");
+  assert.equal(dynamic, "force-dynamic");
+});
+
 test("landing page presents the tokenless human-assurance story", async () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
   const { TokenlessLandingPage } = await import("./page");

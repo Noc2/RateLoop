@@ -10,7 +10,7 @@ import { getMessagesForLocale } from "~~/i18n/messages";
 import { type LandingSocialProofItem, formatLandingSocialProofItem } from "~~/lib/home/socialProof";
 import { getLandingPageSocialProofItems } from "~~/lib/home/socialProofServer";
 
-export const revalidate = 300;
+export const dynamic = "force-dynamic";
 
 const whyItWorksFeatures = [
   {

@@ -45,8 +45,17 @@ async function loadApplicationStats() {
              JOIN tokenless_provider_subject_bindings b ON b.binding_id = a.binding_id
              WHERE a.status = 'active' AND b.status = 'active'
                AND a.capabilities_json LIKE '%"unique_human"%') AS total_verified_humans,
-            ((SELECT COUNT(*) FROM tokenless_assurance_responses
-              WHERE validity = 'valid' AND reviewer_source <> 'sandbox') +
+            ((SELECT COUNT(*) FROM tokenless_private_review_responses) +
+             (SELECT COUNT(*) FROM tokenless_assurance_responses response
+              WHERE response.validity = 'valid' AND response.reviewer_source <> 'sandbox'
+                AND response.run_id NOT IN (
+                  SELECT opportunity.run_id
+                  FROM tokenless_private_unpaid_review_deliveries delivery
+                  JOIN tokenless_agent_review_opportunities opportunity
+                    ON opportunity.workspace_id = delivery.workspace_id
+                   AND opportunity.opportunity_id = delivery.opportunity_id
+                  WHERE opportunity.run_id IS NOT NULL
+                )) +
              (SELECT COUNT(*) FROM tokenless_public_rater_responses
               WHERE hash_verified_at IS NOT NULL AND moderation_status <> 'rejected')) AS total_ratings,
             (SELECT COALESCE(SUM(bonus_atomic), 0)
@@ -112,4 +121,4 @@ export async function getLandingPageSocialProofItems(): Promise<LandingSocialPro
   });
 }
 
-export const __landingSocialProofServerTestUtils = { loadLandingPageSocialProofItems };
+export const __landingSocialProofServerTestUtils = { loadApplicationStats, loadLandingPageSocialProofItems };
