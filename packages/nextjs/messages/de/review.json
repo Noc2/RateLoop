@@ -4,6 +4,7 @@
     "caseProgress": "Fall {current} von {total}",
     "progress": "Prüffortschritt",
     "previous": "Vorheriger Fall",
+    "shortcutsLabel": "Tastaturbefehle",
     "shortcuts": "Tastatur: 1 oder 2 wählt aus · R öffnet die Begründung · Eingabetaste fährt fort"
   },
   "deadline": {

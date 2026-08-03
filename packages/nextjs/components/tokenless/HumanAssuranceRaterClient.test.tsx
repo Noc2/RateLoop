@@ -130,7 +130,8 @@ test("assigned review keeps the content, decision, and deadline visible without 
   assert.doesNotMatch(html, /workspace owner/i);
   assert.doesNotMatch(html, /voucher|calibration|qualification/i);
   assert.doesNotMatch(html, /Case 1 of 1/);
-  assert.match(html, /Keyboard: 1 or 2 selects/);
+  assert.doesNotMatch(html, /Keyboard: 1 or 2 selects/);
+  assert.match(html, /aria-label="Keyboard shortcuts"/);
   assert.match(html, /Submit:/);
   assert.match(html, /Access:/);
 });

@@ -31,6 +31,10 @@ test("reviewer shell supports 1, 2, R, and Enter without a pointer", async () =>
     );
 
     const user = userEvent.setup();
+    assert.equal(screen.queryByText("Keyboard: 1 or 2 selects · R opens rationale · Enter advances"), null);
+    await user.click(screen.getByRole("button", { name: "Keyboard shortcuts" }));
+    assert.ok(screen.getByRole("tooltip"));
+    await user.click(screen.getByRole("button", { name: "Keyboard shortcuts" }));
     screen.getByRole("region", { name: "Reviewer workspace" }).focus();
     await user.keyboard("12r");
     assert.deepEqual(actions, ["first", "second"]);
@@ -87,6 +91,7 @@ test("only the explicitly active shell handles shortcuts and links keep Enter ac
     const user = userEvent.setup({ document });
     assert.equal(view.queryByText("Case 1 of 1"), null);
     assert.equal(view.queryByRole("progressbar"), null);
+    assert.equal(view.getAllByRole("button", { name: "Keyboard shortcuts" }).length, 1);
     view.getAllByRole("region", { name: "Reviewer workspace" })[0]!.focus();
     await user.keyboard("1");
     assert.deepEqual(actions, ["first-select"]);

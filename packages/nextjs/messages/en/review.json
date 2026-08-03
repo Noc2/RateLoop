@@ -4,6 +4,7 @@
     "caseProgress": "Case {current} of {total}",
     "progress": "Review progress",
     "previous": "Previous case",
+    "shortcutsLabel": "Keyboard shortcuts",
     "shortcuts": "Keyboard: 1 or 2 selects · R opens rationale · Enter advances"
   },
   "deadline": {

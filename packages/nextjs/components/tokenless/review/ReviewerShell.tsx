@@ -2,6 +2,7 @@
 
 import { type ReactNode, type RefObject, useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
+import { InfoPopover } from "~~/components/tokenless/InfoPopover";
 import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 
@@ -127,7 +128,11 @@ export function ReviewerShell({
           </Button>
         </div>
         {advanceHint ? <p className="mt-3 text-center text-xs text-base-content/60">{advanceHint}</p> : null}
-        {shortcutsEnabled ? <p className="mt-3 text-center text-xs text-base-content/55">{t("shortcuts")}</p> : null}
+        {shortcutsEnabled ? (
+          <div className="mt-3 flex justify-center">
+            <InfoPopover label={t("shortcutsLabel")}>{t("shortcuts")}</InfoPopover>
+          </div>
+        ) : null}
       </Card>
     </section>
   );
