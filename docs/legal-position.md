@@ -84,6 +84,14 @@ Chapter III, Section 2. The system must rest on a **post-market monitoring plan 
 forms part of the Annex IV technical documentation**. The Commission's implementing act
 laying down the plan template was due 2 February 2026.
 
+**When it bites.** The Digital Omnibus on AI, provisionally agreed 7 May 2026, defers
+Annex III high-risk obligations from 2 August 2026 to **2 December 2027**, and Annex I
+embedded-product systems to 2 August 2028. Article 72 therefore reaches Annex III
+providers from December 2027, not today. Do not sell it as a live obligation. It is a
+dated one, which is the more useful property commercially: a buyer with a December 2027
+deadline and no existing performance record has a reason to start now, and the deferral
+buys time to be the thing they adopt rather than a late entrant.
+
 This is the closest fit between the Act and what the product actually does, and earlier
 revisions of this document omitted it. Three properties matter:
 
