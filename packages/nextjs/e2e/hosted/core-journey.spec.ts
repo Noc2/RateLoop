@@ -52,7 +52,12 @@ async function browserJson(
 
 async function acceptReviewerInvitation(page: Page, destinationUrl: string) {
   const destination = new URL(destinationUrl);
-  if (destination.origin !== target.baseURL || destination.pathname !== "/human") {
+  if (
+    destination.origin !== target.baseURL ||
+    destination.pathname !== "/human/review" ||
+    destination.searchParams.get("invite") !== "1" ||
+    !destination.hash.startsWith("#invite=rlri_")
+  ) {
     throw new Error("Reviewer invitation destination left the isolated tokenless deployment.");
   }
   await page.goto(destination.href, { waitUntil: "domcontentloaded" });
