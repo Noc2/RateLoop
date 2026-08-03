@@ -6,6 +6,7 @@ import { assertCanCreateWorkspaceAgent } from "~~/lib/billing/entitlements";
 import { dbClient, dbPool } from "~~/lib/db";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { DEFAULT_ADAPTIVE_AGREEMENT_THRESHOLD_BPS } from "~~/lib/tokenless/adaptiveReviewDefaults";
+import { deriveAgentAccessPresentation, materialAgentCapabilities } from "~~/lib/tokenless/agentAccessPresentation";
 import {
   type AgentOAuthAccessPrincipal,
   AgentOAuthError,
@@ -359,6 +360,11 @@ export async function listAgentConnections(input: { accountAddress: string; work
     pairings: pairings.rows.map(row => pairingFromRow(row as Row)),
     integrations: integrations.rows.map(value => {
       const row = value as Row;
+      const credentialExpiresAt = iso(row.expires_at);
+      const oauthRecoveryAvailable =
+        text(row, "token_family_status") === "revoked" &&
+        text(row, "token_family_revoked_by") === "oauth_server" &&
+        text(row, "token_family_revocation_reason") === "refresh_token_replay";
       return {
         ...bindingFromRow({ ...row, status: text(row, "status") === "active" ? "active" : "active" }),
         status: text(row, "status"),
@@ -366,16 +372,22 @@ export async function listAgentConnections(input: { accountAddress: string; work
         externalId: text(row, "external_id"),
         displayName: text(row, "display_name"),
         credentialPrefix: text(row, "credential_prefix"),
-        expiresAt: iso(row.expires_at),
+        expiresAt: credentialExpiresAt,
         createdAt: iso(row.created_at),
         revokedAt: iso(row.revoked_at),
         activationMode: text(row, "activation_mode"),
         connectionStatus: text(row, "connection_status"),
         oauthClientId: text(row, "oauth_client_id"),
-        oauthRecoveryAvailable:
-          text(row, "token_family_status") === "revoked" &&
-          text(row, "token_family_revoked_by") === "oauth_server" &&
-          text(row, "token_family_revocation_reason") === "refresh_token_replay",
+        oauthRecoveryAvailable,
+        access: deriveAgentAccessPresentation({
+          activationMode: text(row, "activation_mode"),
+          integrationStatus: text(row, "status"),
+          connectionStatus: text(row, "connection_status"),
+          credentialExpiresAt,
+          tokenFamilyStatus: text(row, "token_family_status"),
+          oauthRecoveryAvailable,
+          grantedScopes: jsonArray(row.granted_scopes_json, "granted scopes"),
+        }),
       };
     }),
   };
@@ -1218,6 +1230,7 @@ export async function activateAgentIntegrationPublishing(input: {
     targetKind: "agent_integration",
     workspaceId: input.workspaceId,
   });
+  const capabilities = materialAgentCapabilities(scopes);
   return {
     integration: {
       integrationId: input.integrationId,
@@ -1233,8 +1246,7 @@ export async function activateAgentIntegrationPublishing(input: {
       publishingPolicyVersion: activated.publishingPolicyVersion,
       allowedWorkflowKeys: activation.allowedWorkflowKeys,
       grantedScopes: scopes,
-      canPublish: true,
-      canSpend: scopes.includes("payment:submit"),
+      ...capabilities,
     },
   };
 }

@@ -4,6 +4,7 @@ import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient, dbPool } from "~~/lib/db";
 import { DEFAULT_ADAPTIVE_AGREEMENT_THRESHOLD_BPS } from "~~/lib/tokenless/adaptiveReviewDefaults";
+import { materialAgentCapabilities } from "~~/lib/tokenless/agentAccessPresentation";
 import { SAFE_AGENT_CONNECTION_SCOPES, createAgentConnectionIntent } from "~~/lib/tokenless/agentConnectionIntents";
 import { AGENT_SETUP_SCREEN_STEPS, type AgentSetupScreenStep } from "~~/lib/tokenless/agentSetupNavigation";
 import { getHumanReviewConfigurationForOwner } from "~~/lib/tokenless/humanReviewConfiguration";
@@ -488,6 +489,7 @@ export async function getWorkspaceAgentSetup(input: {
   const currentStep = clampAgentSetupStep(input.requestedStep, resumeStep);
   const reviewDraft = savedReviewDraft ?? migrateReviewDraft(parseJson<unknown>(row.review_draft_json, {}));
   const integrationScopes = parseJson<string[]>(row.granted_scopes_json, []);
+  const materialCapabilities = materialAgentCapabilities(integrationScopes);
   const allowedWorkflowKeys = parseJson<string[]>(row.allowed_workflow_keys_json, []);
   const tokenFamilyExpiresAt = rowDate(row, "token_family_expires_at");
   const automaticGrantAvailable = Boolean(
@@ -504,8 +506,7 @@ export async function getWorkspaceAgentSetup(input: {
   );
   const safeConnection = {
     canCheckReviewRequirement: true,
-    canSpend: integrationScopes.includes("payment:submit"),
-    canPublish: integrationScopes.includes("panel:publish"),
+    ...materialCapabilities,
     canReadPrivateArtifacts: false,
     canAdministerWorkspace: false,
   };

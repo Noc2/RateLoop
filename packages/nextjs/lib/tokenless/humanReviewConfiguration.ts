@@ -5,6 +5,7 @@ import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/acco
 import { dbClient, dbPool, serializePoolClientQueries } from "~~/lib/db";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
+import { materialAgentCapabilities } from "~~/lib/tokenless/agentAccessPresentation";
 import {
   SAFE_AGENT_CONNECTION_SCOPES,
   connectionLaneFromClientCapabilitiesJson,
@@ -1966,6 +1967,7 @@ export async function putHumanReviewConfigurationForOwner(input: PutHumanReviewC
 
 function connectionFromRow(row: Row) {
   const scopes = parseStringArray(row.granted_scopes_json, "connection scopes");
+  const materialCapabilities = materialAgentCapabilities(scopes);
   return {
     integrationId: rowString(row, "integration_id")!,
     status: rowString(row, "status")!,
@@ -1977,8 +1979,7 @@ function connectionFromRow(row: Row) {
     publishingPolicyVersion: nullableInteger(row, "publishing_policy_version"),
     safeAccess: {
       canCheckReviewRequirement: SAFE_EVALUATION_SCOPES.every(scope => scopes.includes(scope)),
-      canPublish: scopes.includes("panel:publish"),
-      canSpend: scopes.includes("payment:submit"),
+      ...materialCapabilities,
       canReadPrivateArtifacts: scopes.includes("artifact:read_private"),
       canAdministerWorkspace: false,
     },

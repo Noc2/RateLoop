@@ -14,6 +14,7 @@ import { tokenlessMcpTools } from "~~/lib/mcp/protocol";
 import { requireWorkspaceMcpSession } from "~~/lib/mcp/workspaceElicitation";
 import { requestWorkspaceDeletion } from "~~/lib/privacy/workspaceDeletion";
 import { __adaptiveReviewServiceTestUtils } from "~~/lib/tokenless/adaptiveReviewService";
+import { hasActiveAgentAccess, normalizeAgentAccessPresentation } from "~~/lib/tokenless/agentAccessPresentation";
 import { createAgentConnectionIntent } from "~~/lib/tokenless/agentConnectionIntents";
 import {
   activateAgentIntegrationPublishing,
@@ -999,10 +1000,12 @@ test("an owner can recover only a replay-revoked public OAuth integration", asyn
   );
 
   const before = await listAgentConnections({ accountAddress: principalId, workspaceId });
-  assert.equal(
-    before.integrations.find(integration => integration.integrationId === integrationId)?.oauthRecoveryAvailable,
-    true,
-  );
+  const beforeIntegration = before.integrations.find(integration => integration.integrationId === integrationId);
+  assert.equal(beforeIntegration?.oauthRecoveryAvailable, true);
+  assert.equal(beforeIntegration?.access.rateLoopAccessState, "recovery_required");
+  assert.equal(beforeIntegration?.access.canPublish, false);
+  assert.equal(beforeIntegration?.access.canSpend, false);
+  assert.equal(hasActiveAgentAccess(normalizeAgentAccessPresentation(beforeIntegration?.access)), false);
   const presented = await dbClient.execute({
     sql: `SELECT generation FROM tokenless_agent_oauth_refresh_tokens
           WHERE revocation_reason='refresh_token_replay_presented'`,
@@ -1012,10 +1015,10 @@ test("an owner can recover only a replay-revoked public OAuth integration", asyn
   const recovered = await recoverAgentIntegrationOAuth({ accountAddress: principalId, workspaceId, integrationId });
   assert.equal(recovered.integration.oauthRecovered, true);
   const after = await listAgentConnections({ accountAddress: principalId, workspaceId });
-  assert.equal(
-    after.integrations.find(integration => integration.integrationId === integrationId)?.oauthRecoveryAvailable,
-    false,
-  );
+  const afterIntegration = after.integrations.find(integration => integration.integrationId === integrationId);
+  assert.equal(afterIntegration?.oauthRecoveryAvailable, false);
+  assert.equal(afterIntegration?.access.rateLoopAccessState, "active");
+  assert.equal(hasActiveAgentAccess(normalizeAgentAccessPresentation(afterIntegration?.access)), true);
 
   // The replayed generation is never restored: whoever presented it may be holding a stolen copy,
   // so handing the connection back to them is the one outcome recovery must not produce.
@@ -1750,6 +1753,9 @@ test("OAuth keeps one stable tool list and fails closed for unavailable paid-net
   );
   assert.equal(oauthIntegration?.activationMode, "preauthorized_safe");
   assert.equal(oauthIntegration?.credentialPrefix, null);
+  assert.equal(oauthIntegration?.access.rateLoopAccessState, "active");
+  assert.equal(oauthIntegration?.access.canPublish, false);
+  assert.equal(oauthIntegration?.access.canSpend, false);
   const publishing = await createAgentPublishingPolicy({
     accountAddress: principalId,
     workspaceId,
@@ -1775,6 +1781,13 @@ test("OAuth keeps one stable tool list and fails closed for unavailable paid-net
     integrationId: claim.connection.integrationId,
     body: { publishingPolicyId: publishing.policyId, allowedWorkflowKeys: ["general-assistance"] },
   });
+  const upgradedConnections = await listAgentConnections({ accountAddress: principalId, workspaceId });
+  const upgradedIntegration = upgradedConnections.integrations.find(
+    integration => integration.integrationId === claim.connection.integrationId,
+  );
+  assert.equal(upgradedIntegration?.access.rateLoopAccessState, "active");
+  assert.equal(upgradedIntegration?.access.canPublish, true);
+  assert.equal(upgradedIntegration?.access.canSpend, true);
   const upgradedContextResponse = await POST(
     resumedRequest({
       id: 151,

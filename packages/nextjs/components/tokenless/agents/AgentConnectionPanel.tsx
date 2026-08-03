@@ -25,6 +25,10 @@ import { Badge } from "~~/components/tokenless/ui/Badge";
 import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { ConfirmDialog } from "~~/components/tokenless/ui/ConfirmDialog";
+import {
+  type AgentAccessPresentation,
+  normalizeAgentAccessPresentation,
+} from "~~/lib/tokenless/agentAccessPresentation";
 import { type TokenlessHostId } from "~~/lib/tokenless/hostCapabilities";
 import { readJson } from "~~/lib/tokenless/http";
 
@@ -69,6 +73,7 @@ type AgentIntegration = {
   connectionStatus: string | null;
   oauthClientId: string;
   oauthRecoveryAvailable: boolean;
+  access: AgentAccessPresentation;
 };
 
 type PublishingPolicy = {
@@ -274,6 +279,7 @@ export function normalizeAgentIntegration(value: unknown): AgentIntegration {
     connectionStatus: nullableStringField(row, "connectionStatus"),
     oauthClientId: stringField(row, "oauthClientId"),
     oauthRecoveryAvailable: row.oauthRecoveryAvailable === true,
+    access: normalizeAgentAccessPresentation(row.access),
   };
 }
 
