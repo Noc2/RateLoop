@@ -5,6 +5,7 @@ import type {
   TokenlessWaitRequest,
   TokenlessWaitResponse,
 } from "@rateloop/sdk";
+import { TokenlessWaitTimeoutError } from "./exitCodes";
 
 export type TokenlessWaitUntilReadyOptions = TokenlessWaitRequest & {
   maxWaitMs: number;
@@ -40,8 +41,10 @@ export async function waitUntilTokenlessReady(
     const remaining = options.maxWaitMs - elapsed;
     if (remaining < 1_000) {
       const resume = cursor ? ` Resume with cursor ${cursor}.` : "";
-      throw new Error(
+      throw new TokenlessWaitTimeoutError(
         `Tokenless result was not ready within ${options.maxWaitMs}ms.${resume}`,
+        options.maxWaitMs,
+        cursor,
       );
     }
 

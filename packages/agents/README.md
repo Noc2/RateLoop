@@ -144,6 +144,33 @@ yarn workspace @rateloop/agents wait \
 yarn workspace @rateloop/agents result --operation-key op_...
 ```
 
+### Exit codes
+
+`wait --until-ready` is the pipeline gate, so its exit code reports the
+**verdict**, not merely whether the command ran.
+
+| Code | Meaning | Typical CI response |
+| ---- | ------------------------------------------------------------- | ----------------------------- |
+| 0    | Terminal verdict `publishable`, or a non-gating command succeeded | Continue |
+| 1    | Unclassified failure | Investigate |
+| 2    | Usage error — unknown command or option, bad or missing argument | Fix the invocation |
+| 3    | Terminal verdict `inconclusive` or `delisted` | Fail the build |
+| 4    | `--until-ready` gave up before a terminal verdict existed | Retry, or resume with the cursor |
+| 5    | Transport or API failure; the verdict is unknown | Retry |
+| 6    | Terminated without a usable verdict and compensated (`zero_commit_refunded`, `under_quorum_compensated`, `beacon_failure_compensated`) | Alert, then retry |
+
+Code 3 and code 6 are deliberately distinct. Code 3 means the review decided
+against the output. Code 6 means no decision was reached, so treating it as a
+content rejection would be wrong.
+
+Before these existed every failure exited 1 and — more seriously — a
+non-publishable verdict exited **0**, so the gate passed builds whose review had
+rejected the output. Pipelines that relied on the old behaviour and only checked
+for a non-zero exit will now correctly fail on code 3.
+
+Codes are stable. New outcomes get new numbers; existing numbers are not
+reassigned.
+
 Create an encrypted local wallet (the private key never enters an environment
 variable), then run a quote → ask → x402 payment → wait → result flow:
 

@@ -15,6 +15,13 @@ import {
   type CliOptions,
 } from "./cliOptions";
 import { loadTokenlessAgentsRuntimeConfig } from "./config";
+import {
+  CLI_EXIT_CODES,
+  CliUsageError,
+  errorExitCode,
+  verdictExitCode,
+  type CliExitCode,
+} from "./exitCodes";
 import { resolveExistingInputPath } from "./inputPaths";
 import {
   createTokenlessAgentKeystore,
@@ -53,7 +60,7 @@ export function parseCliArgs(args: string[]): {
   for (let index = 0; index < rest.length; index += 1) {
     const token = rest[index];
     if (!token.startsWith("--")) {
-      throw new Error(`Unexpected argument: ${token}`);
+      throw new CliUsageError(`Unexpected argument: ${token}`);
     }
     const name = token.slice(2);
     const next = rest[index + 1];
@@ -70,7 +77,7 @@ export function parseCliArgs(args: string[]): {
 function requireString(options: CliOptions, name: string) {
   const value = options[name];
   if (typeof value !== "string" || !value.trim()) {
-    throw new Error(`--${name} is required`);
+    throw new CliUsageError(`--${name} is required`);
   }
   return value.trim();
 }
@@ -127,7 +134,14 @@ Environment:
 The CLI never defaults to rateloop.ai and never signs or submits legacy contract calls.`;
 }
 
-export async function runCli(args: string[]) {
+/**
+ * Runs one command. Resolves to the exit code the caller should use, or
+ * `undefined` for commands that simply succeeded — {@link main} treats both as
+ * {@link CLI_EXIT_CODES.ok}. Errors are thrown, not returned.
+ */
+export async function runCli(
+  args: string[],
+): Promise<CliExitCode | undefined> {
   const { command, options } = parseCliArgs(args);
   validateCliOptions(command, options);
   if (command === "help" || command === "--help") {
@@ -295,19 +309,20 @@ export async function runCli(args: string[]) {
         typeof options.cursor === "string" ? options.cursor : undefined;
       const timeoutMs = readOptionalPositiveInteger(options, "timeout-ms");
       if (readBooleanFlag(options, "until-ready")) {
-        printJson(
-          await waitUntilTokenlessReady(client, {
-            cursor,
-            maxWaitMs:
-              readOptionalPositiveInteger(options, "max-wait-ms") ?? 300_000,
-            operationKey,
-            timeoutMs,
-          }),
-        );
-        return;
+        const ready = await waitUntilTokenlessReady(client, {
+          cursor,
+          maxWaitMs:
+            readOptionalPositiveInteger(options, "max-wait-ms") ?? 300_000,
+          operationKey,
+          timeoutMs,
+        });
+        printJson(ready);
+        // `--until-ready` is the pipeline gate, so the verdict — not merely the
+        // absence of an exception — decides the build's fate.
+        return verdictExitCode(ready.verdictStatus);
       }
       if (options["max-wait-ms"] !== undefined) {
-        throw new Error("--max-wait-ms requires --until-ready");
+        throw new CliUsageError("--max-wait-ms requires --until-ready");
       }
       printJson(await client.wait({ cursor, operationKey, timeoutMs }));
       return;
@@ -320,7 +335,25 @@ export async function runCli(args: string[]) {
       );
       return;
     default:
-      throw new Error(`Unknown command: ${command}\n\n${usage()}`);
+      throw new CliUsageError(`Unknown command: ${command}\n\n${usage()}`);
+  }
+}
+
+/**
+ * Runs one command and resolves to the process exit code, never throwing.
+ * Extracted from the entry guard below so exit-code behaviour is testable —
+ * previously it lived inside the `import.meta.url` check and could not be
+ * exercised at all.
+ */
+export async function main(
+  args: string[],
+  onError: (message: string) => void = (message) => console.error(message),
+): Promise<CliExitCode> {
+  try {
+    return (await runCli(args)) ?? CLI_EXIT_CODES.ok;
+  } catch (error) {
+    onError(error instanceof Error ? error.message : String(error));
+    return errorExitCode(error);
   }
 }
 
@@ -328,8 +361,7 @@ if (
   process.argv[1] &&
   import.meta.url === pathToFileURL(process.argv[1]).href
 ) {
-  runCli(process.argv.slice(2)).catch((error) => {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exitCode = 1;
+  void main(process.argv.slice(2)).then((code) => {
+    process.exitCode = code;
   });
 }
