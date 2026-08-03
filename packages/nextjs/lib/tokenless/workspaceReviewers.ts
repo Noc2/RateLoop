@@ -9,9 +9,12 @@ import {
   createPrivateGroupInvitationInTransaction,
   ensureDefaultPrivateReviewerGroup,
 } from "~~/lib/tokenless/privateGroups";
+import {
+  WORKSPACE_REVIEWER_INVITATION_PATTERN,
+  isWorkspaceReviewerInvitationToken,
+} from "~~/lib/tokenless/reviewerInvitationToken";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
-const INVITATION_PATTERN = /^rlri_([a-f0-9]{16})_([A-Za-z0-9_-]{43})$/u;
 const EMAIL_PATTERN = /^[^\s@]+@([^\s@]+)$/u;
 const DOMAIN_PATTERN =
   /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u;
@@ -138,7 +141,7 @@ function iso(value: Date | null) {
 }
 
 export function buildWorkspaceReviewerInvitationUrl(token: string, appUrl = getOptionalAppUrl()) {
-  if (!INVITATION_PATTERN.test(token)) {
+  if (!isWorkspaceReviewerInvitationToken(token)) {
     throw new TokenlessServiceError("Reviewer invitation token is invalid.", 400, "invalid_workspace_reviewer");
   }
   const relative = `/human/review?invite=1#invite=${encodeURIComponent(token)}`;
@@ -490,7 +493,7 @@ export async function createWorkspaceReviewerInvitationInTransaction(
   }
   const tokenCandidate =
     input.token ?? `rlri_${randomBytes(8).toString("hex")}_${randomBytes(32).toString("base64url")}`;
-  const tokenMatch = INVITATION_PATTERN.exec(tokenCandidate);
+  const tokenMatch = WORKSPACE_REVIEWER_INVITATION_PATTERN.exec(tokenCandidate);
   if (!tokenMatch) {
     throw new TokenlessServiceError("Reviewer invitation token is invalid.", 400, "invalid_workspace_reviewer");
   }
@@ -664,7 +667,7 @@ async function validateRecipient(client: PoolClient, row: Row, principalAddress:
 }
 
 async function invitationByToken(client: PoolClient, token: string, lock: boolean) {
-  const match = INVITATION_PATTERN.exec(token);
+  const match = WORKSPACE_REVIEWER_INVITATION_PATTERN.exec(token);
   if (!match) {
     throw new TokenlessServiceError(
       "Reviewer invitation not found.",

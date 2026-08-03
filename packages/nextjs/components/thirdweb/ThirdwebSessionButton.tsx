@@ -10,6 +10,7 @@ import {
   readBrowserSession,
   subscribeToBrowserAuthSessionChanges,
 } from "~~/lib/auth/client";
+import { workspaceReviewerInvitationFromHash } from "~~/lib/tokenless/reviewerInvitationToken";
 
 export const RATELOOP_SIGN_IN_LABEL = "Sign In";
 export const RATELOOP_THIRDWEB_AUTO_CONNECT = false;
@@ -30,14 +31,26 @@ export function localizedSignInReturnTo(returnTo: string | undefined, requestedL
   return `/${requestedLocale}${returnTo}`;
 }
 
-export function RateLoopSignInAction({ fill = false, returnTo }: { fill?: boolean; returnTo?: string }) {
+export function RateLoopSignInAction({
+  fill = false,
+  preserveCurrentTab = false,
+  returnTo,
+}: {
+  fill?: boolean;
+  preserveCurrentTab?: boolean;
+  returnTo?: string;
+}) {
   const locale = useLocale();
   const t = useTranslations("auth.session");
-  const localizedReturnTo = localizedSignInReturnTo(returnTo, locale);
+  const localizedReturnTo = preserveCurrentTab ? undefined : localizedSignInReturnTo(returnTo, locale);
   const href = localizedReturnTo ? `/sign-in?returnTo=${encodeURIComponent(localizedReturnTo)}` : "/sign-in";
   return (
-    <Link href={href} className={`${RATELOOP_SIGN_IN_ACTION_CLASS} ${fill ? "w-full" : "w-auto min-w-max"}`}>
-      {t("signIn")}
+    <Link
+      href={href}
+      className={`${RATELOOP_SIGN_IN_ACTION_CLASS} ${fill ? "w-full" : "w-auto min-w-max"}`}
+      {...(preserveCurrentTab ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+    >
+      {t(preserveCurrentTab ? "signInNewTab" : "signIn")}
     </Link>
   );
 }
@@ -128,7 +141,17 @@ export function ThirdwebSessionButton({
 }) {
   const locale = useLocale();
   const [session, setSession] = useState<BrowserSessionResponse | null>(null);
+  const [preserveCurrentTab, setPreserveCurrentTab] = useState(
+    () => typeof window !== "undefined" && workspaceReviewerInvitationFromHash(window.location.hash) !== null,
+  );
   const sessionGenerationRef = useRef(0);
+
+  useEffect(() => {
+    const refresh = () => setPreserveCurrentTab(workspaceReviewerInvitationFromHash(window.location.hash) !== null);
+    refresh();
+    window.addEventListener("hashchange", refresh);
+    return () => window.removeEventListener("hashchange", refresh);
+  }, []);
 
   const refreshSession = useCallback(() => {
     const generation = ++sessionGenerationRef.current;
@@ -161,5 +184,5 @@ export function ThirdwebSessionButton({
     return <AuthenticatedSessionControl compact={compact} session={session} onSignOut={signOutRateLoopSession} />;
   }
 
-  return <RateLoopSignInAction fill={!compact} returnTo={returnTo} />;
+  return <RateLoopSignInAction fill={!compact} preserveCurrentTab={preserveCurrentTab} returnTo={returnTo} />;
 }

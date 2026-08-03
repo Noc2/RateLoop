@@ -13,6 +13,7 @@ import { NextIntlClientProvider } from "next-intl";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import test from "node:test";
+import { installTestDom } from "~~/components/tokenless/testing/dom";
 import enAuth from "~~/messages/en/auth.json";
 
 const require = createRequire(import.meta.url);
@@ -78,6 +79,44 @@ test("the signed-out control links to provider-neutral sign-in", () => {
 test("signed-out review controls preserve a normalized local destination", () => {
   const html = renderToStaticMarkup(withIntl(<RateLoopSignInAction returnTo="/human?q=safety&scope=public" />));
   assert.match(html, /href="\/sign-in\?returnTo=%2Fhuman%3Fq%3Dsafety%26scope%3Dpublic"/);
+});
+
+test("secret reviewer invitations keep their bearer fragment in the original tab during sign-in", () => {
+  const html = renderToStaticMarkup(
+    withIntl(<RateLoopSignInAction preserveCurrentTab returnTo="/human/review?invite=1" />),
+  );
+  assert.match(html, /href="\/sign-in"/u);
+  assert.match(html, /target="_blank"/u);
+  assert.match(html, /rel="noopener noreferrer"/u);
+  assert.match(html, />Sign in in a new tab</u);
+  assert.doesNotMatch(html, /returnTo|rlri_/u);
+});
+
+test("every signed-out session control detects a reviewer bearer fragment without copying it into sign-in", async () => {
+  const restoreDom = installTestDom();
+  const previousFetch = globalThis.fetch;
+  const token = `rlri_0123456789abcdef_${"a".repeat(43)}`;
+  window.history.replaceState(null, "", `/human/review?invite=1#invite=${token}`);
+  globalThis.fetch = async input => {
+    assert.equal(String(input), "/api/auth/session");
+    return Response.json({ authenticated: false });
+  };
+  const { cleanup, render, waitFor } = await import("@testing-library/react");
+
+  try {
+    const view = render(withIntl(<ThirdwebSessionButton compact returnTo="/human/review?invite=1" />));
+    const link = await waitFor(() => view.getByRole("link", { name: "Sign in in a new tab" }));
+    assert.equal(link.getAttribute("href"), "/sign-in");
+    assert.equal(link.getAttribute("target"), "_blank");
+    assert.equal(link.getAttribute("rel"), "noopener noreferrer");
+    assert.equal(link.outerHTML.includes(token), false);
+    assert.equal(window.location.hash, `#invite=${token}`);
+  } finally {
+    cleanup();
+    await new Promise(resolve => setTimeout(resolve, 50));
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
 });
 
 test("German sign-in keeps the locale in both the sign-in page and its return destination", () => {
