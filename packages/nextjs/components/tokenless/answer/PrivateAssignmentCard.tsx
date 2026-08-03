@@ -85,7 +85,7 @@ export function PrivateAssignmentCard({ assignment }: { assignment: PrivateAnswe
               <p className="mt-1 text-sm text-base-content/85">{assignment.reviewQuestion}</p>
             </div>
           ) : null}
-          <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+          <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
             <div>
               <dt className="text-base-content/55">{t("assigned")}</dt>
               <dd className="mt-0.5 text-base-content/80">{dateLabel(assignment.createdAt)}</dd>
@@ -93,10 +93,6 @@ export function PrivateAssignmentCard({ assignment }: { assignment: PrivateAnswe
             <div>
               <dt className="text-base-content/55">{t("updated")}</dt>
               <dd className="mt-0.5 text-base-content/80">{dateLabel(assignment.updatedAt)}</dd>
-            </div>
-            <div>
-              <dt className="text-base-content/55">{t("caseCount")}</dt>
-              <dd className="mt-0.5 text-base-content/80">{assignment.caseCount}</dd>
             </div>
             <div>
               <dt className="text-base-content/55">{t("compensation")}</dt>

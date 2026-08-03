@@ -38,10 +38,12 @@ test("a private history card opens concise review details", async () => {
     assert.ok(details);
     assert.ok(summary);
     assert.equal(details.open, false);
+    assert.equal((document.body.textContent?.match(/1 case/gu) ?? []).length, 1);
 
     fireEvent.click(summary);
 
     assert.equal(details.open, true);
+    assert.equal((document.body.textContent?.match(/1 case/gu) ?? []).length, 1);
     assert.ok(screen.getByText("Is this suggestion correct and safe?"));
     assert.ok(screen.getByText("Unpaid"));
     assert.ok(screen.getByText(/No response was submitted before the deadline/iu));
