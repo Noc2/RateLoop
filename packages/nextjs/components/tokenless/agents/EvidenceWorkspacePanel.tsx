@@ -25,6 +25,7 @@ import { Card } from "~~/components/tokenless/ui/Card";
 import { Link } from "~~/i18n/navigation";
 import type { EvaluationDashboard } from "~~/lib/tokenless/evaluationDashboard";
 import { readJson } from "~~/lib/tokenless/http";
+import { WorkspaceRequestScope } from "~~/lib/tokenless/workspaceRequestScope";
 
 type EvidencePacket = {
   packetDigest: string;
@@ -688,6 +689,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
   const [shareUrls, setShareUrls] = useState<Record<string, string>>({});
   const [copiedShare, setCopiedShare] = useState<string | null>(null);
   const [showAdvancedControls, setShowAdvancedControls] = useState(false);
+  const [workspaceRequests] = useState(() => new WorkspaceRequestScope());
   const [urlReady, setUrlReady] = useState(false);
   const [urlSnapshot, setUrlSnapshot] = useState<EvidenceUrlSnapshot>(() => {
     const params = new URLSearchParams();
@@ -735,14 +737,26 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
     return () => window.removeEventListener("popstate", restoreUrlState);
   }, []);
 
+  useEffect(() => {
+    workspaceRequests.selectWorkspace(workspaceId);
+    return () => {
+      if (workspaceRequests.isWorkspaceCurrent(workspaceId)) workspaceRequests.selectWorkspace("");
+    };
+  }, [workspaceId, workspaceRequests]);
+
   const load = useCallback(async () => {
+    const request = workspaceRequests.begin(workspaceId, "evidence:load");
     setLoading(true);
     setError(null);
     try {
       const base = `/api/account/workspaces/${encodeURIComponent(workspaceId)}`;
       const requestedRun = requestedRunId ? `?run=${encodeURIComponent(requestedRunId)}` : "";
       const dashboard = await readJson<EvaluationDashboard>(
-        await fetch(`${base}/evaluations${requestedRun}`, { cache: "no-store", credentials: "same-origin" }),
+        await fetch(`${base}/evaluations${requestedRun}`, {
+          cache: "no-store",
+          credentials: "same-origin",
+          signal: request.signal,
+        }),
       );
       const packetRows = await Promise.all(
         dashboard.runs
@@ -754,12 +768,14 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                 await fetch(runBase, {
                   cache: "no-store",
                   credentials: "same-origin",
+                  signal: request.signal,
                 }),
               ),
               readJson<{ shares: EvidenceShareGrant[] }>(
                 await fetch(`${runBase}/shares`, {
                   cache: "no-store",
                   credentials: "same-origin",
+                  signal: request.signal,
                 }),
               ),
             ]);
@@ -774,6 +790,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
             };
           }),
       );
+      if (!request.isCurrent()) return;
       setPackets(packetRows);
       if (canManage) {
         const [attestationBody, retentionBody, keyBody] = await Promise.all([
@@ -781,26 +798,37 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
             await fetch(`${base}/assurance/attestations?limit=100`, {
               cache: "no-store",
               credentials: "same-origin",
+              signal: request.signal,
             }),
           ),
           readJson<RetentionPolicy>(
-            await fetch(`${base}/assurance/retention`, { cache: "no-store", credentials: "same-origin" }),
+            await fetch(`${base}/assurance/retention`, {
+              cache: "no-store",
+              credentials: "same-origin",
+              signal: request.signal,
+            }),
           ),
           readJson<TrustedKeyHistory>(
-            await fetch(`${base}/assurance/trusted-keys`, { cache: "no-store", credentials: "same-origin" }),
+            await fetch(`${base}/assurance/trusted-keys`, {
+              cache: "no-store",
+              credentials: "same-origin",
+              signal: request.signal,
+            }),
           ),
         ]);
+        if (!request.isCurrent()) return;
         setAttestations(attestationBody.attestations);
         setRetention(retentionBody);
         setKeys(keyBody.keys);
         setUntrustedPacketKeyCount(keyBody.untrustedPacketKeyCount);
       }
     } catch {
-      setError(errors("loadEvidence"));
+      if (request.isCurrent()) setError(errors("loadEvidence"));
     } finally {
-      setLoading(false);
+      if (request.isCurrent()) setLoading(false);
+      request.finish();
     }
-  }, [canManage, errors, requestedRunId, workspaceId]);
+  }, [canManage, errors, requestedRunId, workspaceId, workspaceRequests]);
 
   useEffect(() => {
     if (urlReady) void load();

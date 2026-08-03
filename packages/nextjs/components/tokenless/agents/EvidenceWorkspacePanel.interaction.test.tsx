@@ -78,6 +78,14 @@ const secondEvidencePacket = {
   },
 };
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>(next => {
+    resolve = next;
+  });
+  return { promise, resolve };
+}
+
 function installFetch(runs: Record<string, unknown>[]) {
   const previousFetch = globalThis.fetch;
   let auditors: Array<Record<string, unknown>> = [];
@@ -409,6 +417,86 @@ test("evidence selection and filters restore from the URL and preserve workspace
   } finally {
     await act(async () => cleanup());
     restoreFetch();
+    restoreDom();
+  }
+});
+
+test("a stale evidence response cannot replace a newer run selection", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup, waitFor } = await import("@testing-library/react");
+  const previousFetch = globalThis.fetch;
+  const firstDashboard = deferred<Response>();
+  let firstDashboardRequested = false;
+  window.history.replaceState(null, "", "/agents?workspace=workspace-evidence&run=run-evidence-1");
+
+  globalThis.fetch = async input => {
+    const url = String(input);
+    if (url.includes("/evaluations?run=run-evidence-1")) {
+      firstDashboardRequested = true;
+      return firstDashboard.promise;
+    }
+    if (url.includes("/evaluations?run=run-evidence-2")) {
+      return Response.json(
+        dashboard([
+          {
+            runId: "run-evidence-2",
+            projectId: "project-release-controls",
+            projectName: "Release controls",
+            suiteId: "suite-deployment-safety",
+            suiteName: "Deployment safety",
+            suiteVersion: 2,
+            evidencePacketAvailable: true,
+          },
+        ]),
+      );
+    }
+    if (url.endsWith("/assurance/runs/run-evidence-1/evidence")) return Response.json(evidencePacket);
+    if (url.endsWith("/assurance/runs/run-evidence-2/evidence")) return Response.json(secondEvidencePacket);
+    if (url.endsWith("/assurance/runs/run-evidence-1/evidence/shares")) return Response.json({ shares: [] });
+    if (url.endsWith("/assurance/runs/run-evidence-2/evidence/shares")) return Response.json({ shares: [] });
+    throw new Error(`Unexpected evidence request: ${url}`);
+  };
+
+  try {
+    const view = await mount(false);
+    await waitFor(() => assert.equal(firstDashboardRequested, true));
+
+    await act(async () => {
+      window.history.pushState(
+        null,
+        "",
+        "/agents?workspace=workspace-evidence&run=run-evidence-2&packet=packet-evidence-2",
+      );
+      window.dispatchEvent(new Event("popstate"));
+    });
+    await view.findByText("Deployment safety");
+
+    await act(async () => {
+      firstDashboard.resolve(
+        Response.json(
+          dashboard([
+            {
+              runId: "run-evidence-1",
+              projectId: "project-release-controls",
+              projectName: "Release controls",
+              suiteId: "suite-production-readiness",
+              suiteName: "Production readiness",
+              suiteVersion: 1,
+              evidencePacketAvailable: true,
+            },
+          ]),
+        ),
+      );
+      await firstDashboard.promise;
+    });
+
+    await waitFor(() => {
+      assert.ok(view.getByText("Deployment safety"));
+      assert.equal(view.queryByText("Production readiness"), null);
+    });
+  } finally {
+    await act(async () => cleanup());
+    globalThis.fetch = previousFetch;
     restoreDom();
   }
 });
