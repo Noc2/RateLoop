@@ -179,4 +179,12 @@ test("landing social proof uses precise localized labels", async () => {
   assert.match(english, />21<\/span> Review responses/);
   assert.match(german, />21<\/span> Prüfantworten/);
   assert.doesNotMatch(german, />21<\/span> Ratings/);
+  assert.match(
+    english,
+    /<span class="block">The Human<\/span><span class="block">Assurance <span class="rateloop-text-gradient">Loop<\/span><\/span>/,
+  );
+  assert.match(
+    german,
+    /<span class="block">Geprüft von<\/span><span class="block"><span class="rateloop-text-gradient">Menschen\.<\/span><\/span>/,
+  );
 });
