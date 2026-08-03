@@ -16,6 +16,8 @@ test("evaluation dashboard leads with results and progressively discloses detail
   assert.match(source, /Results appear after your agent requests human review\./);
   assert.match(source, /dashboard && dashboard\.runs\.length > 0/);
   assert.match(source, /decisionLabel\(run\.clientDecision, copy\)/);
+  assert.doesNotMatch(source, /Current result/);
+  assert.doesNotMatch(source, /<AgentText id="dynamic01[45]"/);
   assert.match(source, /label: copy\("status\.needsAction"\)/);
   assert.match(source, /label: copy\("status\.completed"\)/);
   assert.match(source, /label: copy\("status\.failed"\)/);

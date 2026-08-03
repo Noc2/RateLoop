@@ -188,6 +188,7 @@ test("suppressed results distinguish an active wait from a terminal shortfall", 
 
   try {
     const view = await mount();
+    assert.equal(view.queryByText("Current result"), null);
     assert.ok(await view.findByText("Result hidden until 3 reviewers respond."));
     assert.ok(view.getByText("Result remains hidden because fewer than 3 reviewers responded."));
   } finally {

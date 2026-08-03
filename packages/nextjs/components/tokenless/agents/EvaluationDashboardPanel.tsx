@@ -680,10 +680,7 @@ function RunCard({
 
       <div className="mt-5 grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(14rem,0.7fr)]">
         <div>
-          <p className="text-xs text-base-content/55">
-            {decision ? <AgentText id="dynamic015" /> : <AgentText id="dynamic014" />}
-          </p>
-          <p className="mt-1 text-2xl font-semibold">{decision ?? currentResult}</p>
+          <p className="text-2xl font-semibold">{decision ?? currentResult}</p>
           <SampleNote run={run} />
           {run.failureSummary ? (
             <div className="mt-3 rounded-xl border border-error/20 bg-error/[0.06] p-3">
