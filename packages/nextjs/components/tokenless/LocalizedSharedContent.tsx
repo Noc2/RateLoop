@@ -29,6 +29,17 @@ function preserveWhitespace(source: string, translated: string) {
   return `${leading}${translated}${trailing}`;
 }
 
+function replaceEmbeddedPhrase(source: string, english: string, translated: string) {
+  const escaped = english.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  const startsWithWord = /^[\p{L}\p{N}_]/u.test(english);
+  const endsWithWord = /[\p{L}\p{N}_]$/u.test(english);
+  const pattern = new RegExp(
+    `${startsWithWord ? "(?<![\\p{L}\\p{N}_])" : ""}${escaped}${endsWithWord ? "(?![\\p{L}\\p{N}_])" : ""}`,
+    "gu",
+  );
+  return source.replace(pattern, () => translated);
+}
+
 export function translateSharedString(source: string, phrases: Record<string, string>) {
   const trimmed = source.trim();
   if (!trimmed) return source;
@@ -40,7 +51,7 @@ export function translateSharedString(source: string, phrases: Record<string, st
 
   let translated = source;
   for (const english of Object.keys(phrases).sort((left, right) => right.length - left.length)) {
-    if (translated.includes(english)) translated = translated.replaceAll(english, phrases[english]);
+    if (translated.includes(english)) translated = replaceEmbeddedPhrase(translated, english, phrases[english]);
   }
   return translated;
 }

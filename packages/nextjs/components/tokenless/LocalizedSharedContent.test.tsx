@@ -1,5 +1,5 @@
 import React from "react";
-import { LocalizedSharedContent } from "./LocalizedSharedContent";
+import { LocalizedSharedContent, translateSharedString } from "./LocalizedSharedContent";
 import { PublicEvidenceVerifier } from "./PublicEvidenceVerifier";
 import { RootRecoverySurface } from "./RootRecoverySurface";
 import { RuntimeErrorActions } from "./RuntimeErrorActions";
@@ -109,4 +109,9 @@ test("English stays canonical while recovery actions and German links use locali
   assert.match(recovery, /aria-label="Nützliche Ziele"/u);
   assert.match(recovery, /href="\/de\/search"/u);
   assert.match(recovery, />Agenten verwalten</u);
+});
+
+test("embedded shared phrases never translate inside a larger word", () => {
+  assert.equal(translateSharedString("1. Nov. 2026", { No: "Nein" }), "1. Nov. 2026");
+  assert.equal(translateSharedString("No · Nov.", { No: "Nein" }), "Nein · Nov.");
 });
