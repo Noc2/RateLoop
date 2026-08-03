@@ -81,7 +81,7 @@ async function submitPrivateApproval(page: Page, source: string, suggestion: str
   await page
     .getByRole("textbox", { name: "Decision rationale" })
     .fill("The candidate is correct, bounded, and safe for this exact request.");
-  await page.getByRole("spinbutton", { name: "Crowd forecast" }).fill("65");
+  await expect(page.getByRole("spinbutton", { name: "Crowd forecast" })).toHaveCount(0);
   await page.getByRole("button", { name: "Submit review" }).click();
   await expect(page.getByRole("status")).toContainText("Review submitted.");
   await expect(page.getByText(source, { exact: true })).toHaveCount(0);
