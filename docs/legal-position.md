@@ -74,6 +74,35 @@ A **provider** design-capability duty. The only fields it names apply to one
 biometric category and have no bearing on a text-output review product. Listing
 Article 12 in a deployer-facing mapping is an error.
 
+### Article 72 — post-market monitoring, and the best fit in the Act
+
+Article 72 requires a **provider** of a high-risk system to run a post-market monitoring
+system proportionate to the risk, which "shall actively and systematically collect,
+document and analyse relevant data ... on the performance of high-risk AI systems
+throughout their lifetime", so the provider can evaluate continuous compliance with
+Chapter III, Section 2. The system must rest on a **post-market monitoring plan that
+forms part of the Annex IV technical documentation**. The Commission's implementing act
+laying down the plan template was due 2 February 2026.
+
+This is the closest fit between the Act and what the product actually does, and earlier
+revisions of this document omitted it. Three properties matter:
+
+- It describes a **continuous, sampled, documented performance record** — not a one-off
+  conformity exercise — which is precisely the artefact this product generates.
+- It binds **every** high-risk provider, a far larger population than the deferred
+  Annex III(4)(b) lane or the few dozen VLOPs under the DSA.
+- Because the plan sits inside Annex IV technical documentation, a market-surveillance
+  authority can demand it. That makes the obligation **recurring and inspected** rather
+  than self-attested.
+
+**Article 72 binds the provider, not the deployer.** The same discipline applied to
+Articles 12 and 14 applies here: a deployer-facing Article 72 mapping is an error, and
+this document set has flagged that error before. RateLoop's customer is the provider when
+the customer builds the system, and RateLoop supplies evidence into the customer's plan —
+it never holds the Article 72 duty itself. See
+[Can RateLoop discharge a customer's obligation?](#can-rateloop-discharge-a-customers-obligation)
+below, which governs this article unchanged.
+
 ### Can RateLoop discharge a customer's obligation?
 
 **It can carry out the work. It cannot assume the obligation.** The distinction is
