@@ -14,7 +14,7 @@
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx,.mjs --ignore-pattern public --ignore-pattern .next --ignore-pattern out",
     "serve": "next start",
     "start": "yarn build:workspace-deps && node scripts/dev-preflight.mjs",
-    "vercel": "vercel --build-env YARN_ENABLE_IMMUTABLE_INSTALLS=true --build-env ENABLE_EXPERIMENTAL_COREPACK=1 --build-env VERCEL_TELEMETRY_DISABLED=1",
+    "vercel": "vercel --cwd ../.. --build-env YARN_ENABLE_IMMUTABLE_INSTALLS=true --build-env ENABLE_EXPERIMENTAL_COREPACK=1 --build-env VERCEL_TELEMETRY_DISABLED=1",
     "vercel:login": "vercel login",
     "db:generate": "node -e \"console.error('db:generate is disabled in this package.\\n\\nMigrations under drizzle/ are hand-authored and drizzle-kit snapshots are intentionally absent from drizzle/meta/. With no snapshot to diff against, drizzle-kit generate treats the database as empty: it emits a CREATE-everything migration that can never apply to a migrated database, and it rewrites drizzle/meta/_journal.json, whose hashes are verified at deploy time by scripts/migrate-hosted-database.mjs.\\n\\nTo add a migration: write drizzle/NNNN_name.sql by hand, append a matching entry to drizzle/meta/_journal.json, then run yarn workspace @rateloop/nextjs test to check lib/db/migrationJournal.test.ts.'); process.exit(1)\"",
     "db:migrate": "drizzle-kit migrate",
