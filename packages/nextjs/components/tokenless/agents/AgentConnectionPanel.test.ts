@@ -142,15 +142,17 @@ test("all five consequential connection actions use the shared confirmation dial
   assert.match(source, /actionFeedbackRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
 });
 
-test("safe OAuth integrations show no bearer rotation or publishing permission", () => {
-  assert.match(source, /const legacyCredential = Boolean\(integration\.apiKeyId\)/);
-  assert.match(source, /allActiveIntegrationsUseSafeAccess = activeIntegrations\.every/);
-  assert.match(source, /activeIntegrations\.length > 0 && allActiveIntegrationsUseSafeAccess/);
+test("integration access copy derives from the server projection instead of credential proxies", () => {
+  assert.match(source, /const legacyCredential = integration\.access\.credentialKind === "legacy"/);
+  assert.match(source, /integration\.access\.canPublish/);
+  assert.match(source, /integration\.access\.canSpend/);
+  assert.doesNotMatch(source, /apiKeyId/);
   assert.match(source, /legacyCredential \? \(/);
-  assert.match(messages, /OAuth-managed safe access/);
+  assert.match(messages, /OAuth-managed access/);
   assert.match(messages, /No publishing access/);
   assert.match(messages, /Connected with safe access/);
   assert.match(messages, /Rotate legacy credential/);
+  assert.match(messages, /Current host-tool availability is not verified here\./);
 });
 
 test("replay-revoked OAuth integrations expose the owner recovery action", () => {

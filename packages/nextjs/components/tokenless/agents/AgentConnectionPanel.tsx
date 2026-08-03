@@ -52,7 +52,6 @@ type AgentPairing = {
 
 type AgentIntegration = {
   integrationId: string;
-  apiKeyId: string;
   agentId: string;
   agentVersionId: string;
   agentDisplayName: string;
@@ -257,7 +256,6 @@ export function normalizeAgentIntegration(value: unknown): AgentIntegration {
   const reviewPolicy = record(row.reviewPolicy);
   return {
     integrationId: stringField(row, "integrationId", "id"),
-    apiKeyId: stringField(row, "apiKeyId"),
     agentId: stringField(row, "agentId") || stringField(agent, "agentId", "id"),
     agentVersionId: stringField(row, "agentVersionId") || stringField(version, "versionId", "id"),
     agentDisplayName: stringField(row, "agentDisplayName", "displayName") || stringField(agent, "displayName"),
@@ -1148,7 +1146,15 @@ export function AgentConnectionPanel({
     integration => integration.access.rateLoopAccessState === "recovery_required",
   );
   const managedIntegrations = [...activeIntegrations, ...recoveryIntegrations];
-  const allActiveIntegrationsUseSafeAccess = activeIntegrations.every(integration => !integration.apiKeyId);
+  const anyActiveCanPublish = activeIntegrations.some(integration => integration.access.canPublish);
+  const anyActiveCanSpend = activeIntegrations.some(integration => integration.access.canSpend);
+  const capabilitySummaryKey = anyActiveCanPublish
+    ? anyActiveCanSpend
+      ? "accessCanPublishAndSpend"
+      : "accessCanPublish"
+    : anyActiveCanSpend
+      ? "accessCanSpend"
+      : "accessCannotPublishOrSpend";
   const reconnectableIntegrations = selectReconnectableOAuthConnections(integrations);
   const showConnectionStart = canStartAgentConnection({
     loading,
@@ -1584,29 +1590,21 @@ export function AgentConnectionPanel({
               <h2 id="connected-agents-heading" className="text-xl font-semibold">
                 {activeIntegrations.length === 0
                   ? t("accessNeedsAttention")
-                  : allActiveIntegrationsUseSafeAccess
-                    ? activeIntegrations.length === 1
-                      ? t("authorizationSavedOne", {
-                          name: activeIntegrations[0].agentDisplayName || t("agentFallback"),
-                        })
-                      : t("authorizationSavedMany", { count: activeIntegrations.length })
-                    : activeIntegrations.length === 1
-                      ? t("connectedOne", {
-                          name: activeIntegrations[0].agentDisplayName || t("agentFallback"),
-                        })
-                      : t("connectedMany", { count: activeIntegrations.length })}
+                  : activeIntegrations.length === 1
+                    ? t("accessActiveOne", {
+                        name: activeIntegrations[0].agentDisplayName || t("agentFallback"),
+                      })
+                    : t("accessActiveMany", { count: activeIntegrations.length })}
               </h2>
-              {activeIntegrations.length > 0 && allActiveIntegrationsUseSafeAccess ? (
+              {activeIntegrations.length > 0 ? (
                 <div className="mt-2 space-y-1 text-sm leading-6 text-base-content/55">
-                  <p>
-                    <AgentText id="translated024" />
-                  </p>
+                  <p>{t(capabilitySummaryKey)}</p>
                   <p>{t("hostToolStateUnverified")}</p>
                 </div>
               ) : null}
             </div>
             <div className="flex flex-wrap gap-2">
-              {activeIntegrations.length === 1 && !activeIntegrations[0].apiKeyId ? (
+              {activeIntegrations.length === 1 && activeIntegrations[0].access.credentialKind === "oauth" ? (
                 <Button
                   type="button"
                   size="sm"
@@ -1657,7 +1655,7 @@ export function AgentConnectionPanel({
             <div id="connected-agent-management" className="mt-5 space-y-4">
               {managedIntegrations.map(integration => {
                 const active = hasActiveAgentAccess(integration.access);
-                const legacyCredential = Boolean(integration.apiKeyId);
+                const legacyCredential = integration.access.credentialKind === "legacy";
                 return (
                   <article
                     key={integration.integrationId}
@@ -1681,7 +1679,7 @@ export function AgentConnectionPanel({
                             {integration.enforcementMode === "host_enforced" ? "host-enforced" : "advisory"}
                           </span>
                           <span className="badge badge-ghost">
-                            {legacyCredential ? t("legacyCredentialShort") : t("safeOauth")}
+                            {legacyCredential ? t("legacyCredentialShort") : t("oauthCredentialShort")}
                           </span>
                         </div>
                       </div>

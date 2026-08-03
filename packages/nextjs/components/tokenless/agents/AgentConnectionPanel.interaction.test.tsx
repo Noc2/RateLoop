@@ -39,7 +39,7 @@ function activeIntent() {
   };
 }
 
-function connectedIntegration() {
+function connectedIntegration(overrides: Record<string, unknown> = {}) {
   return {
     access: {
       credentialKind: "oauth",
@@ -53,6 +53,7 @@ function connectedIntegration() {
     connectionStatus: "connected",
     displayName: "Codex",
     credentialExpiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+    ...overrides,
   };
 }
 
@@ -142,12 +143,9 @@ test("polling reports the connection state once instead of on every refresh", as
     );
     const screen = within(document.body);
     await screen.findByRole("heading", { name: "Waiting for the agent to open your connection" });
-    assert.ok(screen.getByRole("heading", { name: "Codex authorized in RateLoop" }));
-    assert.ok(
-      screen.getByText(
-        "Host availability is separate. This page cannot verify that the current agent task loaded the workspace tools.",
-      ),
-    );
+    assert.ok(screen.getByRole("heading", { name: "Codex has active RateLoop access" }));
+    assert.ok(screen.getByText("Active access cannot publish review work or submit payments."));
+    assert.ok(screen.getByText("Current host-tool availability is not verified here."));
     assert.deepEqual(reported, [true]);
 
     // Three more polls land while the connection state is unchanged. Each one used to be reported
@@ -162,6 +160,75 @@ test("polling reports the connection state once instead of on every refresh", as
     await act(async () => cleanup());
     globalThis.fetch = previousFetch;
     restoreVisibility();
+    restoreDom();
+  }
+});
+
+test("mixed OAuth and legacy access keeps host readiness separate and reports server-derived capabilities", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup, fireEvent, render: baseRender, within } = await import("@testing-library/react");
+  const render = withEnglishAppTestProviders(baseRender);
+  const { RateLoopNotificationProvider } = await import("~~/components/tokenless/RateLoopNotificationProvider");
+  const { AgentConnectionPanel } = await import("./AgentConnectionPanel");
+  const previousFetch = globalThis.fetch;
+  const oauth = connectedIntegration({
+    integrationId: "oauth-paid",
+    agentId: "agent-oauth",
+    displayName: "Paid Codex",
+    access: {
+      credentialKind: "oauth",
+      rateLoopAccessState: "active",
+      hostToolReadiness: "unverified",
+      canPublish: true,
+      canSpend: true,
+    },
+  });
+  const legacy = connectedIntegration({
+    integrationId: "legacy-safe",
+    agentId: "agent-legacy",
+    displayName: "Legacy worker",
+    connectionStatus: null,
+    oauthClientId: null,
+    access: {
+      credentialKind: "legacy",
+      rateLoopAccessState: "active",
+      hostToolReadiness: "unverified",
+      canPublish: false,
+      canSpend: false,
+    },
+  });
+
+  globalThis.fetch = async input => {
+    const url = String(input);
+    if (url.endsWith("/agent-connections")) return Response.json({ intents: [] });
+    if (url.endsWith("/agent-pairings")) return Response.json({ pairings: [] });
+    if (url.endsWith("/agent-integrations")) return Response.json({ integrations: [oauth, legacy] });
+    if (url.endsWith("/agent-publishing-policies")) return Response.json({ policies: [] });
+    throw new Error(`Unexpected request: ${url}`);
+  };
+
+  try {
+    render(
+      <RateLoopNotificationProvider>
+        <AgentConnectionPanel workspaceId="workspace-1" />
+      </RateLoopNotificationProvider>,
+    );
+    const screen = within(document.body);
+    assert.ok(await screen.findByRole("heading", { name: "2 agents have active RateLoop access" }));
+    assert.ok(
+      screen.getByText(
+        "At least one active access grant can publish review work and at least one can submit payments.",
+      ),
+    );
+    assert.ok(screen.getByText("Current host-tool availability is not verified here."));
+    assert.equal(screen.queryByText(/No spending|cannot publish or submit payments/i), null);
+
+    fireEvent.click(screen.getByRole("button", { name: "Manage agent access" }));
+    assert.ok(screen.getByText("OAuth access"));
+    assert.ok(screen.getByText("Legacy credential"));
+  } finally {
+    await act(async () => cleanup());
+    globalThis.fetch = previousFetch;
     restoreDom();
   }
 });
@@ -216,7 +283,7 @@ test("replay-revoked OAuth stays inactive until its restore completes", async ()
     assert.deepEqual(reported, [false]);
 
     fireEvent.click(screen.getByRole("button", { name: "Restore connection" }));
-    await waitFor(() => assert.ok(screen.getByRole("heading", { name: "Codex authorized in RateLoop" })));
+    await waitFor(() => assert.ok(screen.getByRole("heading", { name: "Codex has active RateLoop access" })));
     assert.deepEqual(reported, [false, true]);
   } finally {
     await act(async () => cleanup());
@@ -363,7 +430,7 @@ test("all five consequential connection actions require confirmation before send
     );
     const screen = within(document.body);
     await screen.findByRole("heading", { name: "Approve reconnecting this agent" });
-    fireEvent.click(screen.getByRole("button", { name: "Manage connected agents" }));
+    fireEvent.click(screen.getByRole("button", { name: "Manage agent access" }));
 
     const confirmations = [
       {
