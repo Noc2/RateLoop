@@ -198,7 +198,7 @@ export function buildTokenlessPrivateReviewCommitmentQuestion(): TokenlessQuoteR
     prompt: "Does the encrypted candidate satisfy the committed private review criterion?",
     positiveLabel: "Accept",
     negativeLabel: "Needs changes",
-    rationale: { mode: "required", minLength: 10, maxLength: 2_000 },
+    rationale: { mode: "off" },
   };
 }
 

@@ -1020,6 +1020,7 @@ export async function relayPaidRaterCommit(input: { principalId: string; request
       roundId: auth.roundId,
       contentId: String(voucher.contentId) as Hex,
       voteKey: auth.voteKey,
+      reviewerSource,
       rationale: question.rationale,
       response: input.request.response,
       now,

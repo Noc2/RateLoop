@@ -1753,7 +1753,11 @@ export async function reviewAndPublishResult(input: {
   const preferenceShareBps = Math.floor((evidence.upVotes * BPS_MAX) / evidence.revealCount);
   const intervalBps = wilsonIntervalBps(evidence.upVotes, evidence.revealCount);
   const terminal = evaluation.status !== "pending";
-  const feedback = await listAuthorizedTerminalPublicFeedback({ operationKey: input.operationKey, terminal });
+  const feedback = await listAuthorizedTerminalPublicFeedback({
+    operationKey: input.operationKey,
+    reviewerSource: audience.source,
+    terminal,
+  });
   throwIfMaintenanceCancelled(input.signal);
   const result = parseTokenlessResult({
     schemaVersion: TOKENLESS_SCHEMA_VERSION,

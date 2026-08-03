@@ -22,6 +22,21 @@ function rowString(row: Row | undefined, key: string) {
   return value === null || value === undefined ? null : String(value);
 }
 
+export function publicFeedbackAllowedForReviewerSource(source: unknown): source is "rateloop_network" {
+  return source === "rateloop_network";
+}
+
+function quoteReviewerSource(row: Row) {
+  try {
+    const quote = JSON.parse(rowString(row, "quote_response_json") ?? "null") as Row | null;
+    return quote && typeof quote.audience === "object" && quote.audience
+      ? rowString(quote.audience as Row, "source")
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 function loadKeyring(): PublicRaterResponseKeyring {
   if (keyringOverride) return keyringOverride;
   const prefix = "TOKENLESS_PUBLIC_RATER_RESPONSE_VAULT";
@@ -109,12 +124,14 @@ export async function readFeedbackBonusPublicRaterResponse(input: {
   expectedResponseHash: string;
 }) {
   const result = await dbPool.query(
-    `SELECT response.*
+    `SELECT response.*, quote.response_json AS quote_response_json
      FROM tokenless_public_rater_responses response
      JOIN tokenless_agent_review_opportunities opportunity
        ON opportunity.operation_key = response.operation_key
       AND opportunity.workspace_id = $2
       AND opportunity.opportunity_id = $3
+     JOIN tokenless_agent_asks ask ON ask.operation_key = response.operation_key
+     JOIN tokenless_agent_quotes quote ON quote.quote_id = ask.quote_id
      WHERE response.response_id = $1
        AND response.response_hash = $4
        AND response.hash_verified_at IS NOT NULL
@@ -122,7 +139,7 @@ export async function readFeedbackBonusPublicRaterResponse(input: {
      LIMIT 2`,
     [input.responseId, input.workspaceId, input.opportunityId, input.expectedResponseHash.toLowerCase()],
   );
-  if (result.rowCount !== 1) {
+  if (result.rowCount !== 1 || !publicFeedbackAllowedForReviewerSource(quoteReviewerSource(result.rows[0] as Row))) {
     throw new TokenlessServiceError(
       "The selected public feedback body is unavailable.",
       409,
@@ -150,6 +167,7 @@ export async function preparePublicRaterResponse(
     roundId: string;
     contentId: Hex;
     voteKey: string;
+    reviewerSource: unknown;
     rationale?: PublicRaterRationaleRequirement;
     response: PublicRaterResponseInput;
     now: Date;
@@ -157,7 +175,13 @@ export async function preparePublicRaterResponse(
 ) {
   let normalized: ReturnType<typeof normalizePublicRaterResponse>;
   try {
-    normalized = normalizePublicRaterResponse(input, input.response);
+    normalized = normalizePublicRaterResponse(
+      {
+        ...input,
+        rationale: publicFeedbackAllowedForReviewerSource(input.reviewerSource) ? input.rationale : { mode: "off" },
+      },
+      input.response,
+    );
   } catch (error) {
     throw new TokenlessServiceError(
       error instanceof Error ? error.message : "Feedback is invalid.",
@@ -247,8 +271,14 @@ export async function verifyPublicRaterResponseCommitments(input: {
   }
 }
 
-export async function listAuthorizedTerminalPublicFeedback(input: { operationKey: string; terminal: boolean }) {
-  if (!input.terminal) return { items: [], redactedCount: 0 };
+export async function listAuthorizedTerminalPublicFeedback(input: {
+  operationKey: string;
+  reviewerSource: unknown;
+  terminal: boolean;
+}) {
+  if (!input.terminal || !publicFeedbackAllowedForReviewerSource(input.reviewerSource)) {
+    return { items: [], redactedCount: 0 };
+  }
   const result = await dbPool.query(
     `SELECT r.* FROM tokenless_public_rater_responses r
      WHERE r.operation_key = $1
@@ -278,16 +308,21 @@ export async function listPendingPublicRaterResponses(limit = 50) {
     throw new TokenlessServiceError("Moderation limit is invalid.", 400, "invalid_moderation_limit");
   }
   const result = await dbPool.query(
-    `SELECT * FROM tokenless_public_rater_responses
-     WHERE moderation_status = 'pending' ORDER BY created_at ASC LIMIT $1`,
+    `SELECT response.*, quote.response_json AS quote_response_json
+     FROM tokenless_public_rater_responses response
+     JOIN tokenless_agent_asks ask ON ask.operation_key = response.operation_key
+     JOIN tokenless_agent_quotes quote ON quote.quote_id = ask.quote_id
+     WHERE response.moderation_status = 'pending' ORDER BY response.created_at ASC LIMIT $1`,
     [limit],
   );
-  return (result.rows as Row[]).map(row => ({
-    responseId: rowString(row, "response_id")!,
-    operationKey: rowString(row, "operation_key")!,
-    createdAt: new Date(String(row.created_at)).toISOString(),
-    feedback: decryptPayload(row).feedback,
-  }));
+  return (result.rows as Row[])
+    .filter(row => publicFeedbackAllowedForReviewerSource(quoteReviewerSource(row)))
+    .map(row => ({
+      responseId: rowString(row, "response_id")!,
+      operationKey: rowString(row, "operation_key")!,
+      createdAt: new Date(String(row.created_at)).toISOString(),
+      feedback: decryptPayload(row).feedback,
+    }));
 }
 
 export function __setPublicRaterResponseKeyringForTests(value: PublicRaterResponseKeyring | null) {

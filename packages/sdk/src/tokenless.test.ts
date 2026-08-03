@@ -3,6 +3,7 @@ import test from "node:test";
 import { sha256, stringToHex } from "viem";
 import { RateLoopApiError } from "./errors";
 import {
+  buildTokenlessPrivateReviewCommitmentQuestion,
   buildTokenlessQuoteIntent,
   createTokenlessRateLoopClient,
   normalizeTokenlessQuoteRequest,
@@ -45,6 +46,16 @@ const REVIEW_ECONOMICS = {
   bountyPerSeatAtomic: "1000000",
   panelSize: 15,
 };
+
+test("private chain commitments never request public rationale", () => {
+  assert.deepEqual(buildTokenlessPrivateReviewCommitmentQuestion(), {
+    kind: "binary",
+    prompt: "Does the encrypted candidate satisfy the committed private review criterion?",
+    positiveLabel: "Accept",
+    negativeLabel: "Needs changes",
+    rationale: { mode: "off" },
+  });
+});
 
 test("package root exposes only the tokenless client, schema, types, and generic errors", () => {
   assert.deepEqual(

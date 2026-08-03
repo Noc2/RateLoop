@@ -24,7 +24,7 @@ beforeEach(async () => {
     args: [NOW, NOW],
   });
   await dbClient.execute({
-    sql: "INSERT INTO tokenless_agent_quotes (quote_id, request_hash, request_json, response_json, expires_at, created_at) VALUES ('quote_response', 'hash', '{\"visibility\":\"public\"}', '{}', ?, ?)",
+    sql: 'INSERT INTO tokenless_agent_quotes (quote_id, request_hash, request_json, response_json, expires_at, created_at) VALUES (\'quote_response\', \'hash\', \'{"visibility":"public"}\', \'{"audience":{"source":"rateloop_network"}}\', ?, ?)',
     args: [new Date(NOW.getTime() + 60_000), NOW],
   });
   await dbClient.execute({
@@ -105,6 +105,7 @@ test("public feedback is encrypted once per voucher, moderated, hash-verified, a
       roundId: "42",
       contentId: CONTENT_ID,
       voteKey: VOTE_KEY,
+      reviewerSource: "rateloop_network",
       rationale: { mode: "required" },
       response,
       now: NOW,
@@ -117,12 +118,25 @@ test("public feedback is encrypted once per voucher, moderated, hash-verified, a
   assert.equal(stored.rows.length, 1);
   assert.equal(String(stored.rows[0]?.payload_ciphertext).includes(response.body), false);
   assert.equal(String(stored.rows[0]?.moderation_status), "pending");
-  assert.deepEqual(await listAuthorizedTerminalPublicFeedback({ operationKey: "op_response", terminal: false }), {
-    items: [],
-    redactedCount: 0,
-  });
+  assert.deepEqual(
+    await listAuthorizedTerminalPublicFeedback({
+      operationKey: "op_response",
+      reviewerSource: "rateloop_network",
+      terminal: false,
+    }),
+    { items: [], redactedCount: 0 },
+  );
   const pending = await listPendingPublicRaterResponses();
   assert.equal(pending[0]?.feedback?.body, response.body);
+  await dbClient.execute({
+    sql: "UPDATE tokenless_agent_quotes SET response_json=? WHERE quote_id='quote_response'",
+    args: [JSON.stringify({ audience: { source: "customer_invited" } })],
+  });
+  assert.deepEqual(await listPendingPublicRaterResponses(), []);
+  await dbClient.execute({
+    sql: "UPDATE tokenless_agent_quotes SET response_json=? WHERE quote_id='quote_response'",
+    args: [JSON.stringify({ audience: { source: "rateloop_network" } })],
+  });
   await verifyPublicRaterResponseCommitments({
     operationKey: "op_response",
     reveals: [{ voteKey: VOTE_KEY, responseHash: response.responseHash }],
@@ -134,8 +148,61 @@ test("public feedback is encrypted once per voucher, moderated, hash-verified, a
     reasonCode: "policy_pass",
     now: NOW,
   });
-  assert.deepEqual(await listAuthorizedTerminalPublicFeedback({ operationKey: "op_response", terminal: true }), {
-    items: [{ category: "evidence", body: response.body, sourceUrl: "https://example.com/source" }],
-    redactedCount: 0,
-  });
+  assert.deepEqual(
+    await listAuthorizedTerminalPublicFeedback({
+      operationKey: "op_response",
+      reviewerSource: "rateloop_network",
+      terminal: true,
+    }),
+    {
+      items: [{ category: "evidence", body: response.body, sourceUrl: "https://example.com/source" }],
+      redactedCount: 0,
+    },
+  );
+  assert.deepEqual(
+    await listAuthorizedTerminalPublicFeedback({
+      operationKey: "op_response",
+      reviewerSource: "customer_invited",
+      terminal: true,
+    }),
+    { items: [], redactedCount: 0 },
+  );
+});
+
+test("customer-invited prose is rejected before the public response insert", async () => {
+  const response = createPublicRaterResponse(
+    { operationKey: "op_response", roundId: "42", contentId: CONTENT_ID, rationale: { mode: "required" } },
+    {
+      category: "concern",
+      body: "This private rationale must remain in the encrypted workspace response.",
+      nonce: `0x${"34".repeat(32)}`,
+    },
+  );
+  const client = await dbPool.connect();
+  try {
+    await assert.rejects(
+      () =>
+        preparePublicRaterResponse(client, {
+          voucherId: "voucher_response",
+          operationKey: "op_response",
+          questionId: "qst_response",
+          roundId: "42",
+          contentId: CONTENT_ID,
+          voteKey: VOTE_KEY,
+          reviewerSource: "customer_invited",
+          rationale: { mode: "required" },
+          response,
+          now: NOW,
+        }),
+      (error: unknown) =>
+        error instanceof Error &&
+        "code" in error &&
+        error.code === "invalid_public_rater_response" &&
+        /disabled/u.test(error.message),
+    );
+  } finally {
+    client.release();
+  }
+  const stored = await dbClient.execute("SELECT COUNT(*) AS count FROM tokenless_public_rater_responses");
+  assert.equal(Number(stored.rows[0]?.count), 0);
 });
