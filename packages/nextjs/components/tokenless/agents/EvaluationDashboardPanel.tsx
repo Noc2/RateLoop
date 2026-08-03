@@ -631,21 +631,22 @@ function RunCard({
   workspaceId,
   trend,
   evidenceHref,
+  onDecided,
 }: {
   run: EvaluationRun;
   workspaceId: string;
   trend?: DeciderDecisionTrend;
   evidenceHref: string | null;
+  onDecided: (runId: string, decision: NonNullable<EvaluationRun["clientDecision"]>) => void;
 }) {
   const copy = useAgentTranslations("evidencePanels.evaluation");
   const format = useAgentFormatter();
   const locale = useAgentLocale();
   const share = run.candidateSelectionShareBps;
-  const [clientDecision, setClientDecision] = useState(run.clientDecision);
   const [overrideOpen, setOverrideOpen] = useState(false);
-  const decision = decisionLabel(clientDecision, copy);
-  const decidable = evaluationRunNeedsDecision({ ...run, clientDecision });
-  const status = evaluationRunPresentationStatus({ ...run, clientDecision });
+  const decision = decisionLabel(run.clientDecision, copy);
+  const decidable = evaluationRunNeedsDecision(run);
+  const status = evaluationRunPresentationStatus(run);
   const presentationStatus =
     status === "needs_action"
       ? { label: copy("status.needsAction"), className: "bg-warning/10 text-warning" }
@@ -695,7 +696,12 @@ function RunCard({
           {decidable ? (
             <>
               <DecisionSignals run={run} />
-              <ClientDecisionButtons run={run} workspaceId={workspaceId} trend={trend} onDecided={setClientDecision} />
+              <ClientDecisionButtons
+                run={run}
+                workspaceId={workspaceId}
+                trend={trend}
+                onDecided={clientDecision => onDecided(run.runId, clientDecision)}
+              />
             </>
           ) : null}
         </div>
@@ -865,6 +871,20 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
   const [error, setError] = useState<string | null>(null);
   const [urlState, setUrlState] = useState<EvaluationUrlState>(DEFAULT_EVALUATION_URL_STATE);
   const [currentSearch, setCurrentSearch] = useState("");
+
+  const handleRunDecided = useCallback(
+    (runId: string, clientDecision: NonNullable<EvaluationRun["clientDecision"]>) => {
+      setDashboard(current =>
+        current
+          ? {
+              ...current,
+              runs: current.runs.map(run => (run.runId === runId ? { ...run, clientDecision } : run)),
+            }
+          : current,
+      );
+    },
+    [],
+  );
 
   const updateUrlState = useCallback((patch: Partial<EvaluationUrlState>) => {
     const href = evaluationUrlHref({
@@ -1184,6 +1204,7 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
                   evidenceHref={
                     run.evidencePacketAvailable ? evidenceHrefForRun(workspaceId, run.runId, currentSearch) : null
                   }
+                  onDecided={handleRunDecided}
                 />
               ))
             ) : (

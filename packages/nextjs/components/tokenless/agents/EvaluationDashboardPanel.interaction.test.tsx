@@ -54,12 +54,15 @@ async function mount() {
 
 function installFetch(dashboardBody: Record<string, unknown>, caseView?: Record<string, unknown>) {
   const previousFetch = globalThis.fetch;
-  globalThis.fetch = async input => {
+  globalThis.fetch = async (input, init) => {
     const url = String(input);
     if (url === "/api/account/workspaces") {
       return Response.json({ workspaces: [{ workspaceId: "workspace-1", name: "Release team", role: "member" }] });
     }
     if (url.includes("/evaluations")) return Response.json(dashboardBody);
+    if (url.endsWith("/evidence/decision") && init?.method === "POST") {
+      return Response.json({ decisionId: "decision-1" }, { status: 201 });
+    }
     if (caseView && url.endsWith("/cases")) return Response.json(caseView);
     throw new Error(`Unexpected evaluation request: ${url}`);
   };
@@ -188,6 +191,31 @@ test("suppressed results distinguish an active wait from a terminal shortfall", 
     assert.ok(await view.findByText("Result hidden until 3 reviewers respond."));
     assert.ok(view.getByText("Result remains hidden because fewer than 3 reviewers responded."));
   } finally {
+    await act(async () => cleanup());
+    restoreFetch();
+    restoreDom();
+  }
+});
+
+test("recording a decision immediately updates the active outcome filter", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup, waitFor } = await import("@testing-library/react");
+  const userEvent = (await import("@testing-library/user-event")).default;
+  const restoreFetch = installFetch(dashboard());
+  window.history.replaceState(null, "", "/agents/results?workspace=workspace-1&resultStatus=needs_action");
+
+  try {
+    const view = await mount();
+    assert.ok(await view.findByText("Release gate"));
+    assert.ok(view.getByText("Showing 1 of 1 results"));
+
+    await userEvent.setup({ document }).click(view.getByRole("button", { name: "Go" }));
+
+    await waitFor(() => assert.equal(view.queryByText("Release gate"), null));
+    assert.ok(view.getByRole("heading", { name: "No results match these filters" }));
+    assert.ok(view.getByText("Showing 0 of 1 results"));
+  } finally {
+    window.history.replaceState(null, "", "/agents/results");
     await act(async () => cleanup());
     restoreFetch();
     restoreDom();

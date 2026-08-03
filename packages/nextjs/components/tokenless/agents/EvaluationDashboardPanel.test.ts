@@ -15,7 +15,7 @@ test("evaluation dashboard leads with results and progressively discloses detail
   assert.doesNotMatch(source, /showWorkspaceSelector/);
   assert.match(source, /Results appear after your agent requests human review\./);
   assert.match(source, /dashboard && dashboard\.runs\.length > 0/);
-  assert.match(source, /decisionLabel\(clientDecision, copy\)/);
+  assert.match(source, /decisionLabel\(run\.clientDecision, copy\)/);
   assert.match(source, /label: copy\("status\.needsAction"\)/);
   assert.match(source, /label: copy\("status\.completed"\)/);
   assert.match(source, /label: copy\("status\.failed"\)/);
@@ -31,6 +31,10 @@ test("evaluation dashboard leads with results and progressively discloses detail
   assert.match(source, /orderedRuns\.map\(run =>/);
   assert.match(source, /Insufficient responses/);
   assert.match(source, /evaluationRunResultState\(run\)/);
+  assert.match(
+    source,
+    /runs: current\.runs\.map\(run => \(run\.runId === runId \? \{ \.\.\.run, clientDecision \} : run\)\)/,
+  );
   assert.match(source, /Evidence and run details/);
   assert.match(source, /Calibration items/);
   assert.match(source, /Quorum-case unanimity/);
@@ -114,7 +118,7 @@ test("run cards submit go/revise/stop and record per-output overrides without a 
   assert.match(source, /\["go", "revise", "stop"\] as const/);
   assert.match(source, /no choice is preselected/i);
   assert.match(source, /evidence\/decision/);
-  assert.match(source, /evaluationRunNeedsDecision\(\{ \.\.\.run, clientDecision \}\)/);
+  assert.match(source, /evaluationRunNeedsDecision\(run\)/);
   assert.doesNotMatch(
     source,
     /defaultChecked|defaultValue=\{?"(go|revise|stop|accepted|disregarded|overridden|reversed)/,
