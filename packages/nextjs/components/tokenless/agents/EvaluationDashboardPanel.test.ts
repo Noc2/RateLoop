@@ -49,10 +49,12 @@ test("evaluation dashboard leads with results and progressively discloses detail
   assert.match(source, /Operations and policy details/);
   assert.doesNotMatch(source, /How results are shown/);
   const populatedDashboard = source.slice(source.indexOf("dashboard && dashboard.runs.length > 0"));
-  const results = populatedDashboard.indexOf('aria-labelledby="evaluation-runs-heading"');
+  const results = populatedDashboard.indexOf('aria-label={copy("runs")}');
   const workspaceDetails = populatedDashboard.indexOf('<AgentText id="operations" />');
   const publishingLimits = populatedDashboard.indexOf('aria-labelledby="publishing-limits-heading"');
   assert.ok(results >= 0 && results < workspaceDetails);
+  assert.doesNotMatch(source, /evaluation-runs-heading/);
+  assert.doesNotMatch(source, /<AgentText id="translated125"/);
   assert.ok(publishingLimits > workspaceDetails);
   assert.match(populatedDashboard.slice(workspaceDetails), /Publishing limits/);
   assert.match(source, /Small sample/);

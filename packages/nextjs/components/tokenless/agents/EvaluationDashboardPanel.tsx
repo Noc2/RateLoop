@@ -1098,10 +1098,7 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
 
       {dashboard && dashboard.runs.length > 0 ? (
         <>
-          <section className="space-y-3" aria-labelledby="evaluation-runs-heading">
-            <h2 id="evaluation-runs-heading" className="text-xl font-semibold">
-              <AgentText id="translated125" />
-            </h2>
+          <section className="space-y-3" aria-label={copy("runs")}>
             <Card as="div" className="rounded-2xl p-4">
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
                 <Field
@@ -1179,17 +1176,17 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
                   </option>
                 </SelectField>
               </div>
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-base-content/55">
-                <p>
-                  <AgentText id="translated085" /> {orderedRuns.length} <AgentText id="translated063" />{" "}
-                  {dashboard.runs.length} <AgentText id="translated126" />
-                </p>
-                {filtersActive ? (
+              {filtersActive ? (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-base-content/55">
+                  <p>
+                    <AgentText id="translated085" /> {orderedRuns.length} <AgentText id="translated063" />{" "}
+                    {dashboard.runs.length} <AgentText id="translated126" />
+                  </p>
                   <button type="button" className="link" onClick={() => updateUrlState(DEFAULT_EVALUATION_URL_STATE)}>
                     <AgentText id="translated089" />
                   </button>
-                ) : null}
-              </div>
+                </div>
+              ) : null}
             </Card>
             {orderedRuns.length > 0 ? (
               orderedRuns.map(run => (
