@@ -85,6 +85,8 @@ test("only the explicitly active shell handles shortcuts and links keep Enter ac
     );
 
     const user = userEvent.setup({ document });
+    assert.equal(view.queryByText("Case 1 of 1"), null);
+    assert.equal(view.queryByRole("progressbar"), null);
     view.getAllByRole("region", { name: "Reviewer workspace" })[0]!.focus();
     await user.keyboard("1");
     assert.deepEqual(actions, ["first-select"]);

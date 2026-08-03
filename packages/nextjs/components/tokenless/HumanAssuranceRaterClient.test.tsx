@@ -129,7 +129,7 @@ test("assigned review keeps the content, decision, and deadline visible without 
   assert.doesNotMatch(html, /TypeScript code review/i);
   assert.doesNotMatch(html, /workspace owner/i);
   assert.doesNotMatch(html, /voucher|calibration|qualification/i);
-  assert.match(html, /Case 1 of 1/);
+  assert.doesNotMatch(html, /Case 1 of 1/);
   assert.match(html, /Keyboard: 1 or 2 selects/);
   assert.match(html, /Submit:/);
   assert.match(html, /Access:/);

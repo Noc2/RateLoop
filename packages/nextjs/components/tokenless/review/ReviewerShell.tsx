@@ -90,23 +90,27 @@ export function ReviewerShell({
       <Card className="rounded-2xl p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>{laneHeader}</div>
-          <p className="font-mono text-xs uppercase tracking-widest text-base-content/55">
-            {t("caseProgress", { current: caseIndex + 1, total: totalCases })}
-          </p>
+          {totalCases > 1 ? (
+            <p className="font-mono text-xs uppercase tracking-widest text-base-content/55">
+              {t("caseProgress", { current: caseIndex + 1, total: totalCases })}
+            </p>
+          ) : null}
         </div>
-        <div
-          className="mt-4 h-1.5 overflow-hidden rounded-full bg-base-content/10"
-          role="progressbar"
-          aria-label={t("progress")}
-          aria-valuemin={1}
-          aria-valuemax={totalCases}
-          aria-valuenow={caseIndex + 1}
-        >
+        {totalCases > 1 ? (
           <div
-            className="h-full rounded-full bg-[var(--rateloop-green)] transition-[width] motion-reduce:transition-none"
-            style={{ width: `${((caseIndex + 1) / totalCases) * 100}%` }}
-          />
-        </div>
+            className="mt-4 h-1.5 overflow-hidden rounded-full bg-base-content/10"
+            role="progressbar"
+            aria-label={t("progress")}
+            aria-valuemin={1}
+            aria-valuemax={totalCases}
+            aria-valuenow={caseIndex + 1}
+          >
+            <div
+              className="h-full rounded-full bg-[var(--rateloop-green)] transition-[width] motion-reduce:transition-none"
+              style={{ width: `${((caseIndex + 1) / totalCases) * 100}%` }}
+            />
+          </div>
+        ) : null}
       </Card>
 
       {children}
