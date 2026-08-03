@@ -243,8 +243,8 @@ function validFixture() {
     WORLD_ID_APP_ID: "app_production123",
     WORLD_ID_RP_ID: "rp_production123",
     WORLD_ID_ENVIRONMENT: "production",
-    TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: "true",
-    NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: "true",
+    TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: "false",
+    NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: "false",
     TOKENLESS_NETWORK_PANELS_ENABLED: "true",
     NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED: "true",
     TOKENLESS_HYBRID_REVIEWS_ENABLED: "false",
@@ -571,9 +571,9 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
     WORLD_ID_ENVIRONMENT: "production",
   };
   activated.NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE = derivePaidLaneActivationReference(activated);
-  assert.deepEqual(
-    validateTokenlessProductionReadiness({ env: activated, activeRegistry: tokenlessTestRegistry() }),
-    [],
+  assert.match(
+    validateTokenlessProductionReadiness({ env: activated, activeRegistry: tokenlessTestRegistry() }).join("\n"),
+    /private_invited_paid is unavailable/u,
   );
   const activatedWithoutWalletScreening = { ...activated };
   delete activatedWithoutWalletScreening.TOKENLESS_WALLET_SCREENING_PROVIDER_ID;
@@ -589,14 +589,13 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
   const publicOnlyActivation = {
     ...activated,
     TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: "false",
+    NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: "false",
   };
   publicOnlyActivation.NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE =
     derivePaidLaneActivationReference(publicOnlyActivation);
-  assert.match(
-    validateTokenlessProductionReadiness({ env: publicOnlyActivation, activeRegistry: tokenlessTestRegistry() }).join(
-      "\n",
-    ),
-    /TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED and NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED must match/u,
+  assert.deepEqual(
+    validateTokenlessProductionReadiness({ env: publicOnlyActivation, activeRegistry: tokenlessTestRegistry() }),
+    [],
   );
   const hybridActivated = {
     ...activated,

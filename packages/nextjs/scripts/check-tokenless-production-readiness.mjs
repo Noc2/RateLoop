@@ -20,7 +20,8 @@ import { fileURLToPath } from "node:url";
 import { isAddress, zeroAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
-const { validatePaidLaneActivation } = paidLaneActivationModule.default ?? paidLaneActivationModule;
+const { paidLaneCodeReleased, validatePaidLaneActivation } =
+  paidLaneActivationModule.default ?? paidLaneActivationModule;
 
 const BASE_SEPOLIA_CHAIN_ID = 84_532;
 const DEPLOYMENT_SCHEMA = "rateloop-tokenless-deployment-v4";
@@ -976,16 +977,20 @@ export function validateTokenlessProductionReadiness({
     errors.push("WORLD_ID_ENVIRONMENT must be production for a hosted release.");
   }
   const networkPanelsEnabled = value(env, "TOKENLESS_NETWORK_PANELS_ENABLED") === "true";
-  if (
-    value(env, "TOKENLESS_HYBRID_REVIEWS_ENABLED") !== "false" ||
-    value(env, "NEXT_PUBLIC_TOKENLESS_HYBRID_REVIEWS_ENABLED") !== "false"
-  ) {
-    errors.push(
-      "TOKENLESS_HYBRID_REVIEWS_ENABLED and NEXT_PUBLIC_TOKENLESS_HYBRID_REVIEWS_ENABLED must remain false until hybrid child release, terminal, expiry, and refund processing is deployed.",
-    );
+  for (const [lane, serverFlag, publicFlag] of [
+    [
+      "private_invited_paid",
+      "TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED",
+      "NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED",
+    ],
+    ["hybrid_public_safe", "TOKENLESS_HYBRID_REVIEWS_ENABLED", "NEXT_PUBLIC_TOKENLESS_HYBRID_REVIEWS_ENABLED"],
+  ]) {
+    if (!paidLaneCodeReleased(lane) && (value(env, serverFlag) !== "false" || value(env, publicFlag) !== "false")) {
+      errors.push(`${serverFlag} and ${publicFlag} must remain false until ${lane} is released in code.`);
+    }
   }
-  const enabledPaidLanes = ["private_invited_paid"];
-  if (networkPanelsEnabled) enabledPaidLanes.push("public_paid_network");
+  const enabledPaidLanes = [];
+  if (networkPanelsEnabled && paidLaneCodeReleased("public_paid_network")) enabledPaidLanes.push("public_paid_network");
   for (const lane of enabledPaidLanes) {
     errors.push(...validatePaidLaneActivation(lane, env).map(error => `Paid-lane activation: ${error}`));
   }

@@ -6,6 +6,23 @@ export const PAID_LANE_HASH = /^sha256:[0-9a-f]{64}$/u;
 export type PaidLane = "private_invited_paid" | "public_paid_network" | "hybrid_public_safe";
 type PaidLaneActivationEnv = Readonly<Record<string, string | undefined>>;
 
+export const PAID_LANE_CODE_RELEASED = {
+  private_invited_paid: false,
+  public_paid_network: true,
+  hybrid_public_safe: false,
+} as const satisfies Record<PaidLane, boolean>;
+
+const PAID_LANE_RELEASE_BLOCKERS: Record<Exclude<PaidLane, "public_paid_network">, string> = {
+  private_invited_paid:
+    "private_invited_paid is unavailable until encrypted task and lease rendering, exact assignment and issuance binding, on-chain and private decision binding, post-commit response recovery, and deadline and under-quorum evidence are complete.",
+  hybrid_public_safe:
+    "hybrid_public_safe is unavailable until both child paths have production release, terminal, expiry, and refund processing.",
+};
+
+export function paidLaneCodeReleased(lane: PaidLane) {
+  return PAID_LANE_CODE_RELEASED[lane];
+}
+
 function value(env: PaidLaneActivationEnv, name: string) {
   return env[name]?.trim() ?? "";
 }
@@ -50,10 +67,8 @@ function requireFlagPair(
 }
 
 export function validatePaidLaneActivation(lane: PaidLane, env: PaidLaneActivationEnv, now = new Date()): string[] {
-  if (lane === "hybrid_public_safe") {
-    return [
-      "hybrid_public_safe is unavailable until both child paths have production release, terminal, expiry, and refund processing.",
-    ];
+  if (!paidLaneCodeReleased(lane)) {
+    return [PAID_LANE_RELEASE_BLOCKERS[lane as Exclude<PaidLane, "public_paid_network">]];
   }
   const errors: string[] = [];
   const privateRequired = lane === "private_invited_paid";

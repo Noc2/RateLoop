@@ -33,6 +33,9 @@ test("the runtime gate rejects a forged activation reference outside production"
     TOKENLESS_INVITED_PAID_ADULTHOOD_APPROVAL_REFERENCE: `sha256:${"d".repeat(64)}`,
     TOKENLESS_PAID_LANES_COMPLIANCE_APPROVED_AT: "2026-07-20T12:00:00.000Z",
     NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE: `sha256:${"f".repeat(64)}`,
+    WORLD_ID_APP_ID: "app_production123",
+    WORLD_ID_RP_ID: "rp_production123",
+    WORLD_ID_ENVIRONMENT: "production",
   };
   const names = Object.keys(activation);
   const previous = new Map(names.map(name => [name, process.env[name]]));
@@ -43,7 +46,16 @@ test("the runtime gate rejects a forged activation reference outside production"
       (error: unknown) => error instanceof TokenlessServiceError && error.code === "paid_lane_activation_required",
     );
     process.env.NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE = derivePaidLaneActivationReference(process.env);
-    assert.equal(requirePaidLaneComplianceApproval("private_invited_paid")?.approvedAt, "2026-07-20T12:00:00.000Z");
+    assert.throws(
+      () => requirePaidLaneComplianceApproval("private_invited_paid"),
+      (error: unknown) => error instanceof TokenlessServiceError && error.code === "paid_lane_activation_required",
+    );
+    process.env.TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED = "false";
+    process.env.NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED = "false";
+    process.env.TOKENLESS_NETWORK_PANELS_ENABLED = "true";
+    process.env.NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED = "true";
+    process.env.NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE = derivePaidLaneActivationReference(process.env);
+    assert.equal(requirePaidLaneComplianceApproval("public_paid_network")?.approvedAt, "2026-07-20T12:00:00.000Z");
   } finally {
     for (const name of names) {
       const value = previous.get(name);

@@ -37,6 +37,7 @@ import { dbClient, dbPool } from "~~/lib/db";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { throwIfMaintenanceCancelled } from "~~/lib/tokenless/maintenanceCancellation";
 import { markNetworkVoucherConsumed } from "~~/lib/tokenless/networkAssignmentSettlement";
+import { paidLaneCodeReleased } from "~~/lib/tokenless/paidLaneActivation";
 import { requirePaidLaneComplianceApproval } from "~~/lib/tokenless/paidLaneCompliance";
 import { consumePrivatePaidReviewVoucherForCommit } from "~~/lib/tokenless/paidReviewVoucherReceipts";
 import { preparePublicRaterResponse } from "~~/lib/tokenless/publicRaterResponses";
@@ -129,6 +130,7 @@ function paidTaskAssignmentBinding(row: Row, principalId: string | null, now: Da
   const reviewerSource = boundTaskReviewerSource(row);
   if (!reviewerSource || !principalId) return null;
   if (reviewerSource === "customer_invited") {
+    if (!paidLaneCodeReleased("private_invited_paid")) return null;
     const assignmentId = rowString(row, "invited_assignment_id");
     const issuanceId = rowString(row, "invited_issuance_id");
     const assignmentStatus = rowString(row, "invited_assignment_status");

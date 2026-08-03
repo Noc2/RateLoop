@@ -1,4 +1,8 @@
-import { PAID_LANE_HASH, derivePaidLaneActivationReference } from "~~/lib/tokenless/paidLaneActivation";
+import {
+  PAID_LANE_HASH,
+  derivePaidLaneActivationReference,
+  paidLaneCodeReleased,
+} from "~~/lib/tokenless/paidLaneActivation";
 
 export const HUMAN_REVIEW_AUDIENCES = ["private_invited", "public_network", "hybrid"] as const;
 export type HumanReviewAudience = (typeof HUMAN_REVIEW_AUDIENCES)[number];
@@ -140,10 +144,12 @@ export function humanReviewLaneImplementation(
   const activationBound =
     PAID_LANE_HASH.test(activationReference) && activationReference === derivePaidLaneActivationReference(env);
   const privateInvitedPaid =
+    paidLaneCodeReleased("private_invited_paid") &&
     activationBound &&
     env.TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED?.trim() === "true" &&
     env.NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED?.trim() === "true";
   const publicPaidNetwork =
+    paidLaneCodeReleased("public_paid_network") &&
     activationBound &&
     env.TOKENLESS_NETWORK_PANELS_ENABLED?.trim() === "true" &&
     env.NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED?.trim() === "true";
@@ -151,16 +157,16 @@ export function humanReviewLaneImplementation(
     privateInvitedUnpaid: true,
     privateInvitedPaid,
     publicPaidNetwork,
-    // Hybrid remains an intentionally unavailable schema value. The current
-    // adapter has no production release, child-terminal, expiry, or refund
-    // producer, so no environment flag may expose a fund-locking path.
-    hybridPublicSafe: false,
+    hybridPublicSafe:
+      paidLaneCodeReleased("hybrid_public_safe") &&
+      activationBound &&
+      env.TOKENLESS_HYBRID_REVIEWS_ENABLED?.trim() === "true" &&
+      env.NEXT_PUBLIC_TOKENLESS_HYBRID_REVIEWS_ENABLED?.trim() === "true",
   };
 }
 
-// Paid lanes are implemented but default to unavailable. Hosted deployment
-// preflight is the only supported way to publish matching activation flags and
-// their evidence-bound reference.
+// A lane must pass both the immutable code-release rule and its evidence-bound
+// hosted activation. Environment flags alone never assert implementation readiness.
 export const HUMAN_REVIEW_LANE_IMPLEMENTATION = humanReviewLaneImplementation();
 
 export const HUMAN_REVIEW_IMPLEMENTATION_READINESS = {
@@ -177,7 +183,7 @@ export type HumanReviewAudienceSource = "customer_invited" | "rateloop_network" 
 const HUMAN_REVIEW_LANE_UNAVAILABLE_MESSAGES: Record<HumanReviewLaneImplementationKey, string> = {
   privateInvitedUnpaid: "Invited unpaid review is unavailable on this deployment.",
   privateInvitedPaid:
-    "Invited-review USDC settlement is implemented but unavailable until deployment funding and compliance approval are validated.",
+    "Invited-review USDC settlement is unavailable in this release until its private task, identity, recovery, decision-binding, and terminal-evidence paths are complete.",
   publicPaidNetwork:
     "Paid RateLoop network review is implemented but unavailable until identity, funding, deployment, and compliance activation are validated.",
   hybridPublicSafe:

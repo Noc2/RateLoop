@@ -108,7 +108,7 @@ test("deployed implementation readiness is shared without overstating hybrid del
   });
 });
 
-test("supported paid lanes require evidence-bound activation while hybrid stays unavailable", () => {
+test("public paid review requires evidence-bound activation while unreleased lanes stay unavailable", () => {
   assert.deepEqual(humanReviewLaneImplementation({}), {
     privateInvitedUnpaid: true,
     privateInvitedPaid: false,
@@ -135,7 +135,7 @@ test("supported paid lanes require evidence-bound activation while hybrid stays 
   activation.NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE = derivePaidLaneActivationReference(activation);
   assert.deepEqual(humanReviewLaneImplementation(activation), {
     privateInvitedUnpaid: true,
-    privateInvitedPaid: true,
+    privateInvitedPaid: false,
     publicPaidNetwork: true,
     hybridPublicSafe: false,
   });
@@ -181,7 +181,7 @@ test("configured lane descriptions use the same implementation truth", () => {
     privateInvitedPaid: {
       available: false,
       message:
-        "Invited-review USDC settlement is implemented but unavailable until deployment funding and compliance approval are validated.",
+        "Invited-review USDC settlement is unavailable in this release until its private task, identity, recovery, decision-binding, and terminal-evidence paths are complete.",
     },
     publicPaidNetwork: {
       available: false,

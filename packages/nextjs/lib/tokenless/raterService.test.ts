@@ -8,12 +8,14 @@ import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { EVM_TRANSACTION_FEE_POLICY } from "~~/lib/tokenless/chain/evmTransactionReplacement";
 import type { TokenlessChainRuntime } from "~~/lib/tokenless/chain/runtime";
+import { derivePaidLaneActivationReference, validatePaidLaneActivation } from "~~/lib/tokenless/paidLaneActivation";
 import { buildPublicVoucherRequest } from "~~/lib/tokenless/rater/publicVoucherRequest";
 import {
   __raterServiceTestUtils,
   hasOwnedPaidRaterCommitForVoucher,
   listPaidRaterTasks,
 } from "~~/lib/tokenless/raterService";
+import { humanReviewLaneImplementation } from "~~/lib/tokenless/reviewCapabilities";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const ACCOUNT = "0x1111111111111111111111111111111111111111";
@@ -785,16 +787,10 @@ test("customer-invited task discovery stays hidden without its exact prepared as
   assert.deepEqual(await listPaidRaterTasks(null, NOW), []);
 });
 
-test("customer-invited task discovery returns only the bound principal's canonical assignment and issuance", async () => {
+test("customer-invited paid task discovery stays hidden even with a canonical assignment and issuance", async () => {
   await seedCanonicalInvitedTaskBridge();
 
-  const tasks = await listPaidRaterTasks(PRINCIPAL, NOW);
-  assert.equal(tasks.length, 1);
-  const task = tasks[0];
-  assert.ok(task);
-  assert.equal(task.reviewerSource, "customer_invited");
-  assert.equal(task.assignmentId, "assignment_invited_task");
-  assert.equal("issuanceId" in task ? task.issuanceId : null, "issuance_invited_task");
+  assert.deepEqual(await listPaidRaterTasks(PRINCIPAL, NOW), []);
   assert.deepEqual(await listPaidRaterTasks(RECOVERY_PRINCIPAL, NOW), []);
 });
 
@@ -820,12 +816,36 @@ function invitedTaskBindingRow(
   };
 }
 
-test("customer-invited task bindings preserve exact legitimate assignment and issuance access", () => {
-  assert.deepEqual(__raterServiceTestUtils.paidTaskAssignmentBinding(invitedTaskBindingRow(), PRINCIPAL, NOW), {
-    reviewerSource: "customer_invited",
-    assignmentId: "assignment_invited_task",
-    issuanceId: "issuance_invited_task",
+test("the shared code-release rule blocks private activation, projection, and task discovery together", () => {
+  const env: NodeJS.ProcessEnv = {
+    NODE_ENV: "production",
+    TOKENLESS_PAID_LANES_DPIA_APPROVAL_REFERENCE: `sha256:${"a".repeat(64)}`,
+    TOKENLESS_PAID_LANES_TRANSFER_INVENTORY_APPROVAL_REFERENCE: `sha256:${"b".repeat(64)}`,
+    TOKENLESS_PAID_LANES_FUNDING_VALIDATION_REFERENCE: `sha256:${"c".repeat(64)}`,
+    TOKENLESS_INVITED_PAID_ADULTHOOD_APPROVAL_REFERENCE: `sha256:${"d".repeat(64)}`,
+    TOKENLESS_PAID_LANES_COMPLIANCE_APPROVED_AT: "2026-07-20T12:00:00.000Z",
+    TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: "true",
+    NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: "true",
+    TOKENLESS_NETWORK_PANELS_ENABLED: "true",
+    NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED: "true",
+    TOKENLESS_HYBRID_REVIEWS_ENABLED: "false",
+    NEXT_PUBLIC_TOKENLESS_HYBRID_REVIEWS_ENABLED: "false",
+    WORLD_ID_APP_ID: "app_production123",
+    WORLD_ID_RP_ID: "rp_production123",
+    WORLD_ID_ENVIRONMENT: "production",
+  };
+  env.NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE = derivePaidLaneActivationReference(env);
+
+  const afterApproval = new Date("2026-07-26T12:00:00.000Z");
+  assert.match(validatePaidLaneActivation("private_invited_paid", env, afterApproval).join("\n"), /unavailable/u);
+  assert.deepEqual(validatePaidLaneActivation("public_paid_network", env, afterApproval), []);
+  assert.deepEqual(humanReviewLaneImplementation(env), {
+    privateInvitedUnpaid: true,
+    privateInvitedPaid: false,
+    publicPaidNetwork: true,
+    hybridPublicSafe: false,
   });
+  assert.equal(__raterServiceTestUtils.paidTaskAssignmentBinding(invitedTaskBindingRow(), PRINCIPAL, NOW), null);
 });
 
 test("customer-invited task bindings reject anonymous and cross-principal access", () => {
@@ -842,7 +862,7 @@ test("customer-invited task bindings reject anonymous and cross-principal access
   );
 });
 
-test("customer-invited task bindings reject expired assignments and stale prepared eligibility", () => {
+test("customer-invited task bindings remain hidden across stale and issued states", () => {
   assert.equal(
     __raterServiceTestUtils.paidTaskAssignmentBinding(
       invitedTaskBindingRow({ assignmentExpiresAt: new Date(NOW.getTime() - 1) }),
@@ -859,7 +879,7 @@ test("customer-invited task bindings reject expired assignments and stale prepar
     ),
     null,
   );
-  assert.deepEqual(
+  assert.equal(
     __raterServiceTestUtils.paidTaskAssignmentBinding(
       invitedTaskBindingRow({
         eligibilityExpiresAt: new Date(NOW.getTime() - 1),
@@ -868,11 +888,7 @@ test("customer-invited task bindings reject expired assignments and stale prepar
       PRINCIPAL,
       NOW,
     ),
-    {
-      reviewerSource: "customer_invited",
-      assignmentId: "assignment_invited_task",
-      issuanceId: "issuance_invited_task",
-    },
+    null,
   );
 });
 
