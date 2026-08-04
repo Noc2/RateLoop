@@ -3,8 +3,7 @@ import { JsonRequestBodyError, readJsonRequestBody } from "~~/lib/mcp/requestBod
 import { privateNoStoreJson } from "~~/lib/tokenless/privateHttpResponse";
 import {
   attachProductAsk,
-  authenticateProductPrincipal,
-  getProductSessionToken,
+  authenticateProductRequestPrincipal,
   prepareProductAsk,
   releasePreparedProductAsk,
 } from "~~/lib/tokenless/productCore";
@@ -35,10 +34,7 @@ export async function POST(request: NextRequest) {
   let prepared: Awaited<ReturnType<typeof prepareProductAsk>> | null = null;
   let attached = false;
   try {
-    const principal = await authenticateProductPrincipal({
-      authorization: request.headers.get("authorization"),
-      sessionToken: getProductSessionToken(request),
-    });
+    const principal = await authenticateProductRequestPrincipal(request, { mutation: true });
     const rawBody = await readAskBody(request);
     const body = parseTokenlessAskRequest(rawBody, request.headers.get("idempotency-key"));
     const mediaPreviews = parseTokenlessAskMediaPreviewGrants(rawBody);

@@ -9,6 +9,7 @@ import {
 import { privateNoStoreJson } from "~~/lib/tokenless/privateHttpResponse";
 import {
   authenticateProductPrincipal,
+  authenticateProductRequestPrincipal,
   authorizeAskAccess,
   authorizeAskPaymentMutation,
   getProductSessionToken,
@@ -29,10 +30,7 @@ async function authorizedOperation(request: NextRequest, context: { params: Prom
 }
 
 async function authorizedPaymentMutation(request: NextRequest, context: { params: Promise<{ operationKey: string }> }) {
-  const principal = await authenticateProductPrincipal({
-    authorization: request.headers.get("authorization"),
-    sessionToken: getProductSessionToken(request),
-  });
+  const principal = await authenticateProductRequestPrincipal(request, { mutation: true });
   const { operationKey } = await context.params;
   await authorizeAskPaymentMutation(principal, operationKey);
   return operationKey;

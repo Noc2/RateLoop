@@ -4,10 +4,20 @@ import { GET as waitForResult } from "./asks/[operationKey]/wait/route";
 import { POST as createAsk } from "./asks/route";
 import { GET as readResult } from "./results/[operationKey]/route";
 import assert from "node:assert/strict";
-import test from "node:test";
+import { afterEach, beforeEach, test } from "node:test";
 import { PRIVATE_NO_STORE_CACHE_CONTROL, privateNoStoreJson } from "~~/lib/tokenless/privateHttpResponse";
 
 const context = { params: Promise.resolve({ operationKey: "operation_private_cache_test" }) };
+const ORIGINAL_APP_URL = process.env.APP_URL;
+
+beforeEach(() => {
+  process.env.APP_URL = "http://localhost";
+});
+
+afterEach(() => {
+  if (ORIGINAL_APP_URL === undefined) delete process.env.APP_URL;
+  else process.env.APP_URL = ORIGINAL_APP_URL;
+});
 
 test("authenticated agent workflow responses share the private no-store cache invariant", async () => {
   const success = privateNoStoreJson({ ok: true });
@@ -16,6 +26,7 @@ test("authenticated agent workflow responses share the private no-store cache in
     await createAsk(
       new NextRequest("http://localhost/api/agent/v1/asks", {
         body: "{}",
+        headers: { origin: "http://localhost" },
         method: "POST",
       }),
     ),
@@ -26,6 +37,7 @@ test("authenticated agent workflow responses share the private no-store cache in
     await executePayment(
       new NextRequest("http://localhost/api/agent/v1/asks/operation_private_cache_test/payment", {
         body: "{}",
+        headers: { origin: "http://localhost" },
         method: "POST",
       }),
       context,

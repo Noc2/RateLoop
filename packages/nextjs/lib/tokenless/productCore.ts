@@ -12,7 +12,7 @@ import type { PoolClient } from "pg";
 import "server-only";
 import { getAddress } from "viem";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
-import { AUTH_SESSION_COOKIE, findAuthSession } from "~~/lib/auth/session";
+import { AUTH_SESSION_COOKIE, assertAuthRequestOrigin, findAuthSession } from "~~/lib/auth/session";
 import { getWalletBindingAddresses } from "~~/lib/auth/walletBindings";
 import { requireWorkspacePaidPanels } from "~~/lib/billing/entitlements";
 import { dbClient, dbPool } from "~~/lib/db";
@@ -267,6 +267,24 @@ export async function authenticateProductPrincipal(input: {
   if (!session) throw new TokenlessServiceError("Authentication is required.", 401, "authentication_required");
   const wallets = await getWalletBindingAddresses(session.principalId);
   return { kind: "session", accountAddress: session.principalId, walletAddress: wallets.funding };
+}
+
+export async function authenticateProductRequestPrincipal(
+  request: {
+    cookies: { get(name: string): { value: string } | undefined };
+    headers: { get(name: string): string | null };
+  },
+  options?: { mutation?: boolean },
+) {
+  const authorization = request.headers.get("authorization");
+  if (!authorization && options?.mutation) {
+    try {
+      assertAuthRequestOrigin(request.headers.get("origin"));
+    } catch {
+      throw new TokenlessServiceError("Cross-origin request denied.", 403, "invalid_origin");
+    }
+  }
+  return authenticateProductPrincipal({ authorization, sessionToken: getProductSessionToken(request) });
 }
 
 export function getProductSessionToken(request: { cookies: { get(name: string): { value: string } | undefined } }) {

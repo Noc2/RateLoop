@@ -24,6 +24,7 @@ import {
 import { createTokenlessQuote } from "~~/lib/tokenless/server";
 
 const ORIGIN = "https://tokenless.example.test";
+const ORIGINAL_APP_URL = process.env.APP_URL;
 const ASSET_ID = `pqm_${"R".repeat(32)}`;
 const SECOND_ASSET_ID = `pqm_${"S".repeat(32)}`;
 const BUSINESS_EVIDENCE_HASH = "b".repeat(64);
@@ -74,6 +75,7 @@ class MemoryMediaStore implements PublicQuestionMediaStore {
 }
 
 beforeEach(() => {
+  process.env.APP_URL = ORIGIN;
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
   let assetIndex = 0;
   __setPublicQuestionMediaRuntimeForTests({
@@ -84,6 +86,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  if (ORIGINAL_APP_URL === undefined) delete process.env.APP_URL;
+  else process.env.APP_URL = ORIGINAL_APP_URL;
   __setPublicQuestionMediaPreviewKeyForTests(null);
   __setPublicQuestionMediaRuntimeForTests(null);
   __setDatabaseResourcesForTests(null);
@@ -129,6 +133,7 @@ function submitRequest(input: {
         "content-type": "application/json",
         cookie: `${AUTH_SESSION_COOKIE}=${input.token}`,
         "idempotency-key": input.idempotencyKey,
+        origin: ORIGIN,
       },
       method: "POST",
     }),
