@@ -104,8 +104,10 @@ async function connectOAuthAgent(label: string) {
   }
   return {
     claim,
+    clientId: oauthClient.client_id,
     connected: { ...connected, integration: connected.integration, principal: connected.principal },
     principalId,
+    refreshToken: tokens.refresh_token,
     token: tokens.access_token,
     workspaceId,
   };
@@ -188,6 +190,26 @@ test("browser consent atomically upgrades one connected OAuth integration to exa
   assert.equal(integrationEvent.rows[0]?.actor_reference, setup.principalId);
   assert.match(String(integrationEvent.rows[0]?.details_json), /browser_owner_step_up/);
   assert.match(String(integrationEvent.rows[0]?.details_json), /explicitBrowserConsent/);
+});
+
+test("a connected OAuth refresh downscope removes review authority from the effective principal", async () => {
+  const setup = await connectOAuthAgent("downscope");
+  assert.deepEqual(setup.connected.principal.scopes, ["evaluation:read", "review:decide"]);
+
+  const narrowed = await exchangeAgentOAuthToken({
+    grantType: "refresh_token",
+    clientId: setup.clientId,
+    refreshToken: setup.refreshToken,
+    resource: getCanonicalAgentMcpResource(),
+    scope: "connection:claim context:read",
+  });
+  const rehydrated = await authenticateAgentMcpPrincipal(`Bearer ${narrowed.access_token}`);
+  assert.equal(rehydrated.kind, "oauth");
+  if (rehydrated.kind !== "oauth" || !rehydrated.integration || !rehydrated.principal) {
+    throw new Error("Connected OAuth integration expected.");
+  }
+  assert.deepEqual(rehydrated.oauth.scopes, ["connection:claim", "context:read"]);
+  assert.deepEqual(rehydrated.principal.scopes, []);
 });
 
 test("legacy publishing activation preserves a bound unpaid private review without payment authority", async () => {

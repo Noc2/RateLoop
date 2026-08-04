@@ -10,6 +10,7 @@ import { deriveAgentAccessPresentation, materialAgentCapabilities } from "~~/lib
 import {
   type AgentOAuthAccessPrincipal,
   AgentOAuthError,
+  type AgentOAuthScope,
   authenticateAgentOAuthAccessToken,
 } from "~~/lib/tokenless/agentOAuth";
 import { AGENT_ENVIRONMENTS, type AgentEnvironment } from "~~/lib/tokenless/agentRegistry";
@@ -28,6 +29,11 @@ import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Row = Record<string, unknown>;
 type ApiPrincipal = Extract<ProductPrincipal, { kind: "api_key" }>;
+
+const OAUTH_CONTROLLED_PRODUCT_SCOPES = {
+  "evaluation:read": "evaluation:read",
+  "review:decide": "review:decide",
+} as const satisfies Partial<Record<TokenlessAgentScope, AgentOAuthScope>>;
 
 const TOKEN_PATTERN = /^rlk_([a-f0-9]{16})_([A-Za-z0-9_-]{32,128})$/;
 const EXTERNAL_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/;
@@ -439,7 +445,11 @@ export async function rehydrateOAuthAgentMcpPrincipal(
     apiKeyId: oauth.tokenFamilyId,
     workspaceId: text(row, "workspace_id")!,
     role: "member",
-    scopes: TOKENLESS_AGENT_SCOPES.filter(scope => grantedScopes.includes(scope)) as TokenlessAgentScope[],
+    scopes: TOKENLESS_AGENT_SCOPES.filter(scope => {
+      if (!grantedScopes.includes(scope)) return false;
+      const oauthScope = OAUTH_CONTROLLED_PRODUCT_SCOPES[scope as keyof typeof OAUTH_CONTROLLED_PRODUCT_SCOPES];
+      return !oauthScope || oauth.scopes.includes(oauthScope);
+    }) as TokenlessAgentScope[],
     policyId: text(row, "publishing_policy_id"),
     expiresAt: oauth.expiresAt.toISOString(),
   };
