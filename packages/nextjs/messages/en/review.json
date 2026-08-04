@@ -84,7 +84,6 @@
     "commitReceipt": "Commit receipt",
     "confirmed": "Confirmed",
     "viewTransaction": "View confirmed transaction",
-    "eligibility": "Paid-work eligibility",
     "paidWork": "Paid work",
     "addWallet": "Add a payout wallet",
     "renew": "Renew paid-work access",

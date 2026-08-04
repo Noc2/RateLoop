@@ -1185,12 +1185,6 @@ export function PublicQuestionCard({
                   {error}
                 </p>
               ) : null}
-              <Link
-                href="/human/profile?section=paid-work"
-                className="mt-4 block text-center text-xs underline underline-offset-4"
-              >
-                {t("eligibility")}
-              </Link>
             </>
           ) : (
             <div className="flex min-h-52 flex-col justify-center">
