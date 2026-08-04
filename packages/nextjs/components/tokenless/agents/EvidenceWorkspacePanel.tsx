@@ -9,6 +9,7 @@ import { SiemEvidenceDelivery } from "./SiemEvidenceDelivery";
 import { WormEvidenceDelivery } from "./WormEvidenceDelivery";
 import { agentTabHref } from "./agentWorkspaceState";
 import { updateEvaluationUrlSearch } from "./evaluationUrlState";
+import { evidenceGateLabel, evidenceReviewerSourceLabel, evidenceTriggerLabel } from "./evidencePacketPresentation";
 import {
   DEFAULT_EVIDENCE_URL_STATE,
   type EvidenceDateFilter,
@@ -684,6 +685,7 @@ function RetentionEditor({
 
 export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId: string; canManage: boolean }) {
   const copy = useAgentTranslations("evidencePanels.workspace");
+  const evaluationCopy = useAgentTranslations("evidencePanels.evaluation");
   const format = useAgentFormatter();
   const locale = useAgentLocale();
   const ui = useAgentTranslations("ui");
@@ -1313,8 +1315,10 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                       <dt className="text-xs text-base-content/55">
                         <AgentText id="trigger" />
                       </dt>
-                      <dd className="mt-1 capitalize">
-                        {packet.payload.reviewContext?.selectionTrigger?.kind?.replaceAll("_", " ") ?? (
+                      <dd className="mt-1">
+                        {packet.payload.reviewContext?.selectionTrigger?.kind ? (
+                          evidenceTriggerLabel(packet.payload.reviewContext.selectionTrigger.kind, copy)
+                        ) : (
                           <AgentText id="dynamic026" />
                         )}
                       </dd>
@@ -1323,8 +1327,12 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                       <dt className="text-xs text-base-content/55">
                         <AgentText id="gate" />
                       </dt>
-                      <dd className="mt-1 capitalize">
-                        {packet.payload.reviewContext?.gate?.type ?? <AgentText id="dynamic026" />}
+                      <dd className="mt-1">
+                        {packet.payload.reviewContext?.gate?.type ? (
+                          evidenceGateLabel(packet.payload.reviewContext.gate.type, copy)
+                        ) : (
+                          <AgentText id="dynamic026" />
+                        )}
                       </dd>
                     </div>
                     <div>
@@ -1380,7 +1388,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                       <div className="mt-2 space-y-2 text-sm text-base-content/65">
                         {sourceSubpanels.map(source => (
                           <p key={source.source}>
-                            <span className="capitalize">{source.source.replaceAll("_", " ")}</span>:{" "}
+                            <span>{evidenceReviewerSourceLabel(source.source, evaluationCopy)}</span>:{" "}
                             {source.assignedReviewerCount} <AgentText id="translated063" /> {source.targetReviewerCount}{" "}
                             <AgentText id="translated156" /> {source.respondingReviewerCount}{" "}
                             <AgentText id="translated157" /> {source.completeJudgmentSetReviewerCount}{" "}
@@ -1389,11 +1397,15 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                         ))}
                         {packet.payload.reviewContext?.reviewerQualifications ? (
                           <p>
-                            <AgentText id="translated160" />{" "}
                             {packet.payload.reviewContext.reviewerQualifications.categories.length > 0
-                              ? packet.payload.reviewContext.reviewerQualifications.categories
-                                  .map(category => `${category.key} (${category.reviewerCount ?? copy("suppressed")})`)
-                                  .join(", ")
+                              ? copy(
+                                  packet.payload.reviewContext.reviewerQualifications.categories.length === 1
+                                    ? "qualificationCategoryOne"
+                                    : "qualificationCategoryMany",
+                                  {
+                                    count: packet.payload.reviewContext.reviewerQualifications.categories.length,
+                                  },
+                                )
                               : copy("qualificationsSuppressed", {
                                   count: packet.payload.reviewContext.reviewerQualifications.minimumAggregationSize,
                                 })}

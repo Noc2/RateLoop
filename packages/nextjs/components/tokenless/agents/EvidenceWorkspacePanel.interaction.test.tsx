@@ -47,8 +47,27 @@ const evidencePacket = {
         missingTargetJudgmentCount: 1,
         missingAssignedJudgmentCount: 1,
       },
+      reviewerCoverage: {
+        sourceSubpanels: [
+          {
+            source: "customer_invited",
+            targetReviewerCount: 3,
+            assignedReviewerCount: 3,
+            paidReviewerCount: 0,
+            respondingReviewerCount: 2,
+            completeJudgmentSetReviewerCount: 2,
+          },
+        ],
+      },
     },
     reviewContext: {
+      selectionTrigger: { kind: "owner_required" },
+      gate: { type: "not_applicable" },
+      reviewerQualifications: {
+        minimumAggregationSize: 3,
+        categories: [{ key: "internal_taxonomy", reviewerCount: 2, suppressed: false }],
+        unqualified: { reviewerCount: 0, suppressed: false },
+      },
       period: {
         responseSubmissionLatencyFromPeriodStartMs: {
           count: 5,
@@ -209,6 +228,7 @@ test("managers see the evidence state before compliance and advanced controls", 
 test("a packet reveals verification while manager-only exports and controls stay restricted", async () => {
   const restoreDom = installTestDom();
   const { act, cleanup } = await import("@testing-library/react");
+  const userEvent = (await import("@testing-library/user-event")).default;
   const restoreFetch = installFetch([
     {
       runId: "run-evidence-1",
@@ -238,6 +258,15 @@ test("a packet reveals verification while manager-only exports and controls stay
     assert.ok(view.getByText("Median response time"));
     assert.ok(view.getByText("1 min 30 sec"));
     assert.ok(view.getByText("4 min"));
+    await userEvent.setup({ document }).click(view.getByText("Verification details"));
+    assert.ok(view.getByText("Owner requested"));
+    assert.ok(view.getByText("Not applicable"));
+    assert.ok(view.getByText("ed25519:evidence-key-1"));
+    assert.ok(view.getByText(`sha256:${"a".repeat(64)}`));
+    const details = view.getByText("Verification details").closest("details")?.textContent ?? "";
+    assert.match(details, /Invited reviewers:/u);
+    assert.match(details, /1 qualification category included\./u);
+    assert.doesNotMatch(details, /owner_required|not_applicable|customer_invited|internal_taxonomy/u);
     assert.equal(view.queryByRole("heading", { name: "Compliance exports" }), null);
     assert.equal(view.queryByRole("button", { name: "Evidence settings and delivery" }), null);
   } finally {
