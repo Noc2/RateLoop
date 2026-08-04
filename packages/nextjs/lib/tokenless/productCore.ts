@@ -1822,7 +1822,7 @@ export async function authorizeAskAccess(principal: ProductPrincipal, operationK
   }
 }
 
-export async function authorizeAskPaymentMutation(principal: ProductPrincipal, operationKey: string) {
+export async function authorizeAskPaymentAccess(principal: ProductPrincipal, operationKey: string) {
   const result = await dbClient.execute({
     sql: `SELECT o.workspace_id, o.owner_account_address, o.api_key_id, m.role
           FROM tokenless_ask_ownership o

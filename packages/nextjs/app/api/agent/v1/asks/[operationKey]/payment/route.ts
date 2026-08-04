@@ -10,8 +10,7 @@ import { privateNoStoreJson } from "~~/lib/tokenless/privateHttpResponse";
 import {
   authenticateProductPrincipal,
   authenticateProductRequestPrincipal,
-  authorizeAskAccess,
-  authorizeAskPaymentMutation,
+  authorizeAskPaymentAccess,
   getProductSessionToken,
 } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
@@ -25,14 +24,14 @@ async function authorizedOperation(request: NextRequest, context: { params: Prom
     sessionToken: getProductSessionToken(request),
   });
   const { operationKey } = await context.params;
-  await authorizeAskAccess(principal, operationKey);
+  await authorizeAskPaymentAccess(principal, operationKey);
   return operationKey;
 }
 
 async function authorizedPaymentMutation(request: NextRequest, context: { params: Promise<{ operationKey: string }> }) {
   const principal = await authenticateProductRequestPrincipal(request, { mutation: true });
   const { operationKey } = await context.params;
-  await authorizeAskPaymentMutation(principal, operationKey);
+  await authorizeAskPaymentAccess(principal, operationKey);
   return operationKey;
 }
 

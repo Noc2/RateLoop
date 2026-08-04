@@ -14,7 +14,7 @@ import {
   attachProductAsk,
   authenticateProductPrincipal,
   authorizeAskAccess,
-  authorizeAskPaymentMutation,
+  authorizeAskPaymentAccess,
   createAgentPublishingPolicy,
   createWorkspace,
   createWorkspaceApiKey,
@@ -441,7 +441,7 @@ test("external session callers cannot create private quotes", async () => {
   );
 });
 
-test("payment mutation requires the submitting scope and the creating API key", async () => {
+test("payment access requires the submitting scope and the creating API key", async () => {
   const workspace = await workspaceWithKey(ADDRESS_A);
   const resultsOnly = await createWorkspaceApiKey({
     workspaceId: workspace.workspaceId,
@@ -474,16 +474,16 @@ test("payment mutation requires the submitting scope and the creating API key", 
       sessionToken: undefined,
     });
     await assert.rejects(
-      () => authorizeAskPaymentMutation(principal, ask.operationKey),
+      () => authorizeAskPaymentAccess(principal, ask.operationKey),
       (error: unknown) => error instanceof TokenlessServiceError && error.code === "ask_not_found",
     );
   }
 
   await assert.rejects(
-    () => authorizeAskPaymentMutation({ ...creator, scopes: ["result:read"] }, ask.operationKey),
+    () => authorizeAskPaymentAccess({ ...creator, scopes: ["result:read"] }, ask.operationKey),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "insufficient_scope",
   );
-  await authorizeAskPaymentMutation(creator, ask.operationKey);
+  await authorizeAskPaymentAccess(creator, ask.operationKey);
 });
 
 test("production prepaid asks keep reservations payment-gated and attach idempotently", async () => {
