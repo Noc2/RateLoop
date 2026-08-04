@@ -1,4 +1,5 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
+import { withZeroizedBytes } from "~~/lib/privacy/zeroize";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 export type VaultContext = Readonly<{
@@ -195,10 +196,10 @@ export class EnvelopeVault {
 
   async seal(plaintext: Uint8Array, context: VaultContext): Promise<EncryptedEnvelope> {
     const aad = contextAad(context);
-    const dataKey = randomBytes(32);
-    const content = encryptAesGcm(plaintext, dataKey, aad);
-    const wrappedDataKey = await this.provider.wrap(dataKey, aad);
-    dataKey.fill(0);
+    const { content, wrappedDataKey } = await withZeroizedBytes(randomBytes(32), async dataKey => ({
+      content: encryptAesGcm(plaintext, dataKey, aad),
+      wrappedDataKey: await this.provider.wrap(dataKey, aad),
+    }));
     return {
       algorithm: "AES-256-GCM",
       authTag: content.authTag.toString("base64url"),
@@ -220,26 +221,23 @@ export class EnvelopeVault {
     }
     const aad = contextAad(expectedContext);
     const dataKey = await this.provider.unwrap(envelope.wrappedDataKey, aad);
-    try {
-      return decryptAesGcm(
+    return withZeroizedBytes(dataKey, key =>
+      decryptAesGcm(
         Buffer.from(envelope.ciphertext, "base64url"),
-        dataKey,
+        key,
         Buffer.from(envelope.nonce, "base64url"),
         Buffer.from(envelope.authTag, "base64url"),
         aad,
-      );
-    } finally {
-      dataKey.fill(0);
-    }
+      ),
+    );
   }
 
   async rewrap(envelope: EncryptedEnvelope, destination: KeyWrappingProvider): Promise<EncryptedEnvelope> {
     const aad = contextAad(envelope.context);
     const dataKey = await this.provider.unwrap(envelope.wrappedDataKey, aad);
-    try {
-      return { ...envelope, wrappedDataKey: await destination.wrap(dataKey, aad) };
-    } finally {
-      dataKey.fill(0);
-    }
+    return withZeroizedBytes(dataKey, async key => ({
+      ...envelope,
+      wrappedDataKey: await destination.wrap(key, aad),
+    }));
   }
 }

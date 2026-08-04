@@ -13,6 +13,7 @@ import {
   validateVaultEnvironment,
 } from "~~/lib/privacy/vault";
 import { createConfiguredPlatformSecretKeyWrappingProvider } from "~~/lib/privacy/vault/platformSecret";
+import { withZeroizedBytes } from "~~/lib/privacy/zeroize";
 import type { ConfidentialArtifactRendererPolicy } from "~~/lib/tokenless/confidentialArtifactResponse";
 import { artifactDeletionAuditKey } from "~~/lib/tokenless/idempotencyKeys";
 import { privateBlobStorage } from "~~/lib/tokenless/privateBlobStorage";
@@ -142,6 +143,35 @@ function decrypt(input: Uint8Array, key: Uint8Array, nonce: string, tag: string,
   decipher.setAAD(Buffer.from(aad));
   decipher.setAuthTag(Buffer.from(tag, "base64url"));
   return Buffer.concat([decipher.update(input), decipher.final()]);
+}
+
+async function encryptAndWrapArtifact(input: {
+  aad: string;
+  bytes: Uint8Array;
+  keyProvider: KeyWrappingProvider;
+  keyVersion: string;
+}) {
+  return withZeroizedBytes(randomBytes(32), async dataKey => ({
+    encrypted: encrypt(input.bytes, dataKey, input.aad),
+    wrapped: await input.keyProvider.wrap(dataKey, Buffer.from(`${input.aad}:${input.keyVersion}`)),
+  }));
+}
+
+async function unwrapAndDecryptArtifact(input: {
+  aad: string;
+  ciphertext: Uint8Array;
+  contentAuthTag: string;
+  contentNonce: string;
+  keyProvider: KeyWrappingProvider;
+  wrappedDataKey: WrappedDataKey;
+}) {
+  const dataKey = await input.keyProvider.unwrap(
+    input.wrappedDataKey,
+    Buffer.from(`${input.aad}:${input.wrappedDataKey.keyVersion}`),
+  );
+  return withZeroizedBytes(dataKey, key =>
+    decrypt(input.ciphertext, key, input.contentNonce, input.contentAuthTag, input.aad),
+  );
 }
 
 function actorReference(masterKey: Uint8Array, address: string) {
@@ -403,10 +433,12 @@ export async function storeEncryptedArtifact(input: {
   const artifactId = `art_${randomUUID().replaceAll("-", "")}`;
   const objectId = `obj_${randomUUID().replaceAll("-", "")}`;
   const aad = `${ARTIFACT_KEY_DOMAIN}:${input.workspaceId}:${input.projectId}:${artifactId}`;
-  const dataKey = randomBytes(32);
-  const content = encrypt(input.bytes, dataKey, aad);
-  const wrapped = await runtime.keyProvider!.wrap(dataKey, Buffer.from(`${aad}:${runtime.keyVersion}`));
-  dataKey.fill(0);
+  const { encrypted: content, wrapped } = await encryptAndWrapArtifact({
+    aad,
+    bytes: input.bytes,
+    keyProvider: runtime.keyProvider!,
+    keyVersion: runtime.keyVersion,
+  });
   const pathname = `rateloop-private/${input.workspaceId}/${input.projectId}/${objectId}.bin`;
   const storageRef = await runtime.store.put(pathname, content.ciphertext);
   const createdAt = new Date();
@@ -621,10 +653,12 @@ export async function storeEncryptedPrivateReviewArtifacts(input: {
   try {
     for (const definition of definitions) {
       const aad = `${ARTIFACT_KEY_DOMAIN}:${input.workspaceId}:${input.projectId}:${definition.artifactId}`;
-      const dataKey = randomBytes(32);
-      const encrypted = encrypt(definition.bytes, dataKey, aad);
-      const wrapped = await runtime.keyProvider!.wrap(dataKey, Buffer.from(`${aad}:${runtime.keyVersion}`));
-      dataKey.fill(0);
+      const { encrypted, wrapped } = await encryptAndWrapArtifact({
+        aad,
+        bytes: definition.bytes,
+        keyProvider: runtime.keyProvider!,
+        keyVersion: runtime.keyVersion,
+      });
       const pathname = `rateloop-private/${input.workspaceId}/${input.projectId}/preparations/${input.uploadId}/${definition.objectId}.bin`;
       const storageRef = await runtime.store.put(pathname, encrypted.ciphertext);
       uploaded.push({
@@ -1010,25 +1044,23 @@ export async function readEncryptedArtifact(input: {
   const keyVersion = rowString(row, "key_version")!;
   const aad = `${ARTIFACT_KEY_DOMAIN}:${input.workspaceId}:${input.projectId}:${input.artifactId}`;
   const storedKeyDomain = parseKeyDomain(rowString(row, "key_domain"), runtime.keyProvider!, keyVersion);
-  const dataKey = await runtime.keyProvider!.unwrap(
-    {
-      authTag: rowString(row, "wrap_auth_tag") || null,
-      ciphertext: rowString(row, "wrapped_data_key")!,
-      keyResource: storedKeyDomain.keyResource,
-      keyVersion,
-      nonce: rowString(row, "wrap_nonce") || null,
-      provider: storedKeyDomain.provider,
-    },
-    Buffer.from(`${aad}:${keyVersion}`),
-  );
+  const wrappedDataKey = {
+    authTag: rowString(row, "wrap_auth_tag") || null,
+    ciphertext: rowString(row, "wrapped_data_key")!,
+    keyResource: storedKeyDomain.keyResource,
+    keyVersion,
+    nonce: rowString(row, "wrap_nonce") || null,
+    provider: storedKeyDomain.provider,
+  } satisfies WrappedDataKey;
   const ciphertext = await runtime.store.get(storageRef);
-  const bytes = decrypt(
-    ciphertext,
-    dataKey,
-    rowString(row, "content_nonce")!,
-    rowString(row, "content_auth_tag")!,
+  const bytes = await unwrapAndDecryptArtifact({
     aad,
-  );
+    ciphertext,
+    contentAuthTag: rowString(row, "content_auth_tag")!,
+    contentNonce: rowString(row, "content_nonce")!,
+    keyProvider: runtime.keyProvider!,
+    wrappedDataKey,
+  });
   if (input.dsaNamedPanelAdjudication) {
     await assertDsaNamedPanelArtifactBoundary({
       accountAddress: address,
@@ -1555,5 +1587,7 @@ export const __artifactPrivacyTestUtils = {
   appendDsaNamedPanelAdjudicationReadLog,
   assertDsaNamedPanelArtifactBoundary,
   decodeMasterKey,
+  encryptAndWrapArtifact,
   getRuntime,
+  unwrapAndDecryptArtifact,
 };
