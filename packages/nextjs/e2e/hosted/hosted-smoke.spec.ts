@@ -55,7 +55,7 @@ async function checkHostedTheme(browser: Browser, expected: (typeof THEME_VIEWPO
     expect(shellBackground).toBe(expected.shellBackground);
 
     if (expected.kind === "desktop") {
-      await expect(page.locator("[data-rateloop-rail]")).toHaveCSS("background-color", "rgb(5, 5, 5)");
+      await expect(page.locator("[data-rateloop-rail]")).toHaveCSS("background-color", expected.shellBackground);
     } else {
       const menuDetails = page.locator("header details");
       const menu = menuDetails.locator("nav.dropdown-content");

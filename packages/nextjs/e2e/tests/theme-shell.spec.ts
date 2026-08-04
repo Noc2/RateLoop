@@ -20,7 +20,7 @@ const themeCases = [
 ] as const;
 
 for (const expected of themeCases) {
-  test(`initial ${expected.colorScheme} theme keeps the page controls in sync and the desktop rail dark`, async ({
+  test(`initial ${expected.colorScheme} theme keeps page controls and navigation surfaces in sync`, async ({
     context,
     page,
   }) => {
@@ -60,7 +60,7 @@ for (const expected of themeCases) {
       activeBackground: expected.activeBackground,
       activeText: expected.activeText,
       idleBackground: expected.idleBackground,
-      railBackground: "rgb(5, 5, 5)",
+      railBackground: expected.shellBackground,
       shellBackground: expected.shellBackground,
     });
     expect(hydrationErrors).toEqual([]);

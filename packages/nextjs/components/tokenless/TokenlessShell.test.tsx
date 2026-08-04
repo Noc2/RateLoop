@@ -30,14 +30,14 @@ test("tokenless shell exposes Humans, Agents, and Docs without the legacy produc
   assert.doesNotMatch(source, /href: "\/(rate|ask|settings)"|Validate|Earn|Start a validation/);
 });
 
-test("mobile navigation shares the content surface while the desktop rail stays dark", () => {
+test("mobile and desktop navigation share the active content surface", () => {
   const source = shellSource;
 
   assert.match(source, /<header className="[^"]*bg-base-100/);
   assert.match(source, /dropdown-content[^"\n]*bg-base-100/);
   assert.match(source, /<aside[\s\S]*data-rateloop-rail[\s\S]*bg-base-100/);
-  assert.match(globalStyles, /--rateloop-rail-surface: #050505/);
-  assert.match(globalStyles, /\[data-rateloop-rail\][\s\S]*background: var\(--rateloop-rail-surface\)/);
+  assert.doesNotMatch(globalStyles, /--rateloop-rail-/);
+  assert.doesNotMatch(globalStyles, /\[data-rateloop-rail\]\s*\{/);
 });
 
 test("mobile navigation compacts only below 360px", () => {
