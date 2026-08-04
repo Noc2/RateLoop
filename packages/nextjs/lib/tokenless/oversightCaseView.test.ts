@@ -253,6 +253,7 @@ test("invited-lane case detail shows material, plaintext rationales, disagreemen
   assert.equal(view.lane, "customer_invited");
   assert.equal(view.detailAvailable, true);
   assert.equal(view.note, null);
+  assert.equal(view.failureTagLabels.incorrect, "Incorrect");
   assert.equal(view.cases.length, 2);
   const first = view.cases[0]!;
   assert.equal(first.title, "Support case 1");

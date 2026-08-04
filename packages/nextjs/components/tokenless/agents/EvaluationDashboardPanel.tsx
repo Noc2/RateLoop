@@ -68,6 +68,14 @@ function decisionLabel(decision: EvaluationRun["clientDecision"], copy: Translat
   return decision ? copy(`decision.${decision}`) : null;
 }
 
+function artifactRoleLabel(role: "baseline" | "candidate" | "context", copy: Translate) {
+  return copy(`artifactRole.${role}`);
+}
+
+function responseChoiceLabel(choice: "baseline" | "candidate", copy: Translate) {
+  return copy(`responseChoice.${choice}`);
+}
+
 function humanDuration(seconds: number, copy: Translate) {
   if (seconds < 60) return copy("durationSeconds", { count: seconds });
   if (seconds < 3_600) return copy("durationMinutes", { count: Math.round(seconds / 60) });
@@ -512,7 +520,9 @@ function OversightCaseDetail({ run, workspaceId }: { run: EvaluationRun; workspa
                     target="_blank"
                     rel="noreferrer"
                   >
-                    {artifact.role}: {artifact.label ?? artifact.artifactId}
+                    {artifact.label
+                      ? `${artifactRoleLabel(artifact.role, copy)}: ${artifact.label}`
+                      : artifactRoleLabel(artifact.role, copy)}
                   </a>
                 ))}
               </p>
@@ -524,8 +534,14 @@ function OversightCaseDetail({ run, workspaceId }: { run: EvaluationRun; workspa
                       className="rounded-lg bg-base-content/[0.04] p-3 text-xs leading-5"
                     >
                       <p className="text-base-content/55">
-                        {response.reviewerPseudonym} <AgentText id="translated119" /> {response.choice}
-                        {response.failureTagKeys.length > 0 ? ` · ${response.failureTagKeys.join(", ")}` : ""}
+                        {response.reviewerPseudonym} <AgentText id="translated119" />{" "}
+                        {responseChoiceLabel(response.choice, copy)}
+                        {response.failureTagKeys.length > 0
+                          ? ` · ${response.failureTagKeys
+                              .map(key => view.failureTagLabels[key] ?? copy("failureTagUnavailable"))
+                              .filter((label, index, labels) => labels.indexOf(label) === index)
+                              .join(", ")}`
+                          : ""}
                       </p>
                       {response.rationale ? (
                         <p className="mt-1 whitespace-pre-wrap text-base-content/70">{response.rationale}</p>
@@ -571,11 +587,13 @@ function RunCard({
   run,
   workspaceId,
   evidenceHref,
+  agentAttribution,
   onDecided,
 }: {
   run: EvaluationRun;
   workspaceId: string;
   evidenceHref: string | null;
+  agentAttribution: { displayName: string; versionNumber: number } | null;
   onDecided: (runId: string, decision: NonNullable<EvaluationRun["clientDecision"]>) => void;
 }) {
   const copy = useAgentTranslations("evidencePanels.evaluation");
@@ -714,20 +732,14 @@ function RunCard({
             </dd>
           </div>
           {run.attribution.status === "attributed" ? (
-            <>
-              <div>
-                <dt className="text-xs text-base-content/55">
-                  <AgentText id="agentId" />
-                </dt>
-                <dd className="mt-1 break-all font-mono">{run.attribution.agentId}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-base-content/55">
-                  <AgentText id="agentVersion" />
-                </dt>
-                <dd className="mt-1 break-all font-mono">{run.attribution.versionId}</dd>
-              </div>
-            </>
+            <div>
+              <dt className="text-xs text-base-content/55">
+                <AgentText id="agentVersion" />
+              </dt>
+              <dd className="mt-1">
+                {agentAttribution ? copy("attributedAgentVersion", agentAttribution) : copy("agentVersionUnavailable")}
+              </dd>
+            </div>
           ) : null}
           {run.mechanismHealth ? (
             <>
@@ -765,7 +777,6 @@ function RunCard({
             <AgentText id="translated123" />
           </p>
         ) : null}
-        <code className="mt-3 block break-all text-[11px] text-base-content/55">{run.runId}</code>
       </details>
       {["completed", "failed", "dead"].includes(run.status) ? (
         <OversightCaseDetail run={run} workspaceId={workspaceId} />
@@ -927,11 +938,6 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
   const agentOptions = useMemo(() => {
     if (!dashboard) return [];
     const labels = new Map(dashboard.agents.map(agent => [agent.agentId, agent.displayName || agent.externalId]));
-    for (const run of dashboard.runs) {
-      if (run.attribution.status === "attributed" && !labels.has(run.attribution.agentId)) {
-        labels.set(run.attribution.agentId, run.attribution.agentId);
-      }
-    }
     return [...labels].sort((left, right) => left[1].localeCompare(right[1]));
   }, [dashboard]);
 
@@ -1134,6 +1140,20 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
                   workspaceId={workspaceId}
                   evidenceHref={
                     run.evidencePacketAvailable ? evidenceHrefForRun(workspaceId, run.runId, currentSearch) : null
+                  }
+                  agentAttribution={
+                    run.attribution.status === "attributed"
+                      ? (() => {
+                          const agent = dashboard.agents.find(
+                            candidate =>
+                              candidate.agentId === run.attribution.agentId &&
+                              candidate.versionId === run.attribution.versionId,
+                          );
+                          return agent
+                            ? { displayName: agent.displayName || agent.externalId, versionNumber: agent.versionNumber }
+                            : null;
+                        })()
+                      : null
                   }
                   onDecided={handleRunDecided}
                 />

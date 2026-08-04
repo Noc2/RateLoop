@@ -1,3 +1,4 @@
+import { parseHumanAssuranceRubric } from "@rateloop/sdk";
 import "server-only";
 import { dbPool, serializePoolClientQueries } from "~~/lib/db";
 import { decryptWorkspaceOwnedRationale } from "~~/lib/tokenless/assuranceResponses";
@@ -47,6 +48,7 @@ export type OversightRunCaseView = {
   lane: string;
   detailAvailable: boolean;
   note: string | null;
+  failureTagLabels: Record<string, string>;
   cases: OversightCase[];
   overrideDecisions: AssuranceOverrideDecision[];
 };
@@ -111,6 +113,15 @@ export async function getOversightRunCaseView(input: {
       );
     }
     const projectId = text(access.row, "project_id")!;
+    const failureTagLabels = (() => {
+      try {
+        const manifest = JSON.parse(text(access.row, "suite_manifest_json") ?? "") as Record<string, unknown>;
+        const rubric = parseHumanAssuranceRubric(manifest.rubric);
+        return Object.fromEntries(rubric.failureTags.map(tag => [tag.key, tag.label]));
+      } catch {
+        return {};
+      }
+    })();
     const laneResult = await client.query(
       `SELECT ap.reviewer_source
        FROM tokenless_assurance_runs r
@@ -127,6 +138,7 @@ export async function getOversightRunCaseView(input: {
         lane,
         detailAvailable: false,
         note: NETWORK_AGGREGATE_NOTE,
+        failureTagLabels,
         cases: [],
       };
     } else {
@@ -190,6 +202,7 @@ export async function getOversightRunCaseView(input: {
         lane,
         detailAvailable: true,
         note: lane === "hybrid" ? HYBRID_NOTE : null,
+        failureTagLabels,
         cases: (caseRows.rows as Row[]).map(row => {
           const caseId = text(row, "case_id")!;
           const caseResponses = responsesByCase.get(caseId) ?? [];

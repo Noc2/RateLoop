@@ -276,7 +276,7 @@ test("recording a decision immediately updates the active outcome filter", async
   }
 });
 
-test("an attributed run shows its exact agent version without the legacy disclaimer", async () => {
+test("an attributed run shows the named agent version without internal identifiers", async () => {
   const restoreDom = installTestDom();
   const { act, cleanup } = await import("@testing-library/react");
   const restoreFetch = installFetch(
@@ -290,13 +290,29 @@ test("an attributed run shows its exact agent version without the legacy disclai
           },
         }),
       ],
+      agents: [
+        {
+          agentId: "agent_support",
+          externalId: "support-external",
+          status: "active",
+          versionId: "agent_version_support_7",
+          versionNumber: 7,
+          displayName: "Support agent",
+          environment: "production",
+          attributedRunCount: 1,
+          adaptiveCoverage: [],
+        },
+      ],
     }),
   );
 
   try {
     const view = await mount();
-    assert.equal((await view.findAllByText("agent_support")).length, 2);
-    assert.ok(view.getByText("agent_version_support_7"));
+    assert.ok((await view.findAllByText("Support agent")).length >= 1);
+    assert.ok(view.getByText("Support agent · Version 7"));
+    assert.equal(view.queryByText("agent_support"), null);
+    assert.equal(view.queryByText("agent_version_support_7"), null);
+    assert.equal(view.queryByText("run_evaluation_1"), null);
     assert.equal(
       view.queryByText(
         "This run has no immutable agent-version reference, so it is excluded from per-agent comparisons.",
@@ -320,6 +336,7 @@ test("per-response details explain run-specific reviewer pseudonyms without expo
     lane: "customer_invited",
     detailAvailable: true,
     note: null,
+    failureTagLabels: {},
     cases: [
       {
         caseId: "case_evaluation_1",
@@ -327,7 +344,15 @@ test("per-response details explain run-specific reviewer pseudonyms without expo
         title: "Support response",
         instructions: "Compare the replies.",
         isCalibration: false,
-        artifacts: [],
+        artifacts: [
+          {
+            artifactId: "artifact_internal_baseline",
+            role: "baseline",
+            label: null,
+            contentType: "text/plain",
+            digest: null,
+          },
+        ],
         responses: [
           {
             reviewerPseudonym: "reviewer-deadbeef",
@@ -354,6 +379,8 @@ test("per-response details explain run-specific reviewer pseudonyms without expo
       ),
     );
     assert.ok(view.getByText(/reviewer-deadbeef · chose candidate/));
+    assert.ok(view.getByRole("link", { name: "Baseline" }));
+    assert.equal(view.queryByText("artifact_internal_baseline"), null);
     assert.equal(view.queryByText(/@/), null);
   } finally {
     await act(async () => cleanup());
@@ -386,6 +413,7 @@ test("a failed run explains the recorded failure and exposes its case reasons", 
       lane: "customer_invited",
       detailAvailable: true,
       note: null,
+      failureTagLabels: { incorrect: "Incorrect answer" },
       cases: [
         {
           caseId: "case_evaluation_1",
@@ -418,6 +446,8 @@ test("a failed run explains the recorded failure and exposes its case reasons", 
     assert.ok(view.getByText("The run failed. Open case detail for the available evidence and reviewer reasons."));
     await userEvent.setup({ document }).click(view.getByText("Failure details"));
     assert.ok(await view.findByText("The candidate did not answer the question."));
+    assert.ok(view.getByText(/Incorrect answer/));
+    assert.equal(view.queryByText(/incorrect/), null);
   } finally {
     await act(async () => cleanup());
     restoreFetch();
@@ -481,6 +511,7 @@ test("aggregate-only network detail does not render the per-response pseudonym e
     lane: "rateloop_network",
     detailAvailable: false,
     note: aggregateNote,
+    failureTagLabels: {},
     cases: [],
     overrideDecisions: [],
   });

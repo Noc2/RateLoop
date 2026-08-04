@@ -1401,7 +1401,14 @@
       "active": "Aktiv"
     },
     "enforcement": { "host_enforced": "Durch Host erzwungen", "advisory": "Beratend" },
-    "risk": { "low": "Niedrig", "normal": "Normal", "medium": "Mittel", "high": "Hoch", "critical": "Kritisch", "unknown": "Unbekannt" },
+    "risk": {
+      "low": "Niedrig",
+      "normal": "Normal",
+      "medium": "Mittel",
+      "high": "Hoch",
+      "critical": "Kritisch",
+      "unknown": "Unbekannt"
+    },
     "stage": {
       "calibrating": "Kalibrierung",
       "high_coverage": "Hohe Abdeckung",
@@ -1552,6 +1559,11 @@
       "suppressedSampleTerminal": "Das Ergebnis bleibt ausgeblendet, weil weniger als {count} Prüfende geantwortet haben.",
       "candidateChoice": "{percent} wählten den Kandidaten",
       "failureSummaryFallback": "Der Durchlauf ist fehlgeschlagen. Öffne die Falldetails für verfügbare Nachweise und Begründungen.",
+      "artifactRole": { "baseline": "Ausgangswert", "candidate": "Kandidat", "context": "Kontext" },
+      "responseChoice": { "baseline": "Ausgangswert", "candidate": "Kandidat" },
+      "failureTagUnavailable": "Nicht näher bezeichnetes Problem",
+      "attributedAgentVersion": "{displayName} · Version {versionNumber}",
+      "agentVersionUnavailable": "Agent-Version nicht verfügbar",
       "evidenceAvailable": "Verfügbar",
       "evidenceNotGenerated": "Nicht erstellt",
       "recordOverride": "Ergebnis erfassen",

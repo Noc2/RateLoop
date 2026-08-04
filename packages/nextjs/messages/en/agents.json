@@ -1401,7 +1401,14 @@
       "active": "Active"
     },
     "enforcement": { "host_enforced": "Host-enforced", "advisory": "Advisory" },
-    "risk": { "low": "Low", "normal": "Normal", "medium": "Medium", "high": "High", "critical": "Critical", "unknown": "Unknown" },
+    "risk": {
+      "low": "Low",
+      "normal": "Normal",
+      "medium": "Medium",
+      "high": "High",
+      "critical": "Critical",
+      "unknown": "Unknown"
+    },
     "stage": {
       "calibrating": "Calibrating",
       "high_coverage": "High coverage",
@@ -1547,6 +1554,11 @@
       "suppressedSampleTerminal": "Result remains hidden because fewer than {count} reviewers responded.",
       "candidateChoice": "{percent} chose the candidate",
       "failureSummaryFallback": "The run failed. Open case detail for the available evidence and reviewer reasons.",
+      "artifactRole": { "baseline": "Baseline", "candidate": "Candidate", "context": "Context" },
+      "responseChoice": { "baseline": "baseline", "candidate": "candidate" },
+      "failureTagUnavailable": "Unspecified issue",
+      "attributedAgentVersion": "{displayName} · Version {versionNumber}",
+      "agentVersionUnavailable": "Agent version unavailable",
       "evidenceAvailable": "Available",
       "evidenceNotGenerated": "Not generated",
       "recordOverride": "Record outcome",
