@@ -197,6 +197,60 @@ test("suppressed results distinguish an active wait from a terminal shortfall", 
   }
 });
 
+test("decision signals omit unavailable placeholders and disappear when empty", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup } = await import("@testing-library/react");
+  const restoreFetch = installFetch(
+    dashboard({
+      runs: [run({ candidateSelectionShareBps: null, mechanismHealth: null })],
+    }),
+  );
+
+  try {
+    const view = await mount();
+    await view.findByText("Release gate");
+    assert.equal(view.queryByText("Before you decide"), null);
+    assert.equal(view.queryByText("Suppressed"), null);
+    assert.equal(view.queryByText("No calibration data"), null);
+    assert.equal(view.queryByText("No data"), null);
+  } finally {
+    await act(async () => cleanup());
+    restoreFetch();
+    restoreDom();
+  }
+});
+
+test("decision signals retain available disagreement and mechanism evidence", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup, within } = await import("@testing-library/react");
+  const restoreFetch = installFetch(
+    dashboard({
+      runs: [
+        run({
+          candidateSelectionShareBps: 6_200,
+          mechanismHealth: { goldFailureRateBps: 500, unanimityRateBps: 7_500 },
+        }),
+      ],
+    }),
+  );
+
+  try {
+    const view = await mount();
+    const signals = await view.findByRole("note");
+    assert.ok(within(signals).getByText("Before you decide"));
+    assert.ok(within(signals).getByText("Reviewer dissent"));
+    assert.ok(within(signals).getByText("Calibration failure rate"));
+    assert.ok(within(signals).getByText("Quorum-case unanimity"));
+    for (const value of ["38.0%", "5.0%", "75.0%"]) {
+      assert.ok(within(signals).getByText(value));
+    }
+  } finally {
+    await act(async () => cleanup());
+    restoreFetch();
+    restoreDom();
+  }
+});
+
 test("recording a decision immediately updates the active outcome filter", async () => {
   const restoreDom = installTestDom();
   const { act, cleanup, waitFor } = await import("@testing-library/react");

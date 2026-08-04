@@ -139,13 +139,14 @@ test("run cards submit go/revise/stop and record per-output overrides without a 
   assert.match(source, /reasons\.trim\(\)\.length < 10/);
 });
 
-test("anti-rubber-stamping: signals sit above every decision control and nothing is preselected", () => {
-  // Signals block: disagreement, gold/mechanism health, and evidence age.
+test("anti-rubber-stamping: available signals sit above every decision control and nothing is preselected", () => {
+  // Signals block: only available disagreement and mechanism-health evidence.
   assert.match(source, /Before you decide/);
   assert.match(source, /Reviewer dissent/);
   assert.match(source, /Calibration failure rate/);
   assert.match(source, /Quorum-case unanimity/);
-  assert.match(source, /Time since evidence/);
+  assert.doesNotMatch(source, /Time since evidence/);
+  assert.match(source, /if \(signals\.length === 0\) return null/);
   // The signals render before the go/revise/stop buttons and before the
   // override outcome buttons in source order.
   const decisionRegion = source.slice(source.indexOf("{decidable ? ("));

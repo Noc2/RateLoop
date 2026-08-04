@@ -189,48 +189,29 @@ function SampleNote({ run }: { run: EvaluationRun }) {
   );
 }
 
-/**
- * Signals a decider must see before the decision buttons: reviewer
- * disagreement, calibration (gold) failures and mechanism health, and how old
- * the evidence is. Rendered above every decision and override control.
- */
+/** Signals a decider must see before the decision buttons when the run provides them. */
 function DecisionSignals({ run }: { run: EvaluationRun }) {
   const copy = useAgentTranslations("evidencePanels.evaluation");
   const locale = useAgentLocale();
   const share = run.candidateSelectionShareBps;
   const dissentBps = share === null ? null : Math.min(share, 10_000 - share);
-  const evidenceAgeHours = run.completedAt
-    ? Math.max(0, Math.round((Date.now() - new Date(run.completedAt).getTime()) / 3_600_000))
-    : null;
-  const signals: Array<[string, string]> = [
-    [copy("reviewerDissent"), percent(dissentBps, copy, locale)],
-    [
-      copy("calibrationFailureRate"),
-      run.mechanismHealth?.goldFailureRateBps === null || run.mechanismHealth === null
-        ? copy("noCalibrationData")
-        : percent(run.mechanismHealth.goldFailureRateBps, copy, locale),
-    ],
-    [
-      copy("quorumCaseUnanimity"),
-      run.mechanismHealth?.unanimityRateBps === null || run.mechanismHealth === null
-        ? copy("noData")
-        : percent(run.mechanismHealth.unanimityRateBps, copy, locale),
-    ],
-    [
-      copy("timeSinceEvidence"),
-      evidenceAgeHours === null
-        ? copy("notCompleted")
-        : evidenceAgeHours < 48
-          ? copy("durationHours", { count: evidenceAgeHours })
-          : copy("durationDays", { count: Math.round(evidenceAgeHours / 24) }),
-    ],
-  ];
+  const signals: Array<[string, string]> = [];
+  if (dissentBps !== null) {
+    signals.push([copy("reviewerDissent"), percent(dissentBps, copy, locale)]);
+  }
+  if (typeof run.mechanismHealth?.goldFailureRateBps === "number") {
+    signals.push([copy("calibrationFailureRate"), percent(run.mechanismHealth.goldFailureRateBps, copy, locale)]);
+  }
+  if (typeof run.mechanismHealth?.unanimityRateBps === "number") {
+    signals.push([copy("quorumCaseUnanimity"), percent(run.mechanismHealth.unanimityRateBps, copy, locale)]);
+  }
+  if (signals.length === 0) return null;
   return (
     <div className="mt-3 rounded-xl border border-base-content/10 bg-base-content/[0.02] p-3" role="note">
       <p className="text-xs font-semibold text-base-content/55">
         <AgentText id="beforeDecide" />
       </p>
-      <dl className="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+      <dl className="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
         {signals.map(([label, value]) => (
           <div key={label}>
             <dt className="text-base-content/55">{label}</dt>
