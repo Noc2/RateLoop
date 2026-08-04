@@ -18,12 +18,13 @@ test("the public trust anchor contains only configured verification keys", () =>
   assert.doesNotMatch(route, /requireBrowserSession|workspaceId/);
   assert.match(historyService, /projectHumanReviewGateTrustedKeyHistory\(\)\.keys/);
   assert.match(historyService, /configuredDecisionPacketVerificationKeys\(env\)/);
-  assert.match(historyService, /uses: \["human_review_gate"\]/);
-  assert.match(historyService, /uses: \["decision_packet"\]/);
+  assert.match(historyService, /mergeEvidenceTrustedKey/);
+  assert.match(historyService, /"human_review_gate"/);
+  assert.match(historyService, /"decision_packet"/);
   assert.match(historyService, /uses: \["external_attestation"\]/);
   assert.match(workspaceHistory, /listWorkspaceEvidenceSigningKeys/);
   assert.match(historyService, /keyIdentity\(text\(row, "signing_key_id"\)!, text\(row, "signing_public_key"\)!\)/);
-  assert.match(historyService, /keyIdentity\(key\.keyId, publicKeySpki\)/);
+  assert.match(historyService, /keyIdentity\(key\.keyId, key\.publicKeySpki\)/);
   assert.match(historyService, /untrustedPacketKeyCount: packetByKey\.size/);
   assert.match(historyService, /publicKeySpki = encodeEd25519SpkiDerBase64url\(key\.publicKeyJwk\)/);
   assert.match(workspaceHistory, /format !== "spki" \|\| !keyId/);

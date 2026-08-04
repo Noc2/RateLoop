@@ -3,9 +3,13 @@ import {
   configuredDecisionPacketVerificationKeys,
   parseDecisionPacketVerificationKeys,
   projectPublicEvidenceTrustedKeyHistory,
+  projectWorkspaceEvidenceSigningKeyHistory,
 } from "./evidenceSigningKeys";
 import { resolveRequiredEvidenceTrustConfiguration } from "./evidenceTrustConfiguration.mjs";
-import { __setHumanReviewGateEvidenceConfigForTests } from "./humanReviewGateEvidence";
+import {
+  __setHumanReviewGateEvidenceConfigForTests,
+  projectHumanReviewGateTrustedKeyHistory,
+} from "./humanReviewGateEvidence";
 import assert from "node:assert/strict";
 import { createHash, generateKeyPairSync } from "node:crypto";
 import { test } from "node:test";
@@ -118,6 +122,52 @@ test("public trust history includes configured decision-packet pins without a wo
       [{ keyId: attestation.keyId, uses: ["external_attestation"] }],
     );
     assert.equal(history.keys.find(key => key.keyId === attestation.keyId)?.uses.includes("human_review_gate"), false);
+  } finally {
+    __setHumanReviewGateEvidenceConfigForTests(null);
+  }
+});
+
+test("public and workspace trust histories merge a shared review-gate and decision-packet key", () => {
+  const signer = generateKeyPairSync("ed25519");
+  const publicKey = signer.publicKey.export({ format: "der", type: "spki" });
+  const current = {
+    algorithm: "Ed25519",
+    keyId: `ed25519:${createHash("sha256").update(publicKey).digest("hex").slice(0, 24)}`,
+    publicKey: publicKey.toString("base64url"),
+    status: "current",
+  } as const;
+  __setHumanReviewGateEvidenceConfigForTests({
+    signingPrivateKey: signer.privateKey,
+    verificationKeys: [{ publicKey: signer.publicKey, status: "current" }],
+  });
+  try {
+    const env = { TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS: JSON.stringify([current]) };
+    const publicHistory = projectPublicEvidenceTrustedKeyHistory(env);
+    const workspaceHistory = projectWorkspaceEvidenceSigningKeyHistory({
+      workspaceId: "workspace-1",
+      gateKeys: projectHumanReviewGateTrustedKeyHistory().keys,
+      decisionKeys: configuredDecisionPacketVerificationKeys(env),
+      packetRows: [
+        {
+          signing_key_id: current.keyId,
+          signing_public_key: current.publicKey,
+          first_seen_at: "2026-08-01T00:00:00.000Z",
+          last_seen_at: "2026-08-02T00:00:00.000Z",
+          packet_count: 3,
+        },
+      ],
+    });
+
+    assert.deepEqual(
+      publicHistory.keys.filter(key => key.keyId === current.keyId).map(key => key.uses),
+      [["human_review_gate", "decision_packet"]],
+    );
+    assert.deepEqual(
+      workspaceHistory.keys.filter(key => key.keyId === current.keyId).map(key => key.uses),
+      [["human_review_gate", "decision_packet"]],
+    );
+    assert.equal(workspaceHistory.keys.find(key => key.keyId === current.keyId)?.packetCount, 3);
+    assert.equal(workspaceHistory.untrustedPacketKeyCount, 0);
   } finally {
     __setHumanReviewGateEvidenceConfigForTests(null);
   }

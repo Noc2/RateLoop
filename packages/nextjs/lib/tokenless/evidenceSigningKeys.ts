@@ -35,6 +35,34 @@ type DecisionPacketVerificationKey = {
   status: "current" | "retired";
 };
 
+type EvidenceTrustUse = "decision_packet" | "external_attestation" | "human_review_gate";
+
+type EvidenceTrustedKey = {
+  algorithm: "ECDSA-SHA256" | "Ed25519";
+  keyId: string;
+  publicKeyJwk: JsonWebKey;
+  publicKeySpki: string;
+  status: "current" | "retired";
+  uses: EvidenceTrustUse[];
+};
+
+type HumanReviewGateTrustedKey = ReturnType<typeof projectHumanReviewGateTrustedKeyHistory>["keys"][number];
+
+function mergeEvidenceTrustedKey(
+  byIdentity: Map<string, EvidenceTrustedKey>,
+  key: Omit<EvidenceTrustedKey, "uses">,
+  use: EvidenceTrustUse,
+) {
+  const identity = keyIdentity(key.keyId, key.publicKeySpki);
+  const existing = byIdentity.get(identity);
+  if (existing) {
+    if (!existing.uses.includes(use)) existing.uses.push(use);
+    if (key.status === "current") existing.status = "current";
+    return;
+  }
+  byIdentity.set(identity, { ...key, uses: [use] });
+}
+
 type EvidenceSigningEnvironment = {
   TOKENLESS_ATTESTATION_VERIFICATION_KEYS?: string;
   TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS?: string;
@@ -119,41 +147,23 @@ export function configuredDecisionPacketVerificationKeys(
 }
 
 export function projectPublicEvidenceTrustedKeyHistory(env?: EvidenceSigningEnvironment) {
-  const byIdentity = new Map<
-    string,
-    {
-      algorithm: "ECDSA-SHA256" | "Ed25519";
-      keyId: string;
-      publicKeyJwk: JsonWebKey;
-      publicKeySpki: string;
-      status: "current" | "retired";
-      uses: Array<"decision_packet" | "external_attestation" | "human_review_gate">;
-    }
-  >();
+  const byIdentity = new Map<string, EvidenceTrustedKey>();
   for (const key of projectHumanReviewGateTrustedKeyHistory().keys) {
     const publicKeySpki = encodeEd25519SpkiDerBase64url(key.publicKeyJwk);
-    byIdentity.set(keyIdentity(key.keyId, publicKeySpki), {
-      ...key,
-      publicKeySpki,
-      uses: ["human_review_gate"],
-    });
+    mergeEvidenceTrustedKey(byIdentity, { ...key, publicKeySpki }, "human_review_gate");
   }
   for (const key of configuredDecisionPacketVerificationKeys(env)) {
-    const identity = keyIdentity(key.keyId, key.publicKey);
-    const existing = byIdentity.get(identity);
-    if (existing) {
-      existing.uses.push("decision_packet");
-      if (key.status === "current") existing.status = "current";
-      continue;
-    }
-    byIdentity.set(identity, {
-      algorithm: key.algorithm,
-      keyId: key.keyId,
-      publicKeyJwk: key.publicKeyJwk,
-      publicKeySpki: key.publicKey,
-      status: key.status,
-      uses: ["decision_packet"],
-    });
+    mergeEvidenceTrustedKey(
+      byIdentity,
+      {
+        algorithm: key.algorithm,
+        keyId: key.keyId,
+        publicKeyJwk: key.publicKeyJwk,
+        publicKeySpki: key.publicKey,
+        status: key.status,
+      },
+      "decision_packet",
+    );
   }
   for (const key of configuredAttestationVerificationKeys(env)) {
     const identity = keyIdentity(key.keyId, key.publicKey);
@@ -179,6 +189,53 @@ export function projectPublicEvidenceTrustedKeyHistory(env?: EvidenceSigningEnvi
   };
 }
 
+export function projectWorkspaceEvidenceSigningKeyHistory(input: {
+  workspaceId: string;
+  gateKeys: HumanReviewGateTrustedKey[];
+  decisionKeys: DecisionPacketVerificationKey[];
+  packetRows: Row[];
+}) {
+  const packetByKey = new Map(
+    input.packetRows.map(row => {
+      return [keyIdentity(text(row, "signing_key_id")!, text(row, "signing_public_key")!), row] as const;
+    }),
+  );
+  const byIdentity = new Map<string, EvidenceTrustedKey>();
+  for (const key of input.gateKeys) {
+    const publicKeySpki = encodeEd25519SpkiDerBase64url(key.publicKeyJwk);
+    mergeEvidenceTrustedKey(byIdentity, { ...key, publicKeySpki }, "human_review_gate");
+  }
+  for (const key of input.decisionKeys) {
+    mergeEvidenceTrustedKey(
+      byIdentity,
+      {
+        algorithm: key.algorithm,
+        keyId: key.keyId,
+        publicKeyJwk: key.publicKeyJwk,
+        publicKeySpki: key.publicKey,
+        status: key.status,
+      },
+      "decision_packet",
+    );
+  }
+  const keys = [...byIdentity.entries()].map(([identity, key]) => {
+    const packet = packetByKey.get(identity);
+    if (packet) packetByKey.delete(identity);
+    return {
+      ...key,
+      firstPacketAt: packet ? iso(packet.first_seen_at) : null,
+      lastPacketAt: packet ? iso(packet.last_seen_at) : null,
+      packetCount: packet ? Number(packet.packet_count) : 0,
+    };
+  });
+  return {
+    schemaVersion: "rateloop.evidence-trusted-key-history.v1" as const,
+    workspaceId: input.workspaceId,
+    keys,
+    untrustedPacketKeyCount: packetByKey.size,
+  };
+}
+
 export async function listWorkspaceEvidenceSigningKeys(input: { accountAddress: string; workspaceId: string }) {
   await requireAssuranceAttestationManagement(input.accountAddress, input.workspaceId);
   const gateKeyring = projectHumanReviewGateTrustedKeyHistory();
@@ -194,29 +251,6 @@ export async function listWorkspaceEvidenceSigningKeys(input: { accountAddress: 
           ORDER BY last_seen_at DESC,ep.signing_key_id ASC`,
     args: [input.workspaceId],
   });
-  const packetByKey = new Map(
-    packets.rows.map(value => {
-      const row = value as Row;
-      return [keyIdentity(text(row, "signing_key_id")!, text(row, "signing_public_key")!), row] as const;
-    }),
-  );
-  const gateKeys = gateKeyring.keys.map(key => {
-    const publicKeySpki = encodeEd25519SpkiDerBase64url(key.publicKeyJwk);
-    const identity = keyIdentity(key.keyId, publicKeySpki);
-    const packet = packetByKey.get(identity);
-    if (packet) packetByKey.delete(identity);
-    return {
-      keyId: key.keyId,
-      algorithm: key.algorithm,
-      publicKeyJwk: key.publicKeyJwk,
-      publicKeySpki,
-      status: key.status,
-      uses: ["human_review_gate", ...(packet ? (["decision_packet"] as const) : [])],
-      firstPacketAt: packet ? iso(packet.first_seen_at) : null,
-      lastPacketAt: packet ? iso(packet.last_seen_at) : null,
-      packetCount: packet ? Number(packet.packet_count) : 0,
-    };
-  });
   let packetKeys: DecisionPacketVerificationKey[];
   try {
     packetKeys = configuredDecisionPacketVerificationKeys();
@@ -224,26 +258,10 @@ export async function listWorkspaceEvidenceSigningKeys(input: { accountAddress: 
     if (error instanceof TokenlessServiceError) throw error;
     throw new TokenlessServiceError("Decision-packet verification keys are invalid.", 503, "invalid_evidence_keyring");
   }
-  const decisionKeys = packetKeys.map(key => {
-    const identity = keyIdentity(key.keyId, key.publicKey);
-    const packet = packetByKey.get(identity);
-    if (packet) packetByKey.delete(identity);
-    return {
-      keyId: key.keyId,
-      algorithm: key.algorithm,
-      publicKeyJwk: key.publicKeyJwk,
-      publicKeySpki: key.publicKey,
-      status: key.status,
-      uses: ["decision_packet" as const],
-      firstPacketAt: packet ? iso(packet.first_seen_at) : null,
-      lastPacketAt: packet ? iso(packet.last_seen_at) : null,
-      packetCount: packet ? Number(packet.packet_count) : 0,
-    };
-  });
-  return {
-    schemaVersion: "rateloop.evidence-trusted-key-history.v1" as const,
+  return projectWorkspaceEvidenceSigningKeyHistory({
     workspaceId: input.workspaceId,
-    keys: [...gateKeys, ...decisionKeys],
-    untrustedPacketKeyCount: packetByKey.size,
-  };
+    gateKeys: gateKeyring.keys,
+    decisionKeys: packetKeys,
+    packetRows: packets.rows as Row[],
+  });
 }
