@@ -292,7 +292,7 @@ export type TokenlessWaitResponse =
       schemaVersion: typeof TOKENLESS_SCHEMA_VERSION;
       operationKey: string;
       status: "ready";
-      verdictStatus: TokenlessVerdictStatus;
+      verdictStatus: TokenlessTerminalVerdictStatus;
       continuation: null;
     };
 

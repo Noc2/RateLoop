@@ -634,10 +634,17 @@ export function parseTokenlessWaitResponse(
   if (input.status === "ready") {
     if (input.continuation !== null)
       invalid("continuation", "null while wait status is ready");
+    const parsedVerdictStatus = verdictStatus(
+      input.verdictStatus,
+      "verdictStatus",
+    );
+    if (parsedVerdictStatus === "pending") {
+      invalid("verdictStatus", "a terminal verdict while wait status is ready");
+    }
     return {
       ...common,
       status: "ready",
-      verdictStatus: verdictStatus(input.verdictStatus, "verdictStatus"),
+      verdictStatus: parsedVerdictStatus,
       continuation: null,
     };
   }

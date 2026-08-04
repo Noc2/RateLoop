@@ -26,6 +26,7 @@ import {
   parseTokenlessAskResponse,
   parseTokenlessQuoteResponse,
   parseTokenlessResult,
+  parseTokenlessWaitResponse,
 } from "./tokenlessSchema";
 import {
   TOKENLESS_SCHEMA_VERSION,
@@ -1302,6 +1303,20 @@ test("tokenless wait returns an explicit polling continuation and then a result-
   await assert.rejects(
     () => client.wait({ operationKey: "op", timeoutMs: 60_001 }),
     /between 1000 and 60000/,
+  );
+});
+
+test("a ready wait response requires a terminal verdict", () => {
+  assert.throws(
+    () =>
+      parseTokenlessWaitResponse({
+        schemaVersion: TOKENLESS_SCHEMA_VERSION,
+        operationKey: "op.pending",
+        status: "ready",
+        verdictStatus: "pending",
+        continuation: null,
+      }),
+    /terminal verdict while wait status is ready/,
   );
 });
 
