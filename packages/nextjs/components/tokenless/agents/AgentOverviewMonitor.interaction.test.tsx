@@ -5,6 +5,7 @@ import { EnglishAgentTestProviders } from "~~/components/tokenless/testing/Agent
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 const overview = {
+  hasAnyDecisions: true,
   window: {
     period: "30",
     days: 30,
@@ -243,6 +244,22 @@ const overview = {
   },
 };
 
+const emptyOverview = {
+  ...overview,
+  hasAnyDecisions: false,
+  headline: {
+    completedDecisions: { available: true, count: 0 },
+    reviewerEndorsement: { available: false, reason: "No comparable decisions in this window." },
+    medianDecisionLatency: { available: false, reason: "No decision timing is available in this window." },
+    costPerDecision: {
+      available: false,
+      reason: "No decisions in this window.",
+      recordedCount: 0,
+      decisionCount: 0,
+    },
+  },
+};
+
 const secondPageOverview = {
   ...overview,
   agentVersions: {
@@ -365,6 +382,65 @@ test("the overview renders four fixed answers and expands lifetime scope evidenc
     assert.ok(await view.findByText("Page 1 of 2"));
     assert.ok(view.getAllByText("Support agent").length > 0);
     assert.equal(new URL(window.location.href).searchParams.has("overviewPage"), false);
+  } finally {
+    await act(async () => cleanup());
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});
+
+test("a truly empty unfiltered overview gives one first-review instruction while a filtered empty view keeps recovery", async () => {
+  const restoreDom = installTestDom();
+  const previousFetch = globalThis.fetch;
+  let hasAnyDecisions = false;
+  globalThis.fetch = async input => {
+    const url = new URL(String(input), "https://rateloop.test");
+    return Response.json({
+      ...emptyOverview,
+      hasAnyDecisions,
+      facets: {
+        ...emptyOverview.facets,
+        selected: {
+          ...emptyOverview.facets.selected,
+          riskTier: url.searchParams.get("overviewRisk"),
+        },
+      },
+    });
+  };
+  const { act, cleanup, render } = await import("@testing-library/react");
+  const { AgentOverviewMonitor } = await import("./AgentOverviewMonitor");
+
+  try {
+    const unfiltered = render(<AgentOverviewMonitor workspaceId="workspace-empty-overview" />, {
+      wrapper: EnglishAgentTestProviders,
+    });
+    assert.ok(
+      await unfiltered.findByText(
+        "Ask your connected agent to send its first review. This overview appears after the first completed decision.",
+      ),
+    );
+    assert.equal(unfiltered.queryByLabelText("Period"), null);
+    assert.equal(unfiltered.queryByText("Completed decisions"), null);
+    await act(async () => cleanup());
+
+    hasAnyDecisions = true;
+    const outsideWindow = render(<AgentOverviewMonitor workspaceId="workspace-older-overview" />, {
+      wrapper: EnglishAgentTestProviders,
+    });
+    assert.ok(await outsideWindow.findByLabelText("Period"));
+    assert.ok(outsideWindow.getByText("Completed decisions"));
+    assert.equal(outsideWindow.queryByText(/This overview appears after the first completed decision/u), null);
+    await act(async () => cleanup());
+
+    hasAnyDecisions = false;
+    window.history.replaceState({}, "", "/agents/overview?overviewRisk=high");
+    const filtered = render(<AgentOverviewMonitor workspaceId="workspace-empty-overview" />, {
+      wrapper: EnglishAgentTestProviders,
+    });
+    assert.ok(await filtered.findByRole("button", { name: "Clear filters" }));
+    assert.ok(filtered.getByLabelText("Period"));
+    assert.ok(filtered.getByText("Completed decisions"));
+    assert.equal(filtered.queryByText(/This overview appears after the first completed decision/u), null);
   } finally {
     await act(async () => cleanup());
     globalThis.fetch = previousFetch;

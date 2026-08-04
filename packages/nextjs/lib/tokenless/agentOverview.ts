@@ -174,6 +174,7 @@ export type AgentOverviewFacetOption = { value: string; label: string };
 export type AgentOverviewFilters = Pick<AgentOverviewUrlState, "workflow" | "riskTier" | "stage" | "versionId">;
 
 export type AgentOverview = {
+  hasAnyDecisions: boolean;
   window: {
     period: AgentOverviewPeriod;
     days: 7 | 30 | 90 | null;
@@ -1193,6 +1194,7 @@ async function loadAgentOverviewAttention(input: {
 export function projectAgentOverview(input: {
   agents: OverviewAgentSource[];
   observations: OverviewObservation[];
+  hasAnyDecisions?: boolean;
   observationsTruncated?: boolean;
   period?: AgentOverviewPeriod;
   parentPage?: number;
@@ -1232,6 +1234,7 @@ export function projectAgentOverview(input: {
   const averageCost = totalCost === null ? null : (totalCost / BigInt(Math.max(1, observations.length))).toString();
 
   return {
+    hasAnyDecisions: input.hasAnyDecisions ?? input.observations.length > 0,
     window: {
       period: periodKey,
       days: period.days,
@@ -1447,6 +1450,13 @@ export async function getAgentOverview(input: {
       MAX_AGENT_OVERVIEW_OBSERVATIONS + 1,
     ],
   });
+  const lifetimeDecisionPromise = dbClient.execute({
+    sql: `SELECT EXISTS(
+            SELECT 1 FROM tokenless_agent_evaluation_observations
+            WHERE workspace_id=?
+          ) AS has_any_decisions`,
+    args: [input.workspaceId],
+  });
   const attentionPromise = loadAgentOverviewAttention({
     workspaceId: input.workspaceId,
     canManage: access.canManage,
@@ -1455,8 +1465,9 @@ export async function getAgentOverview(input: {
   const totalParentCount = await totalParentCountPromise;
   const totalPages = Math.max(1, Math.ceil(totalParentCount / AGENT_OVERVIEW_PARENT_PAGE_SIZE));
   const page = Math.min(requestedPage, totalPages);
-  const [observationResult, parentPage, attention, reviewQuality] = await Promise.all([
+  const [observationResult, lifetimeDecisionResult, parentPage, attention, reviewQuality] = await Promise.all([
     observationPromise,
+    lifetimeDecisionPromise,
     loadAgentOverviewParentPage({
       workspaceId: input.workspaceId,
       page,
@@ -1468,6 +1479,10 @@ export async function getAgentOverview(input: {
   ]);
   return projectAgentOverview({
     agents: [],
+    hasAnyDecisions:
+      lifetimeDecisionResult.rows[0]?.has_any_decisions === true ||
+      lifetimeDecisionResult.rows[0]?.has_any_decisions === "t" ||
+      lifetimeDecisionResult.rows[0]?.has_any_decisions === 1,
     observations: observationResult.rows
       .slice(0, MAX_AGENT_OVERVIEW_OBSERVATIONS)
       .map((row: unknown) => observationFromRow(row as QueryRow)),

@@ -1032,18 +1032,19 @@ const OVERVIEW_PERIOD_OPTIONS: Array<{ value: AgentOverviewPeriod; labelKey: str
 ];
 
 function OverviewControls({
+  hasFilters,
   loading,
   onChange,
   overview,
   query,
 }: {
+  hasFilters: boolean;
   loading: boolean;
   onChange: (patch: Partial<AgentOverviewUrlState>) => void;
   overview: AgentOverview;
   query: AgentOverviewUrlState;
 }) {
   const ui = useAgentTranslations("ui");
-  const hasFilters = Boolean(query.workflow || query.riskTier || query.stage || query.versionId);
   const selectClassName = "select-sm bg-base-content/[0.04]";
   const labelClassName = "mb-1 text-xs text-base-content/65";
   return (
@@ -1234,9 +1235,23 @@ export function AgentOverviewMonitor({ workspaceId }: { workspaceId: string }) {
       </Card>
     );
   }
+  const hasFilters = Boolean(query.workflow || query.riskTier || query.stage || query.versionId);
+  if (!error && !hasFilters && !overview.hasAnyDecisions) {
+    return (
+      <Card as="section" className="rounded-2xl p-6" role="status">
+        <AgentText id="overviewFirstReview" />
+      </Card>
+    );
+  }
   return (
     <div className="space-y-5">
-      <OverviewControls loading={loading} overview={overview} query={query} onChange={updateQuery} />
+      <OverviewControls
+        hasFilters={hasFilters}
+        loading={loading}
+        overview={overview}
+        query={query}
+        onChange={updateQuery}
+      />
       <HeadlineCards overview={overview} />
       {error ? (
         <p className="rounded-xl border border-error/20 bg-error/[0.06] p-4 text-sm text-error" role="alert">

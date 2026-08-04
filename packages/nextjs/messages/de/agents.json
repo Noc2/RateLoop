@@ -696,6 +696,7 @@
     "createWorkspaceFirst": "Zuerst einen Arbeitsbereich erstellen",
     "evaluationsWorkspace": "Auswertungen gehören zu einem Arbeitsbereich.",
     "resultsAfterReview": "Lass deinen verbundenen Agenten die erste Prüfung senden. Ergebnisse erscheinen hier.",
+    "overviewFirstReview": "Lass deinen verbundenen Agenten die erste Prüfung senden. Diese Übersicht erscheint nach der ersten abgeschlossenen Entscheidung.",
     "allAgents": "Alle Agenten",
     "resultStatus": "Status",
     "allStatuses": "Alle Statuswerte",

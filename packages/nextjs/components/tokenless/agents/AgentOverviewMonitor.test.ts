@@ -72,6 +72,15 @@ test("production overview defaults to current versions with active assurance bin
   assert.match(projectionSource, /scope\.policy_id=review\.policy_id/);
 });
 
+test("first-review routing uses unfiltered lifetime evidence rather than the selected reporting window", () => {
+  assert.match(
+    projectionSource,
+    /SELECT EXISTS\(\s*SELECT 1 FROM tokenless_agent_evaluation_observations\s*WHERE workspace_id=\?/,
+  );
+  assert.match(projectionSource, /hasAnyDecisions:/);
+  assert.match(source, /!hasFilters && !overview\.hasAnyDecisions/);
+});
+
 test("agent-version parents disclose bounded scope evidence without reviewer axes or a scope average", () => {
   assert.doesNotMatch(source, /translated072/);
   assert.match(source, /overview\.agentVersions\.parents\.map/);

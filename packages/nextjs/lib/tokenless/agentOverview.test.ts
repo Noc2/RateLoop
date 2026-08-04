@@ -147,6 +147,7 @@ test("overview projection derives four distinct 30-day answers from decision evi
     startsAt: "2026-06-28T12:00:00.000Z",
     endsAt: "2026-07-28T12:00:00.000Z",
   });
+  assert.equal(overview.hasAnyDecisions, true);
   assert.deepEqual(overview.headline.completedDecisions, { available: true, count: 4 });
   assert.deepEqual(overview.headline.reviewerEndorsement, {
     available: true,

@@ -696,6 +696,7 @@
     "createWorkspaceFirst": "Create a workspace first",
     "evaluationsWorkspace": "Evaluations belong to a workspace.",
     "resultsAfterReview": "Ask your connected agent to send its first review. Results appear here.",
+    "overviewFirstReview": "Ask your connected agent to send its first review. This overview appears after the first completed decision.",
     "allAgents": "All agents",
     "resultStatus": "Status",
     "allStatuses": "All statuses",
