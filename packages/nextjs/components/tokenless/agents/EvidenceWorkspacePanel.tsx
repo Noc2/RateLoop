@@ -22,6 +22,7 @@ import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { WorkspacePublicContentLink } from "~~/components/tokenless/navigation/WorkspacePublicContentLink";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import { Card } from "~~/components/tokenless/ui/Card";
+import { useConfirmDialog } from "~~/components/tokenless/ui/useConfirmDialog";
 import { stripLocalePrefix } from "~~/i18n/config";
 import { Link } from "~~/i18n/navigation";
 import type { EvaluationDashboard } from "~~/lib/tokenless/evaluationDashboard";
@@ -687,6 +688,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
   const locale = useAgentLocale();
   const ui = useAgentTranslations("ui");
   const errors = useAgentTranslations("errors");
+  const { confirm, confirmationDialog } = useConfirmDialog();
   const [packets, setPackets] = useState<PacketRow[]>([]);
   const [attestations, setAttestations] = useState<Attestation[]>([]);
   const [retention, setRetention] = useState<RetentionPolicy | null>(null);
@@ -1109,8 +1111,16 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                       type="button"
                       className="btn btn-sm rateloop-secondary-action"
                       disabled={busyShare === packet.payload.packetId}
-                      aria-describedby={`share-note-${packet.payload.packetId}`}
-                      onClick={() => {
+                      onClick={async () => {
+                        if (
+                          !(await confirm({
+                            title: ui("shareConfirmationTitle"),
+                            description: ui("translated150"),
+                            confirmLabel: ui("shareConfirmationAction"),
+                            cancelLabel: ui("translated183"),
+                          }))
+                        )
+                          return;
                         setBusyShare(packet.payload.packetId);
                         setError(null);
                         void fetch(
@@ -1145,9 +1155,6 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                     </button>
                   </div>
                 </div>
-                <p className="mt-3 text-xs leading-5 text-base-content/60" id={`share-note-${packet.payload.packetId}`}>
-                  <AgentText id="translated150" />
-                </p>
                 {shares.some(share => share.status === "active") ? (
                   <div className="mt-4 space-y-3 rounded-xl border border-base-content/10 bg-base-content/[0.025] p-4">
                     {shares
@@ -1435,7 +1442,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
         </p>
       ) : null}
 
-      {!loading && canManage ? (
+      {!loading && canManage && showAdvancedControls ? (
         <Card as="section" className="rounded-2xl p-6" aria-labelledby="compliance-export-heading">
           <h2 id="compliance-export-heading" className="text-xl font-semibold">
             <AgentText id="translated141" />
@@ -1457,7 +1464,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
         </Card>
       ) : null}
 
-      {!loading && canManage ? <ProjectAuditorAccess workspaceId={workspaceId} /> : null}
+      {!loading && canManage && showAdvancedControls ? <ProjectAuditorAccess workspaceId={workspaceId} /> : null}
 
       {!loading && canManage && showAdvancedControls ? (
         <Card
@@ -1573,6 +1580,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
           ) : null}
         </Card>
       ) : null}
+      {confirmationDialog}
     </div>
   );
 }

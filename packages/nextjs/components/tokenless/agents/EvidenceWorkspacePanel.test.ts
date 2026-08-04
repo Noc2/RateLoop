@@ -11,8 +11,7 @@ test("the evidence workspace keeps verification and export state explicit", () =
   assert.match(source, /Decision records and exports/);
   assert.doesNotMatch(source, /tracking-widest[^>]*>\s*Evidence\s*</);
   assert.match(source, /Export packet/);
-  assert.doesNotMatch(source, /Evidence settings/);
-  assert.match(source, /Retention, keys, and delivery/);
+  assert.match(source, /Evidence settings and delivery/);
   assert.match(source, /aria-expanded=\{showAdvancedControls\}/);
   assert.match(source, /canManage && showAdvancedControls/);
   assert.match(source, /Verification details/);
@@ -91,7 +90,7 @@ test("the evidence workspace keeps verification and export state explicit", () =
 test("workspace compliance controls expose only browser-safe endpoints", () => {
   assert.match(
     source,
-    /!loading && canManage \? \(\s*<Card as="section"[^>]+aria-labelledby="compliance-export-heading"/s,
+    /!loading && canManage && showAdvancedControls \? \(\s*<Card as="section"[^>]+aria-labelledby="compliance-export-heading"/s,
   );
   assert.match(source, /Export operating evidence for an audit/);
   assert.match(source, /\/audit\/export/);
@@ -104,6 +103,8 @@ test("workspace compliance controls expose only browser-safe endpoints", () => {
   assert.match(source, /Evidence integrations/);
   assert.match(source, /Add or update one delivery destination at a time/);
   assert.match(source, /copy\("configureDelivery", \{ label \}\)/);
+  assert.match(source, /shareConfirmationTitle/);
+  assert.doesNotMatch(source, /aria-describedby=\{`share-note-/);
   assert.match(source, /deliveryKind === "worm" \? <WormEvidenceDelivery/);
   assert.match(source, /deliveryKind === "siem" \? <SiemEvidenceDelivery/);
   assert.match(source, /deliveryKind === "grc" \? <GrcEvidenceDelivery/);

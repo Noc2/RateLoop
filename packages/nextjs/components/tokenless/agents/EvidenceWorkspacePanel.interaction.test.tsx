@@ -185,15 +185,17 @@ test("managers see the evidence state before compliance and advanced controls", 
   try {
     const view = await mount(true);
     const evidenceState = await view.findByRole("heading", { name: "No evidence records yet" });
+    assert.equal(view.queryByRole("heading", { name: "Compliance exports" }), null);
+    assert.equal(view.queryByRole("heading", { name: "Project auditors" }), null);
+    assert.equal(view.queryByText("Verify an export"), null);
+
+    await userEvent.setup({ document }).click(view.getByRole("button", { name: "Evidence settings and delivery" }));
     const compliance = view.getByRole("heading", { name: "Compliance exports" });
     assert.ok(evidenceState.compareDocumentPosition(compliance) & 4);
     assert.ok(view.getByRole("link", { name: "Audit log" }));
     assert.ok(view.getByRole("link", { name: "Coverage history" }));
     assert.ok(await view.findByRole("heading", { name: "Project auditors" }));
     assert.ok(view.getByRole("button", { name: "Grant read and export" }));
-    assert.equal(view.queryByText("Verify an export"), null);
-
-    await userEvent.setup({ document }).click(view.getByRole("button", { name: "Retention, keys, and delivery" }));
     assert.ok(view.getByRole("heading", { name: "Retention policy" }));
     assert.ok(view.getByRole("heading", { name: "Trusted verification keys" }));
     assert.ok(view.getByRole("heading", { name: "Evidence integrations" }));
@@ -237,7 +239,7 @@ test("a packet reveals verification while manager-only exports and controls stay
     assert.ok(view.getByText("1 min 30 sec"));
     assert.ok(view.getByText("4 min"));
     assert.equal(view.queryByRole("heading", { name: "Compliance exports" }), null);
-    assert.equal(view.queryByRole("button", { name: "Retention, keys, and delivery" }), null);
+    assert.equal(view.queryByRole("button", { name: "Evidence settings and delivery" }), null);
   } finally {
     await act(async () => cleanup());
     restoreFetch();
@@ -265,8 +267,16 @@ test("packet viewers can create a fragment-only seven-day link and revoke it dir
     const view = await mount(false);
     await view.findByRole("heading", { name: "Decision packets" });
     const user = userEvent.setup({ document });
-    assert.ok(view.getByText("Anyone with the link can open this packet for 7 days. The secret is shown once."));
+    assert.equal(
+      view.queryByText("Anyone with the link can open this packet for 7 days. The secret is shown once."),
+      null,
+    );
     await user.click(view.getByRole("button", { name: "Share for 7 days" }));
+    const dialog = await view.findByRole("alertdialog", { name: "Create a 7-day shared link?" });
+    assert.ok(
+      dialog.textContent?.includes("Anyone with the link can open this packet for 7 days. The secret is shown once."),
+    );
+    await user.click(view.getByRole("button", { name: "Create link" }));
     const input = (await view.findByRole("textbox", { name: "Share link" })) as HTMLInputElement;
     const shareUrl = new URL(input.value);
     assert.equal(shareUrl.pathname, "/evidence/share/esh_1234567890123456789012");
