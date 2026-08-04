@@ -13,6 +13,12 @@ import { WorkspacePublicContentLink } from "~~/components/tokenless/navigation/W
 import { Card } from "~~/components/tokenless/ui/Card";
 import { ConfirmDialog } from "~~/components/tokenless/ui/ConfirmDialog";
 import {
+  billingStatusLabel,
+  ledgerSourceLabel,
+  reservationStatusLabel,
+  topupStatusLabel,
+} from "~~/components/tokenless/workspaceBillingPresentation";
+import {
   TOKENLESS_BILLING_PLANS,
   TOKENLESS_HOSTED_REVIEW_COPY,
   activeAgentLimitLabel,
@@ -132,10 +138,6 @@ function dateLabel(value: string | null, locale = "en") {
     : new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(
         date,
       );
-}
-
-function billingStatusLabel(status: string) {
-  return status.replaceAll("_", " ");
 }
 
 function billingUpgradeIntentMessage(billing: WorkspaceBillingSummary) {
@@ -885,7 +887,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                     <span
                       className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${billingWarning ? "bg-warning/10 text-warning" : "bg-base-content/[0.08] text-base-content/65"}`}
                     >
-                      {billingStatusLabel(billing.status)}
+                      {billingStatusLabel(billing.status, locale)}
                     </span>
                   ) : null}
                 </div>
@@ -1374,7 +1376,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                             className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-base-content/[0.035] px-3 py-2 text-xs"
                           >
                             <span>
-                              ${topup.amountUsd} · <span className="capitalize">{topup.state}</span>
+                              ${topup.amountUsd} · <span>{topupStatusLabel(topup.state, locale)}</span>
                               {topup.invoiceNumber ? ` · ${topup.invoiceNumber}` : ""}
                             </span>
                             {topup.hostedInvoiceUrl || topup.invoicePdfUrl ? (
@@ -1398,13 +1400,13 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                       <ul className="mt-3 space-y-2 text-xs text-base-content/60">
                         {topups.ledger.map(entry => (
                           <li className="flex justify-between gap-3" key={entry.entryId}>
-                            <span>{entry.source.replaceAll("_", " ")}</span>
+                            <span>{ledgerSourceLabel(entry.source, locale)}</span>
                             <span className="font-mono">{signedUsdc(entry.amountAtomic, locale)}</span>
                           </li>
                         ))}
                         {topups.reservations.map(reservation => (
                           <li className="flex justify-between gap-3" key={reservation.reservationId}>
-                            <span className="capitalize">{reservation.status} reservation</span>
+                            <span>{reservationStatusLabel(reservation.status, locale)}</span>
                             <span className="font-mono">-${usdc(reservation.amountAtomic, locale)}</span>
                           </li>
                         ))}
