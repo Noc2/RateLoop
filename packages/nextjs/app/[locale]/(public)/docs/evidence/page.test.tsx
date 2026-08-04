@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { translatePublicString } from "~~/components/docs/LocalizedPublicContent";
 
 const require = createRequire(import.meta.url);
 const { renderToStaticMarkup } = require("react-dom/server") as {
@@ -72,6 +73,12 @@ test("evidence docs explain exact artifacts, checks, mappings, and boundaries", 
   assert.match(html, /limits are part of the verification record, not an apology/i);
   assert.match(html, /no evidence export by itself makes anyone compliant/i);
   assert.match(html, /rateloop\.human-assurance\.evidence\.v4/i);
+  assert.match(html, /Complete synthetic example/i);
+  assert.match(html, /Download packet/i);
+  assert.match(html, /Download synthetic key pin/i);
+  assert.match(html, /ed25519:2d5798c16bafaed29bdbcca0/i);
+  assert.match(html, /only the trust anchor for the synthetic example/i);
+  assert.doesNotMatch(html, /Redacted packet example/i);
   assert.match(html, /Frozen scope.*Review context.*Judgment evidence.*Available references and limits/i);
   assert.match(html, /reviewer identities and raw or decryptable rationales are excluded/i);
   assert.match(html, /Commissioned paid-panel methodology/i);
@@ -129,6 +136,11 @@ test("machine docs mirror evidence boundaries and are linked from agent setup", 
   );
 
   assert.match(evidence, /rateloop\.human-assurance\.evidence\.v4/);
+  assert.match(evidence, /Complete synthetic example/i);
+  assert.match(evidence, /synthetic-evidence-v4\.json/);
+  assert.match(evidence, /synthetic-evidence-v4\.spki\.txt/);
+  assert.match(evidence, /ed25519:2d5798c16bafaed29bdbcca0/);
+  assert.doesNotMatch(evidence, /Redacted shape/i);
   assert.match(evidence, /Commissioned paid-panel methodology/i);
   assert.match(evidence, /not organic consumer feedback, a customer testimonial, an\s+endorsement/i);
   assert.match(evidence, /must not relabel paid reviewer feedback as unsolicited customer or consumer feedback/i);
@@ -173,4 +185,20 @@ test("machine docs mirror evidence boundaries and are linked from agent setup", 
   assert.match(connection, /"httpUrl": "https:\/\/rateloop-tokenless\.vercel\.app\/api\/agent\/v1\/mcp"/);
   assert.match(connection, /GitHub Copilot cloud agent and code review[\s\S]*cannot connect to a remote OAuth MCP/i);
   assert.match(connection, /should not be presented with an install link, client ID, redirect URI, or copied JSON/i);
+});
+
+test("the synthetic example has a German recipient path", () => {
+  assert.equal(
+    translatePublicString("Complete synthetic example", "de", "docs"),
+    "Vollständiges synthetisches Beispiel",
+  );
+  assert.equal(translatePublicString("Download packet", "de", "docs"), "Paket herunterladen");
+  assert.match(
+    translatePublicString(
+      "This pin is only the trust anchor for the synthetic example. It is not a RateLoop production signing key and does not appear in the hosted verification-key endpoint.",
+      "de",
+      "docs",
+    ),
+    /kein RateLoop-Produktionsschlüssel/u,
+  );
 });

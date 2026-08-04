@@ -114,32 +114,12 @@ export const COMPLIANCE_ROWS = assuranceComplianceMap.mappings.map(mapping => {
   };
 });
 
-const REDACTED_PACKET = `{
-  "payload": {
-    "schemaVersion": "rateloop.human-assurance.evidence.v4",
-    "tenantCommitment": "hmac-sha256:[redacted]",
-    "frozen": {
-      "runManifestHash": "sha256:…",
-      "suiteManifestHash": "sha256:…",
-      "policyHash": "sha256:…"
-    },
-    "reviewContext": {
-      "selectionTrigger": { "kind": "owner_required" },
-      "deliveryAuthority": { "mode": "workspace_authorized_member" },
-      "gate": { "type": "advisory" },
-      "reviewerQualifications": "[privacy-safe counts]",
-      "period": { "coverage": "[counts]", "responseSubmissionLatencyFromPeriodStartMs": "[summary]" }
-    },
-    "roots": { "caseRoot": "sha256:…", "responseRoot": "sha256:…" },
-    "aggregation": { "cases": "[privacy-safe counts]", "judgmentCoverage": "[counts]" },
-    "settlement": { "mode": "[recorded mode]" },
-    "chainEvidence": "[available source-derived references]",
-    "limitations": "[explicit non-claims and suppressed cells]"
-  },
-  "signing": { "algorithm": "Ed25519", "keyId": "ed25519:…" },
-  "packetDigest": "sha256:…",
-  "signature": "[base64url]"
-}`;
+const SYNTHETIC_PACKET_PATH = "/docs/examples/synthetic-evidence-v4.json";
+const SYNTHETIC_PUBLIC_KEY_PATH = "/docs/examples/synthetic-evidence-v4.spki.txt";
+const SYNTHETIC_KEY_ID = "ed25519:2d5798c16bafaed29bdbcca0";
+const SYNTHETIC_VERIFY_COMMAND = `yarn workspace @rateloop/nextjs evidence:verify public/docs/examples/synthetic-evidence-v4.json \\
+  --public-key public/docs/examples/synthetic-evidence-v4.spki.txt \\
+  --key-id ${SYNTHETIC_KEY_ID}`;
 
 export default function EvidencePage({ params }: { params?: PublicLocaleParams } = {}) {
   const locale = usePublicLocale(params);
@@ -231,6 +211,9 @@ export default function EvidencePage({ params }: { params?: PublicLocaleParams }
         </p>
 
         <h2 id="packet">What an evidence packet contains</h2>
+        <p>
+          Current schema: <code>rateloop.human-assurance.evidence.v4</code>
+        </p>
         <div className="not-prose my-8 grid gap-4 sm:grid-cols-2">
           {PACKET_FIELDS.map((field, index) => (
             <Card as="section" variant="marketing" key={field.title} className="rounded-2xl border-l-2 p-5 sm:p-6">
@@ -245,12 +228,31 @@ export default function EvidencePage({ params }: { params?: PublicLocaleParams }
           the frozen minimum aggregation size. Host-reported execution metadata remains marked as not independently
           verified.
         </p>
-        <details>
-          <summary>Redacted packet example</summary>
-          <pre>
-            <code>{REDACTED_PACKET}</code>
-          </pre>
-        </details>
+        <Card as="section" variant="marketing" className="not-prose my-8 rounded-2xl border-l-2 p-5 sm:p-6">
+          <h3 className="text-lg font-bold text-base-content">Complete synthetic example</h3>
+          <p className="mt-3 max-w-4xl text-sm leading-7 text-base-content/70">
+            An agent proposes an answer for release. Three invited reviewers check whether the answer is supported; two
+            prefer the candidate and one prefers the baseline, so the frozen rule passes. The owner records Go
+            separately after reading the result. The packet preserves the review result, its boundaries, and the inputs
+            needed to verify it.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <a
+              className="btn btn-sm border-base-content/15 bg-base-content/[0.05] text-base-content hover:bg-base-content/10"
+              download
+              href={SYNTHETIC_PACKET_PATH}
+            >
+              Download packet
+            </a>
+            <a
+              className="btn btn-sm border-base-content/15 bg-base-content/[0.05] text-base-content hover:bg-base-content/10"
+              download
+              href={SYNTHETIC_PUBLIC_KEY_PATH}
+            >
+              Download synthetic key pin
+            </a>
+          </div>
+        </Card>
 
         <h2 id="commissioned-paid-panels">Commissioned paid-panel methodology</h2>
         <p>
@@ -288,17 +290,20 @@ export default function EvidencePage({ params }: { params?: PublicLocaleParams }
         </p>
         <ol>
           <li>
-            <strong>Signature and key pin.</strong> Export the packet and obtain the expected key ID and public-key pin
-            from the cacheable, unauthenticated{" "}
-            <Link href="/api/evidence/trusted-keys">public verification-key endpoint</Link>. A reader who already has a
-            packet needs no RateLoop account to obtain the matching current or retired pin. Workspace members can also
-            download it from the key history in Results. Never treat the public key embedded in the same packet as its
-            own trust anchor. Then run:
+            <strong>Try the synthetic packet.</strong> From a clean checkout, the checked-in packet and its separate
+            synthetic key pin verify with:
             <pre>
-              <code>{`yarn workspace @rateloop/nextjs evidence:verify ./packet.json \\
-  --public-key ./evidence-public-key.txt \\
-  --key-id ed25519:…`}</code>
+              <code>{SYNTHETIC_VERIFY_COMMAND}</code>
             </pre>
+            This pin is only the trust anchor for the synthetic example. It is not a RateLoop production signing key and
+            does not appear in the hosted verification-key endpoint.
+          </li>
+          <li>
+            <strong>Verify your export.</strong> Obtain the expected key ID and public-key pin from the cacheable,
+            unauthenticated <Link href="/api/evidence/trusted-keys">public verification-key endpoint</Link>. A reader
+            who already has a packet needs no RateLoop account to obtain the matching current or retired pin. Workspace
+            members can also download it from the key history in Results. Never use the public key embedded in the
+            packet as its own trust anchor. Run the same command with your packet, pin, and key ID.
           </li>
           <li>
             <strong>Merkle roots and recomputation.</strong> The same command checks canonical packet hashing, the case

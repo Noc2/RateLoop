@@ -48,36 +48,17 @@ Schema: `rateloop.human-assurance.evidence.v4`
 Reviewer identities and raw or decryptable rationales are excluded. Host-reported execution metadata remains marked
 `independentlyVerified:false`; it does not establish that the reported model produced the output.
 
-Redacted shape:
+### Complete synthetic example
 
-```json
-{
-  "payload": {
-    "schemaVersion": "rateloop.human-assurance.evidence.v4",
-    "tenantCommitment": "hmac-sha256:[redacted]",
-    "frozen": {
-      "runManifestHash": "sha256:...",
-      "suiteManifestHash": "sha256:...",
-      "policyHash": "sha256:..."
-    },
-    "reviewContext": {
-      "selectionTrigger": { "kind": "owner_required" },
-      "deliveryAuthority": { "mode": "workspace_authorized_member" },
-      "gate": { "type": "advisory" },
-      "reviewerQualifications": "[privacy-safe counts]",
-      "period": { "coverage": "[counts]", "responseSubmissionLatencyFromPeriodStartMs": "[summary]" }
-    },
-    "roots": { "caseRoot": "sha256:...", "responseRoot": "sha256:..." },
-    "aggregation": { "cases": "[privacy-safe counts]", "judgmentCoverage": "[counts]" },
-    "settlement": { "mode": "[recorded mode]" },
-    "chainEvidence": "[available source-derived references]",
-    "limitations": "[explicit non-claims and suppressed cells]"
-  },
-  "signing": { "algorithm": "Ed25519", "keyId": "ed25519:..." },
-  "packetDigest": "sha256:...",
-  "signature": "[base64url]"
-}
-```
+An agent proposes an answer for release. Three invited reviewers check whether the answer is supported; two prefer the
+candidate and one prefers the baseline, so the frozen rule passes. The owner records Go separately after reading the
+result. The packet preserves the review result, its boundaries, and the recomputation inputs.
+
+- [Download the synthetic v4 packet](./examples/synthetic-evidence-v4.json)
+- [Download its standalone synthetic SPKI pin](./examples/synthetic-evidence-v4.spki.txt)
+
+The example contains no customer data. Its pin is only a trust anchor for the synthetic example; it is not a RateLoop
+production signing key and does not appear in `/api/evidence/trusted-keys`.
 
 ## Commissioned paid-panel methodology
 
@@ -99,12 +80,21 @@ and must not relabel paid reviewer feedback as unsolicited customer or consumer 
 
 ## How to check the evidence
 
-1. Export the packet and obtain the expected key ID and public-key pin from the cacheable, unauthenticated
+1. Verify the checked-in synthetic packet from a clean checkout:
+
+   ```sh
+   yarn workspace @rateloop/nextjs evidence:verify public/docs/examples/synthetic-evidence-v4.json \
+     --public-key public/docs/examples/synthetic-evidence-v4.spki.txt \
+     --key-id ed25519:2d5798c16bafaed29bdbcca0
+   ```
+
+   The command must return `"valid":true` with no errors.
+
+2. For an exported workspace packet, obtain the expected key ID and public-key pin from the cacheable, unauthenticated
    [`/api/evidence/trusted-keys`](/api/evidence/trusted-keys) endpoint. A reader who already has a packet needs no
    RateLoop account to obtain its matching current or retired pin. Workspace members can also download the pin from the
-   Evidence Center. Do not use the public key embedded in the same packet as its sole trust anchor.
-2. Check the Ed25519 signature, canonical packet digest, case and response roots, privacy-safe aggregation, and frozen
-   pass rule:
+   Evidence Center. Do not use the public key embedded in the same packet as its sole trust anchor. Check the Ed25519
+   signature, canonical packet digest, case and response roots, privacy-safe aggregation, and frozen pass rule:
 
    ```sh
    yarn workspace @rateloop/nextjs evidence:verify ./packet.json \

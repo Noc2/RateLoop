@@ -1,0 +1,405 @@
+{
+  "payload": {
+    "schemaVersion": "rateloop.human-assurance.evidence.v4",
+    "packetId": "haep_synthetic_example_v4",
+    "runId": "run_synthetic_release_check",
+    "tenantCommitment": "hmac-sha256:7878787878787878787878787878787878787878787878787878787878787878",
+    "generatedAt": "2026-08-04T08:00:00.000Z",
+    "privacy": {
+      "classification": "synthetic",
+      "minimumAggregationSize": 2,
+      "reviewerIdentitiesIncluded": false,
+      "rawRationaleIncluded": false,
+      "calibrationItemsIncludedInVerdict": false
+    },
+    "frozen": {
+      "runManifestHash": "sha256:bf4f35d1babc362e965179cb8077c12ab9237f798b1415346681cd41fc638430",
+      "runManifest": {
+        "schemaVersion": "human-assurance-run-orchestration-v1",
+        "kind": "run_orchestration_manifest",
+        "runId": "run_synthetic_release_check",
+        "projectId": "project_synthetic_example",
+        "suite": {
+          "suiteId": "suite_synthetic_release_check",
+          "version": 1,
+          "manifestHash": "sha256:9d18312bda34b8630db9622e41fdbfcc6a42be9f92b6e745a2fc0529d22d6943"
+        },
+        "rubric": {
+          "rubricId": "rubric_synthetic_release_check",
+          "version": 1,
+          "passRule": {
+            "metric": "candidate_preference_share_bps",
+            "operator": "gte",
+            "thresholdBps": 6000,
+            "minimumValidResponses": 2
+          }
+        },
+        "audiencePolicy": {
+          "policyId": "policy_synthetic_invited_reviewers",
+          "version": 1,
+          "manifestHash": "sha256:b52d3e9a8b26b9d3dac1ae8892f1497d22252314f2a756a7461ee49fc0dcdec9",
+          "admissionPolicyHash": "0x3434343434343434343434343434343434343434343434343434343434343434"
+        }
+      },
+      "suiteManifestHash": "sha256:9d18312bda34b8630db9622e41fdbfcc6a42be9f92b6e745a2fc0529d22d6943",
+      "suiteManifest": {
+        "kind": "suite_manifest",
+        "projectId": "project_synthetic_example",
+        "suiteId": "suite_synthetic_release_check",
+        "version": 1,
+        "rubric": {
+          "prompt": "Is the proposed answer supported by the supplied evidence?",
+          "failureTags": [
+            "unsupported_claim"
+          ],
+          "rationale": {
+            "mode": "optional"
+          },
+          "passRule": {
+            "metric": "candidate_preference_share_bps",
+            "operator": "gte",
+            "thresholdBps": 6000,
+            "minimumValidResponses": 2
+          }
+        },
+        "cases": [
+          {
+            "caseId": "case_synthetic_release_check"
+          }
+        ]
+      },
+      "policyHash": "sha256:b52d3e9a8b26b9d3dac1ae8892f1497d22252314f2a756a7461ee49fc0dcdec9",
+      "policy": {
+        "schemaVersion": "human-assurance-v1",
+        "policyId": "policy_synthetic_invited_reviewers",
+        "version": 1,
+        "reviewerSource": "customer_invited",
+        "compensation": "unpaid",
+        "selection": "customer_named",
+        "fallbacks": {
+          "allowed": false,
+          "sources": []
+        },
+        "requiredQualifications": [],
+        "assurance": {
+          "requirements": []
+        },
+        "buyerPrivacy": {
+          "visibleFields": [
+            "reviewer_source"
+          ],
+          "minimumAggregationSize": 2,
+          "suppressSmallCells": true
+        },
+        "legalEligibilityRequired": false
+      },
+      "admissionPolicyHashes": [
+        "0x3434343434343434343434343434343434343434343434343434343434343434"
+      ],
+      "admissionPolicies": [
+        {
+          "admissionPolicyHash": "0x3434343434343434343434343434343434343434343434343434343434343434",
+          "derivedFrom": {
+            "kind": "assurance_audience_policy",
+            "id": "policy_synthetic_invited_reviewers",
+            "version": 1,
+            "hash": "sha256:b52d3e9a8b26b9d3dac1ae8892f1497d22252314f2a756a7461ee49fc0dcdec9"
+          }
+        }
+      ]
+    },
+    "reviewContext": {
+      "selectionTrigger": {
+        "kind": "owner_required",
+        "source": "explicit_workspace_assurance_run",
+        "reasonCodes": [
+          "explicit_workspace_assurance_run"
+        ]
+      },
+      "deliveryAuthority": {
+        "mode": "workspace_authorized_member",
+        "callerSupplied": false
+      },
+      "gate": {
+        "type": "not_applicable",
+        "policyReference": null,
+        "stopGateEvidenceReference": null,
+        "statement": "This workspace-started assurance run was not bound to an agent output stop gate."
+      },
+      "versions": {
+        "runManifest": {
+          "hash": "sha256:bf4f35d1babc362e965179cb8077c12ab9237f798b1415346681cd41fc638430"
+        },
+        "suite": {
+          "id": "suite_synthetic_release_check",
+          "version": 1,
+          "hash": "sha256:9d18312bda34b8630db9622e41fdbfcc6a42be9f92b6e745a2fc0529d22d6943"
+        },
+        "audiencePolicy": {
+          "id": "policy_synthetic_invited_reviewers",
+          "version": 1,
+          "hash": "sha256:b52d3e9a8b26b9d3dac1ae8892f1497d22252314f2a756a7461ee49fc0dcdec9"
+        },
+        "admissionPolicies": [
+          {
+            "admissionPolicyHash": "0x3434343434343434343434343434343434343434343434343434343434343434",
+            "derivedFrom": {
+              "kind": "assurance_audience_policy",
+              "id": "policy_synthetic_invited_reviewers",
+              "version": 1,
+              "hash": "sha256:b52d3e9a8b26b9d3dac1ae8892f1497d22252314f2a756a7461ee49fc0dcdec9"
+            }
+          }
+        ],
+        "selectionPolicy": null,
+        "requestProfile": null
+      },
+      "reviewerQualifications": {
+        "taxonomy": "explicit_qualification_categories",
+        "orderedTiers": false,
+        "minimumAggregationSize": 2,
+        "categories": [],
+        "unqualified": {
+          "suppressed": false,
+          "reviewerCount": 3
+        }
+      },
+      "period": {
+        "startInclusive": "2026-08-04T07:55:00.000Z",
+        "endInclusive": "2026-08-04T08:00:00.000Z",
+        "durationMs": 300000,
+        "coverage": {
+          "caseCount": 1,
+          "targetExpectedJudgmentCount": 3,
+          "submittedJudgmentCount": 3,
+          "respondingReviewerCount": 3,
+          "targetReviewerCount": 3
+        },
+        "responseSubmissionLatencyFromPeriodStartMs": {
+          "count": 3,
+          "minimum": 60000,
+          "median": 120000,
+          "p95": 180000,
+          "maximum": 180000
+        }
+      }
+    },
+    "roots": {
+      "caseRoot": "sha256:6f69a0b384f382c26890ccb17f75214a528cbe39dac6c01582dd4078b91be797",
+      "responseRoot": "sha256:e8b18e8b558fe2c51e20bb60f276ad9e9b74fdcf32c49c5c935cc48ed456edf9"
+    },
+    "aggregation": {
+      "aggregationVersion": "rateloop.descriptive-case-quorum.v2",
+      "method": "descriptive_per_case",
+      "minimumAggregationSize": 2,
+      "reviewerCoverage": {
+        "targetReviewerCount": 3,
+        "assignedReviewerCount": 3,
+        "paidReviewerCount": 0,
+        "respondingReviewerCount": 3,
+        "completeJudgmentSetReviewerCount": 3,
+        "sourceSubpanels": [
+          {
+            "source": "customer_invited",
+            "targetReviewerCount": 3,
+            "assignedReviewerCount": 3,
+            "paidReviewerCount": 0,
+            "respondingReviewerCount": 3,
+            "completeJudgmentSetReviewerCount": 3
+          }
+        ]
+      },
+      "judgmentCoverage": {
+        "caseCount": 1,
+        "targetExpectedJudgmentCount": 3,
+        "assignedExpectedJudgmentCount": 3,
+        "submittedJudgmentCount": 3,
+        "validJudgmentCount": 3,
+        "invalidJudgmentCount": 0,
+        "pendingJudgmentCount": 0,
+        "missingTargetJudgmentCount": 0,
+        "missingAssignedJudgmentCount": 0
+      },
+      "passRule": {
+        "metric": "candidate_preference_share_bps",
+        "operator": "gte",
+        "thresholdBps": 6000,
+        "minimumValidResponses": 2
+      },
+      "cases": [
+        {
+          "caseId": "case_synthetic_release_check",
+          "targetReviewerCount": 3,
+          "assignedReviewerCount": 3,
+          "submittedJudgmentCount": 3,
+          "validReviewerCount": 3,
+          "invalidJudgmentCount": 0,
+          "pendingJudgmentCount": 0,
+          "missingTargetJudgmentCount": 0,
+          "missingAssignedJudgmentCount": 0,
+          "suppressed": false,
+          "quorum": {
+            "requiredValidReviewers": 2,
+            "met": true
+          },
+          "preference": {
+            "candidate": 2,
+            "baseline": 1,
+            "tie": 0,
+            "candidateShareBps": 6667,
+            "method": "descriptive_case_share"
+          },
+          "disagreement": {
+            "nonCandidateCount": 1,
+            "rateBps": 3333,
+            "method": "descriptive_case_share"
+          },
+          "outcome": "pass",
+          "sourceSubpanels": [
+            {
+              "source": "customer_invited",
+              "targetReviewerCount": 3,
+              "assignedReviewerCount": 3,
+              "submittedJudgmentCount": 3,
+              "validReviewerCount": 3,
+              "invalidJudgmentCount": 0,
+              "pendingJudgmentCount": 0,
+              "missingTargetJudgmentCount": 0,
+              "missingAssignedJudgmentCount": 0,
+              "suppressed": false,
+              "quorum": {
+                "requiredValidReviewers": 2,
+                "met": true
+              },
+              "preference": {
+                "candidate": 2,
+                "baseline": 1,
+                "tie": 0,
+                "candidateShareBps": 6667,
+                "method": "descriptive_case_share"
+              },
+              "disagreement": {
+                "nonCandidateCount": 1,
+                "rateBps": 3333,
+                "method": "descriptive_case_share"
+              },
+              "outcome": "pass"
+            }
+          ]
+        }
+      ],
+      "suite": {
+        "method": "all_cases_must_pass",
+        "evaluatedCaseCount": 1,
+        "passCaseCount": 1,
+        "failCaseCount": 0,
+        "insufficientCaseCount": 0,
+        "outcome": "pass"
+      }
+    },
+    "calibration": {
+      "itemCount": 0,
+      "statusDisclosedOnlyInAggregate": true
+    },
+    "overrideDecisions": {
+      "atGeneration": {
+        "go": 0,
+        "revise": 0,
+        "stop": 0,
+        "total": 0
+      },
+      "recordedSeparately": true
+    },
+    "failureTagCounts": [],
+    "rationaleDigests": [],
+    "settlement": {
+      "mode": "no_onchain_settlement_unpaid_invited",
+      "statement": "This invited panel was unpaid; there is no on-chain settlement for this evidence packet.",
+      "links": []
+    },
+    "chainEvidence": [
+      {
+        "caseId": "case_synthetic_release_check",
+        "contentId": "0x1212121212121212121212121212121212121212121212121212121212121212",
+        "admissionPolicyHash": "0x3434343434343434343434343434343434343434343434343434343434343434",
+        "roundId": null,
+        "roundStatus": null,
+        "execution": null,
+        "indexedEvents": []
+      }
+    ],
+    "limitations": [
+      {
+        "code": "descriptive_case_results",
+        "message": "Preference shares are descriptive per-case reviewer results; judgments across cases are not treated as independent samples and no confidence interval is claimed."
+      },
+      {
+        "code": "rationale_minimized",
+        "message": "The export contains rationale digests only; raw or decryptable rationale is excluded."
+      },
+      {
+        "code": "decision_separate",
+        "message": "The measured packet is separate from the client's go, revise, or stop sign-off."
+      },
+      {
+        "code": "no_onchain_settlement",
+        "message": "This invited panel was unpaid; there is no on-chain settlement for this evidence packet."
+      }
+    ],
+    "recomputation": {
+      "caseLeaves": [
+        "sha256:6f69a0b384f382c26890ccb17f75214a528cbe39dac6c01582dd4078b91be797"
+      ],
+      "responseLeaves": [
+        "sha256:0d468613eb458017aa4e70a69c63939f05a48074748c2cc38ea60907e00aae3d",
+        "sha256:1fa280f82bca5ff0dfbf6737a713ed966dd6bd9fdb0d92b9370a228b265f0582",
+        "sha256:3ef49e654afd68b030f86b8513358178bd0d5463adf61ff6540672d9223e9ce5"
+      ],
+      "reviewerSources": [
+        {
+          "source": "customer_invited",
+          "targetReviewerCount": 3,
+          "assignedReviewerCount": 3,
+          "paidReviewerCount": 0,
+          "respondingReviewerCount": 3,
+          "completeJudgmentSetReviewerCount": 3
+        }
+      ],
+      "cases": [
+        {
+          "caseId": "case_synthetic_release_check",
+          "overall": {
+            "targetReviewerCount": 3,
+            "assignedReviewerCount": 3,
+            "validReviewerCount": 3,
+            "invalidJudgmentCount": 0,
+            "pendingJudgmentCount": 0,
+            "candidate": 2,
+            "baseline": 1,
+            "tie": 0
+          },
+          "sourceCounts": [
+            {
+              "source": "customer_invited",
+              "targetReviewerCount": 3,
+              "assignedReviewerCount": 3,
+              "validReviewerCount": 3,
+              "invalidJudgmentCount": 0,
+              "pendingJudgmentCount": 0,
+              "candidate": 2,
+              "baseline": 1,
+              "tie": 0
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "signing": {
+    "algorithm": "Ed25519",
+    "keyId": "ed25519:2d5798c16bafaed29bdbcca0",
+    "publicKey": "MCowBQYDK2VwAyEAeZdE5q7ZtF-uNWJdmHSkfhpyAYdbq2Xr8xI4KNqBBNE"
+  },
+  "packetDigest": "sha256:670e62ddc14267bdf19b80ab57e90b82c526f8019675bd04b7911dfed91dff23",
+  "signature": "Umn1HVpQ8_QW2PGVnE2neIphY7SfSj879bP1m6Ib_4tAl3Ds9KVyWyoZkuy6v51cSVPx5c-iM775W0dKf5PLBg"
+}

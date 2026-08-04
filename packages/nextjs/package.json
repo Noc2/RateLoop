@@ -27,6 +27,7 @@
     "e2e:hosted:core": "playwright test --config playwright.hosted.core.config.ts",
     "e2e:hosted:smoke": "playwright test --config playwright.hosted.config.ts",
     "e2e:prepare": "node --import ../../scripts/register-node-test-env.mjs --import tsx e2e/scripts/prepare.ts",
+    "evidence:example:generate": "node scripts/generate-synthetic-evidence-example.mjs",
     "evidence:verify": "node scripts/verify-assurance-evidence.mjs",
     "attestation:verify": "node scripts/verify-assurance-attestation.mjs",
     "oscal:check": "node scripts/generate-oscal-component-definition.mjs --check",
