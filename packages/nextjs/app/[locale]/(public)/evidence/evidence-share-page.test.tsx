@@ -25,7 +25,7 @@ test("the public share page is dynamic, non-indexable, and delegates fragment re
       })}
     </EnglishAgentTestProviders>,
   );
-  assert.match(html, /This link unlocks one packet/u);
+  assert.match(html, /This page opens one shared packet/u);
   assert.match(html, /Opening evidence packet/u);
   assert.doesNotMatch(html, /bearerSecret|token_hash|workspaceId|projectId/u);
 });

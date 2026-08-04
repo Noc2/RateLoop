@@ -26,14 +26,9 @@ export default async function EvidenceSharePage({ params }: { params: Promise<{ 
   return (
     <LocalizedPublicContent locale={locale} section="docs">
       <article className="mx-auto w-full max-w-5xl px-5 py-12 sm:py-16">
-        <p className="font-mono text-xs font-semibold uppercase tracking-[0.18em] text-[var(--rateloop-blue)]">
-          Shared evidence
-        </p>
-        <h1 className="mt-3 max-w-3xl text-4xl font-bold tracking-tight text-base-content sm:text-5xl">
-          Verify this evidence packet
-        </h1>
+        <h1 className="max-w-3xl text-4xl font-bold tracking-tight text-base-content sm:text-5xl">Evidence packet</h1>
         <p className="mt-5 max-w-3xl text-lg leading-8 text-base-content/65">
-          This link unlocks one packet. Verification runs in your browser against RateLoop&apos;s public signing keys.
+          This page opens one shared packet and verifies it in your browser against RateLoop&apos;s public signing keys.
         </p>
         <EvidenceShareViewer grantId={grantId} />
       </article>

@@ -1,6 +1,6 @@
 "use client";
 
-import { type ChangeEvent, type FormEvent, useState } from "react";
+import { type ChangeEvent, type FormEvent, useEffect, useState } from "react";
 import { LocalizedSharedContent } from "~~/components/tokenless/LocalizedSharedContent";
 import { Field, TextareaField } from "~~/components/tokenless/forms/Field";
 import {
@@ -47,12 +47,25 @@ function CheckResult({ check }: { check: PublicEvidenceVerificationResult["check
   );
 }
 
-export function PublicEvidenceVerifier({ initialPacketJson = "" }: { initialPacketJson?: string }) {
+export function PublicEvidenceVerifier({
+  initialPacketJson = "",
+  initialVerificationResult = null,
+}: {
+  initialPacketJson?: string;
+  initialVerificationResult?: PublicEvidenceVerificationResult | null;
+}) {
   const [packetJson, setPacketJson] = useState(initialPacketJson);
   const [sourceName, setSourceName] = useState<string | null>(initialPacketJson ? "Shared packet" : null);
-  const [result, setResult] = useState<PublicEvidenceVerificationResult | null>(null);
+  const [result, setResult] = useState<PublicEvidenceVerificationResult | null>(initialVerificationResult);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setPacketJson(initialPacketJson);
+    setSourceName(initialPacketJson ? "Shared packet" : null);
+    setResult(initialVerificationResult);
+    setError(null);
+  }, [initialPacketJson, initialVerificationResult]);
 
   function changePacket(value: string, name: string | null = null) {
     setPacketJson(value);
