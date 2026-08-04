@@ -103,16 +103,6 @@ export function EvidenceShareViewer({ grantId }: { grantId: string }) {
     );
   }
 
-  if (packetJson === null) {
-    return (
-      <LocalizedSharedContent>
-        <p className="mt-6 text-sm text-base-content/60" role="status">
-          Opening evidence packet…
-        </p>
-      </LocalizedSharedContent>
-    );
-  }
-
   const summary = verification?.valid ? publicEvidenceSummary(packet) : null;
   const technicalDetails = (
     <details className="mt-6 rounded-2xl border border-base-content/10 bg-base-content/[0.025] p-4 sm:p-5">
