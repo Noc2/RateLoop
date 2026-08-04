@@ -286,9 +286,11 @@ and long policy descriptions make it feel larger than the task.
 
 ### P0. Make a shared packet readable and automatically verified
 
-**Implemented:** a redeemed current-v4 packet verifies automatically, presents the bounded
-recipient summary before technical JSON, retries a trusted-key outage, and preserves the same
-generic unavailable response for invalid, wrong-secret, expired, and revoked grants.
+**Implemented within the current privacy boundary:** a redeemed current-v4 packet verifies
+automatically, presents its question, outcome, time, response counts, and limitations before
+technical JSON, retries a trusted-key outage, and preserves the same generic unavailable response
+for invalid, wrong-secret, expired, and revoked grants. Bearer shares intentionally omit tenant,
+project, run, and owner identity; those remain available only in the authenticated owner view.
 
 **Why now:** the public share is the prospect's clearest proof of value, but it currently opens
 as a raw packet verifier that requires a second manual verification action.
@@ -297,8 +299,9 @@ as a raw packet verifier that requires a second manual verification action.
 
 - In `EvidenceShareViewer.tsx` and `PublicEvidenceVerifier.tsx`, automatically verify a redeemed
   current-schema packet and place a clear verified/failed state at the top.
-- Before raw JSON, show a concise recipient view: what was reviewed, project or run context,
-  review outcome, generated time, evidence scope, and material privacy or sample limitations.
+- Before raw JSON, show a concise recipient view: what was reviewed, review outcome, generated
+  time, response coverage, and material privacy or sample limitations. Do not add project or run
+  context to a bearer share until the owner can select a purpose-built safe display label.
 - Put canonical JSON, digest values, signature metadata, and individual technical checks in a
   disclosure. Keep the manual upload/paste verifier available as a separate tool.
 - Be exact about the binding: the evidence packet is signed; the owner decision has its own
@@ -321,9 +324,10 @@ as a raw packet verifier that requires a second manual verification action.
 
 ### P1. Reorder the evidence page around proof
 
-**Implemented early:** packets and current evidence state precede administrative exports;
-auditor, retention, key, and delivery controls now share one permission-bound “Evidence settings
-and delivery” disclosure. A seven-day bearer-link warning appears once, in an accessible
+**Implemented:** packets and current evidence state precede administrative exports; the packet
+heading and actions use a compact section without a redundant card; repeated point-in-time badges
+are gone; auditor, retention, key, and delivery controls share one permission-bound “Evidence
+settings and delivery” disclosure. A seven-day bearer-link warning appears once, in an accessible
 confirmation at creation.
 
 **Why now:** the evidence subsystem is a differentiator, but its current breadth can make the
@@ -354,9 +358,10 @@ page read like administration software.
 ### P0. Remove dead or misleading commercial paths
 
 **Implemented with checkout deliberately disabled:** unenforced decision allowances and stale
-usage framing were removed from visible pricing. Pilot requests resolve through the configured
-safe HTTPS booking destination with an email fallback. Environment configuration still has to
-be confirmed during the hosted release; self-serve checkout must remain disabled.
+usage framing were removed from visible pricing. The product supports a configured safe HTTPS
+booking destination, but the live tokenless environment currently uses the explicit email
+fallback. Selecting and configuring a booking destination remains an operator task; self-serve
+checkout must remain disabled.
 
 **Why now:** a prospect should never discover that a public promise has no working operating
 path.
@@ -415,9 +420,11 @@ pilot-booking path is enough for initial outreach.
 
 ### P0. Make the current evidence story self-explanatory
 
-**Implemented:** the public guide includes a fully synthetic current-v4 packet, pinned SPKI key,
-and one offline verification command. Generation and verification tests keep the sample bound to
-the production verifier and English/German public rendering.
+**Implemented for packet verification:** the public guide includes a fully synthetic current-v4
+packet, pinned SPKI key, a concrete synthetic review scenario, and one offline verification
+command. Generation and verification tests keep the sample bound to the production verifier and
+English/German public rendering. The owner decision is described as a separate packet-bound
+record; the download is intentionally not presented as a combined signed decision artifact.
 
 **Why now:** this produces sales material by improving the product rather than creating a slide
 deck that overstates it.
@@ -426,8 +433,9 @@ deck that overstates it.
 
 - Replace the non-parseable redacted shape with a downloadable, fully synthetic current-v4 packet
   and a pinned synthetic public key.
-- Add one concise worked example showing: agent output, review question, independent result,
-  owner decision, packet, and offline verification. Reuse an existing synthetic E2E fixture.
+- Keep the concise worked example explicit about the synthetic agent output, review question,
+  independent result, separate owner decision, packet, and offline verification. Do not imply
+  that the packet signature also signs the owner decision.
 - On a completed result, offer a direct “Open evidence” action. Do not add a second explanation
   of what evidence is.
 - Give the public evidence page one download-and-verify command that works against the checked-in
@@ -452,6 +460,10 @@ verification, wrong secret, revocation, and cleanup. Ponder and keeper preflight
 bound to the active deployment artifact. The synthetic-account and cleanup procedure lives in
 the hosted-auth README and the internal
 [pre-outreach operations record](tokenless-pre-outreach-operations-2026-08.md).
+
+This release runner proves the persisted invited-private, unpaid workflow. Base Sepolia, Ponder,
+and keeper are checked for exact deployment identity and health, but the hosted core does not
+exercise the separately gated paid public commit, reveal, claim, or recovery lifecycle.
 
 **Why now:** test infrastructure already exists. The gain is repeatability and confidence, not a
 new automation framework.
