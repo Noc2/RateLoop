@@ -25,6 +25,7 @@
     "e2e:hosted:guards:test": "node --test e2e/hosted/*.test.mjs",
     "e2e:hosted:unit": "node --import tsx --test e2e/hosted-auth/*.test.ts e2e/hosted/hostedMcp.test.ts && node --test e2e/hosted/*.test.mjs",
     "e2e:hosted:core": "playwright test --config playwright.hosted.core.config.ts",
+    "e2e:hosted:release": "node e2e/hosted/run-release.mjs",
     "e2e:hosted:smoke": "playwright test --config playwright.hosted.config.ts",
     "e2e:prepare": "node --import ../../scripts/register-node-test-env.mjs --import tsx e2e/scripts/prepare.ts",
     "evidence:example:generate": "node scripts/generate-synthetic-evidence-example.mjs",

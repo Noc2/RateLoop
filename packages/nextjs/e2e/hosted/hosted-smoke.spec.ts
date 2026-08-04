@@ -1,11 +1,82 @@
 import { hostedE2eTarget } from "../../config/hostedE2eTarget";
-import { expect, test } from "@playwright/test";
+import { type Browser, expect, test } from "@playwright/test";
 
 const target = hostedE2eTarget();
 const TOKENLESS_PROJECT = {
   id: "prj_H6C2pfWKEAupFroHbLfzhquaNCLm",
   name: "rateloop-tokenless",
 } as const;
+
+const THEME_VIEWPORTS = [
+  {
+    colorScheme: "light",
+    kind: "desktop",
+    shellBackground: "rgb(255, 255, 255)",
+    viewport: { height: 900, width: 1440 },
+  },
+  { colorScheme: "dark", kind: "desktop", shellBackground: "rgb(10, 10, 10)", viewport: { height: 900, width: 1440 } },
+  {
+    colorScheme: "light",
+    kind: "mobile",
+    shellBackground: "rgb(255, 255, 255)",
+    viewport: { height: 844, width: 390 },
+  },
+  { colorScheme: "dark", kind: "mobile", shellBackground: "rgb(10, 10, 10)", viewport: { height: 844, width: 390 } },
+] as const;
+
+async function checkHostedTheme(browser: Browser, expected: (typeof THEME_VIEWPORTS)[number]) {
+  const context = await browser.newContext({
+    baseURL: target.baseURL,
+    colorScheme: expected.colorScheme,
+    viewport: expected.viewport,
+  });
+  const page = await context.newPage();
+  const browserErrors: string[] = [];
+  const serverFailures: string[] = [];
+  page.on("pageerror", error => browserErrors.push(error.message));
+  page.on("console", message => {
+    if (message.type() === "error") browserErrors.push(message.text());
+  });
+  page.on("response", response => {
+    if (new URL(response.url()).origin === target.baseURL && response.status() >= 500) {
+      serverFailures.push(`${response.status()} ${response.url()}`);
+    }
+  });
+
+  try {
+    const response = await page.goto("/human/review", { waitUntil: "domcontentloaded" });
+    expect(response?.status(), `${expected.kind} ${expected.colorScheme}`).toBeLessThan(500);
+    await expect(page.locator("html")).toHaveAttribute("data-theme", expected.colorScheme);
+    await expect(page.locator("main")).toBeVisible();
+
+    const shellBackground = await page
+      .locator("#main-content")
+      .evaluate(element => getComputedStyle(element.parentElement!).backgroundColor);
+    expect(shellBackground).toBe(expected.shellBackground);
+
+    if (expected.kind === "desktop") {
+      await expect(page.locator("[data-rateloop-rail]")).toHaveCSS("background-color", "rgb(5, 5, 5)");
+    } else {
+      const menuDetails = page.locator("header details");
+      const menu = menuDetails.locator("nav.dropdown-content");
+      await menuDetails.locator("summary").click();
+      await expect(menu).toBeVisible();
+      const [headerBackground, menuBackground] = await Promise.all([
+        page.locator("header").evaluate(element => getComputedStyle(element).backgroundColor),
+        menu.evaluate(element => getComputedStyle(element).backgroundColor),
+      ]);
+      expect({ headerBackground, menuBackground }).toEqual({
+        headerBackground: expected.shellBackground,
+        menuBackground: expected.shellBackground,
+      });
+    }
+
+    expect(serverFailures).toEqual([]);
+    expect(browserErrors).toEqual([]);
+  } finally {
+    await context.close();
+  }
+}
 
 test("release identity matches the intended tokenless deployment", async ({ request }) => {
   const response = await request.get("/api/release", { failOnStatusCode: false });
@@ -47,6 +118,10 @@ test("public tokenless journeys render read-only without browser or server failu
   await expect(page.getByRole("heading", { name: "Connect Your Agent Host" })).toBeVisible();
   expect(serverFailures).toEqual([]);
   expect(browserErrors).toEqual([]);
+});
+
+test("the hosted shell keeps light and dark backgrounds aligned on desktop and mobile", async ({ browser }) => {
+  for (const expected of THEME_VIEWPORTS) await checkHostedTheme(browser, expected);
 });
 
 test("critical agent and maintenance server modules load before authorization", async ({ request }) => {

@@ -60,3 +60,37 @@ All three authenticated states stay only in their in-memory browser contexts.
 `cleanup()` signs out each established RateLoop session and closes all
 contexts. Never print the returned OTP, receiving API key, mailbox values, or
 browser state.
+
+## Release-run ownership and cleanup
+
+`e2e/hosted/core-journey.spec.ts` is the only hosted release test allowed to
+create review responses. It uses the three dedicated synthetic identities
+above, creates a new isolated workspace for each run, and records its random
+run suffix in the workspace name so an interrupted run can be identified.
+Smoke tests are read-only and must never reuse these accounts to mutate hosted
+state.
+
+The core journey disconnects its agent integration, requests workspace
+deletion, signs every account out, and closes all browser contexts from a
+`finally` block. Workspace deletion is asynchronous; evidence integrity and
+audit records can remain for their configured retention period even after the
+workspace is no longer active. This is expected retention, not a reusable test
+fixture. Runtime fixtures must remain disabled in the hosted environment.
+
+If cleanup reports a failure, find the workspace whose name starts with
+`Hosted E2E` and the run suffix from the safe Playwright result attachment,
+confirm that no concurrent release run is active, then use the normal workspace
+deletion control. Do not delete records directly from Postgres. Dedicated
+mailboxes may be reused only after the previous run has signed out or its
+sessions have expired.
+
+Run the full guarded release journey from the repository checkout with:
+
+```sh
+yarn next:e2e:hosted:release
+```
+
+The command refuses any branch other than `tokenless`, requires
+`E2E_EXPECTED_GIT_SHA` to match the checkout, then runs hosted preflight,
+read-only smoke, and the single-worker mutating core journey in order. It stops
+at the first failed boundary.

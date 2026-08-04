@@ -3,7 +3,7 @@ import { verifyAuditExport } from "../../scripts/audit-export-core.mjs";
 import type { HostedAuthRole } from "../hosted-auth/config";
 import { HostedAuthHarness } from "../hosted-auth/harness";
 import { authorizeHostedMcpClient, sha256Commitment } from "./hostedMcp";
-import { type BrowserContext, type Page, expect, test } from "@playwright/test";
+import { type Browser, type BrowserContext, type Page, expect, test } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
 type JsonObject = Record<string, unknown>;
@@ -47,7 +47,45 @@ async function browserJson(
   if (!statuses.includes(response.status())) {
     throw new Error(`${method} ${path} returned HTTP ${response.status()}.`);
   }
+  if (response.status() === 204) return {};
   return object(await response.json(), `${method} ${path}`);
+}
+
+async function withSignedOutPage<T>(browser: Browser, callback: (page: Page) => Promise<T>) {
+  const context = await browser.newContext({
+    baseURL: target.baseURL,
+    colorScheme: "dark",
+    viewport: { height: 900, width: 1440 },
+  });
+  try {
+    return await callback(await context.newPage());
+  } finally {
+    await context.close();
+  }
+}
+
+function evidenceShareDestination(raw: string, grantId: string) {
+  const destination = new URL(raw);
+  const secret = destination.hash.startsWith("#") ? destination.hash.slice(1) : "";
+  if (
+    destination.origin !== target.baseURL ||
+    destination.pathname !== `/evidence/share/${encodeURIComponent(grantId)}` ||
+    destination.search ||
+    !/^[A-Za-z0-9_-]{43}$/u.test(secret)
+  ) {
+    throw new Error("Evidence sharing left the isolated tokenless deployment or returned an invalid secret.");
+  }
+  return { destination, secret };
+}
+
+async function expectUnavailableEvidenceShare(browser: Browser, destination: URL) {
+  return await withSignedOutPage(browser, async page => {
+    const response = await page.goto(destination.href, { waitUntil: "domcontentloaded" });
+    expect(response?.status()).toBeLessThan(500);
+    const alert = page.getByRole("alert");
+    await expect(alert).toHaveText("This evidence share is unavailable. Ask the sender for a new link.");
+    return (await alert.textContent())?.trim() ?? "";
+  });
 }
 
 async function acceptReviewerInvitation(page: Page, destinationUrl: string) {
@@ -100,7 +138,7 @@ async function poll<T>(read: () => Promise<T | null>, attempts = 30): Promise<T>
 test("@hosted-core completes a real OAuth, three-account, two-reviewer private journey", async ({
   browser,
   request,
-}) => {
+}, testInfo) => {
   test.setTimeout(15 * 60_000);
   expect(process.env.E2E_ALLOW_HOSTED_MUTATIONS).toBe("true");
 
@@ -409,6 +447,79 @@ test("@hosted-core completes a real OAuth, three-account, two-reviewer private j
       compensation: "unpaid",
       validResponses: 2,
       distinctReviewers: 2,
+    });
+    const completedRunId = string(completedRun.runId, "Completed run ID");
+
+    const evidencePath = `/api/account/workspaces/${encodeURIComponent(
+      workspaceId,
+    )}/assurance/runs/${encodeURIComponent(completedRunId)}/evidence`;
+    const evidencePacket = await browserJson(owner, "POST", evidencePath, {
+      body: {},
+      statuses: [201],
+    });
+    const evidencePayload = object(evidencePacket.payload, "Evidence payload");
+    expect(evidencePayload).toMatchObject({
+      schemaVersion: "rateloop.human-assurance.evidence.v4",
+      runId: completedRunId,
+    });
+    const evidencePacketDigest = string(evidencePacket.packetDigest, "Evidence packet digest");
+
+    const clientDecision = await browserJson(owner, "POST", `${evidencePath}/decision`, {
+      body: {
+        decision: "go",
+        note: "Hosted release verification accepted this bounded private-review result.",
+      },
+      statuses: [201],
+    });
+    expect(clientDecision).toMatchObject({
+      decision: "go",
+      evidencePacketDigest,
+      runId: completedRunId,
+    });
+
+    const createdShare = await browserJson(owner, "POST", `${evidencePath}/shares`, {
+      body: { expiresAt: new Date(Date.now() + 10 * 60_000).toISOString() },
+      statuses: [201],
+    });
+    const share = object(createdShare.share, "Evidence share");
+    const grantId = string(share.grantId, "Evidence share grant ID");
+    const shareUrl = string(createdShare.shareUrl, "Evidence share URL");
+    const { destination: validShareDestination, secret } = evidenceShareDestination(shareUrl, grantId);
+
+    await withSignedOutPage(browser, async page => {
+      const response = await page.goto(validShareDestination.href, { waitUntil: "domcontentloaded" });
+      expect(response?.status()).toBeLessThan(500);
+      await expect(page.getByText("Packet verified", { exact: true }).first()).toBeVisible();
+      await expect(page.getByText("Review outcome", { exact: true })).toBeVisible();
+      await expect(page.getByText("Pass", { exact: true })).toBeVisible();
+      expect(new URL(page.url()).hash).toBe("");
+    });
+
+    const wrongSecretDestination = new URL(validShareDestination);
+    wrongSecretDestination.hash = `${secret[0] === "A" ? "B" : "A"}${"A".repeat(secret.length - 1)}`;
+    const wrongSecretMessage = await expectUnavailableEvidenceShare(browser, wrongSecretDestination);
+
+    await browserJson(owner, "DELETE", `${evidencePath}/shares/${encodeURIComponent(grantId)}`, {
+      statuses: [204],
+    });
+    const revokedMessage = await expectUnavailableEvidenceShare(browser, validShareDestination);
+    expect(revokedMessage).toBe(wrongSecretMessage);
+
+    await testInfo.attach("hosted-core-result.json", {
+      body: JSON.stringify(
+        {
+          evidencePacketDigest,
+          expectedGitSha: target.expectedGitSha,
+          reviewOutcome: "positive",
+          runId: completedRunId,
+          state: "completed",
+          target: target.baseURL,
+          workspaceName,
+        },
+        null,
+        2,
+      ),
+      contentType: "application/json",
     });
 
     const evidencePage = await owner.newPage();

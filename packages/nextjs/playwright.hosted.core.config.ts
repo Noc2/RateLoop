@@ -13,6 +13,7 @@ export default defineConfig({
   timeout: 15 * 60_000,
   expect: { timeout: 30_000 },
   reporter: process.env.CI ? "github" : "list",
+  outputDir: "./hosted-test-results",
   projects: [
     {
       name: "hosted-core-desktop-chromium",
