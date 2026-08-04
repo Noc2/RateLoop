@@ -2,7 +2,7 @@
 
 **Revised:** 4 August 2026
 
-**Code baseline:** `c3d9245ce9a7` on `tokenless`
+**Implementation baseline:** product changes through `fb17df073` on `tokenless`; hosted release proof still pending
 
 **Status:** product and commercial research; not a release claim, legal opinion, or change to the design of record
 
@@ -188,6 +188,10 @@ provider or integration into the sprint.
 
 ### P0. Simplify the decision surface
 
+**Implemented:** unavailable signal placeholders, time-since-evidence, and prior-choice anchoring
+were removed. Focused rendering and interaction tests bind the remaining warnings and the
+unselected go/revise/stop choice.
+
 **Why now:** the result and owner-decision page is the moment where RateLoop must feel more
 useful than a survey or annotation queue.
 
@@ -216,6 +220,10 @@ useful than a survey or annotation queue.
 
 ### P0. Simplify the reviewer path
 
+**Implemented:** paid tasks now state guaranteed compensation once and no longer send an
+already-eligible reviewer through eligibility setup. Existing recovery and material payment
+warnings remain.
+
 **Why now:** invited review is the part most likely to be shared with someone who has never seen
 RateLoop.
 
@@ -238,6 +246,10 @@ RateLoop.
 **Effort:** 1–2 days.
 
 ### P0. Make setup and first value one path, not a tour of the data model
+
+**Implemented:** the public primary action is agent connection, repeated editor/routing copy was
+removed, adaptive thresholds moved into accessible help, setup ends at the connected agent's
+first review action, and true empty states direct the owner to first value.
 
 **Why now:** the setup wizard already stages the workflow correctly, but several nested headings
 and long policy descriptions make it feel larger than the task.
@@ -274,6 +286,10 @@ and long policy descriptions make it feel larger than the task.
 
 ### P0. Make a shared packet readable and automatically verified
 
+**Implemented:** a redeemed current-v4 packet verifies automatically, presents the bounded
+recipient summary before technical JSON, retries a trusted-key outage, and preserves the same
+generic unavailable response for invalid, wrong-secret, expired, and revoked grants.
+
 **Why now:** the public share is the prospect's clearest proof of value, but it currently opens
 as a raw packet verifier that requires a second manual verification action.
 
@@ -305,6 +321,11 @@ as a raw packet verifier that requires a second manual verification action.
 
 ### P1. Reorder the evidence page around proof
 
+**Implemented early:** packets and current evidence state precede administrative exports;
+auditor, retention, key, and delivery controls now share one permission-bound “Evidence settings
+and delivery” disclosure. A seven-day bearer-link warning appears once, in an accessible
+confirmation at creation.
+
 **Why now:** the evidence subsystem is a differentiator, but its current breadth can make the
 page read like administration software.
 
@@ -331,6 +352,11 @@ page read like administration software.
 **Effort:** 2–3 days.
 
 ### P0. Remove dead or misleading commercial paths
+
+**Implemented with checkout deliberately disabled:** unenforced decision allowances and stale
+usage framing were removed from visible pricing. Pilot requests resolve through the configured
+safe HTTPS booking destination with an email fallback. Environment configuration still has to
+be confirmed during the hosted release; self-serve checkout must remain disabled.
 
 **Why now:** a prospect should never discover that a public promise has no working operating
 path.
@@ -363,6 +389,10 @@ path.
 
 ### P1. Add the missing operator boundary only if checkout will be used
 
+**Deferred:** checkout is not part of the pre-outreach path, so no operator-verification command
+or Stripe lifecycle claim is being added now. Reopen this section only before enabling
+`TOKENLESS_SUBSCRIPTIONS_ENABLED`.
+
 **Why later:** a supported operator action is required before self-serve purchase, but a working
 pilot-booking path is enough for initial outreach.
 
@@ -384,6 +414,10 @@ pilot-booking path is enough for initial outreach.
 **Effort:** 1–2 days once staging credentials and the intended operating procedure are ready.
 
 ### P0. Make the current evidence story self-explanatory
+
+**Implemented:** the public guide includes a fully synthetic current-v4 packet, pinned SPKI key,
+and one offline verification command. Generation and verification tests keep the sample bound to
+the production verifier and English/German public rendering.
 
 **Why now:** this produces sales material by improving the product rather than creating a slide
 deck that overstates it.
@@ -410,6 +444,14 @@ deck that overstates it.
 **Effort:** 1–2 days.
 
 ### P0. Turn existing hosted tests into a release checklist
+
+**Implemented in code; live execution pending:** `next:e2e:hosted:release` now enforces the exact
+tokenless branch/SHA and runs preflight, read-only theme/device smoke, then the single-worker
+mutating journey. The core journey covers packet, owner decision, share, signed-out automatic
+verification, wrong secret, revocation, and cleanup. Ponder and keeper preflight identities are
+bound to the active deployment artifact. The synthetic-account and cleanup procedure lives in
+the hosted-auth README and the internal
+[pre-outreach operations record](tokenless-pre-outreach-operations-2026-08.md).
 
 **Why now:** test infrastructure already exists. The gain is repeatability and confidence, not a
 new automation framework.
@@ -447,6 +489,13 @@ new automation framework.
 
 ### P1. Verify, do not expand, enterprise readiness
 
+**Partially implemented:** project-auditor permissions and evidence controls retain focused
+tests, and the prospect-response index is now maintained in the
+[pre-outreach operations record](tokenless-pre-outreach-operations-2026-08.md). A live SSO/SCIM
+or WORM exercise is explicitly conditional on an existing controlled provider or destination;
+the absence of those credentials is not permission to add a provider or claim a completed
+exercise.
+
 **Why now:** the existing capabilities are useful proof of product depth, but they should not
 crowd the initial demonstration.
 
@@ -461,10 +510,13 @@ crowd the initial demonstration.
   is already configured. Do not add a new storage provider before outreach.
 - Inventory the DPA, subprocessors, privacy notice, security controls, public evidence claims,
   and current limitations in a short internal response index.
-- Draft AI-CAIQ answers only for controls with current evidence. CSA describes AI-CAIQ v1.1 as a
-  247-question, 18-domain self-assessment with justification and evidence fields
-  ([AI-CAIQ v1.1](https://cloudsecurityalliance.org/artifacts/ai-consensus-assessments-initiative-questionnaire-ai-caiq-v1-1)).
-  Do not delay outreach for a STAR submission.
+- Draft AI-CAIQ answers only for controls with current evidence. CSA's current AICM v1.1 has 247
+  control objectives across 18 domains, while the mapped AI-CAIQ v1.1 has 320 self- and
+  third-party-assessment questions. The package includes explicit ownership, evidence, and
+  documentation guidance
+  ([AICM v1.1](https://cloudsecurityalliance.org/artifacts/ai-controls-matrix-v1-1)). Do not
+  confuse controls with questionnaire rows, answer unsupported questions optimistically, or
+  delay outreach for a STAR submission.
 
 **Effort:** 2–4 days of validation and documentation; larger gaps move to the customer-driven
 backlog.
@@ -487,7 +539,7 @@ and retain every material safety/privacy consequence.
 ### Days 4–6: put evidence in the foreground
 
 1. Make the bearer-share view automatically verify and explain the packet before showing JSON.
-2. Verify the checked-in redacted example against the current verifier.
+2. Verify the checked-in synthetic current-v4 example against the current verifier.
 3. Add or confirm a direct result-to-evidence action.
 4. Exercise current evidence sharing and separated auditor access.
 5. Reorder the broader evidence workspace only if the P0 recipient path is already green.
@@ -588,23 +640,23 @@ operational monitoring, reviewer access, or something else.
 ### Product
 
 - [ ] Fresh owner can complete the invited-review golden path without internal intervention.
-- [ ] Owner, reviewer, and shared-evidence pages have one obvious next action.
-- [ ] Results show only available, decision-relevant signals.
-- [ ] Advanced evidence and identity configuration does not crowd the primary journey.
+- [x] Owner, reviewer, and shared-evidence pages have one obvious next action in focused UI tests.
+- [x] Results show only available, decision-relevant signals.
+- [x] Advanced evidence and identity configuration does not crowd the primary journey.
 - [ ] Every empty, waiting, error, expired, and revoked state names the recovery action.
 - [ ] English/German, mobile/desktop, and light/dark are visually checked.
-- [ ] The readiness sprint adds no database migration, fund-core change, or new external
+- [x] The readiness sprint adds no database migration, fund-core change, or new external
       provider.
 
 ### Evidence and claims
 
-- [ ] One current synthetic packet verifies from the public instructions.
-- [ ] A bearer-share recipient sees the bounded outcome and verification result before raw JSON.
-- [ ] Share expiry, revocation, access logging, and auditor separation are tested.
+- [x] One current synthetic packet verifies from the public instructions.
+- [x] A bearer-share recipient sees the bounded outcome and verification result before raw JSON.
+- [x] Share expiry, revocation, access logging, and auditor separation have focused automated tests.
 - [ ] Public claims pass the evidence-claim guard and match deployed configuration.
 - [ ] No compliance, anonymity, custody, independence, or representativeness claim exceeds the
       actual evidence.
-- [ ] Current DPA, privacy, subprocessors, security material, and limitations are indexed for a
+- [x] Current DPA, privacy, subprocessors, security material, and limitations are indexed for a
       prospect response.
 
 ### Reliability
@@ -618,13 +670,14 @@ operational monitoring, reviewer access, or something else.
 ### Commercial path
 
 - [ ] Demo booking and email fallback work.
-- [ ] The primary landing and empty-state actions lead a buyer toward connection or the first
+- [x] The primary landing and empty-state actions lead a buyer toward connection or the first
       controlled release.
-- [ ] Pricing allowances are enforced or removed from visible copy.
-- [ ] Disabled checkout is not presented as self-serve.
+- [x] Pricing allowances are enforced or removed from visible copy.
+- [x] Disabled checkout is not presented as self-serve in the code-level configuration and tests.
 - [ ] Enabled checkout has a working independent business-verification operation and tested
       Stripe lifecycle.
-- [ ] The demo has a stated audience, problem, outcome, limitations, and next step.
+- [x] The demo has a stated audience, problem, outcome, limitations, and next step in the
+      pre-outreach operations record.
 - [ ] The complete buyer story can be demonstrated in five to eight minutes without exposing
       internal IDs or advanced setup.
 
@@ -678,7 +731,7 @@ proof more compelling.
 - [NIST AI RMF Playbook FAQ](https://airc.nist.gov/airmf-resources/playbook/faq/)
 - [European Commission AI Act overview](https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai)
 - [Regulation (EU) 2024/1689](https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng)
-- [CSA AI-CAIQ v1.1](https://cloudsecurityalliance.org/artifacts/ai-consensus-assessments-initiative-questionnaire-ai-caiq-v1-1)
+- [CSA AI Controls Matrix and AI-CAIQ v1.1](https://cloudsecurityalliance.org/artifacts/ai-controls-matrix-v1-1)
 - [CSA STAR for AI](https://cloudsecurityalliance.org/star/ai)
 - [CISA secure-by-design principles](https://www.cisa.gov/sites/default/files/2023-06/principles_approaches_for_security-by-design-default_508c.pdf)
 - [CISA secure-by-design alert](https://www.cisa.gov/sites/default/files/2023-12/SbD-Alert-How-Software-Manufacturers-Can-Protect-Customers-by-Eliminating-Default-Passwords-508c_0.pdf)
