@@ -696,7 +696,7 @@
     "qualityVariance": "Varianz der Qualitätsbewertung (Prozentpunkte²)",
     "createWorkspaceFirst": "Zuerst einen Arbeitsbereich erstellen",
     "evaluationsWorkspace": "Auswertungen gehören zu einem Arbeitsbereich.",
-    "resultsAfterReview": "Ergebnisse erscheinen, nachdem dein Agent eine menschliche Prüfung anfordert.",
+    "resultsAfterReview": "Lass deinen verbundenen Agenten die erste Prüfung senden. Ergebnisse erscheinen hier.",
     "allAgents": "Alle Agenten",
     "resultStatus": "Status",
     "allStatuses": "Alle Statuswerte",

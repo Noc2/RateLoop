@@ -13,7 +13,7 @@ test("evaluation dashboard leads with results and progressively discloses detail
   assert.match(source, /initialWorkspaceId/);
   // The panel renders inside a workspace-scoped page, so it has no workspace selector of its own.
   assert.doesNotMatch(source, /showWorkspaceSelector/);
-  assert.match(source, /Results appear after your agent requests human review\./);
+  assert.match(source, /Ask your connected agent to send its first review\. Results appear here\./);
   assert.match(source, /dashboard && dashboard\.runs\.length > 0/);
   assert.match(source, /decisionLabel\(run\.clientDecision, copy\)/);
   assert.doesNotMatch(source, /Current result/);
