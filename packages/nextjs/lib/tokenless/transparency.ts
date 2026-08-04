@@ -2506,22 +2506,44 @@ async function enqueuePublicationWebhooks(input: {
       verdictStatus: input.result.verdictStatus,
       resultUrl: `${input.appOrigin.replace(/\/$/, "")}/api/agent/v1/results/${encodeURIComponent(input.operationKey)}`,
     };
-    await input.client.query(
+    const payloadJson = stableTransparencyJson(payload);
+    const projected = await input.client.query(
       `INSERT INTO tokenless_webhook_deliveries
        (delivery_id, publication_id, endpoint_id, event_type, idempotency_key, payload_json, attempt_count, state, next_attempt_at, created_at, updated_at)
        VALUES ($1, $2, $3, 'result.ready', $4, $5, 0, 'pending', $6, $7, $8)
-       ON CONFLICT (idempotency_key) DO NOTHING`,
-      [
-        idempotencyKey,
-        input.publicationId,
-        endpointId,
-        idempotencyKey,
-        stableTransparencyJson(payload),
-        input.now,
-        input.now,
-        input.now,
-      ],
+       ON CONFLICT (idempotency_key) DO UPDATE
+       SET publication_id = EXCLUDED.publication_id,
+           endpoint_id = EXCLUDED.endpoint_id,
+           event_type = EXCLUDED.event_type,
+           payload_json = EXCLUDED.payload_json,
+           updated_at = EXCLUDED.updated_at
+       WHERE tokenless_webhook_deliveries.state IN ('pending', 'retry')
+       RETURNING delivery_id, publication_id, endpoint_id, event_type, payload_json`,
+      [idempotencyKey, input.publicationId, endpointId, idempotencyKey, payloadJson, input.now, input.now, input.now],
     );
+    const persisted =
+      (projected.rows[0] as Row | undefined) ??
+      (
+        await input.client.query(
+          `SELECT delivery_id, publication_id, endpoint_id, event_type, payload_json
+           FROM tokenless_webhook_deliveries WHERE idempotency_key = $1 LIMIT 1`,
+          [idempotencyKey],
+        )
+      ).rows[0];
+    if (
+      !persisted ||
+      rowString(persisted as Row, "delivery_id") !== idempotencyKey ||
+      rowString(persisted as Row, "publication_id") !== input.publicationId ||
+      rowString(persisted as Row, "endpoint_id") !== endpointId ||
+      rowString(persisted as Row, "event_type") !== "result.ready" ||
+      rowString(persisted as Row, "payload_json") !== payloadJson
+    ) {
+      throw new TokenlessServiceError(
+        "Published result webhook projection conflicts with canonical evidence.",
+        409,
+        "publication_conflict",
+      );
+    }
   }
 }
 

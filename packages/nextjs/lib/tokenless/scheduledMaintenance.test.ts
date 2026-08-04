@@ -319,6 +319,8 @@ test("settlement work remains due until publication, result projection, and webh
   await seedConfirmedExecution("operation_published");
   await seedConfirmedExecution("operation_projection_missing");
   await seedConfirmedExecution("operation_webhook_missing");
+  await seedConfirmedExecution("operation_projection_conflict");
+  await seedConfirmedExecution("operation_webhook_conflict");
   await dbClient.execute({
     sql: `INSERT INTO tokenless_workspaces (workspace_id, name, status, created_at, updated_at)
           VALUES ('ws_scheduled_settlement', 'Scheduled settlement', 'active', ?, ?);
@@ -342,7 +344,8 @@ test("settlement work remains due until publication, result projection, and webh
            result_json, published_at, evaluation_hash)
           VALUES ('publication_webhook_missing', 'operation_webhook_missing', 1,
                   'zero_commit_refunded', 'root', '{}', ?, 'evaluation-hash');
-          UPDATE tokenless_agent_asks SET result_json = '{}'
+          UPDATE tokenless_agent_asks
+          SET result_json = '{}', verdict_status = 'zero_commit_refunded'
           WHERE operation_key IN ('operation_published', 'operation_webhook_missing');
           INSERT INTO tokenless_webhook_endpoints
           (endpoint_id, workspace_id, url, event_types_json, secret_ciphertext,
@@ -382,16 +385,66 @@ test("settlement work remains due until publication, result projection, and webh
       NOW,
     ],
   });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_result_publications
+          (publication_id, operation_key, publication_version, verdict_status, evidence_root,
+           result_json, published_at, evaluation_hash)
+          VALUES ('publication_projection_conflict', 'operation_projection_conflict', 1,
+                  'zero_commit_refunded', 'root', '{}', ?, 'evaluation-hash'),
+                 ('publication_webhook_conflict', 'operation_webhook_conflict', 1,
+                  'zero_commit_refunded', 'root', '{}', ?, 'evaluation-hash');
+          UPDATE tokenless_agent_asks
+          SET result_json = '{"wrong":true}', verdict_status = 'pending'
+          WHERE operation_key = 'operation_projection_conflict';
+          UPDATE tokenless_agent_asks
+          SET result_json = '{}', verdict_status = 'zero_commit_refunded'
+          WHERE operation_key = 'operation_webhook_conflict';
+          INSERT INTO tokenless_ask_webhook_subscriptions
+          (subscription_id, operation_key, endpoint_id, event_types_json, created_at)
+          VALUES ('subscription_conflicting_delivery', 'operation_webhook_conflict',
+                  'endpoint_missing_delivery', '["result.ready"]', ?);
+          INSERT INTO tokenless_webhook_deliveries
+          (delivery_id, publication_id, endpoint_id, event_type, idempotency_key,
+           payload_json, attempt_count, state, next_attempt_at, created_at, updated_at)
+          VALUES ('delivery_conflicting', 'publication_webhook_conflict',
+                  'endpoint_missing_delivery', 'result.ready', 'delivery:conflicting',
+                  '{"wrong":true}', 0, 'pending', ?, ?, ?);
+          INSERT INTO tokenless_scheduled_work_items
+          (item_id, kind, subject_key, state, attempt_count, next_attempt_at,
+           created_at, updated_at, completed_at)
+          VALUES (?, 'publish_finalized_round', 'operation_projection_conflict', 'completed', 1, ?, ?, ?, ?),
+                 (?, 'publish_finalized_round', 'operation_webhook_conflict', 'completed', 1, ?, ?, ?, ?)`,
+    args: [
+      NOW,
+      NOW,
+      NOW,
+      NOW,
+      NOW,
+      NOW,
+      tokenlessScheduledWorkItemId("publish_finalized_round", "operation_projection_conflict"),
+      NOW,
+      NOW,
+      NOW,
+      NOW,
+      tokenlessScheduledWorkItemId("publish_finalized_round", "operation_webhook_conflict"),
+      NOW,
+      NOW,
+      NOW,
+      NOW,
+    ],
+  });
 
   const seeded = await seedTokenlessScheduledWork(NOW);
-  assert.equal(seeded.settlements, 3);
+  assert.equal(seeded.settlements, 5);
   const items = await dbClient.execute({
     sql: `SELECT subject_key, state FROM tokenless_scheduled_work_items
           WHERE kind = 'publish_finalized_round' ORDER BY subject_key`,
   });
   assert.deepEqual(items.rows, [
     { state: "pending", subject_key: "operation_evidence_only" },
+    { state: "pending", subject_key: "operation_projection_conflict" },
     { state: "pending", subject_key: "operation_projection_missing" },
+    { state: "pending", subject_key: "operation_webhook_conflict" },
     { state: "pending", subject_key: "operation_webhook_missing" },
   ]);
 });

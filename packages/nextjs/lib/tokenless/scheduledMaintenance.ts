@@ -202,6 +202,7 @@ export async function seedTokenlessScheduledWork(now = new Date(), scanLimit = 1
     publicNetworkAudiences,
     publicNetworkFoundations,
     privateReviewEvidence,
+    webhookProjections,
   ] = await Promise.all([
     dbClient.execute({
       sql: `SELECT e.operation_key
@@ -222,6 +223,9 @@ export async function seedTokenlessScheduledWork(now = new Date(), scanLimit = 1
               AND (
                 p.publication_id IS NULL
                 OR a.result_json IS NULL
+                OR (p.publication_id IS NOT NULL AND a.result_json <> p.result_json)
+                OR (p.publication_id IS NOT NULL AND a.verdict_status IS NULL)
+                OR (p.publication_id IS NOT NULL AND a.verdict_status <> p.verdict_status)
                 OR (endpoint.endpoint_id IS NOT NULL AND delivery.delivery_id IS NULL)
               )
             GROUP BY e.operation_key, e.updated_at
@@ -314,9 +318,57 @@ export async function seedTokenlessScheduledWork(now = new Date(), scanLimit = 1
             ORDER BY d.completed_at ASC,d.delivery_id ASC LIMIT ?`,
       args: [limit],
     }),
+    dbClient.execute({
+      sql: `SELECT e.operation_key, p.publication_id, p.verdict_status, p.published_at,
+                   delivery.payload_json
+            FROM tokenless_chain_executions e
+            JOIN tokenless_result_publications p
+              ON p.operation_key = e.operation_key AND p.publication_version = 1
+            JOIN tokenless_ask_webhook_subscriptions s
+              ON s.operation_key = e.operation_key
+             AND s.event_types_json LIKE '%"result.ready"%'
+            JOIN tokenless_webhook_endpoints endpoint
+              ON endpoint.endpoint_id = s.endpoint_id AND endpoint.active = true
+            JOIN tokenless_webhook_deliveries delivery
+              ON delivery.publication_id = p.publication_id
+             AND delivery.endpoint_id = s.endpoint_id
+             AND delivery.event_type = 'result.ready'
+            WHERE e.state = 'confirmed' AND e.round_id IS NOT NULL
+            ORDER BY e.updated_at ASC LIMIT ?`,
+      args: [limit],
+    }),
   ]);
-  for (const row of settlements.rows) {
-    const operationKey = rowString(row as Row, "operation_key")!;
+  const settlementOperationKeys = new Set(settlements.rows.map(row => rowString(row as Row, "operation_key")!));
+  for (const row of webhookProjections.rows as Row[]) {
+    let payload: Row | null = null;
+    try {
+      payload = JSON.parse(rowString(row, "payload_json") ?? "null") as Row | null;
+    } catch {
+      // A malformed delivery is an incomplete projection and must be rebuilt before delivery.
+    }
+    const operationKey = rowString(row, "operation_key")!;
+    const publishedAt = row.published_at instanceof Date ? row.published_at : new Date(String(row.published_at));
+    let resultPathMatches = false;
+    try {
+      resultPathMatches =
+        new URL(rowString(payload ?? undefined, "resultUrl") ?? "").pathname ===
+        `/api/agent/v1/results/${encodeURIComponent(operationKey)}`;
+    } catch {
+      // Invalid result URLs are also incomplete projections.
+    }
+    if (
+      !payload ||
+      rowString(payload, "eventId") !== rowString(row, "publication_id") ||
+      rowString(payload, "eventType") !== "result.ready" ||
+      rowString(payload, "operationKey") !== operationKey ||
+      rowString(payload, "verdictStatus") !== rowString(row, "verdict_status") ||
+      rowString(payload, "occurredAt") !== publishedAt.toISOString() ||
+      !resultPathMatches
+    ) {
+      settlementOperationKeys.add(operationKey);
+    }
+  }
+  for (const operationKey of settlementOperationKeys) {
     await insertWorkItem("publish_finalized_round", operationKey, now);
     await dbClient.execute({
       sql: `UPDATE tokenless_scheduled_work_items
@@ -368,7 +420,7 @@ export async function seedTokenlessScheduledWork(now = new Date(), scanLimit = 1
     publicMediaDeletions: publicMediaDeletions.rows.length,
     privateReviewEvidence: privateReviewEvidence.rows.length,
     raterCommitRecoveries: raterCommitRecoveries.rows.length,
-    settlements: settlements.rows.length,
+    settlements: settlementOperationKeys.size,
   };
 }
 

@@ -887,24 +887,48 @@ test("all incomplete terminal states publish conserved results instead of pollin
   assert.deepEqual(concurrentPublication.result, published.result);
   await dbClient.execute({
     sql: `UPDATE tokenless_agent_asks
-          SET verdict_status = 'pending', result_json = NULL
+          SET verdict_status = 'pending', result_json = '{"wrong":true}'
           WHERE operation_key = ?`,
     args: [OPERATION],
   });
   await dbClient.execute({
-    sql: "DELETE FROM tokenless_webhook_deliveries WHERE publication_id = ?",
+    sql: `UPDATE tokenless_webhook_deliveries SET payload_json = '{"wrong":true}'
+          WHERE publication_id = ?`,
     args: [published.publicationId],
+  });
+  const repairedPublication = await publishTerminalRoundResult({
+    operationKey: OPERATION,
+    appOrigin: "https://app.example.test",
+    now: new Date(NOW.getTime() + 2_000),
+  });
+  const repairedProjection = await dbClient.execute({
+    sql: `SELECT a.result_json, d.payload_json
+          FROM tokenless_agent_asks a
+          JOIN tokenless_result_publications p ON p.operation_key = a.operation_key
+          JOIN tokenless_webhook_deliveries d ON d.publication_id = p.publication_id
+          WHERE a.operation_key = ?`,
+    args: [OPERATION],
+  });
+  assert.deepEqual(JSON.parse(String(repairedProjection.rows[0]?.result_json)), published.result);
+  assert.equal(JSON.parse(String(repairedProjection.rows[0]?.payload_json)).occurredAt, NOW.toISOString());
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_asks
+          SET verdict_status = 'pending', result_json = NULL
+          WHERE operation_key = ?;
+          DELETE FROM tokenless_webhook_deliveries WHERE publication_id = ?`,
+    args: [OPERATION, published.publicationId],
   });
   const replayedPublication = await publishTerminalRoundResult({
     operationKey: OPERATION,
     appOrigin: "https://app.example.test",
-    now: new Date(NOW.getTime() + 2_000),
+    now: new Date(NOW.getTime() + 3_000),
   });
   assert.equal(published.result.verdictStatus, "under_quorum_compensated");
   assert.equal(published.result.audience.participantCount, 3);
   assert.equal(published.result.verdict, null);
   assert.equal(replayedPublication.publicationId, published.publicationId);
   assert.equal(replayedPublication.evidenceRoot, published.evidenceRoot);
+  assert.equal(repairedPublication.publicationId, published.publicationId);
   const stored = await dbClient.execute({
     sql: `SELECT a.verdict_status, a.result_json, t.event_type
           FROM tokenless_agent_asks a
