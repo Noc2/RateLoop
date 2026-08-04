@@ -36,8 +36,17 @@ import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { derivePaidLaneActivationReference } from "~~/lib/tokenless/paidLaneActivation";
-import { attachProductAsk, createWorkspace, prepareProductAsk } from "~~/lib/tokenless/productCore";
-import { TokenlessServiceError, createTokenlessAsk, createTokenlessQuote } from "~~/lib/tokenless/server";
+import {
+  attachProductAsk,
+  createWorkspace,
+  prepareOpportunityBoundNetworkProductAsk,
+  recordPrepaidLedgerEntry,
+} from "~~/lib/tokenless/productCore";
+import {
+  TokenlessServiceError,
+  createOpportunityBoundNetworkAsk,
+  createOpportunityBoundNetworkQuote,
+} from "~~/lib/tokenless/server";
 import { verifyBusinessWorkspaceForTest } from "~~/test/helpers/verifiedBusinessWorkspace";
 
 const PANEL = getAddress("0x1111111111111111111111111111111111111111");
@@ -69,13 +78,13 @@ const PAID_LANE_ENV_NAMES = [
 ] as const;
 const originalPaidLaneEnv = new Map(PAID_LANE_ENV_NAMES.map(name => [name, process.env[name]]));
 
-function activatePrivatePaidLane() {
+function activateNetworkPaidLane() {
   Object.assign(process.env, {
-    TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: "true",
-    TOKENLESS_NETWORK_PANELS_ENABLED: "false",
+    TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: "false",
+    TOKENLESS_NETWORK_PANELS_ENABLED: "true",
     TOKENLESS_HYBRID_REVIEWS_ENABLED: "false",
-    NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: "true",
-    NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED: "false",
+    NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: "false",
+    NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED: "true",
     NEXT_PUBLIC_TOKENLESS_HYBRID_REVIEWS_ENABLED: "false",
     TOKENLESS_PAID_LANES_DPIA_APPROVAL_REFERENCE: `sha256:${"a".repeat(64)}`,
     TOKENLESS_PAID_LANES_TRANSFER_INVENTORY_APPROVAL_REFERENCE: `sha256:${"b".repeat(64)}`,
@@ -182,7 +191,7 @@ function mockRuntime(
 }
 
 beforeEach(() => {
-  activatePrivatePaidLane();
+  activateNetworkPaidLane();
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
 });
 
@@ -362,29 +371,45 @@ test("deployment validation rejects a relabeled panel with different mechanism c
   await assert.rejects(() => assertLiveTokenlessDeployment(config(), runtime), /mixed deployment bundle/);
 });
 
-function invitedAdmissionPolicy() {
+function networkAdmissionPolicy() {
   return {
     schemaVersion: HUMAN_ASSURANCE_SCHEMA_VERSION,
-    policyId: "policy_chain_private_paid",
+    policyId: "policy_chain_public_paid",
     version: 1,
-    reviewerSource: "customer_invited" as const,
+    reviewerSource: "rateloop_network" as const,
+    integrity: {
+      schemaVersion: "rateloop.integrity-assignment.v1" as const,
+      epochId: "integrity:2026-08-04:chain",
+      epochManifestHash: `sha256:${"a".repeat(64)}` as const,
+      maxClusterShareBps: 2_000,
+      allowedRiskBands: ["low", "medium"] as const,
+      recentCoassignmentWindowSeconds: 2_592_000,
+      maxRecentCoassignments: 1,
+      maxPerCustomer: 3,
+      onePerProviderSubject: true as const,
+    },
     compensation: "paid" as const,
-    cohorts: [{ cohortId: "cohort_chain_private_paid", minimumReviewers: 2, maximumReviewers: 15 }],
-    selection: "customer_named" as const,
+    cohorts: [],
+    selection: "randomized" as const,
     fallbacks: { allowed: false, sources: [] },
     requiredQualifications: [],
     assurance: {
       requirements: [
+        ...["account_control", "live_human", "minimum_age"].map(capability => ({
+          capability: capability as "account_control" | "live_human" | "minimum_age",
+          reviewerSources: ["rateloop_network" as const],
+          allowedProviders: ["identity-production"],
+        })),
         {
-          capability: "customer_invitation" as const,
-          reviewerSources: ["customer_invited" as const],
-          allowedProviders: ["workspace-invitation"],
+          capability: "unique_human" as const,
+          reviewerSources: ["rateloop_network" as const],
+          allowedProviders: ["world:poh"],
         },
       ],
     },
     buyerPrivacy: {
       visibleFields: ["reviewer_source" as const],
-      minimumAggregationSize: 2,
+      minimumAggregationSize: 10,
       suppressSmallCells: true,
     },
     legalEligibilityRequired: true,
@@ -462,47 +487,89 @@ async function walletAsk(
   options: {
     attemptReserveAtomic?: string;
     feeBps?: number;
+    idempotencySuffix?: string;
+    paymentMode?: "prepaid" | "wallet" | "x402";
     stripAdmissionPolicy?: boolean;
     responseWindowSeconds?: unknown;
   } = {},
 ) {
-  const { workspaceId } = await createWorkspace({ name: "Wallet team", ownerAddress: FUNDER });
+  const paymentMode = options.paymentMode ?? "wallet";
+  const { workspaceId } = await createWorkspace({ name: `${paymentMode} team`, ownerAddress: FUNDER });
   await activatePaidWorkspace(workspaceId);
-  const policy = invitedAdmissionPolicy();
-  const quote = await createTokenlessQuote({
-    audience: {
-      admissionPolicyHash: freezeAdmissionPolicy(policy).admissionPolicyHash,
-      source: policy.reviewerSource,
+  if (paymentMode === "prepaid") {
+    await recordPrepaidLedgerEntry({ workspaceId, amountAtomic: "100000000", source: "chain-test" });
+  }
+  const policy = networkAdmissionPolicy();
+  const opportunityId = `opportunity_chain_${options.idempotencySuffix ?? "12345678"}`;
+  const quote = await createOpportunityBoundNetworkQuote(
+    {
+      audience: {
+        admissionPolicyHash: freezeAdmissionPolicy(policy).admissionPolicyHash,
+        source: policy.reviewerSource,
+      },
+      audiencePolicy: policy,
+      confirmedNoSensitiveData: true,
+      dataClassification: "synthetic",
+      budget: {
+        attemptReserveAtomic: options.attemptReserveAtomic ?? "20000000",
+        bountyAtomic: "25000000",
+        feeBps: options.feeBps ?? 750,
+      },
+      question: { kind: "binary" as const, prompt: "Ship this?", rationale: { mode: "optional" as const } },
+      requestedPanelSize: 15,
+      responseWindowSeconds: options.responseWindowSeconds ?? 7_200,
+      visibility: "public",
     },
-    audiencePolicy: policy,
-    confirmedNoSensitiveData: true,
-    dataClassification: "synthetic",
-    budget: {
-      attemptReserveAtomic: options.attemptReserveAtomic ?? "20000000",
-      bountyAtomic: "25000000",
-      feeBps: options.feeBps ?? 750,
-    },
-    question: { kind: "binary" as const, prompt: "Ship this?", rationale: { mode: "optional" as const } },
-    requestedPanelSize: 15,
-    responseWindowSeconds: options.responseWindowSeconds ?? 7_200,
-    visibility: "public",
-  });
+    opportunityId,
+  );
   const request = {
-    idempotencyKey: "chain:wallet:12345678",
-    payment: { mode: "wallet" as const, payerAddress: FUNDER },
+    idempotencyKey: `chain:${paymentMode}:${options.idempotencySuffix ?? "12345678"}`,
+    payment:
+      paymentMode === "prepaid"
+        ? ({ mode: "prepaid" as const, workspaceId } as const)
+        : ({ mode: paymentMode, payerAddress: FUNDER } as const),
     quoteId: quote.quoteId,
   };
-  const prepared = await prepareProductAsk({
+  const prepared = await prepareOpportunityBoundNetworkProductAsk({
     principal: { kind: "session", accountAddress: FUNDER, walletAddress: FUNDER },
     request,
+    opportunityId,
   });
-  const ask = await createTokenlessAsk(request, request.idempotencyKey, "https://tokenless.example");
+  const ask = await createOpportunityBoundNetworkAsk(
+    request,
+    request.idempotencyKey,
+    "https://tokenless.example",
+    prepared.idempotencyScope,
+    opportunityId,
+  );
   await attachProductAsk(prepared, ask);
   if (options.stripAdmissionPolicy) await stripAskAdmissionPolicy(ask.operationKey);
   await dbClient.execute("UPDATE tokenless_content_records SET moderation_status = 'approved'");
   await dbClient.execute("UPDATE tokenless_question_records SET moderation_status = 'approved'");
   return { operationKey: ask.operationKey, workspaceId };
 }
+
+test("wallet, prepaid, and x402 preparation share the paid-lane activation gate", async () => {
+  const operations: Array<{ operationKey: string; paymentMode: "prepaid" | "wallet" | "x402" }> = [];
+  for (const paymentMode of ["wallet", "prepaid", "x402"] as const) {
+    const { operationKey } = await walletAsk({ idempotencySuffix: `gate-${paymentMode}`, paymentMode });
+    operations.push({ operationKey, paymentMode });
+  }
+  delete process.env.TOKENLESS_PAID_LANES_FUNDING_VALIDATION_REFERENCE;
+
+  for (const { operationKey, paymentMode } of operations) {
+    await assert.rejects(
+      () => prepareChainPayment(operationKey, { config: config(), runtime: mockRuntime() }),
+      (error: unknown) => {
+        assert.ok(error instanceof TokenlessServiceError, `${paymentMode} should fail with a service error`);
+        assert.equal(error.code, "paid_lane_compliance_approval_required");
+        return true;
+      },
+    );
+  }
+  const executions = await dbClient.execute("SELECT COUNT(*) AS count FROM tokenless_chain_executions");
+  assert.equal(Number(executions.rows[0]?.count), 0);
+});
 
 test("legacy tier-only asks fail closed instead of being converted into capability admission", async () => {
   const { operationKey } = await walletAsk({ stripAdmissionPolicy: true });
@@ -660,6 +727,36 @@ test("zero-fee rounds skip surprise-bounty reservation and still confirm the bas
   assert.equal(Number(confirmedReservation.rows[0]?.count), 0);
 });
 
+test("an exact wallet receipt remains reconcilable after paid-lane deactivation", async () => {
+  const { operationKey } = await walletAsk();
+  const expected = await prepareChainPayment(operationKey, { config: config(), runtime: mockRuntime() });
+  delete process.env.TOKENLESS_PAID_LANES_FUNDING_VALIDATION_REFERENCE;
+
+  await assert.rejects(
+    () => prepareChainPayment(operationKey, { config: config(), runtime: mockRuntime() }),
+    (error: unknown) =>
+      error instanceof TokenlessServiceError && error.code === "paid_lane_compliance_approval_required",
+  );
+
+  const receiptRuntime = mockRuntime(
+    {
+      getTransactionReceipt: async () => ({
+        blockHash: BLOCK_HASH,
+        blockNumber: 200n,
+        logs: [roundCreatedLog(expected)],
+        status: "success",
+      }),
+    },
+    expected,
+  );
+  const confirmed = await confirmWalletChainPayment(operationKey, TX_HASH, {
+    config: config(),
+    runtime: receiptRuntime,
+  });
+  assert.equal(confirmed.paymentState, "confirmed");
+  assert.equal(confirmed.roundId, "7");
+});
+
 test("wallet confirmation accepts only the exact quoted RoundCreated evidence and reconciles the operation", async () => {
   const { operationKey } = await walletAsk();
   const runtime = mockRuntime();
@@ -715,17 +812,25 @@ test("wallet confirmation accepts only the exact quoted RoundCreated evidence an
     sql: "SELECT idempotency_key, request_json FROM tokenless_agent_asks WHERE operation_key = ?",
     args: [operationKey],
   });
-  const resumedAsk = await createTokenlessAsk(
-    JSON.parse(String(storedAsk.rows[0]?.request_json)),
+  const resumedRequest = JSON.parse(String(storedAsk.rows[0]?.request_json));
+  const resumedProduct = await prepareOpportunityBoundNetworkProductAsk({
+    principal: { kind: "session", accountAddress: FUNDER, walletAddress: FUNDER },
+    request: resumedRequest,
+    opportunityId: "opportunity_chain_12345678",
+  });
+  const resumedAsk = await createOpportunityBoundNetworkAsk(
+    resumedRequest,
     String(storedAsk.rows[0]?.idempotency_key),
     "https://tokenless.example",
+    resumedProduct.idempotencyScope,
+    "opportunity_chain_12345678",
   );
   assert.equal(resumedAsk.responseWindowSeconds, 7_200);
   assert.equal(resumedAsk.commitDeadline, new Date(Number(expected.roundTerms.commitDeadline) * 1_000).toISOString());
 });
 
-test("an invited paid round is registered with its exact owning workspace", async () => {
-  const { operationKey, workspaceId } = await walletAsk();
+test("a paid network round is registered with its exact public admission policy", async () => {
+  const { operationKey } = await walletAsk();
   const runtime = mockRuntime();
   const expected = await prepareChainPayment(operationKey, { config: config(), runtime });
   const receiptRuntime = mockRuntime(
@@ -748,8 +853,8 @@ test("an invited paid round is registered with its exact owning workspace", asyn
   const voucherRound = await dbClient.execute({
     sql: "SELECT workspace_id,admission_policy_json FROM tokenless_voucher_rounds WHERE round_id = '7'",
   });
-  assert.equal(voucherRound.rows[0]?.workspace_id, workspaceId);
-  assert.equal(JSON.parse(String(voucherRound.rows[0]?.admission_policy_json)).reviewerSource, "customer_invited");
+  assert.equal(voucherRound.rows[0]?.workspace_id, null);
+  assert.equal(JSON.parse(String(voucherRound.rows[0]?.admission_policy_json)).reviewerSource, "rateloop_network");
 });
 
 test("receipt reconciliation rejects altered economics even when the panel and funder match", async () => {
@@ -819,30 +924,40 @@ test("round reconciliation reads back and rejects altered non-event terms", asyn
 test("x402 authorization inspection reconciles exact receipts and fails unresolved use closed", async () => {
   const { workspaceId } = await createWorkspace({ name: "x402 team", ownerAddress: FUNDER });
   await activatePaidWorkspace(workspaceId);
-  const policy = invitedAdmissionPolicy();
-  const quote = await createTokenlessQuote({
-    audience: {
-      admissionPolicyHash: freezeAdmissionPolicy(policy).admissionPolicyHash,
-      source: "customer_invited",
+  const policy = networkAdmissionPolicy();
+  const opportunityId = "opportunity_chain_x402_authorization";
+  const quote = await createOpportunityBoundNetworkQuote(
+    {
+      audience: {
+        admissionPolicyHash: freezeAdmissionPolicy(policy).admissionPolicyHash,
+        source: "rateloop_network",
+      },
+      audiencePolicy: policy,
+      confirmedNoSensitiveData: true,
+      dataClassification: "synthetic",
+      budget: { attemptReserveAtomic: "20000000", bountyAtomic: "25000000", feeBps: 750 },
+      question: { kind: "binary" as const, prompt: "Fund this?", rationale: { mode: "optional" as const } },
+      requestedPanelSize: 15,
+      responseWindowSeconds: 5_400,
+      visibility: "public",
     },
-    audiencePolicy: policy,
-    confirmedNoSensitiveData: true,
-    dataClassification: "synthetic",
-    budget: { attemptReserveAtomic: "20000000", bountyAtomic: "25000000", feeBps: 750 },
-    question: { kind: "binary" as const, prompt: "Fund this?", rationale: { mode: "optional" as const } },
-    requestedPanelSize: 15,
-    responseWindowSeconds: 5_400,
-    visibility: "public",
-  });
+    opportunityId,
+  );
   const request = {
     idempotencyKey: "chain:x402:12345678",
     payment: { mode: "x402" as const, payerAddress: FUNDER },
     quoteId: quote.quoteId,
   };
   const principal = { kind: "session" as const, accountAddress: FUNDER, walletAddress: FUNDER };
-  const product = await prepareProductAsk({ principal, request });
+  const product = await prepareOpportunityBoundNetworkProductAsk({ principal, request, opportunityId });
   assert.equal(product.paymentState, "pending_chain_authorization");
-  const ask = await createTokenlessAsk(request, request.idempotencyKey, "https://tokenless.example");
+  const ask = await createOpportunityBoundNetworkAsk(
+    request,
+    request.idempotencyKey,
+    "https://tokenless.example",
+    product.idempotencyScope,
+    opportunityId,
+  );
   await attachProductAsk(product, ask);
   await dbClient.execute("UPDATE tokenless_content_records SET moderation_status = 'approved'");
   await dbClient.execute("UPDATE tokenless_question_records SET moderation_status = 'approved'");
@@ -873,7 +988,7 @@ test("x402 authorization inspection reconciles exact receipts and fails unresolv
   );
   await attachX402Authorization(ask.operationKey, authorization);
   assert.equal((await getChainPaymentInstructions(ask.operationKey)).paymentState, "prepared");
-  const replay = await prepareProductAsk({ principal, request });
+  const replay = await prepareOpportunityBoundNetworkProductAsk({ principal, request, opportunityId });
   assert.equal(replay.paymentReference, product.paymentReference);
   assert.equal(replay.createdPayment, false);
 

@@ -457,14 +457,26 @@ function instructions(row: QueryRow): ChainPaymentInstructions {
   };
 }
 
-export async function prepareChainPayment(
+type PrepareChainPaymentOptions = {
+  config?: TokenlessChainConfig;
+  now?: Date;
+  runtime?: TokenlessChainRuntime;
+};
+
+async function prepareChainPaymentInternal(
   operationKey: string,
-  options: { config?: TokenlessChainConfig; now?: Date; runtime?: TokenlessChainRuntime } = {},
+  options: PrepareChainPaymentOptions,
+  allowExistingWalletReconciliation: boolean,
 ) {
   const config = options.config ?? loadTokenlessChainConfig();
   const runtime = options.runtime ?? getTokenlessChainRuntime(config);
   await assertLiveTokenlessDeployment(config, runtime);
   const existing = await executionRow(operationKey);
+  let source: QueryRow | null = null;
+  if (!existing || !allowExistingWalletReconciliation) {
+    source = await operationSource(operationKey);
+    requirePaidLaneForOperationSource(source);
+  }
   if (existing) {
     if (
       rowString(existing, "deployment_key") !== config.deploymentKey ||
@@ -498,7 +510,7 @@ export async function prepareChainPayment(
     }
     return existingInstructions;
   }
-  const source = await operationSource(operationKey);
+  source ??= await operationSource(operationKey);
   const paymentMode = rowString(source, "payment_mode") as ChainPaymentInstructions["paymentMode"];
   const paymentReference = rowString(source, "payment_reference")!;
   let funderAddress: Address;
@@ -599,6 +611,10 @@ export async function prepareChainPayment(
     });
   }
   return persistedInstructions;
+}
+
+export function prepareChainPayment(operationKey: string, options: PrepareChainPaymentOptions = {}) {
+  return prepareChainPaymentInternal(operationKey, options, false);
 }
 
 function exactRoundCreated(input: {
@@ -1098,7 +1114,7 @@ export async function confirmWalletChainPayment(
   }
   const config = options.config ?? loadTokenlessChainConfig();
   const runtime = options.runtime ?? getTokenlessChainRuntime(config);
-  const expected = await prepareChainPayment(operationKey, { config, runtime });
+  const expected = await prepareChainPaymentInternal(operationKey, { config, runtime }, true);
   if (expected.paymentMode !== "wallet") {
     throw new TokenlessServiceError("Only wallet payment intents can be confirmed here.", 409, "payment_mode_mismatch");
   }
@@ -1476,7 +1492,6 @@ export async function executeServerChainPayment(
 ) {
   const config = options.config ?? loadTokenlessChainConfig();
   const runtime = options.runtime ?? getTokenlessChainRuntime(config);
-  requirePaidLaneForOperationSource(await operationSource(operationKey));
   const expected = await prepareChainPayment(operationKey, { config, runtime });
   if (expected.paymentMode === "wallet") return expected;
   if (expected.paymentMode === "x402" && expected.paymentState === X402_AUTHORIZATION_RECONCILIATION_STATE) {
