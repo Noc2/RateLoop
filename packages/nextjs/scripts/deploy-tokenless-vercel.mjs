@@ -4,15 +4,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const TOKENLESS_VERCEL_BUILD_ARGS = Object.freeze([
-  "--build-env",
-  "YARN_ENABLE_IMMUTABLE_INSTALLS=true",
-  "--build-env",
-  "ENABLE_EXPERIMENTAL_COREPACK=1",
-  "--build-env",
-  "VERCEL_TELEMETRY_DISABLED=1",
-]);
-
 function readProjectLink(candidate, readFileSync) {
   try {
     return JSON.parse(readFileSync(candidate, "utf8"));
@@ -40,11 +31,10 @@ export function runTokenlessVercel({
   spawn = spawnSync,
 }) {
   validateTokenlessVercelLinks({ packageRoot, readFileSync, repoRoot });
-  const result = spawn(
-    "yarn",
-    ["exec", "vercel", "--cwd", repoRoot, ...TOKENLESS_VERCEL_BUILD_ARGS, ...forwardedArgs],
-    { cwd: packageRoot, stdio: "inherit" },
-  );
+  const result = spawn("yarn", ["exec", "vercel", "--cwd", repoRoot, ...forwardedArgs], {
+    cwd: packageRoot,
+    stdio: "inherit",
+  });
   if (result.error) throw result.error;
   return result.status ?? 1;
 }

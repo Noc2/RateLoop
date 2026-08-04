@@ -35,9 +35,9 @@ test("the tracked canonical command validates both links before deploying from t
   assert.equal(status, 0);
   assert.equal(calls.length, 1);
   assert.equal(calls[0][0], "yarn");
-  assert.deepEqual(calls[0][1].slice(0, 4), ["exec", "vercel", "--cwd", paths.repoRoot]);
+  assert.deepEqual(calls[0][1], ["exec", "vercel", "--cwd", paths.repoRoot, "--prod", "--yes"]);
   assert.equal(calls[0][1].includes("--project"), false);
-  assert.deepEqual(calls[0][1].slice(-2), ["--prod", "--yes"]);
+  assert.equal(calls[0][1].includes("--build-env"), false);
 });
 
 for (const [name, links] of [
