@@ -8,9 +8,15 @@ import {
 import assert from "node:assert/strict";
 import { createHash, createHmac } from "node:crypto";
 import { afterEach, beforeEach, test } from "node:test";
-import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
+import { __setDatabaseResourcesForTests, dbClient, dbPool } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { type TokenlessChainRuntime, __setTokenlessChainRuntimeForTests } from "~~/lib/tokenless/chain/runtime";
+import { moderateTokenlessPublicRaterResponse } from "~~/lib/tokenless/moderation";
+import {
+  __setPublicRaterResponseKeyringForTests,
+  preparePublicRaterResponse,
+} from "~~/lib/tokenless/publicRaterResponses";
+import { createPublicRaterResponse } from "~~/lib/tokenless/rater/publicResponse";
 import { tokenlessCommitKey } from "~~/lib/tokenless/rater/settlementRecovery";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import {
@@ -39,7 +45,7 @@ const ADAPTER = `0x${"cc".repeat(20)}`;
 const FEEDBACK_BONUS = `0x${"ff".repeat(20)}`;
 const USDC = `0x${"dd".repeat(20)}`;
 const FEE_RECIPIENT = `0x${"ee".repeat(20)}`;
-const CONTENT_ID = `0x${"61".repeat(32)}`;
+const CONTENT_ID = `0x${"61".repeat(32)}` as `0x${string}`;
 const TERMS_HASH = `0x${"62".repeat(32)}`;
 const POLICY_HASH = `0x${"63".repeat(32)}`;
 const BEACON_HASH = TOKENLESS_QUICKNET_T_CHAIN_HASH;
@@ -443,6 +449,10 @@ beforeEach(async () => {
   finalityRpcFailure = false;
   __setTokenlessChainRuntimeForTests(finalityRuntime());
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
+  __setPublicRaterResponseKeyringForTests({
+    currentVersion: "v1",
+    keys: new Map([["v1", Buffer.alloc(32, 7)]]),
+  });
   await dbClient.execute({
     sql: "INSERT INTO tokenless_workspaces (workspace_id, name, status, created_at, updated_at) VALUES (?, 'Transparency', 'active', ?, ?)",
     args: [WORKSPACE, NOW, NOW],
@@ -585,6 +595,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  __setPublicRaterResponseKeyringForTests(null);
   __setTokenlessChainRuntimeForTests(null);
   __setDatabaseResourcesForTests(null);
   restoreFinalityEnvironment();
@@ -760,6 +771,34 @@ test("all incomplete terminal states publish conserved results instead of pollin
       }),
     /internally inconsistent/,
   );
+  await assert.rejects(
+    () =>
+      deriveTerminalRoundEvidence({
+        operationKey: OPERATION,
+        fetchImpl: ponderFetch({
+          commits: underQuorumCommits.map((commit, index) =>
+            index === 1 ? { ...commit, voteKey: VOTE_KEYS[0] } : commit,
+          ),
+          round: underQuorumRound,
+        }),
+        ponderUrl: "https://ponder.example.test",
+      }),
+    /reveal identities are not unique/,
+  );
+  await assert.rejects(
+    () =>
+      deriveTerminalRoundEvidence({
+        operationKey: OPERATION,
+        fetchImpl: ponderFetch({
+          commits: underQuorumCommits.map((commit, index) =>
+            index === 0 ? { ...commit, responseHash: "0x12" } : commit,
+          ),
+          round: underQuorumRound,
+        }),
+        ponderUrl: "https://ponder.example.test",
+      }),
+    /response hash is malformed/,
+  );
 
   const appended = await appendTerminalRoundEvidence({
     operationKey: OPERATION,
@@ -860,6 +899,122 @@ test("all incomplete terminal states publish conserved results instead of pollin
   assert.equal(stored.rows[0]?.event_type, "round.terminal");
   assert.equal(JSON.parse(String(stored.rows[0]?.result_json)).terminal, true);
   assert.equal(Number(deliveries.rows[0]?.count), 1);
+});
+
+test("terminal results include only feedback bound to an indexed reveal commitment", async () => {
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_quotes SET response_json = ? WHERE quote_id = 'quote_transparency'`,
+    args: [
+      JSON.stringify({
+        schemaVersion: "rateloop.tokenless.v2",
+        audience: {
+          admissionPolicyHash: POLICY_HASH,
+          label: "RateLoop network",
+          source: "rateloop_network",
+        },
+        responseWindowSeconds: 3_600,
+        requestProfile: null,
+        reviewEconomics: null,
+      }),
+    ],
+  });
+  const responses = [
+    createPublicRaterResponse(
+      { operationKey: OPERATION, roundId: "42", contentId: CONTENT_ID, rationale: { mode: "required" } },
+      {
+        category: "evidence",
+        body: "This feedback is bound to the compensated reveal.",
+        sourceUrl: "https://example.com/bound",
+        nonce: `0x${"81".repeat(32)}`,
+      },
+    ),
+    createPublicRaterResponse(
+      { operationKey: OPERATION, roundId: "42", contentId: CONTENT_ID, rationale: { mode: "required" } },
+      {
+        category: "concern",
+        body: "This feedback is not bound to the indexed reveal.",
+        nonce: `0x${"82".repeat(32)}`,
+      },
+    ),
+  ];
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    for (const [index, response] of responses.entries()) {
+      await preparePublicRaterResponse(client, {
+        voucherId: `voucher_${index}`,
+        operationKey: OPERATION,
+        questionId: "question_transparency",
+        roundId: "42",
+        contentId: CONTENT_ID,
+        voteKey: VOTE_KEYS[index]!,
+        reviewerSource: "rateloop_network",
+        rationale: { mode: "required" },
+        response,
+        now: NOW,
+      });
+    }
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+  const storedResponses = await dbClient.execute({
+    sql: `SELECT response_id FROM tokenless_public_rater_responses ORDER BY voucher_id`,
+  });
+  for (const row of storedResponses.rows) {
+    await moderateTokenlessPublicRaterResponse({
+      responseId: String(row.response_id),
+      decision: "approved",
+      reasonCode: "policy_pass",
+      now: NOW,
+    });
+  }
+
+  const terminalCommits = indexedCommits().map((commit, index) => ({
+    ...commit,
+    revealed: index < 3,
+    scoringEligible: index < 2,
+    responseHash: index === 0 ? responses[0]!.responseHash : commit.responseHash,
+  }));
+  const terminalRound = indexedRound({
+    state: 7,
+    revealCount: 2,
+    compensatedRevealCount: 3,
+    compensationPerRecipient: "4000000",
+    totalCompensation: "12000000",
+    funderRefund: "34875000",
+    claimDeadline: "1784484000",
+  });
+  await appendTerminalRoundEvidence({
+    operationKey: OPERATION,
+    fetchImpl: ponderFetch({ commits: terminalCommits, round: terminalRound }),
+    ponderUrl: "https://ponder.example.test",
+  });
+
+  const verification = await dbClient.execute({
+    sql: `SELECT voucher_id, hash_verified_at FROM tokenless_public_rater_responses ORDER BY voucher_id`,
+  });
+  assert.ok(verification.rows[0]?.hash_verified_at instanceof Date);
+  assert.equal(verification.rows[1]?.hash_verified_at, null);
+
+  const published = await publishTerminalRoundResult({
+    operationKey: OPERATION,
+    appOrigin: "https://app.example.test",
+    now: NOW,
+  });
+  assert.deepEqual(published.result.feedback, {
+    items: [
+      {
+        category: "evidence",
+        body: "This feedback is bound to the compensated reveal.",
+        sourceUrl: "https://example.com/bound",
+      },
+    ],
+    redactedCount: 0,
+  });
 });
 
 test("evidence waits for the configured confirmation depth, then publishes idempotently", async () => {

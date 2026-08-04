@@ -1596,7 +1596,8 @@ export async function deriveTerminalRoundEvidence(input: {
     throw new TokenlessServiceError("Indexed commit projection is incomplete.", 409, "indexed_evidence_pending", true);
   }
   const commits = rawCommits.map((value, index) => objectValue(value, `Indexed commit ${index}`) as PonderCommit);
-  const revealedCount = commits.filter(commit => commit.revealed === true).length;
+  const revealed = commits.filter(commit => commit.revealed === true);
+  const revealedCount = revealed.length;
   const scoringEligibleCount = commits.filter(
     commit => commit.revealed === true && commit.scoringEligible === true,
   ).length;
@@ -1608,6 +1609,17 @@ export async function deriveTerminalRoundEvidence(input: {
   ) {
     throw new TokenlessServiceError(
       "Indexed terminal reveal counts are inconsistent.",
+      409,
+      "indexed_evidence_invalid",
+    );
+  }
+  const responseCommitments = revealed.map((commit, index) => ({
+    voteKey: exactAddress(commit.voteKey, `Terminal reveal ${index} vote key`),
+    responseHash: exactBytes32(commit.responseHash, `Terminal reveal ${index} response hash`) as Hex,
+  }));
+  if (new Set(responseCommitments.map(commitment => commitment.voteKey)).size !== responseCommitments.length) {
+    throw new TokenlessServiceError(
+      "Indexed terminal reveal identities are not unique.",
       409,
       "indexed_evidence_invalid",
     );
@@ -1729,6 +1741,10 @@ export async function deriveTerminalRoundEvidence(input: {
     },
   };
   validateTerminalEvidence(evidence);
+  await verifyPublicRaterResponseCommitments({
+    operationKey: input.operationKey,
+    reveals: responseCommitments,
+  });
   return evidence;
 }
 
