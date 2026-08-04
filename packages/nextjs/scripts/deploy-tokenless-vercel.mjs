@@ -1,4 +1,4 @@
-import { TOKENLESS_VERCEL_PROJECT, tokenlessVercelProjectLinkError } from "./tokenless-vercel-project.mjs";
+import { tokenlessVercelProjectLinkError } from "./tokenless-vercel-project.mjs";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -42,16 +42,7 @@ export function runTokenlessVercel({
   validateTokenlessVercelLinks({ packageRoot, readFileSync, repoRoot });
   const result = spawn(
     "yarn",
-    [
-      "exec",
-      "vercel",
-      "--cwd",
-      repoRoot,
-      "--project",
-      TOKENLESS_VERCEL_PROJECT.projectId,
-      ...TOKENLESS_VERCEL_BUILD_ARGS,
-      ...forwardedArgs,
-    ],
+    ["exec", "vercel", "--cwd", repoRoot, ...TOKENLESS_VERCEL_BUILD_ARGS, ...forwardedArgs],
     { cwd: packageRoot, stdio: "inherit" },
   );
   if (result.error) throw result.error;
