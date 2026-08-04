@@ -97,6 +97,8 @@ test("workspace compliance controls expose only browser-safe endpoints", () => {
   assert.match(source, /\/audit\/export/);
   assert.match(source, /\/assurance\/coverage\/export/);
   assert.match(source, /\/assurance\/metrics\/grafana/);
+  assert.ok(source.indexOf("evidence-empty-heading") < source.indexOf("compliance-export-heading"));
+  assert.ok(source.indexOf("<VerificationInstructions") < source.indexOf("compliance-export-heading"));
   assert.match(source, /minimumRetentionMonths/);
   assert.doesNotMatch(source, /TOKENLESS_|PRIVATE_KEY|secretRef|credentialRef/);
   assert.match(source, /Evidence integrations/);

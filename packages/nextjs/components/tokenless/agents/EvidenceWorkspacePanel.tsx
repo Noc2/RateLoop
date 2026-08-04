@@ -926,30 +926,6 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
         {null}
       </AsyncSection>
 
-      {!loading && canManage ? (
-        <Card as="section" className="rounded-2xl p-6" aria-labelledby="compliance-export-heading">
-          <h2 id="compliance-export-heading" className="text-xl font-semibold">
-            <AgentText id="translated141" />
-          </h2>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-base-content/55">
-            <AgentText id="translated142" />
-          </p>
-          <div className="mt-5 flex flex-wrap gap-3">
-            <ExportLink href={`${base}/audit/export`}>
-              <AgentText id="auditLog" />
-            </ExportLink>
-            <ExportLink href={`${base}/assurance/coverage/export`}>
-              <AgentText id="coverageHistory" />
-            </ExportLink>
-            <ExportLink href={`${base}/assurance/metrics/grafana`}>
-              <AgentText id="grafanaJson" />
-            </ExportLink>
-          </div>
-        </Card>
-      ) : null}
-
-      {!loading && canManage ? <ProjectAuditorAccess workspaceId={workspaceId} /> : null}
-
       {!loading && !error && packetSelectionUnavailable ? (
         <Card as="section" className="rounded-2xl p-6" aria-labelledby="evidence-unavailable-heading">
           <h2 id="evidence-unavailable-heading" className="font-semibold">
@@ -1458,6 +1434,30 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
           {copy(untrustedPacketKeyCount === 1 ? "keyIs" : "keysAre")} <AgentText id="translated162" />
         </p>
       ) : null}
+
+      {!loading && canManage ? (
+        <Card as="section" className="rounded-2xl p-6" aria-labelledby="compliance-export-heading">
+          <h2 id="compliance-export-heading" className="text-xl font-semibold">
+            <AgentText id="translated141" />
+          </h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-base-content/55">
+            <AgentText id="translated142" />
+          </p>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <ExportLink href={`${base}/audit/export`}>
+              <AgentText id="auditLog" />
+            </ExportLink>
+            <ExportLink href={`${base}/assurance/coverage/export`}>
+              <AgentText id="coverageHistory" />
+            </ExportLink>
+            <ExportLink href={`${base}/assurance/metrics/grafana`}>
+              <AgentText id="grafanaJson" />
+            </ExportLink>
+          </div>
+        </Card>
+      ) : null}
+
+      {!loading && canManage ? <ProjectAuditorAccess workspaceId={workspaceId} /> : null}
 
       {!loading && canManage && showAdvancedControls ? (
         <Card

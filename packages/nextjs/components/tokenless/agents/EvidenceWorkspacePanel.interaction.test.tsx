@@ -176,7 +176,7 @@ async function mount(canManage: boolean, locale: "de" | "en" = "en") {
   });
 }
 
-test("managers see compliance exports before opening advanced evidence controls", async () => {
+test("managers see the evidence state before compliance and advanced controls", async () => {
   const restoreDom = installTestDom();
   const { act, cleanup } = await import("@testing-library/react");
   const userEvent = (await import("@testing-library/user-event")).default;
@@ -184,8 +184,9 @@ test("managers see compliance exports before opening advanced evidence controls"
 
   try {
     const view = await mount(true);
-    await view.findByRole("heading", { name: "No evidence records yet" });
-    assert.ok(view.getByRole("heading", { name: "Compliance exports" }));
+    const evidenceState = await view.findByRole("heading", { name: "No evidence records yet" });
+    const compliance = view.getByRole("heading", { name: "Compliance exports" });
+    assert.ok(evidenceState.compareDocumentPosition(compliance) & 4);
     assert.ok(view.getByRole("link", { name: "Audit log" }));
     assert.ok(view.getByRole("link", { name: "Coverage history" }));
     assert.ok(await view.findByRole("heading", { name: "Project auditors" }));
