@@ -23,6 +23,17 @@ test("localizes server-defined overview periods, reasons, and quality buckets", 
   );
   assert.equal(localizeQualityBucket("unanimous", "Unanimous", "cases", germanUi), "Einstimmig");
   assert.equal(localizeQualityBucket("1h_to_4h", "1–4 hours", "decisions", germanUi), "1–4 Std.");
+  assert.equal(
+    localizeOverviewReason("Cost is recorded for 3 of 5 decisions.", germanUi),
+    "Kosten wurden für 3 von 5 Entscheidungen erfasst.",
+  );
+  assert.equal(
+    localizeOverviewReason(
+      "More than 10,000 decisions fall in the last 30 days; use the evidence export for exact metrics.",
+      germanUi,
+    ),
+    "Mehr als 10.000 Entscheidungen entsprechen dieser Ansicht. Nutze den Nachweisexport für genaue Kennzahlen.",
+  );
 });
 
 test("preserves unknown server copy until it has a stable semantic key", () => {

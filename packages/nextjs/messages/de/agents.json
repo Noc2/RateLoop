@@ -644,6 +644,10 @@
     "noDecisionTiming": "Keine Zeitdaten in diesem Zeitraum.",
     "noEligibleDecisionTiming": "Keine geeigneten Zeitdaten in diesem Zeitraum.",
     "noComparableDecisions": "Keine vergleichbaren Entscheidungen in diesem Zeitraum.",
+    "noDecisions": "Keine Entscheidungen in diesem Zeitraum.",
+    "lifetimeQualityUnavailable": "Wähle 7, 30 oder 90 Tage, um die Prüfqualität anzuzeigen.",
+    "tooManyDecisions": "Mehr als 10.000 Entscheidungen entsprechen dieser Ansicht. Nutze den Nachweisexport für genaue Kennzahlen.",
+    "partialDecisionCost": "Kosten wurden für {recorded} von {total} Entscheidungen erfasst.",
     "panelUnanimous": "Einstimmig",
     "panelDissentUnder25": "Unter 25 % abweichend",
     "panelDissent25To50": "25–50 % abweichend",
@@ -1373,6 +1377,37 @@
     "credentialRevoked": "Zugangsdaten widerrufen.",
     "credentialRotatedShort": "Zugangsdaten rotiert.",
     "credentialIssued": "Zugangsdaten ausgestellt."
+  },
+  "presentation": {
+    "unknown": "Unbekannt",
+    "legacy": "Legacy",
+    "workflowVersion": "Workflow-Version",
+    "confidenceLowerBound": "Untere 95-%-Grenze",
+    "environment": { "production": "Produktion", "staging": "Testumgebung", "development": "Entwicklung" },
+    "agentStatus": { "active": "Aktiv", "inactive": "Inaktiv", "revoked": "Widerrufen" },
+    "connectionStatus": {
+      "issued": "Erstellt",
+      "install_required": "Installation erforderlich",
+      "authorizing": "Autorisierung läuft",
+      "approval_required": "Freigabe erforderlich",
+      "testing": "Wird geprüft",
+      "connected": "Verbunden",
+      "action_required": "Aktion erforderlich",
+      "cancelled": "Abgebrochen",
+      "expired": "Abgelaufen",
+      "rejected": "Abgelehnt",
+      "revoked": "Widerrufen",
+      "superseded": "Ersetzt",
+      "active": "Aktiv"
+    },
+    "enforcement": { "host_enforced": "Durch Host erzwungen", "advisory": "Beratend" },
+    "risk": { "low": "Niedrig", "normal": "Normal", "medium": "Mittel", "high": "Hoch", "critical": "Kritisch", "unknown": "Unbekannt" },
+    "stage": {
+      "calibrating": "Kalibrierung",
+      "high_coverage": "Hohe Abdeckung",
+      "medium_coverage": "Mittlere Abdeckung",
+      "monitoring": "Überwachung"
+    }
   },
   "common": {
     "loading": "Wird geladen…",

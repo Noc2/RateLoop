@@ -12,6 +12,7 @@ import { AgentText } from "./AgentText";
 import { useAgentFormatter, useAgentTranslations } from "./AgentsLocaleProvider";
 import type { AgentConnectionHistoryEntry } from "./agentAuditHistory";
 import { buildAgentConnectionMessage, buildAgentConnectionMessageForHost } from "./agentConnectionMessage";
+import { connectionStatusLabel, enforcementModeLabel } from "./agentPresentation";
 import { canStartAgentConnection, selectReconnectableOAuthConnections } from "./agentWorkspaceState";
 import { useLocalizedReviewPolicyCopy } from "./reviewPolicyCopy";
 import { Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
@@ -703,6 +704,7 @@ export function AgentConnectionPanel({
   const format = useAgentFormatter();
   const t = useAgentTranslations("connection");
   const errors = useAgentTranslations("errors");
+  const presentation = useAgentTranslations("presentation");
   const statusCopy = useAgentTranslations("status");
   const [connectionIntents, setConnectionIntents] = useState<AgentConnectionIntent[]>([]);
   const [pairings, setPairings] = useState<AgentPairing[]>([]);
@@ -1417,7 +1419,9 @@ export function AgentConnectionPanel({
                           <h2 id="pending-agent-connections-heading" className="text-xl font-semibold">
                             {copy.heading}
                           </h2>
-                          <span className="badge badge-ghost font-mono text-xs">{intent.status}</span>
+                          <span className="badge badge-ghost text-xs">
+                            {connectionStatusLabel(intent.status, presentation)}
+                          </span>
                         </div>
                         <p className="mt-2 text-sm leading-6 text-base-content/55">{copy.detail}</p>
                         {move ? (
@@ -1673,10 +1677,10 @@ export function AgentConnectionPanel({
                           >
                             {integration.access.rateLoopAccessState === "recovery_required"
                               ? t("recoveryRequired")
-                              : integration.status}
+                              : connectionStatusLabel(integration.status, presentation)}
                           </span>
                           <span className="badge badge-ghost">
-                            {integration.enforcementMode === "host_enforced" ? "host-enforced" : "advisory"}
+                            {enforcementModeLabel(integration.enforcementMode, presentation)}
                           </span>
                           <span className="badge badge-ghost">
                             {legacyCredential ? t("legacyCredentialShort") : t("oauthCredentialShort")}

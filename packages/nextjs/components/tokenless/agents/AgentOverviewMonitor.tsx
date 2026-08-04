@@ -4,6 +4,7 @@ import { Fragment, useEffect, useState } from "react";
 import { AgentText } from "./AgentText";
 import { useAgentLocale, useAgentTranslations } from "./AgentsLocaleProvider";
 import { localizeOverviewPeriod, localizeOverviewReason, localizeQualityBucket } from "./agentOverviewLocalization";
+import { agentEnvironmentLabel, agentStatusLabel, assuranceStageLabel, riskTierLabel } from "./agentPresentation";
 import { agentTabHref } from "./agentWorkspaceState";
 import { InfoPopover } from "~~/components/tokenless/InfoPopover";
 import { SelectField } from "~~/components/tokenless/forms/Field";
@@ -50,12 +51,6 @@ function usdc(atomic: string, locale: string, unavailable: string) {
 }
 
 type AgentTranslate = (key: string, values?: Record<string, number | string>) => string;
-
-function stageLabel(stage: AgentOverviewScope["stage"], t: AgentTranslate) {
-  if (stage === "high_coverage") return t("stageHighCoverage");
-  if (stage === "medium_coverage") return t("stageMediumCoverage");
-  return stage === "monitoring" ? t("stageMonitoring") : t("stageCalibrating");
-}
 
 function stageComposition(parent: AgentOverviewParent, t: AgentTranslate) {
   return (
@@ -105,7 +100,9 @@ function HeadlineCards({ overview }: { overview: AgentOverview }) {
               <p className="mt-2 text-xl font-semibold">
                 <AgentText id="unavailable" />
               </p>
-              <p className="mt-2 text-xs leading-5 text-base-content/55">{completed.reason}</p>
+              <p className="mt-2 text-xs leading-5 text-base-content/55">
+                {localizeOverviewReason(completed.reason, ui)}
+              </p>
             </>
           )}
         </Card>
@@ -129,7 +126,9 @@ function HeadlineCards({ overview }: { overview: AgentOverview }) {
               <p className="mt-2 text-xl font-semibold">
                 <AgentText id="unavailable" />
               </p>
-              <p className="mt-2 text-xs leading-5 text-base-content/55">{endorsement.reason}</p>
+              <p className="mt-2 text-xs leading-5 text-base-content/55">
+                {localizeOverviewReason(endorsement.reason, ui)}
+              </p>
             </>
           )}
         </Card>
@@ -149,7 +148,9 @@ function HeadlineCards({ overview }: { overview: AgentOverview }) {
               <p className="mt-2 text-xl font-semibold">
                 <AgentText id="unavailable" />
               </p>
-              <p className="mt-2 text-xs leading-5 text-base-content/55">{latency.reason}</p>
+              <p className="mt-2 text-xs leading-5 text-base-content/55">
+                {localizeOverviewReason(latency.reason, ui)}
+              </p>
             </>
           )}
         </Card>
@@ -169,7 +170,7 @@ function HeadlineCards({ overview }: { overview: AgentOverview }) {
               <p className="mt-2 text-xl font-semibold">
                 <AgentText id="unavailable" />
               </p>
-              <p className="mt-2 text-xs leading-5 text-base-content/55">{cost.reason}</p>
+              <p className="mt-2 text-xs leading-5 text-base-content/55">{localizeOverviewReason(cost.reason, ui)}</p>
             </>
           )}
         </Card>
@@ -212,7 +213,7 @@ function ReviewOutcomeTrend({ overview }: { overview: AgentOverview }) {
         </InfoPopover>
       </div>
       {!trend.available ? (
-        <p className="mt-6 text-sm text-base-content/55">{trend.reason}</p>
+        <p className="mt-6 text-sm text-base-content/55">{localizeOverviewReason(trend.reason, ui)}</p>
       ) : (
         <>
           {(() => {
@@ -346,6 +347,7 @@ function decisionTimeSegments(
 
 function DecisionTimeTrend({ overview }: { overview: AgentOverview }) {
   const locale = useAgentLocale();
+  const ui = useAgentTranslations("ui");
   const trend = overview.trends.decisionTime;
   return (
     <Card as="article" className="rounded-2xl p-5">
@@ -353,7 +355,7 @@ function DecisionTimeTrend({ overview }: { overview: AgentOverview }) {
         <AgentText id="decisionTime" />
       </h3>
       {!trend.available ? (
-        <p className="mt-6 text-sm text-base-content/55">{trend.reason}</p>
+        <p className="mt-6 text-sm text-base-content/55">{localizeOverviewReason(trend.reason, ui)}</p>
       ) : (
         <>
           {(() => {
@@ -697,6 +699,7 @@ function ReviewQualityPanel({ overview }: { overview: AgentOverview }) {
 function ScopeTable({ parent }: { parent: AgentOverviewParent }) {
   const locale = useAgentLocale();
   const ui = useAgentTranslations("ui");
+  const presentation = useAgentTranslations("presentation");
   if (parent.scopes.length === 0) {
     return (
       <p className="p-4 text-sm text-base-content/55">
@@ -745,8 +748,8 @@ function ScopeTable({ parent }: { parent: AgentOverviewParent }) {
                 <span className="font-medium">{scope.workflowKey}</span>
                 <code className="mt-1 block max-w-52 truncate text-[10px] text-base-content/55">{scope.scopeId}</code>
               </td>
-              <td className="capitalize">{scope.riskTier}</td>
-              <td>{stageLabel(scope.stage, ui)}</td>
+              <td>{riskTierLabel(scope.riskTier, presentation)}</td>
+              <td>{assuranceStageLabel(scope.stage, presentation)}</td>
               <td className="font-mono">{percent(scope.reviewRateBps)}</td>
               <td className="font-mono">{scope.comparableCount.toLocaleString(locale)}</td>
               <td className="font-mono">
@@ -789,6 +792,7 @@ function AgentVersionTable({
 }) {
   const locale = useAgentLocale();
   const ui = useAgentTranslations("ui");
+  const presentation = useAgentTranslations("presentation");
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const firstParent =
     overview.agentVersions.totalParentCount === 0
@@ -839,7 +843,8 @@ function AgentVersionTable({
                       <td>
                         <p className="font-medium">{parent.displayName}</p>
                         <p className="mt-1 text-xs text-base-content/55">
-                          v{parent.versionNumber} · {parent.environment} · {parent.agentStatus}
+                          v{parent.versionNumber} · {agentEnvironmentLabel(parent.environment, presentation)} ·{" "}
+                          {agentStatusLabel(parent.agentStatus, presentation)}
                         </p>
                       </td>
                       <td>
@@ -856,7 +861,8 @@ function AgentVersionTable({
                           <>
                             <p className="font-mono">{percent(parent.lowestEndorsement.lower95Bps)}</p>
                             <p className="mt-1 text-xs text-base-content/55">
-                              {parent.lowestEndorsement.workflowKey} · {parent.lowestEndorsement.riskTier}
+                              {parent.lowestEndorsement.workflowKey} ·{" "}
+                              {riskTierLabel(parent.lowestEndorsement.riskTier, presentation)}
                             </p>
                           </>
                         ) : (
@@ -944,6 +950,7 @@ function AgentVersionTable({
 function AttentionList({ overview, workspaceId }: { overview: AgentOverview; workspaceId: string }) {
   const locale = useAgentLocale();
   const ui = useAgentTranslations("ui");
+  const presentation = useAgentTranslations("presentation");
   return (
     <Card as="section" className="rounded-2xl p-5" aria-labelledby="agent-attention-heading">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -982,16 +989,17 @@ function AttentionList({ overview, workspaceId }: { overview: AgentOverview; wor
                   </p>
                 ) : item.kind === "low_confidence" ? (
                   <p className="mt-2 text-sm text-base-content/60">
-                    {item.workflowKey} · {item.riskTier} · 95% lower bound {percent(item.lower95Bps)}{" "}
-                    <AgentText id="translated081" /> {percent(item.policyThresholdBps)} <AgentText id="translated082" />{" "}
+                    {item.workflowKey} · {riskTierLabel(item.riskTier, presentation)} ·{" "}
+                    {presentation("confidenceLowerBound")} {percent(item.lower95Bps)} <AgentText id="translated081" />{" "}
+                    {percent(item.policyThresholdBps)} <AgentText id="translated082" />{" "}
                     {item.rejectedCount.toLocaleString(locale)} <AgentText id="translated083" />{" "}
                     {item.comparableCount.toLocaleString(locale)} <AgentText id="translated084" />
                   </p>
                 ) : (
                   <p className="mt-2 text-sm text-base-content/60">
-                    {item.workflowKey} · {item.riskTier} · n = {item.comparableCount.toLocaleString(locale)}{" "}
-                    <AgentText id="translated063" /> {item.targetComparableCount.toLocaleString(locale)}{" "}
-                    <AgentText id="translated084" />
+                    {item.workflowKey} · {riskTierLabel(item.riskTier, presentation)} · n ={" "}
+                    {item.comparableCount.toLocaleString(locale)} <AgentText id="translated063" />{" "}
+                    {item.targetComparableCount.toLocaleString(locale)} <AgentText id="translated084" />
                   </p>
                 )}
               </div>
@@ -1045,6 +1053,7 @@ function OverviewControls({
   query: AgentOverviewUrlState;
 }) {
   const ui = useAgentTranslations("ui");
+  const presentation = useAgentTranslations("presentation");
   const selectClassName = "select-sm bg-base-content/[0.04]";
   const labelClassName = "mb-1 text-xs text-base-content/65";
   return (
@@ -1109,7 +1118,7 @@ function OverviewControls({
           </option>
           {overview.facets.riskTiers.map(option => (
             <option key={option.value} value={option.value}>
-              {option.label}
+              {riskTierLabel(option.value, presentation)}
             </option>
           ))}
         </SelectField>
@@ -1131,7 +1140,7 @@ function OverviewControls({
           </option>
           {overview.facets.stages.map(option => (
             <option key={option.value} value={option.value}>
-              {option.label}
+              {assuranceStageLabel(option.value, presentation)}
             </option>
           ))}
         </SelectField>

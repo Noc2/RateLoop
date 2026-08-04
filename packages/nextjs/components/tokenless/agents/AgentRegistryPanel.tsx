@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AgentText } from "./AgentText";
 import { useAgentFormatter, useAgentTranslations } from "./AgentsLocaleProvider";
 import { type AgentConnectionHistoryEntry, mergeAgentAuditHistory } from "./agentAuditHistory";
+import { agentEnvironmentLabel, agentStatusLabel, connectionStatusLabel } from "./agentPresentation";
 import { AgentVersionForm } from "~~/components/tokenless/agents/AgentVersionForm";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import { Badge } from "~~/components/tokenless/ui/Badge";
@@ -35,6 +36,7 @@ export function AgentRegistryPanel({
   const format = useAgentFormatter();
   const ui = useAgentTranslations("ui");
   const errors = useAgentTranslations("errors");
+  const presentation = useAgentTranslations("presentation");
   const statusCopy = useAgentTranslations("status");
   const [registry, setRegistry] = useState<AgentRegistry | null>(null);
   const [editingAgent, setEditingAgent] = useState<WorkspaceAgent | null>(null);
@@ -167,7 +169,9 @@ export function AgentRegistryPanel({
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="font-semibold">{agent.currentVersion.displayName}</h2>
-                    <Badge variant={agent.status === "active" ? "success" : "neutral"}>{agent.status}</Badge>
+                    <Badge variant={agent.status === "active" ? "success" : "neutral"}>
+                      {agentStatusLabel(agent.status, presentation)}
+                    </Badge>
                   </div>
                 </div>
               </div>
@@ -179,7 +183,7 @@ export function AgentRegistryPanel({
                   <p className="mt-1 text-base-content/65">
                     {selectedVersion.declaredProvider} {selectedVersion.declaredModel}
                     {selectedVersion.declaredModelVersion ? ` ${selectedVersion.declaredModelVersion}` : ""} ·{" "}
-                    {selectedVersion.environment}
+                    {agentEnvironmentLabel(selectedVersion.environment, presentation)}
                   </p>
                   <code className="mt-2 block break-all text-[11px] text-base-content/55">
                     {selectedVersion.versionId}
@@ -248,7 +252,7 @@ export function AgentRegistryPanel({
                       <dt className="text-xs text-base-content/55">
                         <AgentText id="environment" />
                       </dt>
-                      <dd className="mt-1 capitalize">{agent.currentVersion.environment}</dd>
+                      <dd className="mt-1">{agentEnvironmentLabel(agent.currentVersion.environment, presentation)}</dd>
                     </div>
                     {agent.ownerAccountAddress ? (
                       <div>
@@ -296,7 +300,7 @@ export function AgentRegistryPanel({
                     <strong>
                       {entry.kind === "connection"
                         ? entry.clientName
-                        : `${entry.displayName} · Workflow version ${entry.versionNumber}`}
+                        : `${entry.displayName} · ${presentation("workflowVersion")} ${entry.versionNumber}`}
                     </strong>
                     {entry.occurredAt ? (
                       <time dateTime={entry.occurredAt} className="text-xs text-base-content/55">
@@ -307,12 +311,16 @@ export function AgentRegistryPanel({
                   {entry.kind === "connection" ? (
                     <div className="mt-2">
                       <Badge variant="neutral" className="text-xs">
-                        {entry.legacy ? `legacy · ${entry.status}` : entry.status}
+                        {entry.legacy
+                          ? `${presentation("legacy")} · ${connectionStatusLabel(entry.status, presentation)}`
+                          : connectionStatusLabel(entry.status, presentation)}
                       </Badge>
                     </div>
                   ) : (
                     <>
-                      <p className="mt-2 capitalize text-base-content/60">{entry.environment}</p>
+                      <p className="mt-2 text-base-content/60">
+                        {agentEnvironmentLabel(entry.environment, presentation)}
+                      </p>
                       <code className="mt-2 block break-all text-[11px] text-base-content/55">
                         sha256:{entry.configurationCommitment}
                       </code>

@@ -644,6 +644,10 @@
     "noDecisionTiming": "No timing data in this period.",
     "noEligibleDecisionTiming": "No eligible timing data in this period.",
     "noComparableDecisions": "No comparable decisions in this period.",
+    "noDecisions": "No decisions in this period.",
+    "lifetimeQualityUnavailable": "Choose 7, 30, or 90 days to view review quality.",
+    "tooManyDecisions": "More than 10,000 decisions match this view. Use the evidence export for exact metrics.",
+    "partialDecisionCost": "Cost is recorded for {recorded} of {total} decisions.",
     "panelUnanimous": "Unanimous",
     "panelDissentUnder25": "Under 25% dissent",
     "panelDissent25To50": "25–50% dissent",
@@ -1373,6 +1377,37 @@
     "credentialRevoked": "Credential revoked.",
     "credentialRotatedShort": "Credential rotated.",
     "credentialIssued": "Credential issued."
+  },
+  "presentation": {
+    "unknown": "Unknown",
+    "legacy": "Legacy",
+    "workflowVersion": "Workflow version",
+    "confidenceLowerBound": "95% lower bound",
+    "environment": { "production": "Production", "staging": "Staging", "development": "Development" },
+    "agentStatus": { "active": "Active", "inactive": "Inactive", "revoked": "Revoked" },
+    "connectionStatus": {
+      "issued": "Created",
+      "install_required": "Installation required",
+      "authorizing": "Authorizing",
+      "approval_required": "Approval required",
+      "testing": "Testing",
+      "connected": "Connected",
+      "action_required": "Action required",
+      "cancelled": "Cancelled",
+      "expired": "Expired",
+      "rejected": "Rejected",
+      "revoked": "Revoked",
+      "superseded": "Superseded",
+      "active": "Active"
+    },
+    "enforcement": { "host_enforced": "Host-enforced", "advisory": "Advisory" },
+    "risk": { "low": "Low", "normal": "Normal", "medium": "Medium", "high": "High", "critical": "Critical", "unknown": "Unknown" },
+    "stage": {
+      "calibrating": "Calibrating",
+      "high_coverage": "High coverage",
+      "medium_coverage": "Medium coverage",
+      "monitoring": "Monitoring"
+    }
   },
   "common": {
     "loading": "Loading…",

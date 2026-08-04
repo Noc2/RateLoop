@@ -354,7 +354,7 @@ test("the overview renders four fixed answers and expands lifetime scope evidenc
     assert.ok(view.getByRole("heading", { name: "Attention" }));
     assert.ok(view.getByText("2 blocked reviews cannot settle."));
     assert.ok(view.getByText(/95% lower bound 65\.0% is below the 75\.0% policy threshold/));
-    assert.ok(view.getByText(/account-change · normal · n = 12 of 30 comparable decisions/));
+    assert.ok(view.getByText(/account-change · Normal · n = 12 of 30 comparable decisions/));
     assert.match(view.getByRole("link", { name: "Open approvals" }).getAttribute("href") ?? "", /\/agents\/approvals/);
     assert.match(view.getByRole("link", { name: "Open results" }).getAttribute("href") ?? "", /\/agents\/results/);
     assert.match(view.getByRole("link", { name: "Review setup" }).getAttribute("href") ?? "", /\/agents\/review-setup/);

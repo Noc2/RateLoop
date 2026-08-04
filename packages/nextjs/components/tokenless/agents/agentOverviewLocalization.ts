@@ -20,6 +20,8 @@ const REASON_KEYS: Record<string, string> = {
   "No decision timing is available in this window.": "noDecisionTiming",
   "No privacy-eligible decision timing is available in this window.": "noEligibleDecisionTiming",
   "No comparable decisions in this window.": "noComparableDecisions",
+  "No decisions in this window.": "noDecisions",
+  "Lifetime review quality is unavailable. Choose 7, 30, or 90 days.": "lifetimeQualityUnavailable",
 };
 
 const PANEL_BUCKET_KEYS: Record<string, string> = {
@@ -44,7 +46,11 @@ export function localizeOverviewPeriod(label: string, t: AgentTranslate) {
 
 export function localizeOverviewReason(reason: string, t: AgentTranslate) {
   const key = REASON_KEYS[reason];
-  return key ? t(key) : reason;
+  if (key) return t(key);
+  if (reason.startsWith("More than 10,000 decisions fall in ")) return t("tooManyDecisions");
+  const partialCost = /^Cost is recorded for (\d+) of (\d+) decisions\.$/u.exec(reason);
+  if (partialCost) return t("partialDecisionCost", { recorded: partialCost[1], total: partialCost[2] });
+  return reason;
 }
 
 export function localizeQualityBucket(key: string, fallback: string, unit: "cases" | "decisions", t: AgentTranslate) {
