@@ -62,3 +62,17 @@ test("all workspace plan consumers share the hosted invited-unpaid availability 
   assert.match(settingsSource, /privateGroupLimitLabel\(billing\.limits\.activePrivateGroups\)/);
   assert.doesNotMatch(settingsSource, /Paid (?:reviewer )?panels? available/);
 });
+
+test("disabled subscriptions route pilot interest through the configured scheduler", () => {
+  (globalThis as typeof globalThis & { React: typeof React }).React = React;
+  const html = renderToStaticMarkup(
+    <WorkspacePlanCards subscriptionsEnabled={false} demoBookingUrl="https://calendar.app.google/rateloopDemo" />,
+  ).replace(/\s+/g, " ");
+
+  assert.match(
+    html,
+    /href="https:\/\/calendar\.app\.google\/rateloopDemo" target="_blank" rel="noopener noreferrer"[^>]*>Request pilot<\/a>/,
+  );
+  assert.equal(html.match(/href="https:\/\/calendar\.app\.google\/rateloopDemo"/g)?.length, 2);
+  assert.doesNotMatch(html, /mailto:/);
+});

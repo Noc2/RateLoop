@@ -40,8 +40,8 @@ export function WorkspacePlanCards({
   const copy = (source: string) => translatePublicString(source, locale, "site");
   const earlyAccessHref = subscriptionsEnabled
     ? workspacePlanHref(workspaceId, "upgrade")
-    : "mailto:hawigxyz@proton.me?subject=RateLoop%20Early%20Access";
-  const earlyAccessCta = copy(subscriptionsEnabled ? "Choose Early Access" : "Join Early Access");
+    : (demoBookingUrl ?? "mailto:hawigxyz@proton.me?subject=RateLoop%20Early%20Access");
+  const earlyAccessCta = copy(subscriptionsEnabled ? "Choose Early Access" : "Request pilot");
 
   return (
     <LocalizedPublicContent locale={locale} section="site">
@@ -97,6 +97,15 @@ export function WorkspacePlanCards({
           footer={
             earlyAccessHref.startsWith("mailto:") ? (
               <a href={earlyAccessHref} className="rateloop-gradient-action min-h-12 w-full justify-center px-5">
+                {earlyAccessCta}
+              </a>
+            ) : !subscriptionsEnabled ? (
+              <a
+                href={earlyAccessHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rateloop-gradient-action min-h-12 w-full justify-center px-5"
+              >
                 {earlyAccessCta}
               </a>
             ) : (
