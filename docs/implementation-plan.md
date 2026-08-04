@@ -787,7 +787,7 @@ shipped native approve-and-resume.
 | 5     | 2.3, 2.4 — governance and engagement foundations                   | Done                                                                          |
 | 6     | 2.8, 2.6 — canonical v4 packets and witnessed audit heads          | Done                                                                          |
 | 7     | 3.1, 2.1, 2.2 — population and persisted witnessed draw foundation | Modules implemented and tested, but **no production caller**; see §6a P1      |
-| 8     | 2.5, 3.2–3.5 — system evaluations, labels and durable reports      | Code present through `0188`; final engineering and external validation remain |
+| 8     | 2.5, 3.2–3.5 — system evaluations, labels and durable reports      | Code present through `0189`; final engineering and external validation remain |
 | 9     | 2.7, 2.9 — persist separate compliance and research grants         | Implemented through migration `0181`; hosted exercise remains                 |
 | 10    | 3.6 — audit-partner review and two provider pilots                 | Release gate                                                                  |
 | 11    | 3.7 — separate closed-network Base Sepolia exercise                | Release gate                                                                  |
@@ -809,7 +809,7 @@ artefact to accept, and the pricing argument in §6a has nothing behind it. Trea
    references; make quarantine universal; and remove terminology that implies legal or
    organisational independence.
 2. **Engineering verification.** Pass the complete empty-database journal, a populated
-   `0181`→`0188` upgrade, route-boundary and UI interaction suites, and real PostgreSQL
+   `0181`→`0189` upgrade, route-boundary and UI interaction suites, and real PostgreSQL
    trigger negatives. Hosted preflight stops on legacy evidence; it never deletes or
    patches that evidence to make migration pass.
 3. **Role-staged pilot product.** Give the separated project auditor one direct definition
@@ -837,9 +837,9 @@ artefact to accept, and the pricing argument in §6a has nothing behind it. Trea
 
 - **Reference and operational channels never share rollups.** Implement the exclusion in
   1.4 before 2.5 writes its first label.
-- **One migration in flight at a time.** The ordered journal now runs through `0188`; the
-  next available migration number is `0189`. Do not start it until the complete
-  `0000`–`0188` journal and its real-Postgres invariant suite are green.
+- **One migration in flight at a time.** The ordered journal now runs through `0189`; the
+  next available migration number is `0190`. Do not start it until the complete
+  `0000`–`0189` journal and its real-Postgres invariant suite are green.
 - **Keep localized claims inside the same gate.** The claim-gate walker now scans English
   and German JSON as well as public components and Markdown. Any new locale or public-copy
   directory must be added to the same cross-consumer test before copy lands.
@@ -1017,7 +1017,7 @@ done only when the named consumer path and exit tests pass together.
   exact non-quarantined bridge.
 - Part 8 inferential accuracy accepts only the named-panel derivation. Contractual
   public-safe research may expose either derivation only with its exact provenance bridge
-  and restrictions. Exit from engineering is the complete `0000`–`0188` PostgreSQL and
+  and restrictions. Exit from engineering is the complete `0000`–`0189` PostgreSQL and
   route suite; release still requires the external method decision and pilots in §3.6.
 
 ### 2.8, then 2.6–2.7 — packet and adverse-reader path
@@ -1117,7 +1117,7 @@ are not substitutes for either database clock.
   of the withheld fields; qualification expiry, conflicts and later authority grants fail
   closed; response labels preserve `policy_matches → fail` and
   `policy_does_not_match → pass`; and the authorized reveal reproduces the committed
-  mapping. The full `0000`–`0188` journal and the actual PostgreSQL trigger suite must pass
+  mapping. The full `0000`–`0189` journal and the actual PostgreSQL trigger suite must pass
   from an empty database.
 - Migration `0185` lets an authenticated selected reviewer who opened the exact artifact
   report content self-identification without submitting a label. The transaction

@@ -19,7 +19,10 @@ import {
   submitAgentRegistration,
 } from "~~/lib/tokenless/agentIntegrations";
 import { __setArtifactPrivacyRuntimeForTests, readEncryptedArtifact } from "~~/lib/tokenless/artifactPrivacy";
-import { __setAssuranceResponseKeyringsForTests } from "~~/lib/tokenless/assuranceResponses";
+import {
+  __setAssuranceResponseKeyringsForTests,
+  readFeedbackBonusAssuranceResponse,
+} from "~~/lib/tokenless/assuranceResponses";
 import {
   __directPrivateReviewEvidenceTestUtils,
   projectDirectPrivateReviewDecisionEvidence,
@@ -31,6 +34,7 @@ import {
   __humanReviewRequestRouterTestUtils,
   routeHumanReviewRequest,
 } from "~~/lib/tokenless/humanReviewRequestRouter";
+import { getOversightRunCaseView } from "~~/lib/tokenless/oversightCaseView";
 import {
   createPrivateGroup,
   createPrivateGroupInvitation,
@@ -374,7 +378,7 @@ test("unpaid review preserves exact forecast-bearing replays from before forecas
 });
 
 test("direct private assignments surface in reviewer work and produce a terminal aggregate result", async () => {
-  const setup = await fixture();
+  const setup = await fixture([], null, "external", "optional");
   const delivered = await requestPrivateUnpaidHumanReview({
     principal: setup.principal,
     opportunityId: setup.opportunityId,
@@ -453,6 +457,7 @@ test("direct private assignments surface in reviewer work and produce a terminal
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "assurance_case_binding_mismatch",
   );
 
+  const rationales = ["The suggested answer follows the policy.", "The response is correct and safe."];
   const respond = (index: number) => {
     const assignment = delivered.assignments[index]!;
     return submitDirectPrivateReviewResponse({
@@ -465,7 +470,7 @@ test("direct private assignments surface in reviewer work and produce a terminal
           displayedOption: "A",
           selectedArtifactId: setup.prepared.artifacts.suggestionArtifactId,
           failureTagKeys: [],
-          rationale: "",
+          rationale: rationales[index]!,
         },
       ],
       now: new Date(`2026-07-16T09:2${7 + index}:00.000Z`),
@@ -516,6 +521,96 @@ test("direct private assignments surface in reviewer work and produce a terminal
   });
   assert.equal(Number(projectedCounts.rows[0]?.assignment_count), 2);
   assert.equal(Number(projectedCounts.rows[0]?.response_count), 2);
+  const rationaleDigests = await dbClient.execute({
+    sql: `SELECT source.response_id AS source_response_id,projected.response_id AS projected_response_id,
+                 source.response_commitment AS source_commitment,
+                 source.rationale_key_ref AS source_key_ref,
+                 source.rationale_digest AS source_digest,projected.rationale_digest AS projected_digest,
+                 source.rationale_ciphertext AS source_ciphertext,
+                 projected.rationale_ciphertext AS projected_ciphertext
+          FROM tokenless_private_review_responses source
+          JOIN tokenless_assurance_responses projected ON projected.reviewer_key=source.reviewer_key
+          WHERE source.delivery_id=? AND projected.run_id=?
+          ORDER BY source.reviewer_key`,
+    args: [terminal!.deliveryId, projected.rows[0]?.run_id],
+  });
+  assert.equal(rationaleDigests.rows.length, 2);
+  assert.equal(
+    rationaleDigests.rows.every(row => row.source_digest === row.projected_digest),
+    true,
+  );
+  assert.equal(
+    rationaleDigests.rows.every(row => /^sha256:[0-9a-f]{64}$/u.test(String(row.projected_digest))),
+    true,
+  );
+  assert.equal(
+    rationaleDigests.rows.every(row => row.source_ciphertext !== row.projected_ciphertext),
+    true,
+  );
+  const caseView = await getOversightRunCaseView({
+    accountAddress: OWNER,
+    workspaceId: setup.workspaceId,
+    runId: String(projected.rows[0]?.run_id),
+  });
+  assert.deepEqual(caseView.cases[0]?.responses.map(response => response.rationale).sort(), rationales.sort());
+  for (const row of rationaleDigests.rows) {
+    await dbClient.execute({
+      sql: `UPDATE tokenless_assurance_responses
+            SET rationale_ciphertext=?,rationale_key_ref=?,rationale_digest=?
+            WHERE response_id=?`,
+      args: [row.source_ciphertext, row.source_key_ref, row.source_digest, row.projected_response_id],
+    });
+  }
+  const historicalCaseView = await getOversightRunCaseView({
+    accountAddress: OWNER,
+    workspaceId: setup.workspaceId,
+    runId: String(projected.rows[0]?.run_id),
+  });
+  assert.deepEqual(
+    historicalCaseView.cases[0]?.responses.map(response => response.rationale).sort(),
+    rationales.sort(),
+  );
+  const historicalFeedbackBodies = await Promise.all(
+    rationaleDigests.rows.map(row =>
+      readFeedbackBonusAssuranceResponse({
+        responseId: String(row.projected_response_id),
+        workspaceId: setup.workspaceId,
+        opportunityId: setup.opportunityId,
+      }),
+    ),
+  );
+  assert.deepEqual(historicalFeedbackBodies.sort(), rationales.sort());
+  const historicalRow = rationaleDigests.rows[0]!;
+  for (const mutation of [
+    { field: "response_digest", value: `sha256:${"f".repeat(64)}` },
+    { field: "rationale_ciphertext", value: `${historicalRow.source_ciphertext}x` },
+    { field: "rationale_key_ref", value: "assurance_rationale:missing" },
+    { field: "rationale_digest", value: `sha256:${"e".repeat(64)}` },
+  ]) {
+    await dbClient.execute({
+      sql: `UPDATE tokenless_assurance_responses SET ${mutation.field}=? WHERE response_id=?`,
+      args: [mutation.value, historicalRow.projected_response_id],
+    });
+    await assert.rejects(
+      getOversightRunCaseView({
+        accountAddress: OWNER,
+        workspaceId: setup.workspaceId,
+        runId: String(projected.rows[0]?.run_id),
+      }),
+    );
+    await dbClient.execute({
+      sql: `UPDATE tokenless_assurance_responses
+            SET response_digest=?,rationale_ciphertext=?,rationale_key_ref=?,rationale_digest=?
+            WHERE response_id=?`,
+      args: [
+        historicalRow.source_commitment,
+        historicalRow.source_ciphertext,
+        historicalRow.source_key_ref,
+        historicalRow.source_digest,
+        historicalRow.projected_response_id,
+      ],
+    });
+  }
   assert.equal((await __landingSocialProofServerTestUtils.loadApplicationStats()).totalRatings, "2");
   const projectionState = await dbClient.execute({
     sql: `SELECT evidence_projection_state,evidence_projection_next_attempt_at
@@ -570,7 +665,7 @@ test("direct private assignments surface in reviewer work and produce a terminal
   assert.equal(stored.rows.length, 2);
   assert.ok(
     stored.rows.every(
-      row => row.choice === "positive" && row.predicted_positive_bps === null && row.rationale_ciphertext === null,
+      row => row.choice === "positive" && row.predicted_positive_bps === null && row.rationale_ciphertext !== null,
     ),
   );
   assert.ok(stored.rows.every(row => /^sha256:[0-9a-f]{64}$/u.test(String(row.response_commitment))));
@@ -1567,6 +1662,7 @@ async function fixture(
   requiredExpertiseKeys: Array<"code-review:typescript"> = [],
   exactMinimumSeats: number | null = null,
   commitmentMode: "external" | "legacy" = "external",
+  rationaleMode: "off" | "optional" | "required" = "off",
 ) {
   const foundationNow = new Date("2026-07-16T09:00:00.000Z");
   await identity(REVIEWER_A, "reviewer-a@example.com", foundationNow);
@@ -1641,7 +1737,7 @@ async function fixture(
       criterion: "Is this suggestion correct and safe?",
       positiveLabel: "Approve",
       negativeLabel: "Reject",
-      rationaleMode: "off",
+      rationaleMode,
       audience: "private_invited",
       contentBoundary: "private_workspace",
       privateSensitivity: "confidential",

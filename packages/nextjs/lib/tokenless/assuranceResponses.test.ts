@@ -6,6 +6,8 @@ import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import {
   __assuranceResponsesTestUtils,
   __setAssuranceResponseKeyringsForTests,
+  decryptWorkspaceOwnedRationale,
+  encryptAssuranceRationale,
   submitAssuranceResponses,
 } from "~~/lib/tokenless/assuranceResponses";
 import { freezeAssuranceRunOrchestration } from "~~/lib/tokenless/assuranceRunOrchestration";
@@ -47,6 +49,35 @@ beforeEach(() => {
 afterEach(() => {
   __setAssuranceResponseKeyringsForTests(null);
   __setDatabaseResourcesForTests(null);
+});
+
+test("historical projected rationales retain their authenticated source binding", () => {
+  const digest = `sha256:${createHash("sha256").update("source rationale").digest("hex")}`;
+  const encrypted = encryptAssuranceRationale(
+    {
+      runId: "source-delivery",
+      caseId: "source-review",
+      reviewerKey: "source-reviewer",
+      digest,
+      rationale: "source rationale",
+    },
+    { currentVersion: "rationale-test-v1", keys: new Map([["rationale-test-v1", RATIONALE_KEY]]) },
+  );
+
+  assert.equal(
+    decryptWorkspaceOwnedRationale({
+      run_id: "projected-run",
+      case_id: "projected-case",
+      reviewer_key: "source-reviewer",
+      rationale_binding_run_id: "source-delivery",
+      rationale_binding_case_id: "source-review",
+      rationale_binding_reviewer_key: "source-reviewer",
+      rationale_ciphertext: encrypted.ciphertext,
+      rationale_key_ref: encrypted.keyRef,
+      rationale_digest: digest,
+    }),
+    "source rationale",
+  );
 });
 
 async function seedArtifact(projectId: string, artifactId: string, role: "baseline" | "candidate", marker: string) {

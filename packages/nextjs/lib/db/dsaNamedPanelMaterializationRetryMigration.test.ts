@@ -81,7 +81,7 @@ test("0187 retry state applies in the pg-mem service harness", async () => {
   }
 });
 
-test("the complete in-memory journal applies through 0188", async () => {
+test("the complete in-memory journal applies through 0189", async () => {
   const resources = createMemoryDatabaseResources();
   try {
     const result = await resources.pool.query(

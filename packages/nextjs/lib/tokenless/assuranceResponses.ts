@@ -162,10 +162,11 @@ function decryptRationale(row: QueryRow) {
     throw new Error("Assurance rationale digest is unavailable.");
   }
   const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(parts[1]!, "base64url"));
+  const bindingRunId = rowString(row, "rationale_binding_run_id") ?? rowString(row, "run_id");
+  const bindingCaseId = rowString(row, "rationale_binding_case_id") ?? rowString(row, "case_id");
+  const bindingReviewerKey = rowString(row, "rationale_binding_reviewer_key") ?? rowString(row, "reviewer_key");
   decipher.setAAD(
-    Buffer.from(
-      `${RATIONALE_KEY_DOMAIN}:${rowString(row, "run_id")}:${rowString(row, "case_id")}:${rowString(row, "reviewer_key")}:${digest}`,
-    ),
+    Buffer.from(`${RATIONALE_KEY_DOMAIN}:${bindingRunId}:${bindingCaseId}:${bindingReviewerKey}:${digest}`),
   );
   decipher.setAuthTag(Buffer.from(parts[2]!, "base64url"));
   return Buffer.concat([decipher.update(Buffer.from(parts[3]!, "base64url")), decipher.final()]).toString("utf8");
@@ -183,12 +184,25 @@ export async function readFeedbackBonusAssuranceResponse(input: {
   opportunityId: string;
 }) {
   const result = await dbPool.query(
-    `SELECT response.*
+    `SELECT response.*,
+            source.delivery_id AS rationale_binding_run_id,
+            source.private_review_id AS rationale_binding_case_id,
+            source.reviewer_key AS rationale_binding_reviewer_key
      FROM tokenless_assurance_responses response
      JOIN tokenless_agent_review_opportunities opportunity
        ON opportunity.run_id = response.run_id
       AND opportunity.workspace_id = $2
       AND opportunity.opportunity_id = $3
+     LEFT JOIN tokenless_private_unpaid_review_deliveries delivery
+       ON delivery.workspace_id = opportunity.workspace_id
+      AND delivery.opportunity_id = opportunity.opportunity_id
+     LEFT JOIN tokenless_private_review_responses source
+       ON source.delivery_id = delivery.delivery_id
+      AND source.reviewer_key = response.reviewer_key
+      AND source.response_commitment = response.response_digest
+      AND source.rationale_ciphertext = response.rationale_ciphertext
+      AND source.rationale_key_ref = response.rationale_key_ref
+      AND source.rationale_digest = response.rationale_digest
      LEFT JOIN tokenless_assurance_run_gold_items gold
        ON gold.run_id = response.run_id AND gold.case_id = response.case_id
      WHERE response.response_id = $1

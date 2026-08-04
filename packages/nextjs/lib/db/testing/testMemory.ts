@@ -88,6 +88,16 @@ function applySqlStatements(sqlText: string, execute: (statement: string) => voi
 
 function memoryCompatibleMigrationStatement(file: string, statement: string): string | null {
   if (
+    file === "0189_private_review_rationale_digests.sql" &&
+    /^UPDATE "tokenless_assurance_responses" AS projected/u.test(statement)
+  ) {
+    // pg-mem cannot parse PostgreSQL UPDATE ... FROM with joined source
+    // tables. The migration contract test pins that backfill, while the
+    // direct-review service test exercises the same digest projection for
+    // newly written rows.
+    return null;
+  }
+  if (
     file === "0188_network_benchmark_deployment_key.sql" &&
     /^ALTER TABLE "tokenless_network_benchmark_[^"]+"[\s\S]*ADD CONSTRAINT[\s\S]*NOT VALID;?$/u.test(statement)
   ) {

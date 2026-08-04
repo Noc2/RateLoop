@@ -158,11 +158,27 @@ export async function getOversightRunCaseView(input: {
           [projectId],
         ),
         client.query(
-          `SELECT case_id, reviewer_key, reviewer_source, choice, failure_tag_keys_json,
-                  rationale_ciphertext, rationale_key_ref, rationale_digest, run_id, submitted_at
-           FROM tokenless_assurance_responses
-           WHERE run_id = $1 AND validity = 'valid'
-           ORDER BY submitted_at ASC, response_id ASC`,
+          `SELECT response.case_id, response.reviewer_key, response.reviewer_source, response.choice,
+                  response.failure_tag_keys_json, response.rationale_ciphertext, response.rationale_key_ref,
+                  response.rationale_digest, response.run_id, response.submitted_at,
+                  source.delivery_id AS rationale_binding_run_id,
+                  source.private_review_id AS rationale_binding_case_id,
+                  source.reviewer_key AS rationale_binding_reviewer_key
+           FROM tokenless_assurance_responses response
+           LEFT JOIN tokenless_agent_review_opportunities opportunity
+             ON opportunity.run_id = response.run_id
+           LEFT JOIN tokenless_private_unpaid_review_deliveries delivery
+             ON delivery.workspace_id = opportunity.workspace_id
+            AND delivery.opportunity_id = opportunity.opportunity_id
+           LEFT JOIN tokenless_private_review_responses source
+             ON source.delivery_id = delivery.delivery_id
+            AND source.reviewer_key = response.reviewer_key
+            AND source.response_commitment = response.response_digest
+            AND source.rationale_ciphertext = response.rationale_ciphertext
+            AND source.rationale_key_ref = response.rationale_key_ref
+            AND source.rationale_digest = response.rationale_digest
+           WHERE response.run_id = $1 AND response.validity = 'valid'
+           ORDER BY response.submitted_at ASC, response.response_id ASC`,
           [input.runId],
         ),
         client.query("SELECT case_id FROM tokenless_assurance_run_gold_items WHERE run_id = $1", [input.runId]),

@@ -2,6 +2,11 @@ import { createHash } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
 import { dbPool } from "~~/lib/db";
+import {
+  decryptWorkspaceOwnedRationale,
+  encryptAssuranceRationale,
+  getAssuranceResponseKeyrings,
+} from "~~/lib/tokenless/assuranceResponses";
 import { generateAssuranceEvidencePacket } from "~~/lib/tokenless/evidencePackets";
 import { canonicalizeHumanAssuranceDocument, hashHumanAssuranceDocument } from "~~/lib/tokenless/humanAssurance";
 import { throwIfMaintenanceCancelled } from "~~/lib/tokenless/maintenanceCancellation";
@@ -498,12 +503,30 @@ async function insertProjection(client: PoolClient, source: Row, now: Date) {
 
   for (const value of responses.rows) {
     const response = value as Row;
+    const rationaleDigest = text(response, "rationale_digest");
+    const projectedRationale =
+      response.rationale_ciphertext && response.rationale_key_ref && rationaleDigest
+        ? encryptAssuranceRationale(
+            {
+              caseId,
+              digest: rationaleDigest,
+              rationale: decryptWorkspaceOwnedRationale({
+                ...response,
+                run_id: deliveryId,
+                case_id: privateReviewId,
+              }),
+              reviewerKey: text(response, "reviewer_key")!,
+              runId,
+            },
+            getAssuranceResponseKeyrings().rationale,
+          )
+        : { ciphertext: null, keyRef: null };
     await client.query(
       `INSERT INTO tokenless_assurance_responses
        (response_id,run_id,case_id,reviewer_key,reviewer_source,choice,failure_tag_keys_json,
-        rationale_ciphertext,rationale_key_ref,qualification_keys_json,assurance_capabilities_json,
-        response_digest,settlement_reference,validity,submitted_at,updated_at)
-       VALUES ($1,$2,$3,$4,'customer_invited',$5,'[]',$6,$7,$8,'[]',$9,$10,'valid',$11,$11)
+        rationale_ciphertext,rationale_key_ref,rationale_digest,qualification_keys_json,
+        assurance_capabilities_json,response_digest,settlement_reference,validity,submitted_at,updated_at)
+       VALUES ($1,$2,$3,$4,'customer_invited',$5,'[]',$6,$7,$8,$9,'[]',$10,$11,'valid',$12,$12)
        ON CONFLICT (response_id) DO NOTHING`,
       [
         projectedId("harp", deliveryId, text(response, "response_id")!),
@@ -511,8 +534,9 @@ async function insertProjection(client: PoolClient, source: Row, now: Date) {
         caseId,
         text(response, "reviewer_key"),
         text(response, "choice") === "positive" ? "candidate" : "baseline",
-        response.rationale_ciphertext ?? null,
-        response.rationale_key_ref ?? null,
+        projectedRationale.ciphertext,
+        projectedRationale.keyRef,
+        rationaleDigest,
         JSON.stringify(qualificationKeys(response.qualification_snapshot_json)),
         text(response, "response_commitment"),
         paid ? text(response, "paid_settlement_reference") : null,
