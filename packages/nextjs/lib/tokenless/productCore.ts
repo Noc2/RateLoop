@@ -1444,13 +1444,43 @@ async function persistPaymentIntent(input: {
       : input.payment.mode === "x402" && !input.payment.authorization
         ? "pending_chain_authorization"
         : "pending_chain_execution";
-  const existing = await dbClient.execute({
-    sql: `SELECT payment_intent_id, amount_atomic, mode, payload_hash
-          FROM tokenless_payment_intents WHERE workspace_id = ? AND idempotency_key = ? LIMIT 1`,
-    args: [input.workspaceId, input.idempotencyKey],
-  });
-  const row = existing.rows[0] as QueryRow | undefined;
-  if (row) {
+  const paymentIntentId = `pay_${randomUUID().replaceAll("-", "")}`;
+  const now = new Date();
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    const inserted = await client.query(
+      `INSERT INTO tokenless_payment_intents
+       (payment_intent_id, workspace_id, idempotency_key, mode, payer_address, amount_atomic,
+        payload_hash, payload_json, state, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)
+       ON CONFLICT (workspace_id, idempotency_key) DO NOTHING
+       RETURNING payment_intent_id, amount_atomic, mode, payload_hash, state`,
+      [
+        paymentIntentId,
+        input.workspaceId,
+        input.idempotencyKey,
+        input.payment.mode,
+        payerAddress,
+        input.amountAtomic.toString(),
+        payloadHash,
+        payloadJson,
+        state,
+        now,
+      ],
+    );
+    const existing = inserted.rows[0]
+      ? null
+      : await client.query(
+          `SELECT payment_intent_id, amount_atomic, mode, payload_hash, state
+           FROM tokenless_payment_intents
+           WHERE workspace_id = $1 AND idempotency_key = $2 LIMIT 1 FOR UPDATE`,
+          [input.workspaceId, input.idempotencyKey],
+        );
+    const row = (inserted.rows[0] ?? existing?.rows[0]) as QueryRow | undefined;
+    if (!row) {
+      throw new TokenlessServiceError("The payment intent could not be persisted.", 409, "payment_conflict", true);
+    }
     if (
       rowString(row, "amount_atomic") !== input.amountAtomic.toString() ||
       rowString(row, "mode") !== input.payment.mode ||
@@ -1458,30 +1488,18 @@ async function persistPaymentIntent(input: {
     ) {
       throw new TokenlessServiceError("The payment intent conflicts with this ask.", 409, "payment_conflict");
     }
-    return { reference: rowString(row, "payment_intent_id")!, state, created: false };
+    await client.query("COMMIT");
+    return {
+      reference: rowString(row, "payment_intent_id")!,
+      state: rowString(row, "state")!,
+      created: rowString(row, "payment_intent_id") === paymentIntentId,
+    };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
   }
-  const paymentIntentId = `pay_${randomUUID().replaceAll("-", "")}`;
-  const now = new Date();
-  await dbClient.execute({
-    sql: `INSERT INTO tokenless_payment_intents
-          (payment_intent_id, workspace_id, idempotency_key, mode, payer_address, amount_atomic,
-           payload_hash, payload_json, state, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    args: [
-      paymentIntentId,
-      input.workspaceId,
-      input.idempotencyKey,
-      input.payment.mode,
-      payerAddress,
-      input.amountAtomic.toString(),
-      payloadHash,
-      payloadJson,
-      state,
-      now,
-      now,
-    ],
-  });
-  return { reference: paymentIntentId, state, created: true };
 }
 
 async function prepareAsk(

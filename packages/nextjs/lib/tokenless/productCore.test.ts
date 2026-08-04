@@ -570,14 +570,50 @@ test("production wallet asks remain pending until the purpose-bound payment is c
     availableAtomic: "0",
   });
 
+  await dbClient.execute({
+    sql: `UPDATE tokenless_payment_intents SET state = 'confirmed' WHERE payment_intent_id = ?;
+          UPDATE tokenless_ask_ownership SET payment_state = 'confirmed' WHERE operation_key = ?`,
+    args: [prepared.paymentReference, ask.operationKey],
+  });
   const replayPrepared = await prepareProductAsk({ principal, request });
+  assert.equal(replayPrepared.paymentState, "confirmed");
   await attachProductAsk(replayPrepared, ask);
   const replay = await dbClient.execute({
     sql: `SELECT state, operation_key FROM tokenless_payment_intents WHERE payment_intent_id = ?`,
     args: [prepared.paymentReference],
   });
-  assert.deepEqual(replay.rows[0], { operation_key: ask.operationKey, state: "pending_user_signature" });
+  assert.deepEqual(replay.rows[0], { operation_key: ask.operationKey, state: "confirmed" });
   assert.equal(workspaceId, prepared.workspaceId);
+});
+
+test("concurrent wallet ask preparation converges on one payment intent", async () => {
+  const principalId = "rlp_concurrent_wallet_principal";
+  const { workspaceId } = await createWorkspace({ name: "Concurrent wallet", ownerAddress: principalId });
+  await activateEarlyAccess(workspaceId, principalId);
+  const quote = await createTokenlessQuote(quoteRequest());
+  const request = {
+    idempotencyKey: "wallet:concurrent:12345678",
+    payment: { mode: "wallet" as const, payerAddress: ADDRESS_A },
+    quoteId: quote.quoteId,
+  };
+  const principal = {
+    kind: "session" as const,
+    accountAddress: principalId,
+    walletAddress: ADDRESS_A,
+  };
+
+  const [first, second] = await Promise.all([
+    prepareProductAsk({ principal, request }),
+    prepareProductAsk({ principal, request }),
+  ]);
+  assert.equal(first.paymentReference, second.paymentReference);
+  assert.deepEqual([first.createdPayment, second.createdPayment].sort(), [false, true]);
+  const stored = await dbClient.execute({
+    sql: `SELECT COUNT(*) AS count FROM tokenless_payment_intents
+          WHERE workspace_id = ? AND idempotency_key = ?`,
+    args: [workspaceId, request.idempotencyKey],
+  });
+  assert.equal(Number(stored.rows[0]?.count), 1);
 });
 
 test("wallet payment intents require the purpose-bound funding wallet to be the payer", async () => {
