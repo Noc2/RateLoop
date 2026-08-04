@@ -49,8 +49,9 @@ test("workspace settings focuses the funding hash after its async panel renders"
 });
 
 test("workspace settings communicates entitlement and checkout lifecycle", () => {
-  assert.match(source, /role="progressbar"/);
-  assert.match(source, /completed/);
+  assert.doesNotMatch(source, /role="progressbar"/);
+  assert.doesNotMatch(source, /subscription and usage/i);
+  assert.match(source, /Loading plan…/);
   assert.match(source, /reserved/);
   assert.match(source, /Upgrade to Early Access/);
   assert.match(source, /Manage billing/);

@@ -1260,9 +1260,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                     ) : null}
                   </>
                 ) : (
-                  <p className="mt-4 text-sm text-base-content/55">
-                    {billingError ?? "Loading subscription and usage…"}
-                  </p>
+                  <p className="mt-4 text-sm text-base-content/55">{billingError ?? "Loading plan…"}</p>
                 )}
                 {billingError && billing ? (
                   <p className="mt-4 text-sm text-error" role="alert">
