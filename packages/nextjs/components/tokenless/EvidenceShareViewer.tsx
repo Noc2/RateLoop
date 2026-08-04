@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { LocalizedSharedContent } from "~~/components/tokenless/LocalizedSharedContent";
+import { LocalizedSharedContent, UntranslatedContent } from "~~/components/tokenless/LocalizedSharedContent";
 import { PublicEvidenceVerifier } from "~~/components/tokenless/PublicEvidenceVerifier";
 import { readJson } from "~~/lib/tokenless/http";
 import { type PublicEvidenceLimitation, publicEvidenceSummary } from "~~/lib/tokenless/publicEvidencePresentation";
@@ -165,7 +165,7 @@ export function EvidenceShareViewer({ grantId }: { grantId: string }) {
         <p className="font-mono text-xs font-semibold uppercase tracking-[0.16em] text-success">Packet verified</p>
         {summary?.question ? (
           <h2 id="shared-evidence-question" className="mt-3 text-2xl font-semibold text-base-content">
-            {summary.question}
+            <UntranslatedContent>{summary.question}</UntranslatedContent>
           </h2>
         ) : (
           <h2 id="shared-evidence-verified" className="sr-only">
@@ -206,9 +206,11 @@ export function EvidenceShareViewer({ grantId }: { grantId: string }) {
               <div>
                 <dt className="text-base-content/55">Generated</dt>
                 <dd className="mt-1 text-base-content">
-                  {new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(
-                    new Date(summary.generatedAt),
-                  )}
+                  <time dateTime={summary.generatedAt}>
+                    {new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(
+                      new Date(summary.generatedAt),
+                    )}
+                  </time>
                 </dd>
               </div>
             ) : null}

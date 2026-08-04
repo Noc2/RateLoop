@@ -2,7 +2,7 @@
 
 import { type FormEvent, useState } from "react";
 import { useLocale } from "next-intl";
-import { LocalizedSharedContent } from "~~/components/tokenless/LocalizedSharedContent";
+import { LocalizedSharedContent, UntranslatedContent } from "~~/components/tokenless/LocalizedSharedContent";
 import { Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { readJson } from "~~/lib/tokenless/http";
@@ -167,8 +167,8 @@ export function WorkspaceDeletionPanel({ workspaceId, workspaceName }: Workspace
               Delete workspace
             </h3>
             <p className="mt-1 max-w-3xl text-sm leading-6 text-base-content/65">
-              Permanently closes {workspaceName} and removes its private data. Records that must be retained stay
-              restricted.
+              Permanently closes <UntranslatedContent>{workspaceName}</UntranslatedContent> and removes its private
+              data. Records that must be retained stay restricted.
             </p>
           </div>
           {!preview ? (
@@ -185,7 +185,9 @@ export function WorkspaceDeletionPanel({ workspaceId, workspaceName }: Workspace
 
         {preview ? (
           <div className="mt-5 border-t border-error/20 pt-5">
-            <h4 className="font-semibold">Delete {preview.workspace.name}</h4>
+            <h4 className="font-semibold">
+              Delete <UntranslatedContent>{preview.workspace.name}</UntranslatedContent>
+            </h4>
 
             <form className="mt-3" onSubmit={requestDeletion}>
               <p className="text-sm leading-6 text-base-content/65">
@@ -201,7 +203,9 @@ export function WorkspaceDeletionPanel({ workspaceId, workspaceName }: Workspace
               {impacts.length > 0 ? (
                 <ul className="mt-4 list-disc space-y-1 pl-5 text-sm text-base-content/65">
                   {impacts.map(value => (
-                    <li key={value}>{value}</li>
+                    <li key={value}>
+                      <UntranslatedContent>{value}</UntranslatedContent>
+                    </li>
                   ))}
                 </ul>
               ) : null}
@@ -210,7 +214,7 @@ export function WorkspaceDeletionPanel({ workspaceId, workspaceName }: Workspace
                 <div className="mt-4 space-y-2">
                   {preview.warnings.map(warning => (
                     <p key={warning} className="rounded-lg bg-warning/[0.07] p-3 text-sm leading-6 text-warning">
-                      {warning}
+                      <UntranslatedContent>{warning}</UntranslatedContent>
                     </p>
                   ))}
                 </div>
@@ -220,7 +224,7 @@ export function WorkspaceDeletionPanel({ workspaceId, workspaceName }: Workspace
                 <div className="mt-4 space-y-2" role="alert">
                   {preview.blockers.map(blocker => (
                     <p key={blocker.code} className="rounded-lg bg-error/10 p-3 text-sm leading-6 text-error">
-                      {blocker.message}
+                      <UntranslatedContent>{blocker.message}</UntranslatedContent>
                     </p>
                   ))}
                 </div>
@@ -246,7 +250,9 @@ export function WorkspaceDeletionPanel({ workspaceId, workspaceName }: Workspace
               {resolutionQueued ? (
                 <p className="mt-4 rounded-lg bg-success/[0.08] p-3 text-sm text-success" role="status">
                   Fund resolution queued. Your balance has not been forfeited. Reference:{" "}
-                  <span className="font-mono text-xs">{resolutionQueued}</span>
+                  <span className="font-mono text-xs">
+                    <UntranslatedContent>{resolutionQueued}</UntranslatedContent>
+                  </span>
                 </p>
               ) : null}
 

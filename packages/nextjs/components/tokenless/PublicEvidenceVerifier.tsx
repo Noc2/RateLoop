@@ -1,7 +1,7 @@
 "use client";
 
 import { type ChangeEvent, type FormEvent, useEffect, useState } from "react";
-import { LocalizedSharedContent } from "~~/components/tokenless/LocalizedSharedContent";
+import { LocalizedSharedContent, UntranslatedContent } from "~~/components/tokenless/LocalizedSharedContent";
 import { Field, TextareaField } from "~~/components/tokenless/forms/Field";
 import {
   MAX_PUBLIC_EVIDENCE_PACKET_BYTES,
@@ -16,7 +16,9 @@ function CheckResult({ check }: { check: PublicEvidenceVerificationResult["check
     <LocalizedSharedContent>
       <li className="rounded-2xl border border-base-content/10 bg-base-content/[0.025] p-4">
         <div className="flex items-start justify-between gap-4">
-          <h3 className="font-semibold text-base-content">{check.label}</h3>
+          <h3 className="font-semibold text-base-content">
+            <UntranslatedContent>{check.label}</UntranslatedContent>
+          </h3>
           <span
             className={`rounded-full px-2.5 py-1 font-mono text-xs font-semibold uppercase tracking-wide ${
               passed ? "bg-success/10 text-success" : "bg-error/10 text-error"
@@ -25,19 +27,25 @@ function CheckResult({ check }: { check: PublicEvidenceVerificationResult["check
             {passed ? "Pass" : "Fail"}
           </span>
         </div>
-        <p className="mt-2 text-sm leading-6 text-base-content/65">{check.detail}</p>
+        <p className="mt-2 text-sm leading-6 text-base-content/65">
+          <UntranslatedContent>{check.detail}</UntranslatedContent>
+        </p>
         {check.expected || check.actual ? (
           <dl className="mt-3 space-y-2 text-xs">
             {check.expected ? (
               <div>
                 <dt className="text-base-content/60">Packet / trusted value</dt>
-                <dd className="mt-1 break-all font-mono text-base-content/75">{check.expected}</dd>
+                <dd className="mt-1 break-all font-mono text-base-content/75">
+                  <UntranslatedContent>{check.expected}</UntranslatedContent>
+                </dd>
               </div>
             ) : null}
             {check.actual && check.actual !== check.expected ? (
               <div>
                 <dt className="text-base-content/60">Recomputed / packet value</dt>
-                <dd className="mt-1 break-all font-mono text-base-content/75">{check.actual}</dd>
+                <dd className="mt-1 break-all font-mono text-base-content/75">
+                  <UntranslatedContent>{check.actual}</UntranslatedContent>
+                </dd>
               </div>
             ) : null}
           </dl>
@@ -55,21 +63,23 @@ export function PublicEvidenceVerifier({
   initialVerificationResult?: PublicEvidenceVerificationResult | null;
 }) {
   const [packetJson, setPacketJson] = useState(initialPacketJson);
-  const [sourceName, setSourceName] = useState<string | null>(initialPacketJson ? "Shared packet" : null);
+  const [sourceName, setSourceName] = useState<{ userAuthored: boolean; value: string } | null>(
+    initialPacketJson ? { userAuthored: false, value: "Shared packet" } : null,
+  );
   const [result, setResult] = useState<PublicEvidenceVerificationResult | null>(initialVerificationResult);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     setPacketJson(initialPacketJson);
-    setSourceName(initialPacketJson ? "Shared packet" : null);
+    setSourceName(initialPacketJson ? { userAuthored: false, value: "Shared packet" } : null);
     setResult(initialVerificationResult);
     setError(null);
   }, [initialPacketJson, initialVerificationResult]);
 
-  function changePacket(value: string, name: string | null = null) {
+  function changePacket(value: string, name: string | null = null, userAuthored = false) {
     setPacketJson(value);
-    setSourceName(name);
+    setSourceName(name ? { userAuthored, value: name } : null);
     setResult(null);
     setError(null);
   }
@@ -84,7 +94,7 @@ export function PublicEvidenceVerifier({
       return;
     }
     try {
-      changePacket(await file.text(), file.name);
+      changePacket(await file.text(), file.name, true);
     } catch {
       setError("The selected file could not be read.");
     }
@@ -132,7 +142,15 @@ export function PublicEvidenceVerifier({
                 accept=".json,application/json"
                 onChange={selectFile}
               />
-              {sourceName ? <span className="ml-3 text-sm text-base-content/60">{sourceName}</span> : null}
+              {sourceName ? (
+                <span className="ml-3 text-sm text-base-content/60">
+                  {sourceName.userAuthored ? (
+                    <UntranslatedContent>{sourceName.value}</UntranslatedContent>
+                  ) : (
+                    sourceName.value
+                  )}
+                </span>
+              ) : null}
             </div>
             <button
               className="rateloop-gradient-action min-h-11 px-5 disabled:cursor-not-allowed disabled:opacity-50"
@@ -169,7 +187,9 @@ export function PublicEvidenceVerifier({
                 {result.valid ? "Packet verified" : "Verification failed"}
               </h2>
               <p className="mt-2 text-sm leading-6 text-base-content/65">
-                Public key {result.key.keyId} · {result.key.algorithm} · {result.key.status}
+                Public key <UntranslatedContent>{result.key.keyId}</UntranslatedContent> ·{" "}
+                <UntranslatedContent>{result.key.algorithm}</UntranslatedContent> ·{" "}
+                <UntranslatedContent>{result.key.status}</UntranslatedContent>
               </p>
             </div>
 
@@ -184,7 +204,9 @@ export function PublicEvidenceVerifier({
                 <h3 className="font-semibold text-base-content">Verifier errors</h3>
                 <ul className="mt-2 list-disc space-y-1 pl-5 font-mono text-xs text-base-content/65">
                   {result.errors.map(item => (
-                    <li key={item}>{item}</li>
+                    <li key={item}>
+                      <UntranslatedContent>{item}</UntranslatedContent>
+                    </li>
                   ))}
                 </ul>
               </div>

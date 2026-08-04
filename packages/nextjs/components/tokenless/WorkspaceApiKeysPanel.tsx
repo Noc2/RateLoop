@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useLocale } from "next-intl";
-import { LocalizedSharedContent } from "~~/components/tokenless/LocalizedSharedContent";
+import { LocalizedSharedContent, UntranslatedContent } from "~~/components/tokenless/LocalizedSharedContent";
 import { OneTimeSecretNotice } from "~~/components/tokenless/agents/OneTimeSecretNotice";
 import { ChoiceInput, Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
@@ -238,10 +238,15 @@ export function WorkspaceApiKeysPanel({ workspaceId }: { workspaceId: string }) 
               <article key={apiKey.apiKeyId} className="rounded-lg border border-base-content/10 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <h3 className="font-medium">{apiKey.name}</h3>
-                    <p className="mt-1 font-mono text-xs text-base-content/55">{apiKey.keyPrefix}…</p>
+                    <h3 className="font-medium">
+                      <UntranslatedContent>{apiKey.name}</UntranslatedContent>
+                    </h3>
+                    <p className="mt-1 font-mono text-xs text-base-content/55">
+                      <UntranslatedContent>{apiKey.keyPrefix}…</UntranslatedContent>
+                    </p>
                     <p className="mt-2 text-xs text-base-content/55">
-                      Expires {dateLabel(apiKey.expiresAt, locale)} · Last used {dateLabel(apiKey.lastUsedAt, locale)}
+                      Expires <UntranslatedContent>{dateLabel(apiKey.expiresAt, locale)}</UntranslatedContent> · Last
+                      used <UntranslatedContent>{dateLabel(apiKey.lastUsedAt, locale)}</UntranslatedContent>
                     </p>
                   </div>
                   {apiKey.revokedAt ? (
@@ -257,7 +262,7 @@ export function WorkspaceApiKeysPanel({ workspaceId }: { workspaceId: string }) 
                     </button>
                   )}
                 </div>
-                <ul className="mt-3 flex flex-wrap gap-2" aria-label={`Permissions for ${apiKey.name}`}>
+                <ul className="mt-3 flex flex-wrap gap-2" aria-label="Permissions">
                   {apiKey.scopes.map(scope => (
                     <li
                       key={scope}
@@ -274,7 +279,15 @@ export function WorkspaceApiKeysPanel({ workspaceId }: { workspaceId: string }) 
         </AsyncSection>
         <ConfirmDialog
           open={revokeConfirmation !== null}
-          title={revokeConfirmation ? `Revoke “${revokeConfirmation.name}”?` : "Revoke this API key?"}
+          title={
+            revokeConfirmation ? (
+              <>
+                Revoke “<UntranslatedContent>{revokeConfirmation.name}</UntranslatedContent>”?
+              </>
+            ) : (
+              "Revoke this API key?"
+            )
+          }
           description="Existing integrations using it will stop working."
           confirmLabel="Revoke API key"
           busy={busy}

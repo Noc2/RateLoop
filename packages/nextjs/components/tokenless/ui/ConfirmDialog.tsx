@@ -17,7 +17,7 @@ export function ConfirmDialog({
   onConfirm,
 }: {
   open: boolean;
-  title: string;
+  title: ReactNode;
   description: ReactNode;
   confirmLabel: string;
   cancelLabel?: string;

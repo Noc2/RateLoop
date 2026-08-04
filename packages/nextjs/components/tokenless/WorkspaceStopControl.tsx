@@ -3,7 +3,7 @@
 import { type FormEvent, useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { notifyWorkspaceStopChanged, subscribeWorkspaceStop, workspaceStopRevision } from "./workspaceStopSync";
 import { useLocale } from "next-intl";
-import { LocalizedSharedContent } from "~~/components/tokenless/LocalizedSharedContent";
+import { LocalizedSharedContent, UntranslatedContent } from "~~/components/tokenless/LocalizedSharedContent";
 import { TextareaField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { ConfirmDialog } from "~~/components/tokenless/ui/ConfirmDialog";
@@ -154,8 +154,12 @@ export function WorkspaceStopPanel({ workspaceId }: { workspaceId: string }) {
 
         {engaged && stop ? (
           <div className="mt-4 rounded-xl bg-error/10 p-4 text-sm leading-6 text-error" role="status">
-            <p className="font-semibold">Stop engaged {new Date(stop.engagedAt).toLocaleString(locale)}</p>
-            <p className="mt-1 text-error/80">Reason: {stop.reason}</p>
+            <p className="font-semibold">
+              Stop engaged <time dateTime={stop.engagedAt}>{new Date(stop.engagedAt).toLocaleString(locale)}</time>
+            </p>
+            <p className="mt-1 text-error/80">
+              Reason: <UntranslatedContent>{stop.reason}</UntranslatedContent>
+            </p>
             <p className="mt-1 text-error/80">
               Agents do not restart when this stop is released. Each agent needs a fresh publishing grant.
             </p>

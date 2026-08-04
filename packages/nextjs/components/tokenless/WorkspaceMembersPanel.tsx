@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useLocale } from "next-intl";
-import { LocalizedSharedContent } from "~~/components/tokenless/LocalizedSharedContent";
+import { LocalizedSharedContent, UntranslatedContent } from "~~/components/tokenless/LocalizedSharedContent";
 import { OneTimeSecretNotice } from "~~/components/tokenless/agents/OneTimeSecretNotice";
 import { Field, SelectField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
@@ -305,13 +305,21 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
                     >
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold">
-                          {member.displayName ?? member.email ?? shortPrincipal(member.principalId)}
+                          <UntranslatedContent>
+                            {member.displayName ?? member.email ?? shortPrincipal(member.principalId)}
+                          </UntranslatedContent>
                         </p>
                         <p className="mt-1 text-xs text-base-content/55">
-                          {member.displayName && member.email ? `${member.email} · ` : ""}
-                          {member.managedBy
-                            ? `Managed by ${member.managedBy.toUpperCase()}`
-                            : shortPrincipal(member.principalId)}
+                          {member.displayName && member.email ? (
+                            <UntranslatedContent>{member.email} · </UntranslatedContent>
+                          ) : null}
+                          {member.managedBy ? (
+                            <>
+                              Managed by <UntranslatedContent>{member.managedBy.toUpperCase()}</UntranslatedContent>
+                            </>
+                          ) : (
+                            <UntranslatedContent>{shortPrincipal(member.principalId)}</UntranslatedContent>
+                          )}
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
@@ -322,7 +330,14 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
                         ) : (
                           <SelectField
                             className="select-sm rounded-lg border-base-content/10 bg-[var(--rateloop-field)]"
-                            label={`Role for ${member.displayName ?? member.email ?? member.principalId}`}
+                            label={
+                              <>
+                                Role for{" "}
+                                <UntranslatedContent>
+                                  {member.displayName ?? member.email ?? member.principalId}
+                                </UntranslatedContent>
+                              </>
+                            }
                             labelClassName="sr-only"
                             value={member.accessRole}
                             disabled={immutable || busyTarget === member.principalId}
@@ -371,7 +386,8 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
                     key={invitation.inviteId}
                   >
                     <span>
-                      {roleLabel(invitation.accessRole)} · expires {dateLabel(invitation.expiresAt, locale)}
+                      {roleLabel(invitation.accessRole)} · expires{" "}
+                      <UntranslatedContent>{dateLabel(invitation.expiresAt, locale)}</UntranslatedContent>
                     </span>
                     <button
                       className="text-xs text-error underline underline-offset-4"
@@ -390,9 +406,13 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
         <ConfirmDialog
           open={confirmation !== null}
           title={
-            confirmation?.kind === "remove-member"
-              ? `Remove ${confirmation.label} from this workspace?`
-              : "Revoke this workspace invitation?"
+            confirmation?.kind === "remove-member" ? (
+              <>
+                Remove <UntranslatedContent>{confirmation.label}</UntranslatedContent> from this workspace?
+              </>
+            ) : (
+              "Revoke this workspace invitation?"
+            )
           }
           description={
             confirmation?.kind === "remove-member"

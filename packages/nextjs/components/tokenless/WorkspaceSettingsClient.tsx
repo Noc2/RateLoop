@@ -3,7 +3,7 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useLocale } from "next-intl";
 import { InfoPopover } from "~~/components/tokenless/InfoPopover";
-import { LocalizedSharedContent } from "~~/components/tokenless/LocalizedSharedContent";
+import { LocalizedSharedContent, UntranslatedContent } from "~~/components/tokenless/LocalizedSharedContent";
 import { WorkspaceApiKeysPanel } from "~~/components/tokenless/WorkspaceApiKeysPanel";
 import { WorkspaceDangerZone } from "~~/components/tokenless/WorkspaceDangerZone";
 import { WorkspaceMembersPanel } from "~~/components/tokenless/WorkspaceMembersPanel";
@@ -1483,7 +1483,9 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                             <article className="rounded-lg border border-base-content/10 p-4" key={provider.providerId}>
                               <div className="flex flex-wrap items-start justify-between gap-3">
                                 <div>
-                                  <h3 className="font-semibold">{provider.domain}</h3>
+                                  <h3 className="font-semibold">
+                                    <UntranslatedContent>{provider.domain}</UntranslatedContent>
+                                  </h3>
                                   <p className="mt-1 text-xs uppercase tracking-wide text-base-content/55">
                                     {provider.protocol} ·{" "}
                                     {provider.domainVerified ? "domain verified" : "verification required"}
@@ -1720,8 +1722,9 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                                 key={connection.providerId}
                               >
                                 <span>
-                                  Last sync: {dateLabel(connection.lastSyncAt, locale)} ·{" "}
-                                  {connection.lastSyncResult ?? "not used"}
+                                  Last sync:{" "}
+                                  <UntranslatedContent>{dateLabel(connection.lastSyncAt, locale)}</UntranslatedContent>{" "}
+                                  · <UntranslatedContent>{connection.lastSyncResult ?? "not used"}</UntranslatedContent>
                                 </span>
                                 <button
                                   className="text-error underline underline-offset-4"
@@ -1792,9 +1795,14 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
               : "Revoke this SCIM token?"
           }
           description={
-            identityConfirmation?.kind === "delete-provider"
-              ? `The provider for ${identityConfirmation.domain} and its linked SSO accounts will be deleted.`
-              : "User provisioning will stop immediately."
+            identityConfirmation?.kind === "delete-provider" ? (
+              <>
+                The provider for <UntranslatedContent>{identityConfirmation.domain}</UntranslatedContent> and its linked
+                SSO accounts will be deleted.
+              </>
+            ) : (
+              "User provisioning will stop immediately."
+            )
           }
           confirmLabel={identityConfirmation?.kind === "delete-provider" ? "Delete provider" : "Revoke SCIM token"}
           busy={identityBusy}

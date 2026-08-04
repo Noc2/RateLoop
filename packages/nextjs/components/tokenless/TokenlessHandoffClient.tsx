@@ -15,7 +15,7 @@ import {
   parseTokenlessWaitResponse,
 } from "@rateloop/sdk";
 import { useLocale } from "next-intl";
-import { LocalizedSharedContent } from "~~/components/tokenless/LocalizedSharedContent";
+import { LocalizedSharedContent, UntranslatedContent } from "~~/components/tokenless/LocalizedSharedContent";
 import {
   QuestionMedia,
   type QuestionMediaPreviewCapability,
@@ -1245,7 +1245,8 @@ export function TokenlessHandoffClient() {
                     >
                       {workspaces.map(workspace => (
                         <option key={workspace.workspaceId} value={workspace.workspaceId}>
-                          {workspace.name} · {formatUsdcAtomic(workspace.prepaid.availableAtomic, locale)} available
+                          <UntranslatedContent>{workspace.name}</UntranslatedContent> ·{" "}
+                          {formatUsdcAtomic(workspace.prepaid.availableAtomic, locale)} available
                         </option>
                       ))}
                     </SelectField>
