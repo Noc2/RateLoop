@@ -1187,8 +1187,6 @@
     "defaultApprove": "Freigeben",
     "defaultReject": "Ablehnen",
     "loading": "Konfiguration der menschlichen Prüfung wird geladen…",
-    "createDescription": "Lege fest, wie dieser Agent Arbeit an deine Prüfenden sendet.",
-    "editDescription": "Bearbeite die Prüfeinstellungen dieses Agenten.",
     "pluginConnection": "Plugin-Verbindung",
     "connection": "Verbindung",
     "blocking": "Die Prüfeinrichtung erfordert Aufmerksamkeit, bevor dieser Agent eine Prüfung anfragen kann.",

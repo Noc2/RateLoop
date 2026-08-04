@@ -59,6 +59,8 @@ test("the contextual editor owns every human-review dimension through one canoni
   assert.doesNotMatch(source, /private-groups|PrivateGroup|Invited reviewer group|Choose a group/);
   assert.match(source, /expectedBindingVersion: view\.bindingRevision/);
   assert.match(source, /creating \? ui\("finishSetup"\) : ui\("saveChanges"\)/);
+  assert.doesNotMatch(source, /createDescription|editDescription/);
+  assert.doesNotMatch(localizedSource, /Choose how this agent sends work|Edit this agent’s review settings/);
   assert.doesNotMatch(source, /Finish human-review setup before editing it/);
   assert.doesNotMatch(source, /Back to reviews|onClose/);
   assert.doesNotMatch(source, /Human-review configuration is unavailable/);

@@ -566,9 +566,6 @@ export function AgentHumanReviewEditor({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold">{creating ? ui("finishHumanReview") : ui("humanReviewTitle")}</h2>
-          <p className="mt-1 text-sm text-base-content/60">
-            {creating ? editor("createDescription") : editor("editDescription")}
-          </p>
         </div>
       </div>
       {view.connection?.enforcementMode === "advisory" ? (

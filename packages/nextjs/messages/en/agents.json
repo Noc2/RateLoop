@@ -1187,8 +1187,6 @@
     "defaultApprove": "Approve",
     "defaultReject": "Reject",
     "loading": "Loading human-review configuration…",
-    "createDescription": "Choose how this agent sends work to your reviewers.",
-    "editDescription": "Edit this agent’s review settings.",
     "pluginConnection": "Plugin connection",
     "connection": "Connection",
     "blocking": "Review setup needs attention before this agent can request a review.",
