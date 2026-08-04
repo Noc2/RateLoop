@@ -756,11 +756,15 @@ export async function waitForTokenlessAsk(
       throw new TokenlessServiceError("The question did not pass pre-round moderation.", 410, "content_rejected");
     }
     if (ask.resultJson) {
+      const result = parseTokenlessResult(JSON.parse(ask.resultJson));
+      if (!result.terminal || result.verdictStatus === "pending") {
+        throw new TokenlessServiceError("The stored result is not terminal.", 500, "invalid_stored_result");
+      }
       return {
         schemaVersion: TOKENLESS_SCHEMA_VERSION,
         operationKey,
         status: "ready",
-        verdictStatus: parseTokenlessResult(JSON.parse(ask.resultJson)).verdictStatus,
+        verdictStatus: result.verdictStatus,
         continuation: null,
       };
     }
