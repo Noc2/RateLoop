@@ -325,9 +325,7 @@ test("an unchanged private-group policy opens without asking for terms again", a
     assert.equal(acceptanceBody.current?.confidentialityTermsHash, termsHash);
     assert.equal(
       `${window.location.pathname}${window.location.search}${window.location.hash}`,
-      `/human/review?scope=private&source=inbox&assignment=${binaryTask.assignmentId}&terms=${encodeURIComponent(
-        termsHash,
-      )}#review-queue`,
+      `/human/review?assignment=${binaryTask.assignmentId}&terms=${encodeURIComponent(termsHash)}#review-queue`,
     );
   } finally {
     cleanup();
