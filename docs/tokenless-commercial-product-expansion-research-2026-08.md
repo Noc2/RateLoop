@@ -2,7 +2,7 @@
 
 **Revised:** 4 August 2026
 
-**Implementation baseline:** product changes through `fb17df073` on `tokenless`; hosted release proof still pending
+**Implementation status:** scoped readiness changes are implemented and locally verified; hosted release proof remains pending
 
 **Status:** product and commercial research; not a release claim, legal opinion, or change to the design of record
 
