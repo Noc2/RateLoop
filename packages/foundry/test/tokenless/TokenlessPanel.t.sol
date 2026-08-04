@@ -345,6 +345,21 @@ contract TokenlessPanelTest is Test {
         panel.cancelEmptyRound(committedRound);
     }
 
+    function test_UncreatedRoundCannotBeFinalizedBeforeItIsFunded() public {
+        uint256 futureRoundId = panel.nextRoundId();
+
+        vm.expectRevert(TokenlessPanel.InvalidState.selector);
+        panel.beginSettlement(futureRoundId);
+
+        uint256 roundId = _createRound(3, 3);
+        assertEq(roundId, futureRoundId);
+        assertEq(uint8(_round(roundId).state), uint8(TokenlessPanel.RoundState.Open));
+
+        Rater memory alice = _rater(0x402, 1, 7_000, "alice", roundId);
+        _commit(roundId, alice);
+        assertEq(_round(roundId).commitCount, 1);
+    }
+
     function test_IssuerRotationCannotAffectAcceptedWorkOrPayment() public {
         (uint256 roundId, Rater[3] memory raters) = _healthyRound();
         vm.prank(rotationAuthority);

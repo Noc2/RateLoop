@@ -454,7 +454,9 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
     /// @notice Freeze the reveal set or enter a deterministic refund/compensation terminal path.
     function beginSettlement(uint256 roundId) external nonReentrant {
         Round storage round = _rounds[roundId];
-        if (round.state != RoundState.Open && round.state != RoundState.Revealable) revert InvalidState();
+        if (round.funder == address(0) || (round.state != RoundState.Open && round.state != RoundState.Revealable)) {
+            revert InvalidState();
+        }
         if (block.timestamp <= round.revealDeadline) revert InvalidDeadline();
 
         if (round.commitCount == 0) {
