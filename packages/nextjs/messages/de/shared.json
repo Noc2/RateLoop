@@ -309,7 +309,7 @@
     "Manage billing": "Abrechnung verwalten",
     "Manage the existing subscription below before starting another checkout.": "Verwalte das bestehende Abonnement unten, bevor du einen weiteren Bezahlvorgang startest.",
     "Packet digest": "Paket-Digest",
-    "Plan and usage": "Tarif und Nutzung",
+    "Plan": "Tarif",
     "Quote ID": "Angebots-ID",
     "RateLoop reviewer network": "RateLoop-Prüfnetzwerk",
     "RateLoop saved this non-secret request reference so the authenticated result survives reloads.": "RateLoop hat diese nicht geheime Anfragereferenz gespeichert, damit das authentifizierte Ergebnis auch nach dem Neuladen erhalten bleibt.",

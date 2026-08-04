@@ -60,6 +60,7 @@ test("all workspace plan consumers share the hosted invited-unpaid availability 
   assert.doesNotMatch(`${overview}\n${cards}\n${settingsSource}`, /decisionsPerPeriod|Workspace review decision usage/);
   assert.match(settingsSource, /activeAgentLimitLabel\(billing\.limits\.activeAgents\)/);
   assert.match(settingsSource, /privateGroupLimitLabel\(billing\.limits\.activePrivateGroups\)/);
+  assert.doesNotMatch(settingsSource, /Plan and usage/);
   assert.doesNotMatch(settingsSource, /Paid (?:reviewer )?panels? available/);
 });
 

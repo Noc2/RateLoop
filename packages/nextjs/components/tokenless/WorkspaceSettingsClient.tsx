@@ -878,7 +878,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
                     <h2 id="workspace-plan" className="text-2xl font-semibold">
-                      {billing ? (billing.plan === "early_access" ? "Early Access" : "Free") : "Plan and usage"}
+                      {billing ? (billing.plan === "early_access" ? "Early Access" : "Free") : "Plan"}
                     </h2>
                   </div>
                   {billing ? (
