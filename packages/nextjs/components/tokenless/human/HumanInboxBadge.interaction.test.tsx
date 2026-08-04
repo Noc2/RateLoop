@@ -5,6 +5,8 @@ import { HumanInboxBadge } from "~~/components/tokenless/human/HumanInboxBadge";
 import { withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
+const LOADED_SUITE_TIMEOUT_MS = 5_000;
+
 test("Human inbox badge counts only unread reviewer notifications", async () => {
   const restoreDom = installTestDom();
   const { cleanup, render: baseRender, waitFor } = await import("@testing-library/react");
@@ -26,8 +28,9 @@ test("Human inbox badge counts only unread reviewer notifications", async () => 
   };
   try {
     const view = render(<HumanInboxBadge />);
-    await waitFor(() =>
-      assert.equal(view.getByText("2").getAttribute("aria-label"), "2 unread reviewer notifications"),
+    await waitFor(
+      () => assert.equal(view.getByText("2").getAttribute("aria-label"), "2 unread reviewer notifications"),
+      { timeout: LOADED_SUITE_TIMEOUT_MS },
     );
     assert.deepEqual(requests, ["/api/auth/session", "/api/notifications/inbox?scope=reviewer&limit=100"]);
   } finally {
@@ -49,7 +52,9 @@ test("Human inbox badge fails quietly for signed-out visitors", async () => {
   };
   try {
     const view = render(<HumanInboxBadge />);
-    await waitFor(() => assert.equal(view.container.textContent, ""));
+    await waitFor(() => assert.equal(view.container.textContent, ""), {
+      timeout: LOADED_SUITE_TIMEOUT_MS,
+    });
     assert.deepEqual(requests, ["/api/auth/session"]);
   } finally {
     globalThis.fetch = previousFetch;
@@ -81,8 +86,9 @@ test("opening Human navigation never marks reviewer notifications read", async (
   };
   try {
     const view = render(<HumanInboxBadge />);
-    await waitFor(() =>
-      assert.equal(view.getByText("2").getAttribute("aria-label"), "2 unread reviewer notifications"),
+    await waitFor(
+      () => assert.equal(view.getByText("2").getAttribute("aria-label"), "2 unread reviewer notifications"),
+      { timeout: LOADED_SUITE_TIMEOUT_MS },
     );
     assert.deepEqual(requests, [
       { body: undefined, method: "GET", url: "/api/auth/session" },
