@@ -115,10 +115,21 @@ base product's security.
 The underlying buyer job remains valid. NIST's AI RMF describes documented human oversight,
 production monitoring, go/no-go decisions, independent input where appropriate, feedback,
 appeal, override, incident response, recovery, and change management
-([AI RMF Core](https://airc.nist.gov/airmf-resources/airmf/5-sec-core/)). The European Commission
-also describes post-market monitoring, deployer human oversight, logging, and documentation as
-parts of the AI Act operating model
-([Commission AI Act overview](https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai)).
+([AI RMF Core](https://airc.nist.gov/airmf-resources/airmf/5-sec-core/)). The NIST Playbook is
+explicit about keeping histories and audit logs, testing explanations with different audiences,
+recording overrides, and documenting go/no-go decisions by accountable parties. It is also clear
+that the Playbook is not a one-size-fits-all checklist
+([NIST Measure Playbook](https://airc.nist.gov/airmf-resources/playbook/measure/),
+[Playbook FAQ](https://airc.nist.gov/airmf-resources/playbook/faq/)). This supports improving the
+readability of RateLoop's current decision record, not implementing every possible governance
+surface before outreach.
+
+The European Commission describes post-market monitoring, deployer human oversight, logging,
+and documentation as parts of the AI Act operating model. The regulation itself also couples
+human-oversight measures with interpretable outputs and appropriate log retention where the
+high-risk obligations apply
+([Commission AI Act overview](https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai),
+[Regulation (EU) 2024/1689](https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng)).
 
 These sources validate the direction, not a compliance claim. Before outreach, RateLoop only
 needs to show that its existing workflow can record one bounded oversight decision faithfully.
@@ -185,9 +196,10 @@ useful than a survey or annotation queue.
 - In `EvaluationDashboardPanel.tsx`, render decision signals only when they contain actionable
   information. Do not show “Suppressed,” “No calibration data,” or “No data” as a permanent box;
   omit the whole box when no signal is available.
-- Remove the repeated sign-off instruction immediately above the go/revise/stop buttons.
-- Remove the decider's prior-choice percentage from the active decision surface. It adds noise
-  and can anchor the very decision RateLoop intends to keep considered.
+- Remove all prior-choice history from the active go/revise/stop and override forms. A ratio such
+  as “1/1 go” anchors just as readily as a percentage.
+- Remove “Time since evidence” from this signal box until a real freshness policy makes it
+  actionable; generated timestamps remain in run and packet details.
 - Keep material disagreement, privacy threshold, small-sample, expired, failed, and
   aggregate-only explanations.
 - Shorten evidence/detail disclosures so their labels predict distinct contents rather than
@@ -209,16 +221,12 @@ RateLoop.
 
 **Changes**
 
-- In `ReviewerShell.tsx`, hide “Case 1 of 1” and its progress bar for a single-case assignment;
-  retain progress for multi-case work.
-- Move permanent keyboard-shortcut help into the existing accessible info popover while keeping
-  all shortcuts functional.
-- In `PublicQuestionCard.tsx`, show “Rating recorded” once, show guaranteed compensation once,
-  and hide the eligibility-management link when eligibility is already ready.
-- In `PrivateAssignmentCard.tsx`, show the case count once.
-- In `HumanAssuranceRaterClient.tsx`, remove “Invitation details loaded” and “This link identifies
-  your assigned review” after the valid invitation is already rendered. Keep access, privacy,
-  confidentiality, deadline, public-record, recovery, and irreversible-submission warnings.
+- Treat the completed single-case progress, shortcut disclosure, receipt, private-history count,
+  and invitation-copy fixes as verified baseline; do not rework them.
+- In `PublicQuestionCard.tsx`, show guaranteed compensation once and hide the
+  eligibility-management link when eligibility is already ready.
+- Keep the non-ready wallet/eligibility recovery action and every material payment, deadline,
+  confidentiality, public-record, recovery, and irreversible-submission warning.
 
 **Tests**
 
@@ -246,11 +254,13 @@ and long policy descriptions make it feel larger than the task.
   reset rules in the existing accessible popover.
 - Keep the recommended connection path visually primary. Move raw workflow-version IDs and
   protocol verification detail into technical details.
-- After each successful setup action, route or state the single next missing action: reconnect or
-  open the agent, invite reviewers, copy the first-review instruction, open the resulting
-  decision, or verify/share its packet. Derive this checklist from existing setup, agent,
-  reviewer, run, decision, and packet state; do not add a migration.
-- Replace passive empty Overview and Results explanations with the relevant primary action.
+- Keep completion local and state-specific rather than building a cross-product activation
+  checklist: invitation created → copy the invitation; setup ready or invitation deferred → ask
+  the connected agent to send its first review.
+- Replace the empty Overview analytics wall with a first-review instruction only when the
+  unfiltered workspace truly has no evidence. A filtered-empty view must retain “clear filters.”
+- Make the Results empty copy actionable, but do not add a browser button that pretends to start
+  a request the connected agent must actually send.
 
 **Tests**
 
@@ -284,7 +294,9 @@ as a raw packet verifier that requires a second manual verification action.
 **Tests**
 
 - A valid redeemed packet verifies without a second click and presents the recipient summary.
-- Tampered, expired, and revoked shares fail with distinct recovery-safe states.
+- Malformed, wrong-secret, expired, and revoked capabilities remain deliberately indistinguishable:
+  “This evidence share is unavailable. Ask the sender for a new link.” A trusted-key outage may
+  have a distinct retry state only after redemption succeeds.
 - Raw JSON remains available but is not the initial reading order.
 - The standalone manual verifier still accepts a pasted or uploaded packet.
 - Share secrets do not leak into rendered diagnostics, analytics, or browser history.
@@ -325,9 +337,10 @@ path.
 
 **Changes**
 
-- Trace the decision-allowance reservation from both invited and paid terminal review paths. Add
-  a cross-consumer invariant test. If the live invited path does not enforce the advertised
-  allowance, remove the decision allowance from public and workspace pricing copy until it does.
+- Remove the 25/250 decision allowance and usage meter from public and workspace pricing copy.
+  Explicit assurance runs enforce it, but the primary hosted invited-private path does not
+  reserve or consume that allocation. Keep the backend meter for flows that really use it and
+  retain truthful active-agent/private-group limits.
 - Keep `TOKENLESS_SUBSCRIPTIONS_ENABLED=false` unless checkout, webhook, cancellation, invoice,
   and the independent business-verification operation are all exercised in the target
   environment.
@@ -340,7 +353,8 @@ path.
 
 **Tests**
 
-- Pricing copy and the entitlement consumer share one rule across free-limit boundary cases.
+- Public cards, workspace overview, settings, and legal terms expose no unenforced decision
+  allowance while retaining the same truthful plan facts.
 - Disabled subscriptions have no checkout CTA.
 - Enabled staging rejects unverified businesses, accepts only operator-verified ones, and handles
   Stripe return states without a generic error.
@@ -376,13 +390,14 @@ deck that overstates it.
 
 **Changes**
 
-- Recheck the redacted packet example in the public evidence documentation against a current
-  packet schema and verifier.
+- Replace the non-parseable redacted shape with a downloadable, fully synthetic current-v4 packet
+  and a pinned synthetic public key.
 - Add one concise worked example showing: agent output, review question, independent result,
   owner decision, packet, and offline verification. Reuse an existing synthetic E2E fixture.
 - On a completed result, offer a direct “Open evidence” action. Do not add a second explanation
   of what evidence is.
-- Give the public evidence page one download-and-verify command that works from a clean checkout.
+- Give the public evidence page one download-and-verify command that works against the checked-in
+  sample from a clean checkout.
 - Review public claims with `publicEvidenceClaims` and the deployment's actual configuration;
   keep limitations beside the claim they qualify.
 
@@ -401,17 +416,21 @@ new automation framework.
 
 **Changes**
 
-- Define one pre-outreach command sequence using `e2e:hosted:smoke` and `e2e:hosted:core` with the
-  existing exact-origin, branch-SHA, and service-health guards.
+- Add one `e2e:hosted:release` sequence that runs preflight, smoke, then the single-worker mutating
+  core suite with the existing exact-origin, branch-SHA, and service-health guards.
 - Record the synthetic accounts, expected record cleanup/retention, and which test is allowed to
   create review responses.
 - Maintain one dedicated demonstration workspace and a documented reset/replacement procedure;
   never enable runtime fixtures in the hosted environment.
-- Cover the golden path plus: expired invitation, duplicate response, insufficient quorum,
-  revise/stop, tampered share secret, revoked share, wrong workspace, mobile navigation, and both
-  themes.
+- Extend the hosted golden path through packet generation, owner decision, share creation,
+  signed-out redemption, automatic verification, generic wrong-secret failure, revocation, and
+  the same generic unavailable state. Keep expired invitation, duplicate response, insufficient
+  quorum, revise/stop, and wrong-workspace cases in focused integration tests rather than making
+  the release run slow and brittle.
+- Add read-only light/dark and desktop/mobile smoke coverage; keep the mutating core suite on one
+  desktop project and one worker.
 - Fail with a precise recovery action when Vercel, Ponder, keeper, authentication, or a deployment
-  address is stale.
+  address is stale. Compare Ponder and keeper identity with the active tokenless-v4 artifact.
 - Keep browser-plugin exploration for human-visible checks, but keep deterministic hosted E2E as
   the reproducible release gate. They serve different purposes.
 - Rehearse the buyer story as a five-to-eight-minute demonstration. If it needs a verbal tour of
@@ -655,7 +674,10 @@ proof more compelling.
 - [Langfuse pricing](https://langfuse.com/pricing)
 - [Langfuse retention documentation](https://langfuse.com/docs/administration/data-retention)
 - [NIST AI RMF Core](https://airc.nist.gov/airmf-resources/airmf/5-sec-core/)
+- [NIST AI RMF Measure Playbook](https://airc.nist.gov/airmf-resources/playbook/measure/)
+- [NIST AI RMF Playbook FAQ](https://airc.nist.gov/airmf-resources/playbook/faq/)
 - [European Commission AI Act overview](https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai)
+- [Regulation (EU) 2024/1689](https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng)
 - [CSA AI-CAIQ v1.1](https://cloudsecurityalliance.org/artifacts/ai-consensus-assessments-initiative-questionnaire-ai-caiq-v1-1)
 - [CSA STAR for AI](https://cloudsecurityalliance.org/star/ai)
 - [CISA secure-by-design principles](https://www.cisa.gov/sites/default/files/2023-06/principles_approaches_for_security-by-design-default_508c.pdf)
