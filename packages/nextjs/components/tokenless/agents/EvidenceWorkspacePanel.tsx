@@ -889,35 +889,31 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
 
   return (
     <div className="space-y-5">
-      <Card as="section" className="rounded-2xl p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h2 className="text-2xl font-semibold">
-              <AgentText id="decisionRecords" />
-            </h2>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {canManage ? (
-              <button
-                type="button"
-                className="btn btn-sm border-base-content/10 bg-base-content/[0.06]"
-                aria-controls="evidence-advanced-controls"
-                aria-expanded={showAdvancedControls}
-                onClick={() => setShowAdvancedControls(current => !current)}
-              >
-                <AgentText id="translated139" />
-              </button>
-            ) : null}
+      <section className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-xl font-semibold">
+          <AgentText id="decisionRecords" />
+        </h2>
+        <div className="flex flex-wrap gap-2">
+          {canManage ? (
             <button
               type="button"
               className="btn btn-sm border-base-content/10 bg-base-content/[0.06]"
-              onClick={() => void load()}
+              aria-controls="evidence-advanced-controls"
+              aria-expanded={showAdvancedControls}
+              onClick={() => setShowAdvancedControls(current => !current)}
             >
-              <AgentText id="translated140" />
+              <AgentText id="translated139" />
             </button>
-          </div>
+          ) : null}
+          <button
+            type="button"
+            className="btn btn-sm border-base-content/10 bg-base-content/[0.06]"
+            onClick={() => void load()}
+          >
+            <AgentText id="translated140" />
+          </button>
         </div>
-      </Card>
+      </section>
 
       {error ? (
         <div className="rounded-xl border border-error/20 bg-error/[0.06] p-4 text-sm text-error" role="alert">
@@ -1048,9 +1044,6 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                     <h3 className="mt-1 text-lg font-semibold">{suiteName}</h3>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <span className={`badge border-0 ${outcomeStyle(outcome)}`}>{copy(`outcome.${outcome}`)}</span>
-                      <span className="badge border-base-content/10 bg-base-content/[0.04] text-base-content/65">
-                        <AgentText id="translated148" />
-                      </span>
                       <span className="badge border-base-content/10 bg-base-content/[0.04] text-base-content/65">
                         {anchorLabel(attestation, canManage, copy)}
                       </span>

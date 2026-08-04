@@ -232,7 +232,7 @@ test("a packet reveals verification while manager-only exports and controls stay
     assert.equal(resultHref.pathname, "/agents/results");
     assert.equal(resultHref.searchParams.get("workspace"), "workspace-evidence");
     assert.equal(resultHref.searchParams.get("resultRun"), "run-evidence-1");
-    assert.ok(view.getByText("Point-in-time record"));
+    assert.equal(view.queryByText("Point-in-time record"), null);
     assert.ok(view.getByText("Review coverage and timing"));
     assert.ok(view.getByText("Target expected"));
     assert.ok(view.getByText("Median response time"));

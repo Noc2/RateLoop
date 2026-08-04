@@ -17,7 +17,7 @@ test("the evidence workspace keeps verification and export state explicit", () =
   assert.match(source, /Verification details/);
   assert.match(source, /respondingReviewerCount/);
   assert.match(source, /targetReviewerCount/);
-  assert.match(source, /Point-in-time record/);
+  assert.doesNotMatch(source, /Point-in-time record/);
   assert.match(source, /projectId: run\.projectId/);
   assert.match(source, /suiteId: run\.suiteId/);
   assert.match(source, /suiteVersion: run\.suiteVersion/);
