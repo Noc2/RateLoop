@@ -1,4 +1,4 @@
-import { tokenlessVercelProjectLinkError } from "./tokenless-vercel-project.mjs";
+import { TOKENLESS_VERCEL_PROJECT, tokenlessVercelProjectLinkError } from "./tokenless-vercel-project.mjs";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -23,6 +23,35 @@ export function validateTokenlessVercelLinks({ packageRoot, readFileSync = fs.re
   }
 }
 
+const TOKENLESS_PRODUCTION_ALIAS = "rateloop-tokenless.vercel.app";
+
+function inspectTokenlessProduction({ packageRoot, repoRoot, spawn }) {
+  const result = spawn(
+    "yarn",
+    ["exec", "vercel", "inspect", TOKENLESS_PRODUCTION_ALIAS, "--format=json", "--non-interactive", "--cwd", repoRoot],
+    { cwd: packageRoot, encoding: "utf8" },
+  );
+  if (result.error || result.status !== 0 || typeof result.stdout !== "string") return null;
+  const jsonStart = result.stdout.indexOf("{");
+  if (jsonStart < 0) return null;
+  try {
+    const deployment = JSON.parse(result.stdout.slice(jsonStart));
+    if (
+      typeof deployment?.id !== "string" ||
+      deployment.name !== TOKENLESS_VERCEL_PROJECT.projectName ||
+      deployment.target !== "production" ||
+      deployment.readyState !== "READY" ||
+      !Array.isArray(deployment.aliases) ||
+      !deployment.aliases.includes(TOKENLESS_PRODUCTION_ALIAS)
+    ) {
+      return null;
+    }
+    return deployment.id;
+  } catch {
+    return null;
+  }
+}
+
 export function runTokenlessVercel({
   forwardedArgs,
   packageRoot,
@@ -31,12 +60,28 @@ export function runTokenlessVercel({
   spawn = spawnSync,
 }) {
   validateTokenlessVercelLinks({ packageRoot, readFileSync, repoRoot });
+  const verifiesProduction = forwardedArgs.includes("--prod");
+  const previousDeploymentId = verifiesProduction ? inspectTokenlessProduction({ packageRoot, repoRoot, spawn }) : null;
   const result = spawn("yarn", ["exec", "vercel", "--cwd", repoRoot, ...forwardedArgs], {
     cwd: packageRoot,
     stdio: "inherit",
   });
   if (result.error) throw result.error;
-  return result.status ?? 1;
+  const status = result.status ?? 1;
+  if (status !== 0 || !verifiesProduction) return status;
+
+  const deployedId = inspectTokenlessProduction({ packageRoot, repoRoot, spawn });
+  if (!deployedId) {
+    throw new Error(
+      `Vercel did not expose a ready production deployment on ${TOKENLESS_PRODUCTION_ALIAS}; refusing to report success.`,
+    );
+  }
+  if (previousDeploymentId && deployedId === previousDeploymentId) {
+    throw new Error(
+      `Vercel left ${TOKENLESS_PRODUCTION_ALIAS} on ${deployedId}; refusing to report a no-op deployment as successful.`,
+    );
+  }
+  return 0;
 }
 
 function main() {

@@ -24,20 +24,74 @@ test("the tracked canonical command validates both links before deploying from t
 
   const paths = fixture();
   const calls = [];
+  let inspectCount = 0;
   const status = runTokenlessVercel({
     ...paths,
     forwardedArgs: ["--prod", "--yes"],
     spawn: (...args) => {
       calls.push(args);
+      if (args[1].includes("inspect")) {
+        inspectCount += 1;
+        return {
+          status: 0,
+          stdout: JSON.stringify({
+            aliases: ["rateloop-tokenless.vercel.app"],
+            id: `dpl_${inspectCount}`,
+            name: TOKENLESS_VERCEL_PROJECT.projectName,
+            readyState: "READY",
+            target: "production",
+          }),
+        };
+      }
       return { status: 0 };
     },
   });
   assert.equal(status, 0);
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0][0], "yarn");
-  assert.deepEqual(calls[0][1], ["exec", "vercel", "--cwd", paths.repoRoot, "--prod", "--yes"]);
-  assert.equal(calls[0][1].includes("--project"), false);
-  assert.equal(calls[0][1].includes("--build-env"), false);
+  assert.equal(calls.length, 3);
+  const deployCall = calls[1];
+  assert.equal(deployCall[0], "yarn");
+  assert.deepEqual(deployCall[1], ["exec", "vercel", "--cwd", paths.repoRoot, "--prod", "--yes"]);
+  assert.equal(deployCall[1].includes("--project"), false);
+  assert.equal(deployCall[1].includes("--build-env"), false);
+});
+
+test("a production deploy fails closed when Vercel exits zero without moving the alias", () => {
+  const paths = fixture();
+  const deployment = JSON.stringify({
+    aliases: ["rateloop-tokenless.vercel.app"],
+    id: "dpl_unchanged",
+    name: TOKENLESS_VERCEL_PROJECT.projectName,
+    readyState: "READY",
+    target: "production",
+  });
+  assert.throws(
+    () =>
+      runTokenlessVercel({
+        ...paths,
+        forwardedArgs: ["--prod", "--yes"],
+        spawn: (_command, args) => (args.includes("inspect") ? { status: 0, stdout: deployment } : { status: 0 }),
+      }),
+    /no-op deployment/i,
+  );
+});
+
+test("a production deploy fails closed when the resulting alias cannot be verified", () => {
+  const paths = fixture();
+  let inspectCount = 0;
+  assert.throws(
+    () =>
+      runTokenlessVercel({
+        ...paths,
+        forwardedArgs: ["--prod", "--yes"],
+        spawn: (_command, args) => {
+          if (!args.includes("inspect")) return { status: 0 };
+          inspectCount += 1;
+          if (inspectCount === 1) return { status: 1, stdout: "" };
+          return { status: 0, stdout: "Vercel CLI 54.18.0" };
+        },
+      }),
+    /did not expose a ready production deployment/i,
+  );
 });
 
 for (const [name, links] of [
