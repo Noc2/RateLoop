@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useFormatter, useTranslations } from "next-intl";
 import { ChoiceInput, Field, TextareaField } from "~~/components/tokenless/forms/Field";
+import { canonicalReviewSearchParams } from "~~/components/tokenless/human/humanNavigation";
 import { CrowdForecastField } from "~~/components/tokenless/review/CrowdForecastField";
 import { DeadlineChip } from "~~/components/tokenless/review/DeadlineChip";
 import { PrivateArtifactPreview } from "~~/components/tokenless/review/PrivateArtifactPreview";
@@ -11,6 +12,7 @@ import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { Chip } from "~~/components/tokenless/ui/Chip";
 import { PageHeading } from "~~/components/tokenless/ui/PageHeading";
+import { stripLocalePrefix } from "~~/i18n/config";
 import { Link } from "~~/i18n/navigation";
 import { readBrowserSession, subscribeToBrowserAuthSessionChanges } from "~~/lib/auth/client";
 import { HttpJsonError, readJson } from "~~/lib/tokenless/http";
@@ -315,15 +317,17 @@ export function reviewerAssignmentHref(currentHref: string, assignmentId: string
   const id = assignmentId.trim();
   const terms = termsHash.trim();
   if (
-    current.pathname !== "/human/review" ||
+    stripLocalePrefix(current.pathname) !== "/human/review" ||
     id.length < 8 ||
     id.length > 256 ||
     !/^sha256:[0-9a-f]{64}$/u.test(terms)
   ) {
     return null;
   }
-  current.searchParams.set("assignment", id);
-  current.searchParams.set("terms", terms);
+  const canonical = canonicalReviewSearchParams(current.searchParams);
+  canonical.set("assignment", id);
+  canonical.set("terms", terms);
+  current.search = canonical.toString();
   return `${current.pathname}${current.search}${current.hash}`;
 }
 

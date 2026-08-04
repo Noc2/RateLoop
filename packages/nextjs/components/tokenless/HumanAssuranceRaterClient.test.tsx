@@ -9,19 +9,25 @@ const { renderToStaticMarkup } = require("react-dom/server") as {
   renderToStaticMarkup: (element: React.ReactElement) => string;
 };
 
-test("reviewer assignment URLs preserve queue context only for validated opened assignments", async () => {
+test("reviewer assignment URLs preserve only meaningful review context for validated assignments", async () => {
   const { reviewerAssignmentHref } = await import("./HumanAssuranceRaterClient");
   const termsHash = `sha256:${"a".repeat(64)}`;
 
   assert.equal(
     reviewerAssignmentHref(
-      "https://rateloop-tokenless.vercel.app/human/review?scope=private&source=inbox#review-queue",
+      "https://rateloop-tokenless.vercel.app/human/review?scope=private&source=inbox&invite=1#review-queue",
       "haas_assignment_123",
       termsHash,
     ),
-    `/human/review?scope=private&source=inbox&assignment=haas_assignment_123&terms=${encodeURIComponent(
+    `/human/review?invite=1&assignment=haas_assignment_123&terms=${encodeURIComponent(termsHash)}#review-queue`,
+  );
+  assert.equal(
+    reviewerAssignmentHref(
+      "https://rateloop-tokenless.vercel.app/de/human/review?q=old&assignment=stale&terms=stale",
+      "haas_assignment_123",
       termsHash,
-    )}#review-queue`,
+    ),
+    `/de/human/review?assignment=haas_assignment_123&terms=${encodeURIComponent(termsHash)}`,
   );
   assert.equal(
     reviewerAssignmentHref("https://rateloop-tokenless.vercel.app/docs", "haas_assignment_123", termsHash),

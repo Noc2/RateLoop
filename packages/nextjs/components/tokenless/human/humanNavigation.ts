@@ -2,7 +2,9 @@ export type HumanTab = "discover" | "inbox" | "profile" | "settings";
 export type HumanNavigation = HumanTab | "history";
 export type HumanSection = "review" | "history" | "inbox" | "profile" | "settings";
 
-type NavigationSearchParams = Record<string, string | string[] | undefined>;
+export type NavigationSearchParams = Record<string, string | string[] | undefined>;
+
+const REVIEW_QUERY_KEYS = ["assignment", "terms", "invite"] as const;
 
 const humanSectionByNavigation: Record<HumanNavigation, HumanSection> = {
   discover: "review",
@@ -46,15 +48,35 @@ export function humanNavigationForSection(section?: string): HumanNavigation | n
   return section ? (humanNavigationBySection.get(section) ?? null) : null;
 }
 
+export function canonicalReviewSearchParams(input?: URLSearchParams | NavigationSearchParams) {
+  const current = navigationSearchParams(input);
+  const canonical = new URLSearchParams();
+  for (const key of REVIEW_QUERY_KEYS) {
+    const value = current.get(key);
+    if (value) canonical.set(key, value);
+  }
+  return canonical;
+}
+
+export function rateRedirectHref(searchParams: NavigationSearchParams) {
+  const search = canonicalReviewSearchParams(searchParams).toString();
+  return `/human/review${search ? `?${search}` : ""}`;
+}
+
 export function humanSectionHref(
   navigation: HumanNavigation,
   currentSearch?: URLSearchParams | NavigationSearchParams,
 ) {
-  const params = navigationSearchParams(currentSearch);
-  params.delete("tab");
-  params.delete("q");
-  params.delete("scope");
-  if (navigation === "history") params.delete("view");
+  let params = navigationSearchParams(currentSearch);
+  if (humanSectionForNavigation(navigation) === "review") {
+    params = canonicalReviewSearchParams(params);
+  } else {
+    params.delete("tab");
+    params.delete("q");
+    params.delete("scope");
+    params.delete("source");
+    if (navigation === "history") params.delete("view");
+  }
   const search = params.toString();
   return `/human/${humanSectionForNavigation(navigation)}${search ? `?${search}` : ""}`;
 }

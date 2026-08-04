@@ -1,4 +1,10 @@
-import { humanSectionHref, legacyHumanRouteHref } from "./humanNavigation";
+import { reviewerAssignmentHref } from "../HumanAssuranceRaterClient";
+import {
+  canonicalReviewSearchParams,
+  humanSectionHref,
+  legacyHumanRouteHref,
+  rateRedirectHref,
+} from "./humanNavigation";
 import { humanAccountReturnTo, resolveHumanProfileSection } from "./humanProfileNavigation";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -50,6 +56,42 @@ test("human route compatibility preserves history, profile, and invitation state
   assert.equal(
     humanSectionHref("profile", new URLSearchParams("section=forecast-integrity")),
     "/human/profile?section=forecast-integrity",
+  );
+});
+
+test("all review entry points share one canonical query contract", () => {
+  const termsHash = `sha256:${"a".repeat(64)}`;
+  const noisy = new URLSearchParams(
+    `q=safety&scope=private&source=inbox&invite=1&invite=ignored&assignment=haas_assignment_old&terms=${encodeURIComponent(
+      termsHash,
+    )}`,
+  );
+  assert.equal(
+    canonicalReviewSearchParams(noisy).toString(),
+    `assignment=haas_assignment_old&terms=${encodeURIComponent(termsHash)}&invite=1`,
+  );
+  assert.equal(
+    humanSectionHref("discover", noisy),
+    `/human/review?assignment=haas_assignment_old&terms=${encodeURIComponent(termsHash)}&invite=1`,
+  );
+  assert.equal(
+    rateRedirectHref({
+      q: "safety",
+      scope: "private",
+      source: "inbox",
+      invite: ["1", "ignored"],
+      assignment: "haas_assignment_old",
+      terms: termsHash,
+    }),
+    `/human/review?assignment=haas_assignment_old&terms=${encodeURIComponent(termsHash)}&invite=1`,
+  );
+  assert.equal(
+    reviewerAssignmentHref(
+      `https://rateloop-tokenless.vercel.app/human/review?${noisy.toString()}#active`,
+      "haas_assignment_new",
+      termsHash,
+    ),
+    `/human/review?assignment=haas_assignment_new&terms=${encodeURIComponent(termsHash)}&invite=1#active`,
   );
 });
 
