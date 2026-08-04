@@ -446,7 +446,6 @@
     "issueReference": "Problem: {key}"
   },
   "routing": {
-    "title": "Prüfungsrouting",
     "when": "Wann soll RateLoop eine menschliche Prüfung verlangen?",
     "whenInfo": "Wann eine menschliche Prüfung erforderlich ist",
     "whenInfoBody": "Legt fest, wann eine berechtigte Ausgabe menschlich geprüft werden muss. Dies erlaubt weder das Senden noch die Finanzierung einer Anfrage.",

@@ -446,7 +446,6 @@
     "issueReference": "Issue: {key}"
   },
   "routing": {
-    "title": "Review routing",
     "when": "When should RateLoop require human review?",
     "whenInfo": "About when human review is required",
     "whenInfoBody": "Decides when an eligible output requires human review. It does not authorize sending or funding a request.",

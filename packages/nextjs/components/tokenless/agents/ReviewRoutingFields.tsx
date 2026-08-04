@@ -215,10 +215,8 @@ export function ReviewRoutingFields({
   onModeChange: (mode: ReviewRoutingMode) => void;
   onAuthorityChange: (authority: ReviewRoutingAuthority) => void;
 }) {
-  const t = useAgentTranslations("routing");
   return (
-    <Card as="fieldset" variant="nested" className={`p-4 sm:p-5 ${className ?? ""}`}>
-      <legend className="px-1 text-xl font-semibold">{t("title")}</legend>
+    <Card as="div" variant="nested" className={`p-4 sm:p-5 ${className ?? ""}`}>
       <div className="grid gap-5 sm:grid-cols-2">
         <ReviewFrequencyFields
           mode={mode}

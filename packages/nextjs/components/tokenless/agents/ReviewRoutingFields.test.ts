@@ -11,7 +11,6 @@ const source = readFileSync(new URL("./ReviewRoutingFields.tsx", import.meta.url
 const catalogSource = readFileSync(new URL("../../../messages/en/agents.json", import.meta.url), "utf8");
 
 test("review routing keeps selection and authority together with accessible explanations", () => {
-  assert.match(catalogSource, /Review routing/);
   assert.match(source, /export function ReviewFrequencyFields/);
   assert.match(source, /export function ReviewAuthorityFields/);
   assert.match(source, /<ReviewFrequencyFields/);
@@ -26,6 +25,7 @@ test("review routing keeps selection and authority together with accessible expl
   assert.match(catalogSource, /does not authorize sending or funding a request/);
   assert.match(catalogSource, /Applies only after review is required/);
   assert.match(catalogSource, /controls whether the agent checks, prepares, or sends a request/);
+  assert.doesNotMatch(source, /<legend[^>]*>\{t\("title"\)\}<\/legend>/);
 });
 
 test("manual handoff has exact copy and hides the authority field", () => {
