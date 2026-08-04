@@ -30,7 +30,7 @@ import {
   verifyPublicRaterResponseCommitments,
 } from "~~/lib/tokenless/publicRaterResponses";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
-import { finalizeSurpriseBountyRound } from "~~/lib/tokenless/surpriseBountyService";
+import { closeTerminalSurpriseBountyRound, finalizeSurpriseBountyRound } from "~~/lib/tokenless/surpriseBountyService";
 import { assertTokenlessSettlementAccounting } from "~~/lib/tokenless/tokenlessSettlementAccounting";
 
 const WEBHOOK_EVENTS = new Set([
@@ -1863,6 +1863,11 @@ export async function appendTerminalRoundEvidence(input: {
 }) {
   const evidence = await deriveTerminalRoundEvidence(input);
   await requireCanonicalEvidenceFinality(evidence, input.signal);
+  await closeTerminalSurpriseBountyRound({
+    operationKey: input.operationKey,
+    deploymentKey: evidence.deploymentKey,
+    roundId: evidence.roundId,
+  });
   if (
     !UNSIGNED_INTEGER.test(evidence.chain.timestamp) ||
     BigInt(evidence.chain.timestamp) > BigInt(Math.floor(Date.now() / 1_000) + 300)

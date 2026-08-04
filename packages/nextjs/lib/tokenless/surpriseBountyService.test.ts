@@ -10,6 +10,7 @@ import type { TokenlessChainRuntime } from "~~/lib/tokenless/chain/runtime";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import {
   __surpriseBountyServiceTestUtils,
+  closeTerminalSurpriseBountyRound,
   finalizeSurpriseBountyRound,
   processSurpriseBountyPayments,
   reserveSurpriseBountyCapacity,
@@ -623,4 +624,53 @@ test("expired abandoned reservations release deployment capacity for another ope
       { operationKey: "operation-surprise-successor", state: "reserved", expires: true },
     ],
   );
+});
+
+test("every incomplete terminal outcome closes its funded reservation and releases capacity", async () => {
+  const terminalOutcomes = ["zero_commit_refunded", "under_quorum_compensated", "beacon_failure_compensated"];
+  const expiresAt = new Date(NOW.getTime() + 600_000);
+
+  for (const [index, terminalOutcome] of terminalOutcomes.entries()) {
+    const operationKey = `operation-surprise-terminal-${terminalOutcome}`;
+    await seedAsk(operationKey);
+    await reserveSurpriseBountyCapacity({
+      operationKey,
+      guaranteedBasePerReportAtomic: 1_000_000n,
+      maximumReports: 10,
+      feeAmountAtomic: 1_250_000n,
+      config: config(),
+      runtime: runtime(1_250_000n),
+      now: NOW,
+      expiresAt,
+    });
+    await dbClient.execute({
+      sql: `UPDATE tokenless_surprise_bounty_rounds
+            SET state = 'funded', reservation_expires_at = NULL
+            WHERE operation_key = ?`,
+      args: [operationKey],
+    });
+
+    const closed = await closeTerminalSurpriseBountyRound({
+      operationKey,
+      deploymentKey: config().deploymentKey,
+      roundId: String(100 + index),
+      now: NOW,
+    });
+    assert.equal(closed.status, "insufficient_sample");
+
+    const stored = await dbClient.execute({
+      sql: `SELECT state, total_bonus_atomic, reservation_expires_at, completed_at
+            FROM tokenless_surprise_bounty_rounds WHERE operation_key = ?`,
+      args: [operationKey],
+    });
+    assert.equal(stored.rows[0]?.state, "insufficient_sample");
+    assert.equal(String(stored.rows[0]?.total_bonus_atomic), "0");
+    assert.equal(stored.rows[0]?.reservation_expires_at, null);
+    assert.ok(stored.rows[0]?.completed_at instanceof Date);
+  }
+
+  const entitlements = await dbClient.execute({
+    sql: "SELECT COUNT(*) AS count FROM tokenless_surprise_bounty_entitlements",
+  });
+  assert.equal(Number(entitlements.rows[0]?.count), 0);
 });

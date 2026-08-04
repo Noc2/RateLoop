@@ -737,6 +737,17 @@ test("all incomplete terminal states publish conserved results instead of pollin
   assert.equal(underQuorum.economics.compensation.totalAtomic, "12000000");
   assert.equal(underQuorum.economics.refund.totalAtomic, "34875000");
 
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_surprise_bounty_rounds
+          (bounty_round_id, operation_key, deployment_key, version, state, policy_json,
+           guaranteed_base_per_report_atomic, maximum_bonus_per_report_atomic,
+           reserved_report_capacity, maximum_liability_atomic, paid_bonus_atomic,
+           reservation_expires_at, created_at, updated_at)
+          VALUES ('sbr_terminal', ?, ?, 'v1', 'funded', '{}', 1000000, 125000,
+                  10, 1250000, 0, NULL, ?, ?)`,
+    args: [OPERATION, DEPLOYMENT, NOW, NOW],
+  });
+
   await assert.rejects(
     () =>
       deriveTerminalRoundEvidence({
@@ -761,6 +772,15 @@ test("all incomplete terminal states publish conserved results instead of pollin
     ponderUrl: "https://ponder.example.test",
   });
   assert.equal(replayedAppend.eventId, appended.eventId);
+  const closedBounty = await dbClient.execute({
+    sql: `SELECT state, total_bonus_atomic, reservation_expires_at, completed_at
+          FROM tokenless_surprise_bounty_rounds WHERE operation_key = ?`,
+    args: [OPERATION],
+  });
+  assert.equal(closedBounty.rows[0]?.state, "insufficient_sample");
+  assert.equal(String(closedBounty.rows[0]?.total_bonus_atomic), "0");
+  assert.equal(closedBounty.rows[0]?.reservation_expires_at, null);
+  assert.ok(closedBounty.rows[0]?.completed_at instanceof Date);
 
   canonicalFinalizedBlockHash = `0x${"bc".repeat(32)}`;
   await assert.rejects(

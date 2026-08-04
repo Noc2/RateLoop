@@ -417,6 +417,15 @@ export async function finalizeSurpriseBountyRound(input: {
   }
 }
 
+export async function closeTerminalSurpriseBountyRound(input: {
+  operationKey: string;
+  deploymentKey: string;
+  roundId: string;
+  now?: Date;
+}) {
+  return finalizeSurpriseBountyRound({ ...input, reports: [] });
+}
+
 function configuredPonderUrl(raw = process.env.TOKENLESS_PONDER_URL ?? process.env.NEXT_PUBLIC_PONDER_URL) {
   const value = raw?.trim() || (process.env.NODE_ENV === "production" ? "" : "http://127.0.0.1:42069");
   if (!value)
