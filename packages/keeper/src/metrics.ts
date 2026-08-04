@@ -48,6 +48,12 @@ let walletBalanceWei: bigint | null = null;
 let minimumWalletBalanceWei = 0n;
 let healthThresholdMs = 45_000;
 
+export type KeeperDeploymentIdentity = {
+  chainId: number;
+  deploymentBlock: string;
+  deploymentKey: string;
+};
+
 export function incrementCounter(name: string, amount = 1) {
   if (name in counters) counters[name] += amount;
 }
@@ -171,6 +177,13 @@ export function operationalHealthSnapshot(now = new Date()) {
   };
 }
 
+export function authenticatedHealthSnapshot(
+  deploymentIdentity: KeeperDeploymentIdentity,
+  now = new Date(),
+) {
+  return { ...operationalHealthSnapshot(now), ...deploymentIdentity };
+}
+
 export function renderMetrics() {
   const lines: string[] = [];
   for (const [name, value] of Object.entries(counters)) {
@@ -190,6 +203,7 @@ export function startMetricsServer(
   port: number,
   bindAddress: string,
   authToken: string | null,
+  deploymentIdentity: KeeperDeploymentIdentity,
 ): Server {
   const server = createServer((request, response) => {
     if (request.url === "/live") {
@@ -224,7 +238,7 @@ export function startMetricsServer(
       return;
     }
     if (request.url === "/health") {
-      const health = operationalHealthSnapshot();
+      const health = authenticatedHealthSnapshot(deploymentIdentity);
       response.writeHead(health.status === "ok" ? 200 : 503, {
         "content-type": "application/json",
       });

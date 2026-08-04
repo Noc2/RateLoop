@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   __resetMetricsForTests,
+  authenticatedHealthSnapshot,
   operationalHealthSnapshot,
   recordError,
   recordSigningFailure,
@@ -112,5 +113,36 @@ describe("tokenless keeper liveness metrics", () => {
       "keeper_signing_errors_malformed_response_or_recovery_total 1",
     );
     expect(metrics).toContain("keeper_signing_errors_outage_total 1");
+  });
+
+  it("adds deployment identity only to the authenticated health projection", () => {
+    recordRun(
+      {
+        roundsScanned: 0,
+        roundFailures: 0,
+        revealWindowsOpened: 0,
+        votesRevealed: 0,
+        settlementsBegun: 0,
+        aggregateBatchesProcessed: 0,
+        scoringSeedsFinalized: 0,
+        scoreBatchesProcessed: 0,
+        roundsFinalized: 0,
+        terminalRoundsAdvanced: 0,
+        claimsExecuted: 0,
+        staleReturnsExecuted: 0,
+        feedbackBonusRefundsExecuted: 0,
+        selfRevealFallbacksPending: 0,
+        roundsAwaitingBeaconFailure: 0,
+        roundsAwaitingScoringEntropy: 0,
+      },
+      1,
+    );
+    const identity = {
+      chainId: 84_532,
+      deploymentBlock: "44915850",
+      deploymentKey: "tokenless-v4:84532:fixture",
+    };
+    expect(operationalHealthSnapshot()).not.toHaveProperty("deploymentKey");
+    expect(authenticatedHealthSnapshot(identity)).toMatchObject(identity);
   });
 });

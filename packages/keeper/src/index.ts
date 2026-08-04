@@ -54,6 +54,11 @@ async function main() {
     config.metricsPort,
     config.metricsBindAddress,
     config.metricsAuthToken,
+    {
+      chainId: chain.id,
+      deploymentBlock: config.deployment.blockNumber.toString(),
+      deploymentKey: config.deployment.key,
+    },
   );
 
   let running = false;
