@@ -124,8 +124,11 @@ export function TokenlessLandingPage({
                 Scale AI autonomy without scaling blind trust.
               </p>
               <div className="mt-6 flex w-full flex-col items-stretch gap-3 sm:w-auto sm:flex-row">
-                <Link href="/human/review" className="group rateloop-gradient-action min-h-11 gap-2 px-5 text-base">
-                  <span>Start Reviewing</span>
+                <Link
+                  href="/agents/connections"
+                  className="group rateloop-gradient-action min-h-11 gap-2 px-5 text-base"
+                >
+                  <span>Connect Agent</span>
                   <span
                     aria-hidden="true"
                     className="text-lg leading-none transition-transform group-hover:translate-x-0.5"
@@ -134,10 +137,10 @@ export function TokenlessLandingPage({
                   </span>
                 </Link>
                 <Link
-                  href="/agents/connections"
+                  href="/human/review"
                   className="group btn min-h-11 gap-2 rounded-lg border-0 bg-base-content/[0.11] px-5 text-base hover:bg-base-content/[0.18]"
                 >
-                  <span>Connect Agent</span>
+                  <span>Start Reviewing</span>
                   <span
                     aria-hidden="true"
                     className="text-lg leading-none transition-transform group-hover:translate-x-0.5"
