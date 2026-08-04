@@ -13,6 +13,7 @@ import {
   validateVaultEnvironment,
 } from "~~/lib/privacy/vault";
 import { createConfiguredPlatformSecretKeyWrappingProvider } from "~~/lib/privacy/vault/platformSecret";
+import type { ConfidentialArtifactRendererPolicy } from "~~/lib/tokenless/confidentialArtifactResponse";
 import { artifactDeletionAuditKey } from "~~/lib/tokenless/idempotencyKeys";
 import { privateBlobStorage } from "~~/lib/tokenless/privateBlobStorage";
 import { authorizeProjectAccount, projectAccountReference } from "~~/lib/tokenless/projectAccess";
@@ -385,7 +386,7 @@ export async function storeEncryptedArtifact(input: {
   label: string;
   projectId: string;
   redactionStatus: "not_required" | "pending" | "approved" | "rejected";
-  rendererPolicy: "plain_text" | "sanitized_html" | "image" | "download";
+  rendererPolicy: ConfidentialArtifactRendererPolicy;
   role: "baseline" | "candidate" | "context" | "reference";
   workspaceId: string;
 }) {
@@ -974,7 +975,7 @@ export async function readEncryptedArtifact(input: {
     if (!leaseId) throw new TokenlessServiceError("Artifact not found.", 404, "artifact_not_found");
   }
   const result = await dbClient.execute({
-    sql: `SELECT a.content_type, a.size_bytes, o.storage_ref, o.key_domain, o.key_version, o.content_nonce, o.content_auth_tag,
+    sql: `SELECT a.content_type, a.renderer_policy, a.size_bytes, o.storage_ref, o.key_domain, o.key_version, o.content_nonce, o.content_auth_tag,
                  o.wrapped_data_key, o.wrap_nonce, o.wrap_auth_tag
           FROM tokenless_assurance_artifacts a
           JOIN tokenless_assurance_artifact_objects o ON o.artifact_id = a.artifact_id
@@ -1065,6 +1066,7 @@ export async function readEncryptedArtifact(input: {
   return {
     bytes: new Uint8Array(bytes),
     contentType: rowString(row, "content_type")!,
+    rendererPolicy: rowString(row, "renderer_policy") as ConfidentialArtifactRendererPolicy,
     sizeBytes: Number(rowString(row, "size_bytes")),
   };
 }

@@ -1,18 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import {
+  CONFIDENTIAL_ARTIFACT_NO_STORE,
+  confidentialArtifactResponse,
+} from "~~/lib/tokenless/confidentialArtifactResponse";
 import { readDsaReferencePanelAdjudicationArtifact } from "~~/lib/tokenless/dsaReferencePanelPilot";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const NO_STORE = "private, no-store, max-age=0";
-const INLINE_CONTENT_TYPES = new Set(["application/json", "image/jpeg", "image/png", "image/webp", "text/plain"]);
 type Context = { params: Promise<{ workspaceId: string; unitId: string }> };
 type Dependencies = {
   requireSession: (request: NextRequest) => Promise<{ principalId: string }>;
   readArtifact: typeof readDsaReferencePanelAdjudicationArtifact;
 };
+
+export const buildConfidentialArtifactResponse = confidentialArtifactResponse;
 
 function requiredQuery(request: NextRequest, key: "epochId" | "leaseId") {
   const value = request.nextUrl.searchParams.get(key)?.trim();
@@ -37,27 +41,15 @@ export function createDsaReferencePanelAdjudicationArtifactGet(
         unitId,
         leaseId: requiredQuery(request, "leaseId"),
       });
-      const contentType = artifact.contentType.split(";", 1)[0]!.trim().toLowerCase();
-      return new NextResponse(Buffer.from(artifact.bytes), {
-        headers: {
-          "Cache-Control": NO_STORE,
-          ...(!INLINE_CONTENT_TYPES.has(contentType)
-            ? { "Content-Disposition": 'attachment; filename="reference-panel-artifact"' }
-            : {}),
-          "Content-Length": String(artifact.sizeBytes),
-          "Content-Type": artifact.contentType,
-          "Content-Security-Policy": "default-src 'none'; sandbox",
-          "Cross-Origin-Resource-Policy": "same-origin",
-          "Referrer-Policy": "no-referrer",
-          "X-Frame-Options": "DENY",
-          "X-Content-Type-Options": "nosniff",
-        },
+      return buildConfidentialArtifactResponse({
+        artifact,
+        filename: "reference-panel-artifact",
       });
     } catch (error) {
       const response = tokenlessErrorResponse(error);
       return NextResponse.json(response.body, {
         status: response.status,
-        headers: { "Cache-Control": NO_STORE },
+        headers: { "Cache-Control": CONFIDENTIAL_ARTIFACT_NO_STORE },
       });
     }
   };

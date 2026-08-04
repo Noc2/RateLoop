@@ -23,14 +23,19 @@ test("dedicated adjudication artifact route authenticates and forwards only the 
     },
     async readArtifact(input) {
       delivered = input;
-      return { bytes: new Uint8Array([101, 120, 97, 99, 116]), contentType: "text/plain", sizeBytes: 5 };
+      return {
+        bytes: new Uint8Array([101, 120, 97, 99, 116]),
+        contentType: "text/plain",
+        rendererPolicy: "plain_text",
+        sizeBytes: 5,
+      };
     },
   });
 
   const response = await get(new NextRequest(REQUEST_URL), CONTEXT);
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("cache-control"), "private, no-store, max-age=0");
-  assert.equal(response.headers.get("content-type"), "text/plain");
+  assert.equal(response.headers.get("content-type"), "text/plain; charset=utf-8");
   assert.equal(response.headers.get("content-disposition"), null);
   assert.equal(response.headers.get("content-security-policy"), "default-src 'none'; sandbox");
   assert.equal(response.headers.get("cross-origin-resource-policy"), "same-origin");
@@ -55,7 +60,7 @@ test("dedicated adjudication artifact route never reaches delivery without authe
     },
     async readArtifact() {
       delivered = true;
-      return { bytes: new Uint8Array(), contentType: "text/plain", sizeBytes: 0 };
+      return { bytes: new Uint8Array(), contentType: "text/plain", rendererPolicy: "plain_text", sizeBytes: 0 };
     },
   });
   const response = await get(new NextRequest(REQUEST_URL), CONTEXT);
@@ -69,7 +74,7 @@ test("dedicated adjudication artifact route downloads unsupported stored media t
       return { principalId: "rlp_abcdefghijklmnopqrstuvwxyz" };
     },
     async readArtifact() {
-      return { bytes: new Uint8Array([1]), contentType: "text/html", sizeBytes: 1 };
+      return { bytes: new Uint8Array([1]), contentType: "text/html", rendererPolicy: "sanitized_html", sizeBytes: 1 };
     },
   });
   const response = await get(new NextRequest(REQUEST_URL), CONTEXT);
@@ -99,7 +104,12 @@ test("artifact delivery resolves a current nonterminal marker and passes an inte
       client,
       async readArtifact(input) {
         readInput = input;
-        return { bytes: new Uint8Array([1]), contentType: "application/octet-stream", sizeBytes: 1 };
+        return {
+          bytes: new Uint8Array([1]),
+          contentType: "application/octet-stream",
+          rendererPolicy: "download",
+          sizeBytes: 1,
+        };
       },
     },
   );
@@ -139,7 +149,7 @@ test("revoked, expired, adjudicated, or terminal markers fail closed before decr
         client,
         async readArtifact() {
           decrypted = true;
-          return { bytes: new Uint8Array(), contentType: "text/plain", sizeBytes: 0 };
+          return { bytes: new Uint8Array(), contentType: "text/plain", rendererPolicy: "plain_text", sizeBytes: 0 };
         },
       },
     ),

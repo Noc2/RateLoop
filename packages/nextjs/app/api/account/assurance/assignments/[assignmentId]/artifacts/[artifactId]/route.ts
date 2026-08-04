@@ -7,6 +7,10 @@ import {
   assertAssuranceAssignmentSettlementAvailable,
   assertMatchingPrivateGroupSnapshot,
 } from "~~/lib/tokenless/audienceAssignments";
+import {
+  CONFIDENTIAL_ARTIFACT_NO_STORE,
+  confidentialArtifactResponse,
+} from "~~/lib/tokenless/confidentialArtifactResponse";
 import { readDsaNamedPanelArtifactIfExists } from "~~/lib/tokenless/dsaNamedReferencePanel";
 import {
   directPrivateArtifactAccess,
@@ -19,6 +23,8 @@ export const runtime = "nodejs";
 
 type Context = { params: Promise<{ artifactId: string; assignmentId: string }> };
 type QueryRow = Record<string, unknown>;
+
+export const buildConfidentialArtifactResponse = confidentialArtifactResponse;
 
 function rowString(row: QueryRow | undefined, key: string) {
   const value = row?.[key];
@@ -89,23 +95,15 @@ export async function GET(request: NextRequest, context: Context) {
         requestReference: request.headers.get("x-request-id") ?? undefined,
         workspaceId: workspaceId!,
       }));
-    return new NextResponse(Buffer.from(artifact.bytes), {
-      headers: {
-        "Cache-Control": "private, no-store, max-age=0",
-        "Content-Length": String(artifact.sizeBytes),
-        "Content-Type": artifact.contentType,
-        "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
-        "Cross-Origin-Resource-Policy": "same-origin",
-        "Referrer-Policy": "no-referrer",
-        "X-Frame-Options": "DENY",
-        "X-Content-Type-Options": "nosniff",
-      },
+    return buildConfidentialArtifactResponse({
+      artifact,
+      filename: artifactId,
     });
   } catch (error) {
     const response = tokenlessErrorResponse(error);
     return NextResponse.json(response.body, {
       status: response.status,
-      headers: { "Cache-Control": "private, no-store, max-age=0" },
+      headers: { "Cache-Control": CONFIDENTIAL_ARTIFACT_NO_STORE },
     });
   }
 }

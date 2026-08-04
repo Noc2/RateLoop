@@ -188,6 +188,7 @@ test("artifact plaintext stays out of Postgres and private object storage", asyn
     workspaceId: project.workspaceId,
   });
   assert.equal(new TextDecoder().decode(read.bytes), "private customer prompt");
+  assert.equal(read.rendererPolicy, "plain_text");
 });
 
 test("opaque Better Auth principals retain assigned artifact access without a wallet", async () => {
