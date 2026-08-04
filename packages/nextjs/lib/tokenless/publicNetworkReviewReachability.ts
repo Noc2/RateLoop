@@ -9,6 +9,7 @@ import type { PoolClient } from "pg";
 import "server-only";
 import { dbClient, dbPool } from "~~/lib/db";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
+import { lockAssuranceProjectForRunMutation } from "~~/lib/tokenless/assuranceProjectMutation";
 import { bindAssuranceCaseRound, freezeAssuranceRunOrchestration } from "~~/lib/tokenless/assuranceRunOrchestration";
 import { expireAudienceAssignments } from "~~/lib/tokenless/audienceAssignments";
 import {
@@ -286,6 +287,14 @@ async function seedFoundationResources(input: {
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
+    const project = await lockAssuranceProjectForRunMutation(client, input.projectId);
+    if (!project || project.status !== "active" || project.workspace_id !== input.source.workspaceId) {
+      throw new TokenlessServiceError(
+        "The frozen admission policy is not attached to an exact workspace-owned public project.",
+        409,
+        "public_network_project_binding_mismatch",
+      );
+    }
     const policyResult = await client.query(
       `SELECT ap.project_id,ap.policy_id,ap.version,ap.policy_hash,ap.policy_json,
               p.workspace_id,p.status,p.visibility,p.material_kind,p.data_classification

@@ -15,6 +15,7 @@ import { consumeWorkspaceUsageAllocations, releaseWorkspaceUsageAllocations } fr
 import { dbClient, dbPool, serializePoolClientQueries } from "~~/lib/db";
 import type { TokenlessWorkspaceRole } from "~~/lib/db/productSchema";
 import { assertCredentialDataPolicy, assertDataIngressPolicy } from "~~/lib/privacy/dataPolicy";
+import { lockAssuranceProjectForRunMutation } from "~~/lib/tokenless/assuranceProjectMutation";
 import { lockAssuranceSuiteForMutation } from "~~/lib/tokenless/assuranceSuiteMutation";
 import { promoteCompletedRunGoldQualifications } from "~~/lib/tokenless/goldQuality";
 import { recordAssuranceMechanismHealth } from "~~/lib/tokenless/mechanismHealth";
@@ -833,57 +834,70 @@ export async function createAssuranceRun(input: {
     throw new TokenlessServiceError("Runs require a frozen suite.", 409, "assurance_suite_not_frozen");
   }
   const projectId = rowString(suite, "project_id")!;
-  const policyResult = await dbClient.execute({
-    sql: `SELECT project_id, policy_hash FROM tokenless_assurance_audience_policies
-          WHERE policy_id = ? AND version = ? LIMIT 1`,
-    args: [input.audiencePolicyId, input.audiencePolicyVersion],
-  });
-  const policy = policyResult.rows[0] as QueryRow | undefined;
-  if (!policy || rowString(policy, "project_id") !== projectId) {
-    throw new TokenlessServiceError(
-      "Audience policy not found in this project.",
-      400,
-      "invalid_assurance_audience_policy",
-    );
-  }
-  if (input.previousRunId) {
-    const previous = await dbClient.execute({
-      sql: `SELECT project_id, status FROM tokenless_assurance_runs
-            WHERE run_id = ? LIMIT 1`,
-      args: [input.previousRunId],
-    });
-    const previousRow = previous.rows[0] as QueryRow | undefined;
-    if (rowString(previousRow, "project_id") !== projectId || rowString(previousRow, "status") !== "completed") {
-      throw new TokenlessServiceError(
-        "The previous run must be completed in the same project.",
-        400,
-        "invalid_previous_assurance_run",
-      );
-    }
-  }
   const runId = `hau_${randomUUID().replaceAll("-", "")}`;
   const now = new Date();
-  await dbClient.execute({
-    sql: `INSERT INTO tokenless_assurance_runs
-          (run_id, project_id, suite_id, suite_version, audience_policy_id,
-           audience_policy_version, status, policy_hash, previous_run_id,
-           created_by, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?)`,
-    args: [
-      runId,
-      projectId,
-      input.suiteId,
-      input.suiteVersion,
-      input.audiencePolicyId,
-      input.audiencePolicyVersion,
-      rowString(policy, "policy_hash"),
-      input.previousRunId ?? null,
-      principalLabel(input.principal),
-      now,
-      now,
-    ],
-  });
-  return { projectId, runId, status: "draft" as const };
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    const project = await lockAssuranceProjectForRunMutation(client, projectId);
+    if (!project || project.status !== "active") {
+      throw new TokenlessServiceError("The assurance project is archived.", 409, "assurance_project_archived");
+    }
+    const policyResult = await client.query(
+      `SELECT project_id, policy_hash FROM tokenless_assurance_audience_policies
+       WHERE policy_id = $1 AND version = $2 LIMIT 1`,
+      [input.audiencePolicyId, input.audiencePolicyVersion],
+    );
+    const policy = policyResult.rows[0] as QueryRow | undefined;
+    if (!policy || rowString(policy, "project_id") !== projectId) {
+      throw new TokenlessServiceError(
+        "Audience policy not found in this project.",
+        400,
+        "invalid_assurance_audience_policy",
+      );
+    }
+    if (input.previousRunId) {
+      const previous = await client.query(
+        `SELECT project_id, status FROM tokenless_assurance_runs
+         WHERE run_id = $1 LIMIT 1`,
+        [input.previousRunId],
+      );
+      const previousRow = previous.rows[0] as QueryRow | undefined;
+      if (rowString(previousRow, "project_id") !== projectId || rowString(previousRow, "status") !== "completed") {
+        throw new TokenlessServiceError(
+          "The previous run must be completed in the same project.",
+          400,
+          "invalid_previous_assurance_run",
+        );
+      }
+    }
+    await client.query(
+      `INSERT INTO tokenless_assurance_runs
+       (run_id, project_id, suite_id, suite_version, audience_policy_id,
+        audience_policy_version, status, policy_hash, previous_run_id,
+        created_by, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, 'draft', $7, $8, $9, $10, $10)`,
+      [
+        runId,
+        projectId,
+        input.suiteId,
+        input.suiteVersion,
+        input.audiencePolicyId,
+        input.audiencePolicyVersion,
+        rowString(policy, "policy_hash"),
+        input.previousRunId ?? null,
+        principalLabel(input.principal),
+        now,
+      ],
+    );
+    await client.query("COMMIT");
+    return { projectId, runId, status: "draft" as const };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 async function loadRunForWrite(principal: AssurancePrincipal, runId: string) {
@@ -1315,23 +1329,55 @@ export async function transitionAssuranceRun(input: {
 
 export async function archiveAssuranceProject(input: { principal: AssurancePrincipal; projectId: string }) {
   await requireProjectAccess(input.principal, input.projectId);
-  const running = await dbClient.execute({
-    sql: `SELECT run_id FROM tokenless_assurance_runs
-          WHERE project_id = ? AND status NOT IN ('completed', 'cancelled') LIMIT 1`,
-    args: [input.projectId],
-  });
-  if (running.rows.length > 0) {
-    throw new TokenlessServiceError(
-      "Complete or cancel draft runs before archiving the project.",
-      409,
-      "assurance_project_has_active_runs",
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    const project = await lockAssuranceProjectForRunMutation(client, input.projectId);
+    if (!project) {
+      throw new TokenlessServiceError("Assurance project not found.", 404, "assurance_project_not_found");
+    }
+    if (project.status === "archived") {
+      await client.query("COMMIT");
+      return { projectId: input.projectId, status: "archived" as const };
+    }
+    if (project.status !== "active") {
+      throw new TokenlessServiceError(
+        "This assurance project cannot be archived.",
+        409,
+        "invalid_assurance_project_transition",
+      );
+    }
+    const running = await client.query(
+      `SELECT run_id FROM tokenless_assurance_runs
+       WHERE project_id = $1 AND status NOT IN ('completed', 'cancelled') LIMIT 1`,
+      [input.projectId],
     );
+    if (running.rows.length > 0) {
+      throw new TokenlessServiceError(
+        "Complete or cancel draft runs before archiving the project.",
+        409,
+        "assurance_project_has_active_runs",
+      );
+    }
+    const result = await client.query(
+      `UPDATE tokenless_assurance_projects
+       SET status = 'archived', updated_at = $1
+       WHERE project_id = $2 AND status = 'active'`,
+      [new Date(), input.projectId],
+    );
+    if (result.rowCount !== 1) {
+      throw new TokenlessServiceError(
+        "The assurance project changed while it was being archived.",
+        409,
+        "assurance_project_conflict",
+      );
+    }
+    await client.query("COMMIT");
+    return { projectId: input.projectId, status: "archived" as const };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
   }
-  await dbClient.execute({
-    sql: `UPDATE tokenless_assurance_projects
-          SET status = 'archived', updated_at = ?
-          WHERE project_id = ? AND status = 'active'`,
-    args: [new Date(), input.projectId],
-  });
-  return { projectId: input.projectId, status: "archived" as const };
 }

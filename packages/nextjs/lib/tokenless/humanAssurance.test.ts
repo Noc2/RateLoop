@@ -4,6 +4,7 @@ import { afterEach, beforeEach, test } from "node:test";
 import type { PoolClient } from "pg";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import { lockAssuranceProjectForRunMutation } from "~~/lib/tokenless/assuranceProjectMutation";
 import { freezeAssuranceRunOrchestration, importAssuranceCases } from "~~/lib/tokenless/assuranceRunOrchestration";
 import { lockAssuranceSuiteForMutation } from "~~/lib/tokenless/assuranceSuiteMutation";
 import {
@@ -372,6 +373,23 @@ test("all suite manifest mutations share one row-lock boundary", async () => {
   );
   assert.match(statement, /FROM tokenless_assurance_suites[\s\S]+LIMIT 1 FOR UPDATE$/u);
   assert.deepEqual(values, ["has_lock_boundary", 7]);
+});
+
+test("project archival and active-run creation share one row-lock boundary", async () => {
+  let statement = "";
+  let values: readonly unknown[] = [];
+  await lockAssuranceProjectForRunMutation(
+    {
+      query: (async (sql: string, args?: readonly unknown[]) => {
+        statement = sql;
+        values = args ?? [];
+        return { rows: [] };
+      }) as PoolClient["query"],
+    },
+    "hap_lock_boundary",
+  );
+  assert.match(statement, /FROM tokenless_assurance_projects[\s\S]+LIMIT 1 FOR UPDATE$/u);
+  assert.deepEqual(values, ["hap_lock_boundary"]);
 });
 
 test("suite, case, and run manifests freeze immutably with strict lifecycle transitions", async () => {
