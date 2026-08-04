@@ -160,7 +160,7 @@ test("revoked, expired, adjudicated, or terminal markers fail closed before decr
 
 test("artifact privacy repeats the boundary after decrypt and conditionally logs the exact still-eligible lease", async () => {
   const source = await readFile(new URL("../../../lib/tokenless/artifactPrivacy.ts", import.meta.url), "utf8");
-  const decryptAt = source.indexOf("const bytes = decrypt(");
+  const decryptAt = source.indexOf("const bytes = await unwrapAndDecryptArtifact({");
   const recheckAt = source.indexOf("if (input.dsaNamedPanelAdjudication)", decryptAt);
   const logAt = source.indexOf("await appendDsaNamedPanelAdjudicationReadLog({", recheckAt);
   assert.ok(decryptAt >= 0 && recheckAt > decryptAt && logAt > recheckAt);
