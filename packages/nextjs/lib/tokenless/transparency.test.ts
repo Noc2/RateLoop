@@ -775,15 +775,50 @@ test("all incomplete terminal states publish conserved results instead of pollin
   );
   canonicalFinalizedBlockHash = FINALIZED_BLOCK_HASH;
 
-  const published = await publishTerminalRoundResult({
-    operationKey: OPERATION,
-    appOrigin: "https://app.example.test",
-    now: NOW,
+  const endpoint = await createWorkspaceWebhook({
+    accountAddress: OWNER,
+    workspaceId: WORKSPACE,
+    url: "https://hooks.example.test/terminal-result",
+    eventTypes: ["result.ready"],
+    encryptionKey: ENCRYPTION_KEY,
+    resolveHostname: resolvePublic,
+  });
+  assert.equal(
+    await subscribeAskWebhook({
+      operationKey: OPERATION,
+      workspaceId: WORKSPACE,
+      registration: { url: endpoint.url, eventTypes: ["result.ready"] },
+    }),
+    true,
+  );
+  const [published, concurrentPublication] = await Promise.all([
+    publishTerminalRoundResult({
+      operationKey: OPERATION,
+      appOrigin: "https://app.example.test",
+      now: NOW,
+    }),
+    publishTerminalRoundResult({
+      operationKey: OPERATION,
+      appOrigin: "https://app.example.test",
+      now: new Date(NOW.getTime() + 1_000),
+    }),
+  ]);
+  assert.equal(concurrentPublication.publicationId, published.publicationId);
+  assert.deepEqual(concurrentPublication.result, published.result);
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_asks
+          SET verdict_status = 'pending', result_json = NULL
+          WHERE operation_key = ?`,
+    args: [OPERATION],
+  });
+  await dbClient.execute({
+    sql: "DELETE FROM tokenless_webhook_deliveries WHERE publication_id = ?",
+    args: [published.publicationId],
   });
   const replayedPublication = await publishTerminalRoundResult({
     operationKey: OPERATION,
     appOrigin: "https://app.example.test",
-    now: new Date(NOW.getTime() + 1_000),
+    now: new Date(NOW.getTime() + 2_000),
   });
   assert.equal(published.result.verdictStatus, "under_quorum_compensated");
   assert.equal(published.result.audience.participantCount, 3);
@@ -797,9 +832,14 @@ test("all incomplete terminal states publish conserved results instead of pollin
           WHERE a.operation_key = ?`,
     args: [OPERATION],
   });
+  const deliveries = await dbClient.execute({
+    sql: "SELECT COUNT(*) AS count FROM tokenless_webhook_deliveries WHERE publication_id = ?",
+    args: [published.publicationId],
+  });
   assert.equal(stored.rows[0]?.verdict_status, "under_quorum_compensated");
   assert.equal(stored.rows[0]?.event_type, "round.terminal");
   assert.equal(JSON.parse(String(stored.rows[0]?.result_json)).terminal, true);
+  assert.equal(Number(deliveries.rows[0]?.count), 1);
 });
 
 test("evidence waits for the configured confirmation depth, then publishes idempotently", async () => {
@@ -1232,6 +1272,33 @@ test("finalized evidence publishes once and webhook retries preserve idempotency
   assert.equal(published.result.verdictStatus, "publishable");
   assert.equal(published.result.verdict?.preferenceShareBps, 8000);
   assert.deepEqual(published.result.verdict?.intervalBps, { lower: 3755, upper: 9638 });
+
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_asks
+          SET verdict_status = 'pending', result_json = NULL
+          WHERE operation_key = ?`,
+    args: [OPERATION],
+  });
+  await dbClient.execute({
+    sql: "DELETE FROM tokenless_webhook_deliveries WHERE publication_id = ?",
+    args: [published.publicationId],
+  });
+  const repaired = await reviewAndPublishResult({
+    operationKey: OPERATION,
+    appOrigin: "https://app.example.test",
+    now: new Date(NOW.getTime() + 2_000),
+  });
+  assert.deepEqual(repaired.result, published.result);
+  const repairedProjection = await dbClient.execute({
+    sql: "SELECT result_json FROM tokenless_agent_asks WHERE operation_key = ?",
+    args: [OPERATION],
+  });
+  const repairedDeliveries = await dbClient.execute({
+    sql: "SELECT COUNT(*) AS count FROM tokenless_webhook_deliveries WHERE publication_id = ?",
+    args: [published.publicationId],
+  });
+  assert.deepEqual(JSON.parse(String(repairedProjection.rows[0]?.result_json)), published.result);
+  assert.equal(Number(repairedDeliveries.rows[0]?.count), 1);
 
   let calls = 0;
   let deliveryId = "";

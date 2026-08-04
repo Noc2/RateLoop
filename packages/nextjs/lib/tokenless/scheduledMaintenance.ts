@@ -206,9 +206,25 @@ export async function seedTokenlessScheduledWork(now = new Date(), scanLimit = 1
     dbClient.execute({
       sql: `SELECT e.operation_key
             FROM tokenless_chain_executions e
+            JOIN tokenless_agent_asks a ON a.operation_key = e.operation_key
             LEFT JOIN tokenless_result_publications p
               ON p.operation_key = e.operation_key AND p.publication_version = 1
-            WHERE e.state = 'confirmed' AND e.round_id IS NOT NULL AND p.publication_id IS NULL
+            LEFT JOIN tokenless_ask_webhook_subscriptions s
+              ON s.operation_key = e.operation_key
+             AND s.event_types_json LIKE '%"result.ready"%'
+            LEFT JOIN tokenless_webhook_endpoints endpoint
+              ON endpoint.endpoint_id = s.endpoint_id AND endpoint.active = true
+            LEFT JOIN tokenless_webhook_deliveries delivery
+              ON delivery.publication_id = p.publication_id
+             AND delivery.endpoint_id = s.endpoint_id
+             AND delivery.event_type = 'result.ready'
+            WHERE e.state = 'confirmed' AND e.round_id IS NOT NULL
+              AND (
+                p.publication_id IS NULL
+                OR a.result_json IS NULL
+                OR (endpoint.endpoint_id IS NOT NULL AND delivery.delivery_id IS NULL)
+              )
+            GROUP BY e.operation_key, e.updated_at
             ORDER BY e.updated_at ASC LIMIT ?`,
       args: [limit],
     }),
@@ -300,7 +316,14 @@ export async function seedTokenlessScheduledWork(now = new Date(), scanLimit = 1
     }),
   ]);
   for (const row of settlements.rows) {
-    await insertWorkItem("publish_finalized_round", rowString(row as Row, "operation_key")!, now);
+    const operationKey = rowString(row as Row, "operation_key")!;
+    await insertWorkItem("publish_finalized_round", operationKey, now);
+    await dbClient.execute({
+      sql: `UPDATE tokenless_scheduled_work_items
+            SET state = 'pending', next_attempt_at = ?, completed_at = NULL, updated_at = ?
+            WHERE kind = 'publish_finalized_round' AND subject_key = ? AND state = 'completed'`,
+      args: [now, now, operationKey],
+    });
   }
   for (const row of chainRecoveries.rows) {
     await insertWorkItem("recover_chain_execution", rowString(row as Row, "operation_key")!, now);

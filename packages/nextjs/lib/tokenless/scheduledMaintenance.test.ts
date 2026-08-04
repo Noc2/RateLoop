@@ -13,6 +13,7 @@ import {
   runTokenlessScheduledMaintenance,
   seedTokenlessScheduledWork,
 } from "~~/lib/tokenless/scheduledMaintenance";
+import { tokenlessScheduledWorkItemId } from "~~/lib/tokenless/scheduledWorkItems";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const NOW = new Date("2026-07-14T15:00:00.000Z");
@@ -313,9 +314,11 @@ test("scheduled maintenance publishes each due round once and deduplicates a cro
   assert.deepEqual(published, ["operation_due_1"]);
 });
 
-test("settlement work remains due after evidence append and stops only after result publication", async () => {
+test("settlement work remains due until publication, result projection, and webhook fanout are complete", async () => {
   await seedConfirmedExecution("operation_evidence_only");
   await seedConfirmedExecution("operation_published");
+  await seedConfirmedExecution("operation_projection_missing");
+  await seedConfirmedExecution("operation_webhook_missing");
   await dbClient.execute({
     sql: `INSERT INTO tokenless_workspaces (workspace_id, name, status, created_at, updated_at)
           VALUES ('ws_scheduled_settlement', 'Scheduled settlement', 'active', ?, ?);
@@ -328,17 +331,69 @@ test("settlement work remains due after evidence append and stops only after res
           (publication_id, operation_key, publication_version, verdict_status, evidence_root,
            result_json, published_at, evaluation_hash)
           VALUES ('publication_scheduled_settlement', 'operation_published', 1,
-                  'zero_commit_refunded', 'root', '{}', ?, 'evaluation-hash')`,
-    args: [NOW, NOW, NOW, NOW, NOW],
+                  'zero_commit_refunded', 'root', '{}', ?, 'evaluation-hash');
+          INSERT INTO tokenless_result_publications
+          (publication_id, operation_key, publication_version, verdict_status, evidence_root,
+           result_json, published_at, evaluation_hash)
+          VALUES ('publication_projection_missing', 'operation_projection_missing', 1,
+                  'zero_commit_refunded', 'root', '{}', ?, 'evaluation-hash');
+          INSERT INTO tokenless_result_publications
+          (publication_id, operation_key, publication_version, verdict_status, evidence_root,
+           result_json, published_at, evaluation_hash)
+          VALUES ('publication_webhook_missing', 'operation_webhook_missing', 1,
+                  'zero_commit_refunded', 'root', '{}', ?, 'evaluation-hash');
+          UPDATE tokenless_agent_asks SET result_json = '{}'
+          WHERE operation_key IN ('operation_published', 'operation_webhook_missing');
+          INSERT INTO tokenless_webhook_endpoints
+          (endpoint_id, workspace_id, url, event_types_json, secret_ciphertext,
+           secret_key_version, active, created_at, updated_at)
+          VALUES ('endpoint_missing_delivery', 'ws_scheduled_settlement',
+                  'https://hooks.example.test/result', '["result.ready"]', 'ciphertext',
+                  'v1', true, ?, ?);
+          INSERT INTO tokenless_ask_webhook_subscriptions
+          (subscription_id, operation_key, endpoint_id, event_types_json, created_at)
+          VALUES ('subscription_missing_delivery', 'operation_webhook_missing',
+                  'endpoint_missing_delivery', '["result.ready"]', ?);
+          INSERT INTO tokenless_scheduled_work_items
+          (item_id, kind, subject_key, state, attempt_count, next_attempt_at,
+           created_at, updated_at, completed_at)
+          VALUES (?, 'publish_finalized_round', 'operation_projection_missing', 'completed', 1, ?, ?, ?, ?),
+                 (?, 'publish_finalized_round', 'operation_webhook_missing', 'completed', 1, ?, ?, ?, ?)`,
+    args: [
+      NOW,
+      NOW,
+      NOW,
+      NOW,
+      NOW,
+      NOW,
+      NOW,
+      NOW,
+      NOW,
+      NOW,
+      tokenlessScheduledWorkItemId("publish_finalized_round", "operation_projection_missing"),
+      NOW,
+      NOW,
+      NOW,
+      NOW,
+      tokenlessScheduledWorkItemId("publish_finalized_round", "operation_webhook_missing"),
+      NOW,
+      NOW,
+      NOW,
+      NOW,
+    ],
   });
 
   const seeded = await seedTokenlessScheduledWork(NOW);
-  assert.equal(seeded.settlements, 1);
+  assert.equal(seeded.settlements, 3);
   const items = await dbClient.execute({
-    sql: `SELECT subject_key FROM tokenless_scheduled_work_items
+    sql: `SELECT subject_key, state FROM tokenless_scheduled_work_items
           WHERE kind = 'publish_finalized_round' ORDER BY subject_key`,
   });
-  assert.deepEqual(items.rows, [{ subject_key: "operation_evidence_only" }]);
+  assert.deepEqual(items.rows, [
+    { state: "pending", subject_key: "operation_evidence_only" },
+    { state: "pending", subject_key: "operation_projection_missing" },
+    { state: "pending", subject_key: "operation_webhook_missing" },
+  ]);
 });
 
 test("a failed maintenance bucket can be reclaimed and completed exactly once", async () => {

@@ -3,9 +3,10 @@ import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, 
 import { lookup } from "node:dns/promises";
 import { request as httpsRequest } from "node:https";
 import { isIP } from "node:net";
+import type { PoolClient } from "pg";
 import "server-only";
 import { type Address, type Hash, type Hex, encodeAbiParameters, keccak256 } from "viem";
-import { dbClient } from "~~/lib/db";
+import { dbClient, dbPool } from "~~/lib/db";
 import { loadTokenlessChainConfig } from "~~/lib/tokenless/chain/config";
 import {
   TokenlessEvidenceFinalityPendingError,
@@ -2002,6 +2003,110 @@ export function wilsonIntervalBps(successes: number, sampleSize: number) {
   };
 }
 
+type PublicationCandidate = {
+  publicationId: string;
+  verdictStatus: string;
+  evidenceRoot: string;
+  evaluationHash: string;
+  result: TokenlessResult;
+  publishedAt: Date;
+};
+
+async function persistAndProjectPublication(input: {
+  operationKey: string;
+  expectedVerdictStatus: string;
+  expectedEvidenceRoot: string;
+  expectedEvaluationHash: string;
+  expectedTerminal: boolean;
+  appOrigin: string;
+  candidate?: PublicationCandidate;
+  signal?: AbortSignal;
+}) {
+  throwIfMaintenanceCancelled(input.signal);
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    if (input.candidate) {
+      await client.query(
+        `INSERT INTO tokenless_result_publications
+         (publication_id, operation_key, publication_version, verdict_status, evidence_root,
+          result_json, published_at, evaluation_hash)
+         VALUES ($1, $2, 1, $3, $4, $5, $6, $7)
+         ON CONFLICT (operation_key, publication_version) DO NOTHING`,
+        [
+          input.candidate.publicationId,
+          input.operationKey,
+          input.candidate.verdictStatus,
+          input.candidate.evidenceRoot,
+          JSON.stringify(input.candidate.result),
+          input.candidate.publishedAt,
+          input.candidate.evaluationHash,
+        ],
+      );
+    }
+    const publication = await client.query(
+      `SELECT publication_id, verdict_status, evidence_root, evaluation_hash, result_json, published_at
+       FROM tokenless_result_publications
+       WHERE operation_key = $1 AND publication_version = 1 LIMIT 1`,
+      [input.operationKey],
+    );
+    const canonical = publication.rows[0] as Row | undefined;
+    if (!canonical) {
+      throw new TokenlessServiceError("Result publication was not persisted.", 409, "publication_conflict");
+    }
+    const result = parseTokenlessResult(JSON.parse(rowString(canonical, "result_json")!));
+    if (
+      rowString(canonical, "verdict_status") !== input.expectedVerdictStatus ||
+      rowString(canonical, "evidence_root") !== input.expectedEvidenceRoot ||
+      rowString(canonical, "evaluation_hash") !== input.expectedEvaluationHash ||
+      result.operationKey !== input.operationKey ||
+      result.verdictStatus !== input.expectedVerdictStatus ||
+      result.terminal !== input.expectedTerminal
+    ) {
+      throw new TokenlessServiceError("Published result evidence is immutable.", 409, "publication_conflict");
+    }
+    const publishedAtRaw = canonical.published_at;
+    const publishedAt = publishedAtRaw instanceof Date ? publishedAtRaw : new Date(String(publishedAtRaw));
+    if (!Number.isFinite(publishedAt.getTime())) {
+      throw new TokenlessServiceError("Published result timestamp is invalid.", 409, "publication_conflict");
+    }
+    const projection = await client.query(
+      `UPDATE tokenless_agent_asks
+       SET status = 'submitted', verdict_status = $1, result_json = $2, updated_at = $3
+       WHERE operation_key = $4
+       RETURNING operation_key, verdict_status, result_json`,
+      [input.expectedVerdictStatus, JSON.stringify(result), publishedAt, input.operationKey],
+    );
+    if (
+      projection.rowCount !== 1 ||
+      rowString(projection.rows[0] as Row | undefined, "operation_key") !== input.operationKey ||
+      rowString(projection.rows[0] as Row | undefined, "verdict_status") !== input.expectedVerdictStatus ||
+      rowString(projection.rows[0] as Row | undefined, "result_json") !== JSON.stringify(result)
+    ) {
+      throw new TokenlessServiceError("Published result projection was not persisted.", 409, "publication_conflict");
+    }
+    await enqueuePublicationWebhooks({
+      publicationId: rowString(canonical, "publication_id")!,
+      operationKey: input.operationKey,
+      result,
+      appOrigin: input.appOrigin,
+      now: publishedAt,
+      client,
+      signal: input.signal,
+    });
+    await client.query("COMMIT");
+    return {
+      publicationId: rowString(canonical, "publication_id")!,
+      result,
+    };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function publishTerminalRoundResult(input: {
   operationKey: string;
   appOrigin: string;
@@ -2030,20 +2135,18 @@ export async function publishTerminalRoundResult(input: {
   });
   const existingPublication = publication.rows[0] as Row | undefined;
   if (existingPublication) {
-    const result = parseTokenlessResult(JSON.parse(rowString(existingPublication, "result_json")!));
-    if (
-      rowString(existingPublication, "verdict_status") !== evidence.verdictStatus ||
-      rowString(existingPublication, "evidence_root") !== root ||
-      rowString(existingPublication, "evaluation_hash") !== evaluationHash ||
-      result.verdictStatus !== evidence.verdictStatus ||
-      result.terminal !== true
-    ) {
-      throw new TokenlessServiceError("Published terminal evidence is immutable.", 409, "publication_conflict");
-    }
+    const projected = await persistAndProjectPublication({
+      operationKey: input.operationKey,
+      expectedVerdictStatus: evidence.verdictStatus,
+      expectedEvidenceRoot: root,
+      expectedEvaluationHash: evaluationHash,
+      expectedTerminal: true,
+      appOrigin: input.appOrigin,
+      signal: input.signal,
+    });
     return {
       evidenceRoot: root,
-      publicationId: rowString(existingPublication, "publication_id")!,
-      result,
+      ...projected,
     };
   }
 
@@ -2094,37 +2197,24 @@ export async function publishTerminalRoundResult(input: {
   const publicationId = `pub_${digest(`${input.operationKey}:${root}:${evidence.verdictStatus}`).slice(0, 32)}`;
   await requireCanonicalEvidenceFinality(evidence, input.signal);
   throwIfMaintenanceCancelled(input.signal);
-  await dbClient.execute({
-    sql: `INSERT INTO tokenless_result_publications
-          (publication_id, operation_key, publication_version, verdict_status, evidence_root,
-           result_json, published_at, evaluation_hash)
-          VALUES (?, ?, 1, ?, ?, ?, ?, ?)
-          ON CONFLICT (operation_key, publication_version) DO NOTHING`,
-    args: [
-      publicationId,
-      input.operationKey,
-      evidence.verdictStatus,
-      root,
-      JSON.stringify(result),
-      now,
-      evaluationHash,
-    ],
-  });
-  await dbClient.execute({
-    sql: `UPDATE tokenless_agent_asks
-          SET status = 'submitted', verdict_status = ?, result_json = ?, updated_at = ?
-          WHERE operation_key = ?`,
-    args: [evidence.verdictStatus, JSON.stringify(result), now, input.operationKey],
-  });
-  await enqueuePublicationWebhooks({
-    publicationId,
+  const projected = await persistAndProjectPublication({
     operationKey: input.operationKey,
-    result,
+    expectedVerdictStatus: evidence.verdictStatus,
+    expectedEvidenceRoot: root,
+    expectedEvaluationHash: evaluationHash,
+    expectedTerminal: true,
     appOrigin: input.appOrigin,
-    now,
+    candidate: {
+      publicationId,
+      verdictStatus: evidence.verdictStatus,
+      evidenceRoot: root,
+      evaluationHash,
+      result,
+      publishedAt: now,
+    },
     signal: input.signal,
   });
-  return { evidenceRoot: root, publicationId, result };
+  return { evidenceRoot: root, ...projected };
 }
 
 export async function reviewAndPublishResult(input: {
@@ -2283,51 +2373,51 @@ export async function reviewAndPublishResult(input: {
   throwIfMaintenanceCancelled(input.signal);
   const existing = existingPublication.rows[0] as Row | undefined;
   if (existing) {
-    if (
-      rowString(existing, "evidence_root") !== root ||
-      rowString(existing, "evaluation_hash") !== evaluation.evaluationHash
-    ) {
-      throw new TokenlessServiceError("Published result evidence is immutable.", 409, "publication_conflict");
-    }
+    const projected = await persistAndProjectPublication({
+      operationKey: input.operationKey,
+      expectedVerdictStatus: evaluation.status,
+      expectedEvidenceRoot: root,
+      expectedEvaluationHash: evaluation.evaluationHash,
+      expectedTerminal: true,
+      appOrigin: input.appOrigin,
+      signal: input.signal,
+    });
     return {
       evidenceRoot: root,
-      publicationId: rowString(existing, "publication_id")!,
+      publicationId: projected.publicationId,
       reasonCodes: evaluation.reasonCodes,
       evaluation,
-      result: parseTokenlessResult(JSON.parse(rowString(existing, "result_json")!)),
+      result: projected.result,
     };
   }
   throwIfMaintenanceCancelled(input.signal);
   await requireCanonicalEvidenceFinality(evidence);
   throwIfMaintenanceCancelled(input.signal);
   const publicationId = `pub_${digest(`${input.operationKey}:${root}:${evaluation.evaluationHash}`).slice(0, 32)}`;
-  await dbClient.execute({
-    sql: `INSERT INTO tokenless_result_publications
-          (publication_id, operation_key, publication_version, verdict_status, evidence_root, result_json, published_at, evaluation_hash)
-          VALUES (?, ?, 1, ?, ?, ?, ?, ?) ON CONFLICT (operation_key, publication_version) DO NOTHING`,
-    args: [
-      publicationId,
-      input.operationKey,
-      evaluation.status,
-      root,
-      JSON.stringify(result),
-      now,
-      evaluation.evaluationHash,
-    ],
-  });
-  await dbClient.execute({
-    sql: "UPDATE tokenless_agent_asks SET status = 'submitted', verdict_status = ?, result_json = ?, updated_at = ? WHERE operation_key = ?",
-    args: [evaluation.status, JSON.stringify(result), now, input.operationKey],
-  });
-  await enqueuePublicationWebhooks({
-    publicationId,
+  const projected = await persistAndProjectPublication({
     operationKey: input.operationKey,
-    result,
+    expectedVerdictStatus: evaluation.status,
+    expectedEvidenceRoot: root,
+    expectedEvaluationHash: evaluation.evaluationHash,
+    expectedTerminal: true,
     appOrigin: input.appOrigin,
-    now,
+    candidate: {
+      publicationId,
+      verdictStatus: evaluation.status,
+      evidenceRoot: root,
+      evaluationHash: evaluation.evaluationHash,
+      result,
+      publishedAt: now,
+    },
     signal: input.signal,
   });
-  return { evidenceRoot: root, publicationId, reasonCodes: evaluation.reasonCodes, evaluation, result };
+  return {
+    evidenceRoot: root,
+    publicationId: projected.publicationId,
+    reasonCodes: evaluation.reasonCodes,
+    evaluation,
+    result: projected.result,
+  };
 }
 
 export async function appendAndPublishSettledRound(input: {
@@ -2352,15 +2442,16 @@ async function enqueuePublicationWebhooks(input: {
   result: TokenlessResult;
   appOrigin: string;
   now: Date;
+  client: PoolClient;
   signal?: AbortSignal;
 }) {
   throwIfMaintenanceCancelled(input.signal);
-  const subscriptions = await dbClient.execute({
-    sql: `SELECT s.endpoint_id, s.event_types_json FROM tokenless_ask_webhook_subscriptions s
-          JOIN tokenless_webhook_endpoints e ON e.endpoint_id = s.endpoint_id
-          WHERE s.operation_key = ? AND e.active = true`,
-    args: [input.operationKey],
-  });
+  const subscriptions = await input.client.query(
+    `SELECT s.endpoint_id, s.event_types_json FROM tokenless_ask_webhook_subscriptions s
+     JOIN tokenless_webhook_endpoints e ON e.endpoint_id = s.endpoint_id
+     WHERE s.operation_key = $1 AND e.active = true`,
+    [input.operationKey],
+  );
   for (const value of subscriptions.rows) {
     throwIfMaintenanceCancelled(input.signal);
     const row = value as Row;
@@ -2377,12 +2468,12 @@ async function enqueuePublicationWebhooks(input: {
       verdictStatus: input.result.verdictStatus,
       resultUrl: `${input.appOrigin.replace(/\/$/, "")}/api/agent/v1/results/${encodeURIComponent(input.operationKey)}`,
     };
-    await dbClient.execute({
-      sql: `INSERT INTO tokenless_webhook_deliveries
-            (delivery_id, publication_id, endpoint_id, event_type, idempotency_key, payload_json, attempt_count, state, next_attempt_at, created_at, updated_at)
-            VALUES (?, ?, ?, 'result.ready', ?, ?, 0, 'pending', ?, ?, ?)
-            ON CONFLICT (idempotency_key) DO NOTHING`,
-      args: [
+    await input.client.query(
+      `INSERT INTO tokenless_webhook_deliveries
+       (delivery_id, publication_id, endpoint_id, event_type, idempotency_key, payload_json, attempt_count, state, next_attempt_at, created_at, updated_at)
+       VALUES ($1, $2, $3, 'result.ready', $4, $5, 0, 'pending', $6, $7, $8)
+       ON CONFLICT (idempotency_key) DO NOTHING`,
+      [
         idempotencyKey,
         input.publicationId,
         endpointId,
@@ -2392,7 +2483,7 @@ async function enqueuePublicationWebhooks(input: {
         input.now,
         input.now,
       ],
-    });
+    );
   }
 }
 
