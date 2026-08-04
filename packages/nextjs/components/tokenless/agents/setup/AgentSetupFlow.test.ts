@@ -24,6 +24,13 @@ test("setup uses one canonical URL and a focused workspace creation stage", () =
   assert.doesNotMatch(startSource, /billing|publishing|API key/i);
 });
 
+test("completed setup returns to the connection and states the first-value action", () => {
+  assert.match(flowSource, /url\.pathname = "\/agents\/connections"/);
+  assert.match(localizedFlowSource, /Ready\. Ask this agent to send its first review\./);
+  assert.match(localizedFlowSource, /Open agent connection/);
+  assert.doesNotMatch(flowSource, /url\.pathname = "\/agents\/overview"/);
+});
+
 test("workspace creation cannot fall through to a native GET before hydration", () => {
   assert.match(startSource, /const \[hydrated, setHydrated\] = useState\(false\)/);
   assert.match(startSource, /useEffect\(\(\) => setHydrated\(true\), \[\]\)/);

@@ -328,7 +328,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
 
   function openCompletedWorkspace() {
     const url = new URL(window.location.href);
-    url.pathname = "/agents/overview";
+    url.pathname = "/agents/connections";
     url.searchParams.delete("tab");
     url.searchParams.set("workspace", setup.workspaceId);
     url.searchParams.delete("step");
