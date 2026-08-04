@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { RootRecoveryShell } from "~~/components/tokenless/RootRecoveryShell";
 import { RootRecoverySurface } from "~~/components/tokenless/RootRecoverySurface";
-import { TokenlessShell } from "~~/components/tokenless/TokenlessShell";
 
 export const metadata: Metadata = {
   title: "Page not found",
@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function NotFound() {
   return (
-    <TokenlessShell>
+    <RootRecoveryShell>
       <RootRecoverySurface
         eyebrow="404"
         title="Page not found"
@@ -20,6 +20,6 @@ export default function NotFound() {
           </Link>
         }
       />
-    </TokenlessShell>
+    </RootRecoveryShell>
   );
 }

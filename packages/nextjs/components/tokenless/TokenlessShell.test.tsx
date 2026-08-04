@@ -103,15 +103,18 @@ test("tokenless routes expose one main landmark and a keyboard skip link", () =>
 test("root recovery routes use the shell's single landmark", () => {
   const notFoundSource = readFileSync(new URL("../../app/not-found.tsx", import.meta.url), "utf8");
   const errorSource = readFileSync(new URL("../../app/error.tsx", import.meta.url), "utf8");
+  const recoveryShellSource = readFileSync(new URL("./RootRecoveryShell.tsx", import.meta.url), "utf8");
   const recoverySource = readFileSync(new URL("./RootRecoverySurface.tsx", import.meta.url), "utf8");
 
   assert.match(notFoundSource, /title: "Page not found"/);
   for (const source of [notFoundSource, errorSource]) {
-    assert.match(source, /import \{ TokenlessShell \}/);
-    assert.match(source, /<TokenlessShell>/);
+    assert.match(source, /import \{ RootRecoveryShell \}/);
+    assert.match(source, /<RootRecoveryShell>/);
     assert.match(source, /<RootRecoverySurface/);
     assert.doesNotMatch(source, /<main\b/);
   }
+  assert.match(recoveryShellSource, /<NextIntlClientProvider/);
+  assert.match(recoveryShellSource, /<TokenlessShell>/);
   assert.doesNotMatch(recoverySource, /<main\b/);
   assert.equal(shellSource.match(/<main\b/g)?.length, 1);
 });
