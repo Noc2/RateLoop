@@ -52,10 +52,10 @@ test("Human inbox badge fails quietly for signed-out visitors", async () => {
   };
   try {
     const view = render(<HumanInboxBadge />);
-    await waitFor(() => assert.equal(view.container.textContent, ""), {
+    await waitFor(() => assert.deepEqual(requests, ["/api/auth/session"]), {
       timeout: LOADED_SUITE_TIMEOUT_MS,
     });
-    assert.deepEqual(requests, ["/api/auth/session"]);
+    assert.equal(view.container.textContent, "");
   } finally {
     globalThis.fetch = previousFetch;
     cleanup();
