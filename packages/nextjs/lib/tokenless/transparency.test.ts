@@ -800,6 +800,27 @@ test("all incomplete terminal states publish conserved results instead of pollin
     /response hash is malformed/,
   );
 
+  await assert.rejects(
+    () =>
+      appendTerminalRoundEvidence({
+        operationKey: OPERATION,
+        fetchImpl: ponderFetch({
+          commits: underQuorumCommits,
+          round: {
+            ...underQuorumRound,
+            finalizedAt: String(Math.floor(Date.now() / 1_000) + 301),
+          },
+        }),
+        ponderUrl: "https://ponder.example.test",
+      }),
+    /Terminal timestamp is invalid/,
+  );
+  const bountyBeforeValidEvidence = await dbClient.execute({
+    sql: "SELECT state FROM tokenless_surprise_bounty_rounds WHERE operation_key = ?",
+    args: [OPERATION],
+  });
+  assert.equal(bountyBeforeValidEvidence.rows[0]?.state, "funded");
+
   const appended = await appendTerminalRoundEvidence({
     operationKey: OPERATION,
     fetchImpl: ponderFetch({ commits: underQuorumCommits, round: underQuorumRound }),
@@ -988,6 +1009,22 @@ test("terminal results include only feedback bound to an indexed reveal commitme
     funderRefund: "34875000",
     claimDeadline: "1784484000",
   });
+  await assert.rejects(
+    () =>
+      appendTerminalRoundEvidence({
+        operationKey: OPERATION,
+        fetchImpl: ponderFetch({
+          commits: terminalCommits,
+          round: { ...terminalRound, finalizedAt: String(Math.floor(Date.now() / 1_000) + 301) },
+        }),
+        ponderUrl: "https://ponder.example.test",
+      }),
+    /Terminal timestamp is invalid/,
+  );
+  const beforeCanonicalVerification = await dbClient.execute({
+    sql: `SELECT hash_verified_at FROM tokenless_public_rater_responses ORDER BY voucher_id`,
+  });
+  assert.ok(beforeCanonicalVerification.rows.every(row => row.hash_verified_at === null));
   await appendTerminalRoundEvidence({
     operationKey: OPERATION,
     fetchImpl: ponderFetch({ commits: terminalCommits, round: terminalRound }),
@@ -1019,6 +1056,16 @@ test("terminal results include only feedback bound to an indexed reveal commitme
 
 test("evidence waits for the configured confirmation depth, then publishes idempotently", async () => {
   await seedFrozenIntegrityAssignments();
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_surprise_bounty_rounds
+          (bounty_round_id, operation_key, deployment_key, version, state, policy_json,
+           guaranteed_base_per_report_atomic, maximum_bonus_per_report_atomic,
+           reserved_report_capacity, maximum_liability_atomic, paid_bonus_atomic,
+           reservation_expires_at, created_at, updated_at)
+          VALUES ('sbr_finalized', ?, ?, 'v1', 'funded', '{}', 1000000, 125000,
+                  10, 1250000, 0, NULL, ?, ?)`,
+    args: [OPERATION, DEPLOYMENT, NOW, NOW],
+  });
   finalityLatestBlock = FINALIZED_BLOCK + 62n;
   await assert.rejects(
     () =>
@@ -1036,6 +1083,22 @@ test("evidence waits for the configured confirmation depth, then publishes idemp
   assert.equal(Number(beforeDepth.rows[0]?.count), 0);
 
   finalityLatestBlock = FINALIZED_BLOCK + 63n;
+  await assert.rejects(
+    () =>
+      appendFinalizedRoundEvidence({
+        operationKey: OPERATION,
+        fetchImpl: ponderFetch({
+          round: indexedRound({ finalizedAt: String(Math.floor(Date.now() / 1_000) + 301) }),
+        }),
+        ponderUrl: "https://ponder.example.test",
+      }),
+    /Finalization timestamp is invalid/,
+  );
+  const bountyBeforeValidEvidence = await dbClient.execute({
+    sql: "SELECT state FROM tokenless_surprise_bounty_rounds WHERE operation_key = ?",
+    args: [OPERATION],
+  });
+  assert.equal(bountyBeforeValidEvidence.rows[0]?.state, "funded");
   const appended = await appendFinalizedRoundEvidence({
     operationKey: OPERATION,
     fetchImpl: ponderFetch(),

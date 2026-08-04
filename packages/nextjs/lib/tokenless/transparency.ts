@@ -1494,11 +1494,15 @@ async function deriveFinalizedRoundEvidenceBundle(input: {
     },
   };
   validateFinalizedEvidence(evidence);
-  await verifyPublicRaterResponseCommitments({
-    operationKey: input.operationKey,
-    reveals: voteKeys.map((voteKey, index) => ({ voteKey, responseHash: responseHashes[index] as Hex })),
-  });
-  return { evidence, integrityInput: assurance.integrityInput, surpriseReports: normativeReveals };
+  return {
+    evidence,
+    integrityInput: assurance.integrityInput,
+    publicResponseCommitments: voteKeys.map((voteKey, index) => ({
+      voteKey,
+      responseHash: responseHashes[index] as Hex,
+    })),
+    surpriseReports: normativeReveals,
+  };
 }
 
 export async function deriveFinalizedRoundEvidence(input: {
@@ -1543,7 +1547,16 @@ function validateTerminalEvidence(value: IndexedTerminalEvidence) {
   );
 }
 
-export async function deriveTerminalRoundEvidence(input: {
+function assertEvidenceTimestampNotFuture(evidence: IndexedFinalizedEvidence | IndexedTerminalEvidence, label: string) {
+  if (
+    !UNSIGNED_INTEGER.test(evidence.chain.timestamp) ||
+    BigInt(evidence.chain.timestamp) > BigInt(Math.floor(Date.now() / 1_000) + 300)
+  ) {
+    throw new TokenlessServiceError(`${label} timestamp is invalid.`, 409, "indexed_evidence_invalid");
+  }
+}
+
+async function deriveTerminalRoundEvidenceBundle(input: {
   operationKey: string;
   fetchImpl?: typeof fetch;
   ponderUrl?: string;
@@ -1741,11 +1754,16 @@ export async function deriveTerminalRoundEvidence(input: {
     },
   };
   validateTerminalEvidence(evidence);
-  await verifyPublicRaterResponseCommitments({
-    operationKey: input.operationKey,
-    reveals: responseCommitments,
-  });
-  return evidence;
+  return { evidence, responseCommitments };
+}
+
+export async function deriveTerminalRoundEvidence(input: {
+  operationKey: string;
+  fetchImpl?: typeof fetch;
+  ponderUrl?: string;
+  signal?: AbortSignal;
+}) {
+  return (await deriveTerminalRoundEvidenceBundle(input)).evidence;
 }
 
 function immutableFinalizedEvidenceIdentity(evidence: IndexedFinalizedEvidence) {
@@ -1782,8 +1800,14 @@ export async function appendFinalizedRoundEvidence(input: {
   ponderUrl?: string;
   signal?: AbortSignal;
 }) {
-  const { evidence, integrityInput, surpriseReports } = await deriveFinalizedRoundEvidenceBundle(input);
+  const { evidence, integrityInput, publicResponseCommitments, surpriseReports } =
+    await deriveFinalizedRoundEvidenceBundle(input);
   await requireCanonicalEvidenceFinality(evidence, input.signal);
+  assertEvidenceTimestampNotFuture(evidence, "Finalization");
+  await verifyPublicRaterResponseCommitments({
+    operationKey: input.operationKey,
+    reveals: publicResponseCommitments,
+  });
   await finalizeSurpriseBountyRound({
     operationKey: input.operationKey,
     deploymentKey: evidence.deploymentKey,
@@ -1796,12 +1820,6 @@ export async function appendFinalizedRoundEvidence(input: {
   });
   const workspaceId = rowString(ownership.rows[0] as Row | undefined, "workspace_id");
   if (!workspaceId) throw new TokenlessServiceError("Ask chain execution was not found.", 404, "ask_not_found");
-  if (
-    !UNSIGNED_INTEGER.test(evidence.chain.timestamp) ||
-    BigInt(evidence.chain.timestamp) > BigInt(Math.floor(Date.now() / 1_000) + 300)
-  ) {
-    throw new TokenlessServiceError("Finalization timestamp is invalid.", 409, "indexed_evidence_invalid");
-  }
   const evidenceJson = stableTransparencyJson(evidence);
   const evidenceHash = digest(`round.finalized:${evidenceJson}`);
   await aggregatePublicForecastRound({
@@ -1877,19 +1895,18 @@ export async function appendTerminalRoundEvidence(input: {
   ponderUrl?: string;
   signal?: AbortSignal;
 }) {
-  const evidence = await deriveTerminalRoundEvidence(input);
+  const { evidence, responseCommitments } = await deriveTerminalRoundEvidenceBundle(input);
   await requireCanonicalEvidenceFinality(evidence, input.signal);
+  assertEvidenceTimestampNotFuture(evidence, "Terminal");
+  await verifyPublicRaterResponseCommitments({
+    operationKey: input.operationKey,
+    reveals: responseCommitments,
+  });
   await closeTerminalSurpriseBountyRound({
     operationKey: input.operationKey,
     deploymentKey: evidence.deploymentKey,
     roundId: evidence.roundId,
   });
-  if (
-    !UNSIGNED_INTEGER.test(evidence.chain.timestamp) ||
-    BigInt(evidence.chain.timestamp) > BigInt(Math.floor(Date.now() / 1_000) + 300)
-  ) {
-    throw new TokenlessServiceError("Terminal timestamp is invalid.", 409, "indexed_evidence_invalid");
-  }
   const ownership = await dbClient.execute({
     sql: "SELECT workspace_id FROM tokenless_ask_ownership WHERE operation_key = ? LIMIT 1",
     args: [input.operationKey],

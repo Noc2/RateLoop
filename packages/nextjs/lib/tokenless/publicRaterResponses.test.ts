@@ -142,6 +142,20 @@ test("public feedback is encrypted once per voucher, moderated, hash-verified, a
     reveals: [{ voteKey: VOTE_KEY, responseHash: response.responseHash }],
     now: NOW,
   });
+  await verifyPublicRaterResponseCommitments({
+    operationKey: "op_response",
+    reveals: [],
+    now: new Date(NOW.getTime() + 1_000),
+  });
+  const clearedVerification = await dbClient.execute({
+    sql: "SELECT hash_verified_at FROM tokenless_public_rater_responses WHERE voucher_id = 'voucher_response'",
+  });
+  assert.equal(clearedVerification.rows[0]?.hash_verified_at, null);
+  await verifyPublicRaterResponseCommitments({
+    operationKey: "op_response",
+    reveals: [{ voteKey: VOTE_KEY, responseHash: response.responseHash }],
+    now: new Date(NOW.getTime() + 2_000),
+  });
   await moderateTokenlessPublicRaterResponse({
     responseId: String(stored.rows[0]?.response_id),
     decision: "approved",

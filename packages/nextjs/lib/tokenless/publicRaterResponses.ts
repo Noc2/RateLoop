@@ -243,12 +243,19 @@ export async function verifyPublicRaterResponseCommitments(input: {
   now?: Date;
 }) {
   const reveals = new Map(input.reveals.map(value => [value.voteKey.toLowerCase(), value.responseHash.toLowerCase()]));
+  const now = input.now ?? new Date();
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
     const responses = await client.query(
       "SELECT response_id, vote_key, response_hash FROM tokenless_public_rater_responses WHERE operation_key = $1 FOR UPDATE",
       [input.operationKey],
+    );
+    await client.query(
+      `UPDATE tokenless_public_rater_responses
+       SET hash_verified_at = NULL, updated_at = $1
+       WHERE operation_key = $2 AND hash_verified_at IS NOT NULL`,
+      [now, input.operationKey],
     );
     let verified = 0;
     for (const row of responses.rows as Row[]) {
@@ -257,7 +264,7 @@ export async function verifyPublicRaterResponseCommitments(input: {
       }
       await client.query(
         "UPDATE tokenless_public_rater_responses SET hash_verified_at = $1, updated_at = $1 WHERE response_id = $2",
-        [input.now ?? new Date(), rowString(row, "response_id")],
+        [now, rowString(row, "response_id")],
       );
       verified += 1;
     }
