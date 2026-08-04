@@ -615,6 +615,8 @@
     "connectAwarder": "Verbinde die Wallet der Vergabeperson, um eine endgültige Vergabe vorzunehmen.",
     "last30Days": "Letzte 30 Tage",
     "last90Days": "Letzte 90 Tage",
+    "lifetimeByScope": "Gesamter Zeitraum je Bereich",
+    "currentEvidenceState": "Aktueller Nachweisstand",
     "beforeDecide": "Vor deiner Entscheidung",
     "explainDecision": "Diese Entscheidung begründen",
     "recordAction": "Erfasse, was du mit dieser Ausgabe getan hast",

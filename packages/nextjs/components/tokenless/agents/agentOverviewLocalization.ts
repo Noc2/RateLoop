@@ -5,6 +5,8 @@ const PERIOD_KEYS: Record<string, string> = {
   "Last 30 days": "last30Days",
   "Last 90 days": "last90Days",
   Lifetime: "periodLifetime",
+  "Lifetime by scope": "lifetimeByScope",
+  "Current evidence state": "currentEvidenceState",
 };
 
 const REASON_KEYS: Record<string, string> = {

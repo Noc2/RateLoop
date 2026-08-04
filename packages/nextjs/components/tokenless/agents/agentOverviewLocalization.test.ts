@@ -12,6 +12,8 @@ function germanUi(key: string, values: Record<string, number | string> = {}) {
 
 test("localizes server-defined overview periods, reasons, and quality buckets", () => {
   assert.equal(localizeOverviewPeriod("Last 30 days", germanUi), "Letzte 30 Tage");
+  assert.equal(localizeOverviewPeriod("Lifetime by scope", germanUi), "Gesamter Zeitraum je Bereich");
+  assert.equal(localizeOverviewPeriod("Current evidence state", germanUi), "Aktueller Nachweisstand");
   assert.equal(
     localizeOverviewReason(
       "At least two privacy-eligible, multi-reviewer cases are required for reviewer consistency.",

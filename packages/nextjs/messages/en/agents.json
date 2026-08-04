@@ -615,6 +615,8 @@
     "connectAwarder": "Connect the human awarder wallet to make a final award.",
     "last30Days": "Last 30 days",
     "last90Days": "Last 90 days",
+    "lifetimeByScope": "Lifetime by scope",
+    "currentEvidenceState": "Current evidence state",
     "beforeDecide": "Before you decide",
     "explainDecision": "Explain this decision",
     "recordAction": "Record what you did with this output",
