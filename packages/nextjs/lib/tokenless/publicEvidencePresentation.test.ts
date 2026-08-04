@@ -20,7 +20,11 @@ test("verified evidence presentation exposes only a bounded decision summary", (
         judgmentCoverage: { caseCount: 2, validJudgmentCount: 5 },
         reviewerCoverage: { respondingReviewerCount: 3 },
       },
-      limitations: ["internal limitation"],
+      limitations: [
+        { code: "minimum_aggregation_not_met", message: "secret customer detail" },
+        { code: "no_onchain_settlement", message: "another private implementation detail" },
+        { code: "unknown_future_code", message: "must stay hidden" },
+      ],
       recomputation: { reviewerIds: ["reviewer-secret"] },
     },
   };
@@ -32,8 +36,12 @@ test("verified evidence presentation exposes only a bounded decision summary", (
     caseCount: 2,
     respondingReviewerCount: 3,
     validJudgmentCount: 5,
+    limitations: ["minimum_aggregation_not_met", "no_onchain_settlement"],
   });
-  assert.doesNotMatch(JSON.stringify(publicEvidenceSummary(packet)), /secret|limitation|reviewer-id/iu);
+  assert.doesNotMatch(
+    JSON.stringify(publicEvidenceSummary(packet)),
+    /secret customer detail|private implementation detail|must stay hidden|reviewer-secret/iu,
+  );
 });
 
 test("evidence presentation rejects unsupported packets and omits malformed fields", () => {
@@ -58,6 +66,7 @@ test("evidence presentation rejects unsupported packets and omits malformed fiel
       caseCount: null,
       respondingReviewerCount: null,
       validJudgmentCount: null,
+      limitations: [],
     },
   );
 });

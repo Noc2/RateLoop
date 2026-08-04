@@ -45,6 +45,9 @@ test("the viewer removes the fragment, redeems once, and automatically verifies 
     assert.ok(await view.findByRole("heading", { name: "Packet verified" }));
     const summary = view.getByRole("region", { name: "Is the response supported by the evidence?" });
     assert.ok(within(summary).getByText("Pass"));
+    assert.ok(within(summary).getByText("Review result and coverage"));
+    assert.ok(within(summary).getByText("Results are hidden because the minimum group size was not met."));
+    assert.equal(within(summary).queryByText(/fixture message|unknown fixture/iu), null);
     assert.equal(within(summary).getAllByText("1", { selector: "dd" }).length, 3);
     assert.equal(within(summary).queryByText(packet.signing.keyId), null);
     assert.equal(requests.length, 2);

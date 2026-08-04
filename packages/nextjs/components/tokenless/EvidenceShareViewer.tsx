@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { LocalizedSharedContent } from "~~/components/tokenless/LocalizedSharedContent";
 import { PublicEvidenceVerifier } from "~~/components/tokenless/PublicEvidenceVerifier";
 import { readJson } from "~~/lib/tokenless/http";
-import { publicEvidenceSummary } from "~~/lib/tokenless/publicEvidencePresentation";
+import { type PublicEvidenceLimitation, publicEvidenceSummary } from "~~/lib/tokenless/publicEvidencePresentation";
 import {
   type PublicEvidenceVerificationResult,
   verifyPublicEvidencePacket,
@@ -22,6 +22,20 @@ function outcomeLabel(outcome: "fail" | "insufficient" | "pass") {
   if (outcome === "pass") return "Pass";
   if (outcome === "fail") return "Fail";
   return "Insufficient";
+}
+
+function limitationLabel(limitation: PublicEvidenceLimitation) {
+  if (limitation === "minimum_aggregation_not_met") {
+    return "Results are hidden because the minimum group size was not met.";
+  }
+  if (limitation === "small_source_cells_suppressed") {
+    return "One or more reviewer groups are too small to show separately.";
+  }
+  if (limitation === "incomplete_or_invalid_work") {
+    return "Missing, invalid, or pending responses are excluded from the result.";
+  }
+  if (limitation === "chain_evidence_incomplete") return "Some settlement evidence is incomplete.";
+  return "No onchain settlement was part of this review.";
 }
 
 export function EvidenceShareViewer({ grantId }: { grantId: string }) {
@@ -170,6 +184,10 @@ export function EvidenceShareViewer({ grantId }: { grantId: string }) {
         )}
         {summary ? (
           <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <dt className="text-base-content/55">Evidence scope</dt>
+              <dd className="mt-1 font-semibold text-base-content">Review result and coverage</dd>
+            </div>
             {summary.outcome ? (
               <div>
                 <dt className="text-base-content/55">Review outcome</dt>
@@ -201,6 +219,18 @@ export function EvidenceShareViewer({ grantId }: { grantId: string }) {
                   {new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(
                     new Date(summary.generatedAt),
                   )}
+                </dd>
+              </div>
+            ) : null}
+            {summary.limitations.length > 0 ? (
+              <div className="sm:col-span-2 lg:col-span-4">
+                <dt className="text-base-content/55">Limitations</dt>
+                <dd className="mt-1 text-base-content/75">
+                  <ul className="list-disc space-y-1 pl-5">
+                    {summary.limitations.map(limitation => (
+                      <li key={limitation}>{limitationLabel(limitation)}</li>
+                    ))}
+                  </ul>
                 </dd>
               </div>
             ) : null}

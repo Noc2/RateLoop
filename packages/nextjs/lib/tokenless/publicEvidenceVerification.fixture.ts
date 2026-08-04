@@ -65,6 +65,13 @@ export async function signedPublicEvidencePacket() {
     },
     recomputation,
     aggregation: computeEvidenceAggregation(recomputation, 1, passRule),
+    limitations: [
+      {
+        code: "minimum_aggregation_not_met",
+        message: "fixture message must never be rendered to a share recipient",
+      },
+      { code: "unknown_fixture_limitation", message: "unknown fixture detail" },
+    ],
   };
   const signing = { algorithm: "Ed25519", keyId, publicKey } as const;
   const signedDocument = { payload, signing };
