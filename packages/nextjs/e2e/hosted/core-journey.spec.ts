@@ -64,6 +64,18 @@ async function withSignedOutPage<T>(browser: Browser, callback: (page: Page) => 
   }
 }
 
+async function readLandingReviewResponseCount(page: Page) {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  const summary = page.locator("span").filter({ hasText: /^\d[\d,]* Review responses?$/u });
+  const matches = await summary.count();
+  if (matches === 0) return 0;
+  expect(matches).toBe(1);
+  const text = (await summary.textContent())?.trim() ?? "";
+  const match = /^(\d[\d,]*) Review responses?$/u.exec(text);
+  if (!match) throw new Error("The landing review-response total was malformed.");
+  return Number.parseInt(match[1]!.replaceAll(",", ""), 10);
+}
+
 function evidenceShareDestination(raw: string, grantId: string) {
   const destination = new URL(raw);
   const secret = destination.hash.startsWith("#") ? destination.hash.slice(1) : "";
@@ -156,6 +168,7 @@ test("@hosted-core completes a real OAuth, three-account, two-reviewer private j
   const sourcePayload = JSON.stringify({ request: "Check this exact hosted private-review response.", runId });
   const suggestionPayload = JSON.stringify({ answer: "The hosted private-review response is safe and correct." });
   const auth = await HostedAuthHarness.create(browser);
+  const landingResponseCountBefore = await withSignedOutPage(browser, readLandingReviewResponseCount);
   let integrationId: string | null = null;
   let workspaceId: string | null = null;
   let primaryFailure: unknown = null;
@@ -449,6 +462,13 @@ test("@hosted-core completes a real OAuth, three-account, two-reviewer private j
       distinctReviewers: 2,
     });
     const completedRunId = string(completedRun.runId, "Completed run ID");
+    const landingResponseCountAfter = await withSignedOutPage(browser, async page =>
+      poll(async () => {
+        const count = await readLandingReviewResponseCount(page);
+        return count >= landingResponseCountBefore + 2 ? count : null;
+      }),
+    );
+    expect(landingResponseCountAfter).toBeGreaterThanOrEqual(landingResponseCountBefore + 2);
 
     const evidencePath = `/api/account/workspaces/${encodeURIComponent(
       workspaceId,
@@ -510,6 +530,8 @@ test("@hosted-core completes a real OAuth, three-account, two-reviewer private j
         {
           evidencePacketDigest,
           expectedGitSha: target.expectedGitSha,
+          landingResponseCountAfter,
+          landingResponseCountBefore,
           reviewOutcome: "positive",
           runId: completedRunId,
           state: "completed",
