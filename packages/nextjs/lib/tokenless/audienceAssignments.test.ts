@@ -6,6 +6,7 @@ import { type DatabaseResources, __setDatabaseResourcesForTests, dbClient } from
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { type PrivateArtifactStore, __setArtifactPrivacyRuntimeForTests } from "~~/lib/tokenless/artifactPrivacy";
+import { lockAssuranceRunForWorkMutation } from "~~/lib/tokenless/assuranceRunMutation";
 import {
   type CohortSource,
   type QualificationProvenance,
@@ -22,6 +23,7 @@ import {
   reserveAudienceAssignment,
   reserveDiversifiedNetworkSubpanel,
 } from "~~/lib/tokenless/audienceAssignments";
+import { transitionAssuranceRun } from "~~/lib/tokenless/humanAssurance";
 import { integrityReviewerLookup } from "~~/lib/tokenless/integrityEpochs";
 import { requirePaidReviewEligibilityInTransaction } from "~~/lib/tokenless/paidReviewEligibilityPreflight";
 import {
@@ -38,6 +40,32 @@ import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import { configurePaidLaneTestEnvironment } from "~~/test/helpers/paidLaneEnvironment";
 
 configurePaidLaneTestEnvironment();
+
+test("cancellation and every reservation entry point share one run-row lock", async () => {
+  let statement = "";
+  let values: readonly unknown[] = [];
+  await lockAssuranceRunForWorkMutation(
+    {
+      query: (async (sql: string, args?: readonly unknown[]) => {
+        statement = sql;
+        values = args ?? [];
+        return { rows: [] };
+      }) as PoolClient["query"],
+    },
+    "hau_lock_boundary",
+  );
+  assert.match(statement, /FROM tokenless_assurance_runs[\s\S]+LIMIT 1 FOR UPDATE$/u);
+  assert.deepEqual(values, ["hau_lock_boundary"]);
+  assert.deepEqual(
+    [
+      transitionAssuranceRun,
+      reserveAudienceAssignment,
+      reserveDiversifiedNetworkSubpanel,
+      recoverExpiredAudienceAssignment,
+    ].map(operation => typeof operation),
+    ["function", "function", "function", "function"],
+  );
+});
 
 const OWNER = "0x1111111111111111111111111111111111111111";
 const REVIEWER = "0x2222222222222222222222222222222222222222";
@@ -784,6 +812,20 @@ test("network selection rejects manual collisions and invited-only supply before
       async query(sql: string, values?: readonly unknown[]) {
         if (["BEGIN", "COMMIT", "ROLLBACK"].includes(sql)) return { rowCount: null, rows: [] };
         if (sql.includes("FROM tokenless_workspaces")) return { rowCount: 1, rows: [{ workspace_id: "ws_network" }] };
+        if (sql.includes("FROM tokenless_assurance_runs")) {
+          return {
+            rowCount: 1,
+            rows: [
+              {
+                run_id: "run_network",
+                project_id: "project_network",
+                status: "frozen",
+                manifest_hash: RUN_HASH,
+                policy_hash: frozen.policyHash,
+              },
+            ],
+          };
+        }
         if (sql.includes("FROM tokenless_public_network_review_bindings binding")) {
           return { rowCount: 1, rows: [{ binding_id: "pnrb_network" }] };
         }

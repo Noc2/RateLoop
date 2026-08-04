@@ -16,6 +16,7 @@ import { dbClient, dbPool, serializePoolClientQueries } from "~~/lib/db";
 import type { TokenlessWorkspaceRole } from "~~/lib/db/productSchema";
 import { assertCredentialDataPolicy, assertDataIngressPolicy } from "~~/lib/privacy/dataPolicy";
 import { lockAssuranceProjectForRunMutation } from "~~/lib/tokenless/assuranceProjectMutation";
+import { lockAssuranceRunForWorkMutation } from "~~/lib/tokenless/assuranceRunMutation";
 import { lockAssuranceSuiteForMutation } from "~~/lib/tokenless/assuranceSuiteMutation";
 import { promoteCompletedRunGoldQualifications } from "~~/lib/tokenless/goldQuality";
 import { recordAssuranceMechanismHealth } from "~~/lib/tokenless/mechanismHealth";
@@ -1269,18 +1270,22 @@ export async function transitionAssuranceRun(input: {
   status: "recruiting" | "collecting" | "aggregating" | "completed" | "cancelled";
 }) {
   if (input.status === "completed") return completeAssuranceRun(input.principal, input.runId);
-  const run = await loadRunForWrite(input.principal, input.runId);
-  const current = rowString(run, "status")!;
-  if (!RUN_TRANSITIONS.get(current)?.has(input.status)) {
-    throw new TokenlessServiceError(
-      `Cannot move an assurance run from ${current} to ${input.status}.`,
-      409,
-      "invalid_assurance_run_transition",
-    );
-  }
+  const authorizedRun = await loadRunForWrite(input.principal, input.runId);
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
+    const run = await lockAssuranceRunForWorkMutation(client, input.runId);
+    if (!run || run.project_id !== rowString(authorizedRun, "project_id")) {
+      throw new TokenlessServiceError("Assurance run not found.", 404, "assurance_run_not_found");
+    }
+    const current = run.status;
+    if (!RUN_TRANSITIONS.get(current)?.has(input.status)) {
+      throw new TokenlessServiceError(
+        `Cannot move an assurance run from ${current} to ${input.status}.`,
+        409,
+        "invalid_assurance_run_transition",
+      );
+    }
     const now = new Date();
     if (input.status === "cancelled") {
       const protectedWork = await client.query(

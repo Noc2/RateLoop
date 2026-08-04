@@ -10,6 +10,7 @@ import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient, dbPool } from "~~/lib/db";
 import { evaluateFrozenAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { issueArtifactLease } from "~~/lib/tokenless/artifactPrivacy";
+import { lockAssuranceRunForWorkMutation } from "~~/lib/tokenless/assuranceRunMutation";
 import { isForecastAssignmentRestricted, networkForecastSubject } from "~~/lib/tokenless/crowdForecastPersistence";
 import { assertDsaNamedPanelPrincipalEligible } from "~~/lib/tokenless/dsaNamedPanelEligibility";
 import { freezeDsaNamedPanelSelectionAtReservation } from "~~/lib/tokenless/dsaNamedPanelSelections";
@@ -1320,6 +1321,10 @@ export async function reserveDiversifiedNetworkSubpanel(input: {
   const client = await dbPool.connect();
   try {
     await beginIntegrityAssignmentTransaction(client, input.workspaceId);
+    const run = await lockAssuranceRunForWorkMutation(client, input.runId);
+    if (!run || run.project_id !== input.projectId || run.status !== "frozen") {
+      throw new TokenlessServiceError("Frozen network subpanel is unavailable.", 409, "integrity_subpanel_unavailable");
+    }
     const liveReachability = await client.query(
       `SELECT binding.binding_id
        FROM tokenless_public_network_review_bindings binding
@@ -1366,11 +1371,9 @@ export async function reserveDiversifiedNetworkSubpanel(input: {
       );
     }
     const locked = await client.query(
-      `SELECT sp.*, c.qualification_rules_json, r.status AS run_status, r.manifest_hash AS current_run_manifest_hash,
-              r.policy_hash AS current_policy_hash, p.policy_json, e.lookup_key_version,
+      `SELECT sp.*, c.qualification_rules_json, p.policy_json, e.lookup_key_version,
               e.private_features_expire_at
        FROM tokenless_assurance_run_subpanels sp
-       JOIN tokenless_assurance_runs r ON r.run_id = sp.run_id AND r.project_id = sp.project_id
        JOIN tokenless_assurance_audience_policies p
          ON p.policy_id = sp.policy_id AND p.version = sp.policy_version
        JOIN tokenless_assurance_cohorts c ON c.project_id = sp.project_id AND c.cohort_id = sp.cohort_id
@@ -1387,9 +1390,8 @@ export async function reserveDiversifiedNetworkSubpanel(input: {
       rowString(subpanel, "source") !== "rateloop_network" ||
       rowString(subpanel, "selection") !== "randomized" ||
       !["pending", "reserved"].includes(rowString(subpanel, "selection_status") ?? "") ||
-      rowString(subpanel, "run_status") !== "frozen" ||
-      rowString(subpanel, "run_manifest_hash") !== rowString(subpanel, "current_run_manifest_hash") ||
-      rowString(subpanel, "policy_hash") !== rowString(subpanel, "current_policy_hash") ||
+      rowString(subpanel, "run_manifest_hash") !== run.manifest_hash ||
+      rowString(subpanel, "policy_hash") !== run.policy_hash ||
       rowString(subpanel, "integrity_epoch_id") !== policy.integrity.epochId ||
       rowString(subpanel, "integrity_manifest_hash") !== policy.integrity.epochManifestHash ||
       rowString(subpanel, "integrity_constraints_json") !== canonicalJson(policy.integrity) ||
@@ -2027,11 +2029,18 @@ export async function reserveAudienceAssignment(input: {
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
+    const run = await lockAssuranceRunForWorkMutation(client, input.runId);
+    if (
+      !run ||
+      run.project_id !== input.projectId ||
+      !["frozen", "recruiting"].includes(run.status) ||
+      !run.manifest_hash
+    ) {
+      throw new TokenlessServiceError("Audience subpanel not found.", 404, "subpanel_not_found");
+    }
     const subpanelResult = await client.query(
-      `SELECT sp.*, r.status AS run_status, r.manifest_hash AS current_run_manifest_hash,
-              r.policy_hash AS current_policy_hash, p.policy_json,named_unit.epoch_id AS dsa_named_panel_epoch_id
+      `SELECT sp.*, p.policy_json,named_unit.epoch_id AS dsa_named_panel_epoch_id
        FROM tokenless_assurance_run_subpanels sp
-       JOIN tokenless_assurance_runs r ON r.run_id = sp.run_id AND r.project_id = sp.project_id
        JOIN tokenless_assurance_audience_policies p
          ON p.policy_id = sp.policy_id AND p.version = sp.policy_version
        LEFT JOIN tokenless_dsa_named_panel_units named_unit
@@ -2044,9 +2053,8 @@ export async function reserveAudienceAssignment(input: {
     const subpanel = subpanelResult.rows[0] as QueryRow | undefined;
     if (
       !subpanel ||
-      !["frozen", "recruiting"].includes(rowString(subpanel, "run_status") ?? "") ||
-      rowString(subpanel, "run_manifest_hash") !== rowString(subpanel, "current_run_manifest_hash") ||
-      rowString(subpanel, "policy_hash") !== rowString(subpanel, "current_policy_hash")
+      rowString(subpanel, "run_manifest_hash") !== run.manifest_hash ||
+      rowString(subpanel, "policy_hash") !== run.policy_hash
     ) {
       throw new TokenlessServiceError("Audience subpanel not found.", 404, "subpanel_not_found");
     }
@@ -2376,6 +2384,15 @@ export async function recoverExpiredAudienceAssignment(input: {
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
+    const assignmentRun = await client.query(
+      "SELECT run_id FROM tokenless_assurance_assignments WHERE assignment_id = $1 LIMIT 1",
+      [input.assignmentId],
+    );
+    const runId = rowString(assignmentRun.rows[0] as QueryRow | undefined, "run_id");
+    const run = runId ? await lockAssuranceRunForWorkMutation(client, runId) : undefined;
+    if (!run || !["frozen", "recruiting"].includes(run.status) || !run.manifest_hash) {
+      throw new TokenlessServiceError("Assignment cannot be recovered.", 409, "assignment_recovery_unavailable");
+    }
     await client.query(
       "SELECT assignment_id FROM tokenless_assurance_assignments WHERE assignment_id = $1 FOR UPDATE",
       [input.assignmentId],
@@ -2388,8 +2405,7 @@ export async function recoverExpiredAudienceAssignment(input: {
               sp.private_group_policy_hash AS subpanel_private_group_policy_hash,
               c.capacity, c.active_reservations AS cohort_reservations,
               cr.maximum_active_assignments, cr.active_reservations AS reviewer_reservations,
-              r.status AS run_status, r.manifest_hash AS current_run_manifest_hash,
-              r.policy_hash AS current_policy_hash, ap.policy_json
+              ap.policy_json
        FROM tokenless_assurance_assignments a
        JOIN tokenless_assurance_run_subpanels sp ON sp.subpanel_id = a.subpanel_id
        JOIN tokenless_assurance_cohorts c ON c.project_id = a.project_id AND c.cohort_id = a.cohort_id
@@ -2409,10 +2425,11 @@ export async function recoverExpiredAudienceAssignment(input: {
     const row = result.rows[0] as QueryRow | undefined;
     if (
       !row ||
+      rowString(row, "run_id") !== run.run_id ||
+      rowString(row, "project_id") !== run.project_id ||
       (rowNumber(row, "recovery_count") ?? 20) >= 20 ||
-      !["frozen", "recruiting"].includes(rowString(row, "run_status") ?? "") ||
-      rowString(row, "run_manifest_hash") !== rowString(row, "current_run_manifest_hash") ||
-      rowString(row, "policy_hash") !== rowString(row, "current_policy_hash")
+      rowString(row, "run_manifest_hash") !== run.manifest_hash ||
+      rowString(row, "policy_hash") !== run.policy_hash
     ) {
       throw new TokenlessServiceError("Assignment cannot be recovered.", 409, "assignment_recovery_unavailable");
     }
