@@ -1,6 +1,7 @@
 "use client";
 
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { notifyWorkspaceStopChanged, subscribeWorkspaceStop, workspaceStopRevision } from "./workspaceStopSync";
 import { useLocale } from "next-intl";
 import { LocalizedSharedContent } from "~~/components/tokenless/LocalizedSharedContent";
 import { TextareaField } from "~~/components/tokenless/forms/Field";
@@ -43,9 +44,16 @@ function useWorkspaceStopState(workspaceId: string, revision: number) {
   return stop;
 }
 
+function useWorkspaceStopRevision(workspaceId: string) {
+  const subscribe = useCallback((listener: () => void) => subscribeWorkspaceStop(workspaceId, listener), [workspaceId]);
+  const getSnapshot = useCallback(() => workspaceStopRevision(workspaceId), [workspaceId]);
+  return useSyncExternalStore(subscribe, getSnapshot, () => 0);
+}
+
 export function WorkspaceStopBanner({ workspaceId }: { workspaceId: string }) {
   const locale = useLocale();
-  const stop = useWorkspaceStopState(workspaceId, 0);
+  const revision = useWorkspaceStopRevision(workspaceId);
+  const stop = useWorkspaceStopState(workspaceId, revision);
   if (stop?.status !== "engaged") return null;
   return (
     <LocalizedSharedContent>
@@ -62,14 +70,14 @@ export function WorkspaceStopBanner({ workspaceId }: { workspaceId: string }) {
 
 export function WorkspaceStopPanel({ workspaceId }: { workspaceId: string }) {
   const locale = useLocale();
-  const [revision, setRevision] = useState(0);
+  const revision = useWorkspaceStopRevision(workspaceId);
   const stop = useWorkspaceStopState(workspaceId, revision);
   const [confirming, setConfirming] = useState(false);
   const [confirmingRelease, setConfirmingRelease] = useState(false);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const { capture, clear, fieldErrors, formError } = useFormErrors();
-  const refresh = useCallback(() => setRevision(value => value + 1), []);
+  const refresh = useCallback(() => notifyWorkspaceStopChanged(workspaceId), [workspaceId]);
 
   async function engage(event: FormEvent) {
     event.preventDefault();

@@ -34,4 +34,6 @@ test("the engaged banner persists across agents pages and the panel mounts in th
   assert.doesNotMatch(panelsSource, /<WorkspaceDangerZone/);
   assert.match(settingsSource, /selected && canManageWorkspace \? \(\s*<WorkspaceDangerZone/);
   assert.match(dangerSource, /<WorkspaceStopPanel workspaceId=\{workspaceId\} \/>/);
+  assert.equal(controlSource.match(/useWorkspaceStopRevision\(workspaceId\)/g)?.length, 2);
+  assert.match(controlSource, /notifyWorkspaceStopChanged\(workspaceId\)/);
 });
