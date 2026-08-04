@@ -149,12 +149,12 @@
   }
 
   html {
-    background: var(--rateloop-surface);
+    background: var(--color-base-100);
   }
 
   body {
     min-height: 100vh;
-    background: var(--rateloop-surface);
+    background: var(--color-base-100);
     color: var(--color-base-content);
     font-family: var(--font-sans);
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";

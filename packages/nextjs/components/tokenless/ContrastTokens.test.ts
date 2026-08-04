@@ -215,8 +215,8 @@ test("the desktop rail inherits the page canvas in both themes", async () => {
 
 test("shared surfaces and prose use semantic colors instead of dark-only literals", async () => {
   const styles = await stylesPromise;
-  assert.match(styles, /html\s*\{\s*background: var\(--rateloop-surface\)/);
-  assert.match(styles, /body\s*\{[\s\S]*?background: var\(--rateloop-surface\)/);
+  assert.match(styles, /html\s*\{\s*background: var\(--color-base-100\)/);
+  assert.match(styles, /body\s*\{[\s\S]*?background: var\(--color-base-100\)/);
   assert.match(styles, /\.prose\s*\{\s*color: var\(--rateloop-text-secondary\)/);
   assert.match(styles, /\.prose pre\s*\{[\s\S]*?background: var\(--rateloop-code-surface\)/);
   assert.match(

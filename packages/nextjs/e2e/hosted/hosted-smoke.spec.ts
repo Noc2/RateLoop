@@ -49,10 +49,16 @@ async function checkHostedTheme(browser: Browser, expected: (typeof THEME_VIEWPO
     await expect(page.locator("html")).toHaveAttribute("data-theme", expected.colorScheme);
     await expect(page.locator("main")).toBeVisible();
 
-    const shellBackground = await page
-      .locator("#main-content")
-      .evaluate(element => getComputedStyle(element.parentElement!).backgroundColor);
-    expect(shellBackground).toBe(expected.shellBackground);
+    const [htmlBackground, bodyBackground, shellBackground] = await Promise.all([
+      page.locator("html").evaluate(element => getComputedStyle(element).backgroundColor),
+      page.locator("body").evaluate(element => getComputedStyle(element).backgroundColor),
+      page.locator("#main-content").evaluate(element => getComputedStyle(element.parentElement!).backgroundColor),
+    ]);
+    expect({ htmlBackground, bodyBackground, shellBackground }).toEqual({
+      htmlBackground: expected.shellBackground,
+      bodyBackground: expected.shellBackground,
+      shellBackground: expected.shellBackground,
+    });
 
     if (expected.kind === "desktop") {
       await expect(page.locator("[data-rateloop-rail]")).toHaveCSS("background-color", expected.shellBackground);

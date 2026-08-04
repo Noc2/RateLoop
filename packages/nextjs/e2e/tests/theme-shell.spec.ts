@@ -50,6 +50,8 @@ for (const expected of themeCases) {
       return {
         activeBackground: getComputedStyle(activeTab).backgroundColor,
         activeText: getComputedStyle(activeTab).color,
+        bodyBackground: getComputedStyle(document.body).backgroundColor,
+        htmlBackground: getComputedStyle(document.documentElement).backgroundColor,
         idleBackground: getComputedStyle(inactiveTab).backgroundColor,
         railBackground: getComputedStyle(rail).backgroundColor,
         shellBackground: getComputedStyle(shell).backgroundColor,
@@ -59,6 +61,8 @@ for (const expected of themeCases) {
     expect(colors).toEqual({
       activeBackground: expected.activeBackground,
       activeText: expected.activeText,
+      bodyBackground: expected.shellBackground,
+      htmlBackground: expected.shellBackground,
       idleBackground: expected.idleBackground,
       railBackground: expected.shellBackground,
       shellBackground: expected.shellBackground,

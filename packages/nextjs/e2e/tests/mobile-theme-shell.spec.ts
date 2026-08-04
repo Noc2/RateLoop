@@ -20,7 +20,9 @@ for (const expected of themeCases) {
     await expect(menu).toBeVisible();
 
     const backgrounds = {
+      body: await page.locator("body").evaluate(element => getComputedStyle(element).backgroundColor),
       header: await page.locator("header").evaluate(element => getComputedStyle(element).backgroundColor),
+      html: await page.locator("html").evaluate(element => getComputedStyle(element).backgroundColor),
       menu: await menu.evaluate(element => getComputedStyle(element).backgroundColor),
       shell: await page
         .locator("#main-content")
@@ -28,7 +30,9 @@ for (const expected of themeCases) {
     };
 
     expect(backgrounds).toEqual({
+      body: expected.shellBackground,
       header: expected.shellBackground,
+      html: expected.shellBackground,
       menu: expected.shellBackground,
       shell: expected.shellBackground,
     });
