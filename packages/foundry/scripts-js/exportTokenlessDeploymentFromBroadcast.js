@@ -8,6 +8,7 @@ import {
   reconstructTokenlessDeploymentFromBroadcast,
   serializeTokenlessDeploymentArtifact,
   TOKENLESS_BASE_SEPOLIA_CHAIN_ID,
+  TOKENLESS_DEPLOYMENT_ARTIFACTS,
   TOKENLESS_BASE_SEPOLIA_NETWORK,
 } from "./tokenlessDeployment.js";
 
@@ -35,29 +36,61 @@ export function tokenlessDeploymentPath(root = foundryRoot) {
   );
 }
 
-export function compiledBeaconVerifierRuntimeCodeHash(root = foundryRoot) {
-  const artifactPath = join(
-    root,
-    "out",
-    "QuicknetTBeaconVerifier.sol",
-    "QuicknetTBeaconVerifier.json",
-  );
+function readCompiledDeploymentArtifact(root, label, artifactName) {
+  const artifactPath = join(root, "out", `${artifactName}.sol`, `${artifactName}.json`);
   if (!existsSync(artifactPath)) {
     throw new Error(
-      `Missing compiled QuicknetTBeaconVerifier artifact ${artifactPath}. Run the deploy-profile build first.`,
+      `Missing compiled ${label} artifact ${artifactPath}. Run the deploy-profile build first.`,
     );
   }
   const artifact = JSON.parse(readFileSync(artifactPath, "utf8"));
-  const bytecode = artifact.deployedBytecode?.object;
+  const bytecode = artifact.bytecode?.object;
+  const deployedBytecode = artifact.deployedBytecode?.object;
   if (
     typeof bytecode !== "string" ||
     !/^0x(?:[0-9a-fA-F]{2})+$/u.test(bytecode)
   ) {
     throw new Error(
-      "Compiled QuicknetTBeaconVerifier has no exact deployed runtime bytecode.",
+      `Compiled ${label} has no exact creation bytecode.`,
     );
   }
-  return keccak256(bytecode).toLowerCase();
+  if (
+    typeof deployedBytecode !== "string" ||
+    !/^0x(?:[0-9a-fA-F]{2})+$/u.test(deployedBytecode)
+  ) {
+    throw new Error(`Compiled ${label} has no exact deployed runtime bytecode.`);
+  }
+  if (!Array.isArray(artifact.abi)) {
+    throw new Error(`Compiled ${label} has no ABI array.`);
+  }
+  return {
+    artifact: artifactName,
+    abi: artifact.abi,
+    bytecode: bytecode.toLowerCase(),
+    deployedBytecode: deployedBytecode.toLowerCase(),
+  };
+}
+
+export function compiledTokenlessDeploymentArtifacts(root = foundryRoot) {
+  return Object.fromEntries(
+    Object.entries(TOKENLESS_DEPLOYMENT_ARTIFACTS).map(([label, artifactName]) => [
+      label,
+      readCompiledDeploymentArtifact(root, label, artifactName),
+    ]),
+  );
+}
+
+export function compiledTokenlessCreationCodeHashes(root = foundryRoot) {
+  return Object.fromEntries(
+    Object.entries(compiledTokenlessDeploymentArtifacts(root)).map(
+      ([label, artifact]) => [label, keccak256(artifact.bytecode).toLowerCase()],
+    ),
+  );
+}
+
+export function compiledBeaconVerifierRuntimeCodeHash(root = foundryRoot) {
+  const artifact = compiledTokenlessDeploymentArtifacts(root).QuicknetTBeaconVerifier;
+  return keccak256(artifact.deployedBytecode).toLowerCase();
 }
 
 async function rpcBytecodeLoader(rpcUrl, address) {
@@ -132,6 +165,7 @@ export async function exportTokenlessDeploymentFromBroadcast({
   deploymentPath = tokenlessDeploymentPath(),
   targetNetwork = process.env.DEPLOY_TARGET_NETWORK,
   feeRecipient = process.env.TOKENLESS_FEE_RECIPIENT,
+  compiledArtifacts = compiledTokenlessDeploymentArtifacts(),
   getBytecode = (address) => rpcBytecodeLoader(process.env.RPC_URL, address),
   expectedBeaconVerifierRuntimeCodeHash = compiledBeaconVerifierRuntimeCodeHash(),
   bytecodeRetryAttempts = DEFAULT_BYTECODE_RETRY_ATTEMPTS,
@@ -149,6 +183,7 @@ export async function exportTokenlessDeploymentFromBroadcast({
 
   const broadcast = JSON.parse(readFileSync(broadcastPath, "utf8"));
   const reconstructed = reconstructTokenlessDeploymentFromBroadcast(broadcast, {
+    compiledArtifacts,
     feeRecipient,
   });
   const artifact = await attachTokenlessRuntimeCodeEvidence(reconstructed, {

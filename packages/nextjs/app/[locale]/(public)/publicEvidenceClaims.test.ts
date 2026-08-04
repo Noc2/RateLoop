@@ -98,11 +98,11 @@ function claimSources(file: string) {
   return file.endsWith(".json") ? jsonMessageValues(JSON.parse(source) as unknown) : [source];
 }
 
-test("the released deployment registry and every deployment claim share one exact identity", () => {
+test("the stale deployment registry and every deployment claim require replacement", () => {
   const deployment = tokenlessDeployedContracts[84532];
   assert.deepEqual(tokenlessDeploymentStatus, {
     schemaVersion: "rateloop-tokenless-deployment-v4",
-    status: "released",
+    status: "fresh_deployment_required",
     chainId: 84532,
     deploymentKey: deployment.deploymentKey,
   });
@@ -111,17 +111,9 @@ test("the released deployment registry and every deployment claim share one exac
   for (const file of TOKENLESS_DEPLOYMENT_CLAIM_FILES) {
     const source = readFileSync(file, "utf8");
     assert.ok(source.includes(String(deployment.deploymentBlockNumber)), file);
-    assert.doesNotMatch(
-      source,
-      /44390557|0x377f8631030a06e997cee78bdf649106a90bba46|fresh_deployment_required|fresh test redeployment is required|blocked on a fresh complete Base Sepolia deployment|release status:\s*`unreleased`/iu,
-      file,
-    );
+    assert.match(source, /fresh complete Base Sepolia deployment|fresh_deployment_required/iu, file);
+    assert.doesNotMatch(source, /44390557|0x377f8631030a06e997cee78bdf649106a90bba46/iu, file);
   }
-
-  assert.match(
-    readFileSync(path.join(REPOSITORY_DIRECTORY, "docs/implementation-plan.md"), "utf8"),
-    /Fresh v4 Base Sepolia bundle deployed and synchronized; complete hosted exercise pending/u,
-  );
 
   for (const file of [
     path.join(REPOSITORY_DIRECTORY, "README.md"),

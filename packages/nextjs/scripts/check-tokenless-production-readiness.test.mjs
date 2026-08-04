@@ -770,6 +770,27 @@ test("tokenless and production hosted gates share one exact deployment-bundle in
   }
 });
 
+test("hosted readiness fails closed while the checked deployment requires replacement", () => {
+  const fixture = validFixture();
+  fixture.deploymentStatus = {
+    schemaVersion: "rateloop-tokenless-deployment-v4",
+    status: "fresh_deployment_required",
+    chainId: 84532,
+    deploymentKey: fixture.activeRegistry[84532].deploymentKey,
+  };
+  assert.match(
+    validateTokenlessProductionReadiness(fixture).join("\n"),
+    /fresh complete Base Sepolia deployment is required/u,
+  );
+
+  const staleRegistry = validFixture();
+  staleRegistry.activeRegistry[84532].sourceCompatibility = "fresh_deployment_required";
+  assert.match(
+    validateTokenlessProductionReadiness(staleRegistry).join("\n"),
+    /fresh complete Base Sepolia deployment is required/u,
+  );
+});
+
 test("exact deployment readiness requires complete runtime-code evidence and a registry-bound fee recipient", () => {
   const mutations = [
     ["fee recipient", active => delete active.feeRecipient],

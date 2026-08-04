@@ -6,7 +6,7 @@ export const tokenlessDeploymentSchema = "rateloop-tokenless-deployment-v4" as c
 
 export const tokenlessDeploymentStatus = {
   "schemaVersion": "rateloop-tokenless-deployment-v4",
-  "status": "released",
+  "status": "fresh_deployment_required",
   "chainId": 84532,
   "deploymentKey": "tokenless-v4:84532:0x0b2a1dbb8723583e5e0d4bfa9df0ed94a69b708b:0x09ea70d6de57fdfb5072f9e215f58e29976d7ee4:0xf4fa3259589f77a140c7fd82ffdf9e00a3e5402c:0xd6e6c750f5e465d2d43e6ae20d8b196f200b42e4"
 } as const;
@@ -15,6 +15,7 @@ export const tokenlessDeployedContracts = {
   "84532": {
     "schemaVersion": "rateloop-tokenless-deployment-v4",
     "version": 4,
+    "sourceCompatibility": "fresh_deployment_required",
     "deploymentComplete": true,
     "deploymentProfile": "test",
     "networkName": "baseSepolia",

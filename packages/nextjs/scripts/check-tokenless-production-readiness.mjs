@@ -5,6 +5,7 @@ import {
 import {
   tokenlessDeployedContracts,
   tokenlessDeploymentSchema,
+  tokenlessDeploymentStatus,
 } from "../../contracts/src/tokenless/deployedContracts.ts";
 import {
   resolveManagedAssuranceAttestationConfiguration,
@@ -409,9 +410,16 @@ function normalizedRegistryAddress(raw) {
   return typeof raw === "string" ? raw.toLowerCase() : "";
 }
 
-function validateExactActiveDeploymentBundle({ activeRegistry, deploymentSchema, env, errors }) {
+function validateExactActiveDeploymentBundle({ activeRegistry, deploymentSchema, deploymentStatus, env, errors }) {
   const active = activeDeployment(activeRegistry, errors);
   if (!active) return;
+  if (
+    active.sourceCompatibility === "fresh_deployment_required" ||
+    deploymentStatus?.status === "fresh_deployment_required"
+  ) {
+    errors.push("The checked tokenless chain bundle is stale; a fresh complete Base Sepolia deployment is required.");
+    return;
+  }
 
   const expectedKey = configuredDeploymentKey(env);
   const contracts = active.contracts && typeof active.contracts === "object" ? active.contracts : {};
@@ -433,6 +441,12 @@ function validateExactActiveDeploymentBundle({ activeRegistry, deploymentSchema,
     contractNames.length === expectedContractNames.length &&
     contractNames.every((name, index) => name === expectedContractNames[index]);
   const metadataMatches =
+    active.sourceCompatibility === undefined &&
+    (deploymentStatus === undefined ||
+      (deploymentStatus.schemaVersion === DEPLOYMENT_SCHEMA &&
+        deploymentStatus.status === "released" &&
+        deploymentStatus.chainId === BASE_SEPOLIA_CHAIN_ID &&
+        deploymentStatus.deploymentKey === active.deploymentKey)) &&
     deploymentSchema === DEPLOYMENT_SCHEMA &&
     value(env, "TOKENLESS_DEPLOYMENT_SCHEMA") === active.schemaVersion &&
     active.schemaVersion === DEPLOYMENT_SCHEMA &&
@@ -523,7 +537,7 @@ function validateTokenlessTestVault(env, errors) {
   return wrappingVersion && wrappingKeys ? currentKey(env, "TOKENLESS_ARTIFACT_WRAPPING", "base64url", errors) : null;
 }
 
-function validateTokenlessTestDeployment(env, { activeRegistry, deploymentSchema }) {
+function validateTokenlessTestDeployment(env, { activeRegistry, deploymentSchema, deploymentStatus }) {
   const errors = [];
   errors.push(...validateRequiredManagedAssuranceAttestationConfiguration(env));
   let attestationConfiguration;
@@ -738,7 +752,7 @@ function validateTokenlessTestDeployment(env, { activeRegistry, deploymentSchema
   for (const names of testSecretRoles.values()) {
     if (names.length > 1) errors.push(`Tokenless test key roles must be distinct: ${names.join(", ")}.`);
   }
-  validateExactActiveDeploymentBundle({ activeRegistry, deploymentSchema, env, errors });
+  validateExactActiveDeploymentBundle({ activeRegistry, deploymentSchema, deploymentStatus, env, errors });
   return errors;
 }
 
@@ -746,6 +760,7 @@ export function validateTokenlessProductionReadiness({
   env,
   activeRegistry,
   deploymentSchema = tokenlessDeploymentSchema,
+  deploymentStatus = undefined,
   releaseCapabilities = DEFAULT_HOSTED_RELEASE_CAPABILITIES,
   hosted = env.VERCEL === "1" || env.VERCEL_ENV === "production" || env.VERCEL_ENV === "preview",
 }) {
@@ -753,7 +768,7 @@ export function validateTokenlessProductionReadiness({
   if (!hosted) return errors;
 
   if (value(env, "VERCEL_GIT_COMMIT_REF") !== "main") {
-    return validateTokenlessTestDeployment(env, { activeRegistry, deploymentSchema });
+    return validateTokenlessTestDeployment(env, { activeRegistry, deploymentSchema, deploymentStatus });
   }
 
   validateHostedGitIdentity(env, "main", errors);
@@ -1200,7 +1215,7 @@ export function validateTokenlessProductionReadiness({
     if (names.length > 1 && !errors.includes(message)) errors.push(message);
   }
 
-  validateExactActiveDeploymentBundle({ activeRegistry, deploymentSchema, env, errors });
+  validateExactActiveDeploymentBundle({ activeRegistry, deploymentSchema, deploymentStatus, env, errors });
   return errors;
 }
 
@@ -1214,6 +1229,7 @@ function main() {
   const errors = validateTokenlessProductionReadiness({
     env: process.env,
     activeRegistry: tokenlessDeployedContracts,
+    deploymentStatus: tokenlessDeploymentStatus,
     hosted,
   });
   if (errors.length > 0) {

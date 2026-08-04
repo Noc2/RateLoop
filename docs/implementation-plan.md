@@ -829,7 +829,7 @@ artefact to accept, and the pricing argument in §6a has nothing behind it. Trea
 | Phase | Responsible party                                        | Current state                                                                      | Concrete exit evidence                                                                                                                           |
 | ----- | -------------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 1–3   | RateLoop engineering                                     | Implemented; final verification in progress                                        | clean `0000`→current journal, populated upgrade, route/service/UI suites, exact denial tests, no uncommitted release fix                         |
-| 4     | RateLoop release operator                                | Fresh v4 Base Sepolia bundle deployed and synchronized; complete hosted exercise pending | one deployment key in contracts, app, Ponder and keeper; restart/reorg/expiry/old-key denials; tokenless-only Vercel verification                |
+| 4     | RateLoop release operator                                | Fresh complete Base Sepolia deployment required after fund-core fix                       | one deployment key in contracts, app, Ponder and keeper; restart/reorg/expiry/old-key denials; tokenless-only Vercel verification                |
 | 5     | Audit organisation and two provider pilot owners         | External release gate                                                              | dated method acceptance, two preregistered issue logs, offline reproduction and one paid-repeat request                                          |
 | 6     | RateLoop compliance, labour counsel and release operator | Retained as a default-off testnet exercise                                         | v2 operator evidence, two-provider demand, exact permitted countries, worker controls, private unmonitored channel and paid-core recovery drills |
 
@@ -1169,8 +1169,8 @@ or self-asserted digests are never evidence.
   short-lived exact-opportunity test-asset network exercise. Exercise deactivation,
   country-set denial, keeper outage, retry, reorg, beacon failure, expiry and old-key
   rejection. This is not a real-money or mainnet release.
-- The active v4 registry publishes the complete Base Sepolia test bundle beginning at
-  block `44915850`. A synchronized Vercel/Railway bundle remains a hard prerequisite;
+- The v4 registry retains the stale Base Sepolia test bundle beginning at block
+  `44915850` as evidence. A fresh complete Base Sepolia deployment and synchronized Vercel/Railway bundle remain hard prerequisites;
   every service must fail closed on an older or mixed deployment identity.
 - Neither task enables the closed network automatically. Activation still requires the
   legal/privacy/payment gates in §7 and explicit evidence of demand beyond the named

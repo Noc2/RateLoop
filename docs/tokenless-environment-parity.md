@@ -13,16 +13,18 @@ Every live tokenless component is isolated from the legacy RateLoop deployment.
   `PONDER_RPC_FALLBACK_URLS_84532`, or `RPC_URL` + `RPC_FALLBACK_URLS`
 - Deployment schema target: `rateloop-tokenless-deployment-v4`
 - Deployment key target: `tokenless-v4:<chainId>:<panel>:<issuer>:<adapter-or-zero>:<feedback-bonus>`
-- Current v4 release status: `released` test profile
-- Active Base Sepolia deployment block: `44915850`
-- Active Base Sepolia deployment key:
+- Current v4 release status: `fresh_deployment_required`
+- Stale Base Sepolia deployment block retained as evidence: `44915850`
+- Stale Base Sepolia deployment key:
   `tokenless-v4:84532:0x0b2a1dbb8723583e5e0d4bfa9df0ed94a69b708b:0x09ea70d6de57fdfb5072f9e215f58e29976d7ee4:0xf4fa3259589f77a140c7fd82ffdf9e00a3e5402c:0xd6e6c750f5e465d2d43e6ae20d8b196f200b42e4`
 
-The active v4 registry contains exactly that complete runtime-evidenced bundle. It binds the experimental in-repo
-`QuicknetTBeaconVerifier`, TokenlessPanel, CredentialIssuer, x402 adapter, and TokenlessFeedbackBonus. The deployment
-script always deploys that exact verifier; it does not accept a verifier address from the
-environment. Deployment export compares its observed runtime code hash with the compiled artifact and fails closed on
-any difference. Hosted app, Ponder, and keeper configuration consume the resulting pinned address as
+The v4 registry retains that runtime-evidenced bundle as stale evidence and hosted readiness rejects it. A fresh
+complete Base Sepolia deployment must bind the experimental in-repo `QuicknetTBeaconVerifier`, TokenlessPanel,
+CredentialIssuer, x402 adapter, and TokenlessFeedbackBonus. The deployment script always deploys that exact verifier;
+it does not accept a verifier address from the environment. Deployment export requires every Forge CREATE input to
+equal the current deploy-profile creation bytecode plus its encoded constructor arguments, records creation, input, and
+runtime fingerprints for all six contracts, and fails closed when later artifact generation sees a different compiled
+source. Hosted app, Ponder, and keeper configuration consume the resulting pinned address as
 `TOKENLESS_BEACON_VERIFIER_ADDRESS` or their package-prefixed equivalent. The verifier remains unaudited, and this
 deployment binding does not remove the independent-review release gate.
 Historical v1-v3 artifacts, including the v3 test bundle deployed at block `44132668`, must not be relabelled or

@@ -9,7 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { keccak256 } from "viem";
+import { encodeDeployData, keccak256 } from "viem";
 
 import { exportTokenlessDeploymentFromBroadcast } from "./exportTokenlessDeploymentFromBroadcast.js";
 import {
@@ -19,6 +19,7 @@ import {
 import {
   reconstructTokenlessDeploymentFromBroadcast as reconstructRawTokenlessDeploymentFromBroadcast,
   TOKENLESS_DEPLOYMENT_SCHEMA,
+  tokenlessCodeEvidenceHash,
   validateTokenlessDeploymentArtifact,
 } from "./tokenlessDeployment.js";
 import { requireTokenlessDeploymentAddresses } from "./tokenlessDeployArgs.js";
@@ -28,6 +29,82 @@ function address(index) {
 }
 
 const FEE_RECIPIENT = address(50);
+
+const FIXTURE_COMPILED_ARTIFACTS = Object.freeze({
+  TestUSDC: {
+    artifact: "MockERC20",
+    abi: [
+      {
+        type: "constructor",
+        inputs: [
+          { name: "name", type: "string" },
+          { name: "symbol", type: "string" },
+          { name: "decimals", type: "uint8" },
+        ],
+      },
+    ],
+    bytecode: "0x6001",
+  },
+  CredentialIssuer: {
+    artifact: "CredentialIssuer",
+    abi: [
+      {
+        type: "constructor",
+        inputs: [
+          { name: "rotationAuthority", type: "address" },
+          { name: "initialSigner", type: "address" },
+          { name: "maximumVoucherLifetime", type: "uint64" },
+        ],
+      },
+    ],
+    bytecode: "0x6002",
+  },
+  QuicknetTBeaconVerifier: {
+    artifact: "QuicknetTBeaconVerifier",
+    abi: [],
+    bytecode: "0x6003",
+  },
+  TokenlessPanel: {
+    artifact: "TokenlessPanel",
+    abi: [
+      {
+        type: "constructor",
+        inputs: [
+          { name: "usdc", type: "address" },
+          { name: "credentialIssuer", type: "address" },
+          { name: "beaconVerifier", type: "address" },
+        ],
+      },
+    ],
+    bytecode: "0x6004",
+  },
+  TokenlessFeedbackBonus: {
+    artifact: "TokenlessFeedbackBonus",
+    abi: [
+      {
+        type: "constructor",
+        inputs: [
+          { name: "usdc", type: "address" },
+          { name: "credentialIssuer", type: "address" },
+        ],
+      },
+    ],
+    bytecode: "0x6005",
+  },
+  X402PanelSubmitter: {
+    artifact: "X402PanelSubmitter",
+    abi: [
+      {
+        type: "constructor",
+        inputs: [
+          { name: "usdc", type: "address" },
+          { name: "panel", type: "address" },
+        ],
+      },
+    ],
+    bytecode: "0x6006",
+  },
+});
 
 function reconstructTokenlessDeploymentFromBroadcast(broadcast, options = {}) {
   return reconstructRawTokenlessDeploymentFromBroadcast(broadcast, {
@@ -40,19 +117,42 @@ function hash(index) {
   return `0x${index.toString(16).padStart(64, "0")}`;
 }
 
+function fixtureCreationCodeHashes() {
+  return Object.fromEntries(
+    Object.entries(FIXTURE_COMPILED_ARTIFACTS).map(([name, artifact]) => [
+      name,
+      keccak256(artifact.bytecode).toLowerCase(),
+    ]),
+  );
+}
+
 function addRuntimeCodeEvidence(artifact) {
   const evidenced = structuredClone(artifact);
   let index = 100;
   for (const contract of Object.values(evidenced.contracts)) {
     contract.runtimeCodeHash = hash(index++);
+    contract.creationCodeHash ??= hash(index++);
+    contract.deploymentInputHash ??= hash(index++);
   }
   evidenced.beaconVerifierRuntimeCodeHash = hash(index);
+  evidenced.beaconVerifierCreationCodeHash ??= hash(index + 1);
+  evidenced.beaconVerifierDeploymentInputHash ??= hash(index + 2);
   evidenced.runtimeCodeEvidenceComplete = true;
+  evidenced.codeEvidenceHash = tokenlessCodeEvidenceHash(evidenced);
   return evidenced;
 }
 
 function createTransaction(contractName, contractAddress, args, index) {
   const transactionHash = hash(index);
+  const label = contractName === "MockERC20" ? "TestUSDC" : contractName;
+  const compiled = FIXTURE_COMPILED_ARTIFACTS[label];
+  const input = compiled
+    ? encodeDeployData({
+        abi: compiled.abi,
+        bytecode: compiled.bytecode,
+        args,
+      })
+    : "0x6000";
   return {
     transaction: {
       transactionType: "CREATE",
@@ -60,6 +160,11 @@ function createTransaction(contractName, contractAddress, args, index) {
       contractAddress,
       arguments: args,
       hash: transactionHash,
+      transaction: {
+        from: FEE_RECIPIENT,
+        to: null,
+        input,
+      },
     },
     receipt: {
       transactionHash,
@@ -270,6 +375,82 @@ test("resolves Foundry CREATE hash permutations by unique successful receipt add
   assert.equal(artifact.contracts.X402PanelSubmitter.deployedOnBlock, 106);
 });
 
+test("binds every CREATE input to the matching compiled deploy-profile artifact", () => {
+  const complete = completeBroadcast({ includeAdapter: true });
+  assert.doesNotThrow(() =>
+    reconstructTokenlessDeploymentFromBroadcast(complete, {
+      compiledArtifacts: FIXTURE_COMPILED_ARTIFACTS,
+    }),
+  );
+
+  for (const contractName of [
+    "MockERC20",
+    "CredentialIssuer",
+    "QuicknetTBeaconVerifier",
+    "TokenlessPanel",
+    "TokenlessFeedbackBonus",
+    "X402PanelSubmitter",
+  ]) {
+    const mutated = structuredClone(complete);
+    const transaction = mutated.transactions.find(
+      (candidate) => candidate.contractName === contractName,
+    );
+    transaction.transaction.input = `${transaction.transaction.input.slice(0, -2)}ff`;
+    assert.throws(
+      () =>
+        reconstructTokenlessDeploymentFromBroadcast(mutated, {
+          compiledArtifacts: FIXTURE_COMPILED_ARTIFACTS,
+        }),
+      new RegExp(
+        `${contractName === "MockERC20" ? "TestUSDC" : contractName} CREATE transaction.input does not match`,
+        "u",
+      ),
+    );
+  }
+});
+
+test("compiled CREATE evidence fails closed when missing or malformed", () => {
+  const missingInput = completeBroadcast();
+  delete missingInput.transactions[0].transaction.input;
+  assert.throws(
+    () =>
+      reconstructTokenlessDeploymentFromBroadcast(missingInput, {
+        compiledArtifacts: FIXTURE_COMPILED_ARTIFACTS,
+      }),
+    /TestUSDC CREATE transaction\.input must be non-empty exact bytecode/u,
+  );
+
+  const nonCreateDestination = completeBroadcast();
+  nonCreateDestination.transactions[0].transaction.to = address(99);
+  assert.throws(
+    () =>
+      reconstructTokenlessDeploymentFromBroadcast(nonCreateDestination, {
+        compiledArtifacts: FIXTURE_COMPILED_ARTIFACTS,
+      }),
+    /TestUSDC CREATE transaction must have a null destination/u,
+  );
+
+  const missingArtifact = structuredClone(FIXTURE_COMPILED_ARTIFACTS);
+  delete missingArtifact.TokenlessPanel;
+  assert.throws(
+    () =>
+      reconstructTokenlessDeploymentFromBroadcast(completeBroadcast(), {
+        compiledArtifacts: missingArtifact,
+      }),
+    /Missing compiled deployment artifact for TokenlessPanel/u,
+  );
+
+  const malformedArtifact = structuredClone(FIXTURE_COMPILED_ARTIFACTS);
+  malformedArtifact.CredentialIssuer.bytecode = "0x__unlinked__";
+  assert.throws(
+    () =>
+      reconstructTokenlessDeploymentFromBroadcast(completeBroadcast(), {
+        compiledArtifacts: malformedArtifact,
+      }),
+    /CredentialIssuer creation bytecode must be non-empty exact bytecode/u,
+  );
+});
+
 test("rejects missing required contracts and mixed broadcasts", () => {
   const missingIssuer = completeBroadcast();
   missingIssuer.transactions = missingIssuer.transactions.filter(
@@ -398,15 +579,23 @@ test("complete artifacts require exact test profile, currency, artifacts, and ru
   const complete = addRuntimeCodeEvidence(
     reconstructTokenlessDeploymentFromBroadcast(
       completeBroadcast({ includeAdapter: true }),
+      { compiledArtifacts: FIXTURE_COMPILED_ARTIFACTS },
     ),
   );
   assert.doesNotThrow(() =>
     validateTokenlessDeploymentArtifact(complete, {
       requireRuntimeCodeEvidence: true,
+      expectedCreationCodeHashes: fixtureCreationCodeHashes(),
     }),
   );
 
   const mutations = [
+    {
+      mutate: (artifact) => {
+        artifact.sourceCompatibility = "released";
+      },
+      error: /Unsupported tokenless deployment source compatibility released/u,
+    },
     {
       mutate: (artifact) => {
         artifact.deploymentProfile = "production";
@@ -438,6 +627,18 @@ test("complete artifacts require exact test profile, currency, artifacts, and ru
       },
       error: /X402PanelSubmitter runtimeCodeHash is missing/u,
     },
+    {
+      mutate: (artifact) => {
+        artifact.contracts.TokenlessPanel.runtimeCodeHash = hash(999);
+      },
+      error: /code evidence hash does not match/u,
+    },
+    {
+      mutate: (artifact) => {
+        artifact.contracts.TokenlessFeedbackBonus.creationCodeHash = hash(998);
+      },
+      error: /creation bytecode does not match/u,
+    },
   ];
 
   for (const { mutate, error } of mutations) {
@@ -447,6 +648,7 @@ test("complete artifacts require exact test profile, currency, artifacts, and ru
       () =>
         validateTokenlessDeploymentArtifact(candidate, {
           requireRuntimeCodeEvidence: true,
+          expectedCreationCodeHashes: fixtureCreationCodeHashes(),
         }),
       error,
     );
@@ -483,6 +685,7 @@ test("export writes tokenless-v4 with exact runtime hashes and leaves historical
       deploymentPath: tokenlessPath,
       targetNetwork: "baseSepolia",
       feeRecipient: FEE_RECIPIENT,
+      compiledArtifacts: FIXTURE_COMPILED_ARTIFACTS,
       getBytecode: async (contractAddress) =>
         `0x60${contractAddress.slice(-2)}`,
       expectedBeaconVerifierRuntimeCodeHash: keccak256("0x6006"),
@@ -502,7 +705,14 @@ test("export writes tokenless-v4 with exact runtime hashes and leaves historical
       exported.contracts.TokenlessPanel.runtimeCodeHash,
       /^0x[0-9a-f]{64}$/u,
     );
+    for (const contract of Object.values(exported.contracts)) {
+      assert.match(contract.creationCodeHash, /^0x[0-9a-f]{64}$/u);
+      assert.match(contract.deploymentInputHash, /^0x[0-9a-f]{64}$/u);
+    }
     assert.match(exported.beaconVerifierRuntimeCodeHash, /^0x[0-9a-f]{64}$/u);
+    assert.match(exported.beaconVerifierCreationCodeHash, /^0x[0-9a-f]{64}$/u);
+    assert.match(exported.beaconVerifierDeploymentInputHash, /^0x[0-9a-f]{64}$/u);
+    assert.equal(exported.codeEvidenceHash, tokenlessCodeEvidenceHash(exported));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -531,6 +741,7 @@ test("export waits for a freshly deployed contract to propagate across the RPC",
       deploymentPath,
       targetNetwork: "baseSepolia",
       feeRecipient: FEE_RECIPIENT,
+      compiledArtifacts: FIXTURE_COMPILED_ARTIFACTS,
       getBytecode: async (contractAddress) => {
         if (contractAddress === testUsdc && testUsdcLoads++ < 2) return "0x";
         return `0x60${contractAddress.slice(-2)}`;
@@ -575,6 +786,7 @@ test("export rejects deployed verifier bytecode that differs from the compiled r
           deploymentPath,
           targetNetwork: "baseSepolia",
           feeRecipient: FEE_RECIPIENT,
+          compiledArtifacts: FIXTURE_COMPILED_ARTIFACTS,
           getBytecode: async (contractAddress) =>
             `0x60${contractAddress.slice(-2)}`,
           expectedBeaconVerifierRuntimeCodeHash: keccak256("0x6007"),
@@ -632,7 +844,7 @@ test("source-only ABI generation cannot emit or replace deployment metadata", ()
   }
 });
 
-test("the checked-in fresh v4 artifact regenerates its exact active release registry", () => {
+test("the checked-in stale v4 artifact requires a fresh complete deployment", () => {
   const artifact = JSON.parse(
     readFileSync(
       new URL("../deployments/tokenless-v4/84532.json", import.meta.url),
@@ -640,13 +852,13 @@ test("the checked-in fresh v4 artifact regenerates its exact active release regi
     ),
   );
 
-  const sources = buildTokenlessGeneratedSources(artifact, {
-    abiLoader: () => [],
-  });
-  const registry = sources.get("deployedContracts.ts");
-  assert.match(registry, /"status": "released"/u);
-  assert.ok(registry.includes(artifact.deploymentKey));
-  assert.ok(registry.includes(artifact.feeRecipient));
+  assert.throws(
+    () =>
+      buildTokenlessGeneratedSources(artifact, {
+        abiLoader: () => [],
+      }),
+    /stale and requires a fresh complete deployment/u,
+  );
 });
 
 test("full artifact generation rejects historical v1 deployment metadata", () => {

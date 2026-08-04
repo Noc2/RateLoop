@@ -40,11 +40,10 @@ On the `tokenless` branch, read
 [`docs/tokenless-immutable-implementation-plan-2026-07.md`](docs/tokenless-immutable-implementation-plan-2026-07.md)
 before changing contracts, deployment artifacts, Ponder, Keeper, the app, SDK,
 agents, MCP, E2E, or public docs. Base mainnet contracts are legacy and are not
-final. The active versioned Base Sepolia artifact is
-`packages/foundry/deployments/tokenless-v4/84532.json`, a complete deployment at
-block `44915850`; `tokenless-v1` through `tokenless-v3` are historical evidence
-only. That artifact becomes stale after any future fund-core change and must
-then be freshly redeployed before live configuration. Prefer removal of
+final. `packages/foundry/deployments/tokenless-v4/84532.json` records the stale
+deployment at block `44915850`; a fresh complete Base Sepolia deployment is
+required before live configuration. `tokenless-v1` through `tokenless-v3` are
+historical evidence only. Prefer removal of
 obsolete consumers over any
 compatibility work. Hosted tokenless work must stay in the isolated
 `rateloop-tokenless` Vercel and Railway projects and must never use

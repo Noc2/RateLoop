@@ -10,8 +10,16 @@ try {
   const deployment = JSON.parse(
     await readFile(new URL("../../../foundry/deployments/tokenless-v4/84532.json", import.meta.url), "utf8"),
   );
-  if (deployment?.schemaVersion !== "rateloop-tokenless-deployment-v4" || deployment?.deploymentComplete !== true) {
-    throw new Error("The checked-in Base Sepolia tokenless-v4 deployment artifact is incomplete or invalid.");
+  if (
+    deployment?.schemaVersion !== "rateloop-tokenless-deployment-v4" ||
+    deployment?.deploymentComplete !== true ||
+    deployment?.sourceCompatibility !== undefined
+  ) {
+    throw new Error(
+      deployment?.sourceCompatibility === "fresh_deployment_required"
+        ? "The checked-in Base Sepolia tokenless-v4 deployment artifact is stale; a fresh complete deployment is required."
+        : "The checked-in Base Sepolia tokenless-v4 deployment artifact is incomplete or invalid.",
+    );
   }
   const operations = await checkHostedOperations({
     expectedDeployment: deployment,

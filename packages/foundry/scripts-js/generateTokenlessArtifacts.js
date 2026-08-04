@@ -13,7 +13,10 @@ import {
   TOKENLESS_DEPLOYMENT_SCHEMA,
   validateTokenlessDeploymentArtifact,
 } from "./tokenlessDeployment.js";
-import { compiledBeaconVerifierRuntimeCodeHash } from "./exportTokenlessDeploymentFromBroadcast.js";
+import {
+  compiledBeaconVerifierRuntimeCodeHash,
+  compiledTokenlessCreationCodeHashes,
+} from "./exportTokenlessDeploymentFromBroadcast.js";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const foundryRoot = join(scriptDirectory, "..");
@@ -184,6 +187,8 @@ export function generateTokenlessArtifacts({
     JSON.parse(readFileSync(deploymentPath, "utf8")),
     {
       requireRuntimeCodeEvidence: true,
+      expectedCreationCodeHashes:
+        compiledTokenlessCreationCodeHashes(compiledArtifactRoot),
       expectedBeaconVerifierRuntimeCodeHash:
         compiledBeaconVerifierRuntimeCodeHash(compiledArtifactRoot),
     },

@@ -1,6 +1,7 @@
 {
   "schemaVersion": "rateloop-tokenless-deployment-v4",
   "version": 4,
+  "sourceCompatibility": "fresh_deployment_required",
   "deploymentComplete": true,
   "deploymentProfile": "test",
   "networkName": "baseSepolia",

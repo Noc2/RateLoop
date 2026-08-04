@@ -1,4 +1,10 @@
-import { isAddress, keccak256, zeroAddress } from "viem";
+import {
+  encodeDeployData,
+  isAddress,
+  keccak256,
+  stringToHex,
+  zeroAddress,
+} from "viem";
 
 export const TOKENLESS_DEPLOYMENT_SCHEMA = "rateloop-tokenless-deployment-v4";
 export const TOKENLESS_DEPLOYMENT_VERSION = 4;
@@ -13,13 +19,21 @@ const REQUIRED_CONTRACTS = [
   "TokenlessFeedbackBonus",
 ];
 const OPTIONAL_CONTRACTS = ["X402PanelSubmitter"];
-const CONTRACT_ARTIFACTS = Object.freeze({
+export const TOKENLESS_DEPLOYMENT_ARTIFACTS = Object.freeze({
   TestUSDC: "MockERC20",
   CredentialIssuer: "CredentialIssuer",
+  QuicknetTBeaconVerifier: "QuicknetTBeaconVerifier",
   TokenlessPanel: "TokenlessPanel",
   TokenlessFeedbackBonus: "TokenlessFeedbackBonus",
   X402PanelSubmitter: "X402PanelSubmitter",
 });
+const CONTRACT_ARTIFACTS = Object.freeze(
+  Object.fromEntries(
+    Object.entries(TOKENLESS_DEPLOYMENT_ARTIFACTS).filter(
+      ([name]) => name !== "QuicknetTBeaconVerifier",
+    ),
+  ),
+);
 const TOKENLESS_TEST_CURRENCY = Object.freeze({
   contract: "TestUSDC",
   decimals: 6,
@@ -91,6 +105,7 @@ export async function attachTokenlessRuntimeCodeEvidence(
   evidenced.beaconVerifierRuntimeCodeHash =
     observedBeaconVerifierRuntimeCodeHash;
   evidenced.runtimeCodeEvidenceComplete = true;
+  evidenced.codeEvidenceHash = tokenlessCodeEvidenceHash(evidenced);
   return validateTokenlessDeploymentArtifact(evidenced, {
     requireRuntimeCodeEvidence: true,
     expectedBeaconVerifierRuntimeCodeHash: expectedBeaconVerifierHash,
@@ -132,6 +147,66 @@ function receiptIndexes(receipts) {
 
 function deploymentLabel(contractName) {
   return contractName === "MockERC20" ? "TestUSDC" : contractName;
+}
+
+function exactHexBytes(value, label) {
+  if (typeof value !== "string" || !/^0x(?:[0-9a-fA-F]{2})+$/u.test(value)) {
+    throw new Error(`${label} must be non-empty exact bytecode.`);
+  }
+  return value.toLowerCase();
+}
+
+function compiledDeployment(compiledArtifacts, label) {
+  const expectedArtifact = TOKENLESS_DEPLOYMENT_ARTIFACTS[label];
+  const compiled = compiledArtifacts?.[label];
+  if (!compiled || typeof compiled !== "object") {
+    throw new Error(`Missing compiled deployment artifact for ${label}.`);
+  }
+  if (compiled.artifact !== expectedArtifact) {
+    throw new Error(`${label} compiled artifact must be ${expectedArtifact}.`);
+  }
+  if (!Array.isArray(compiled.abi)) {
+    throw new Error(`${label} compiled artifact has no ABI array.`);
+  }
+  return {
+    ...compiled,
+    bytecode: exactHexBytes(compiled.bytecode, `${label} creation bytecode`),
+  };
+}
+
+function bindCreateInputs(creates, compiledArtifacts) {
+  for (const deployment of creates) {
+    const label = deploymentLabel(deployment.contractName);
+    const compiled = compiledDeployment(compiledArtifacts, label);
+    if (deployment.transactionTo !== null) {
+      throw new Error(`${label} CREATE transaction must have a null destination.`);
+    }
+    const observedInput = exactHexBytes(
+      deployment.transactionInput,
+      `${label} CREATE transaction.input`,
+    );
+    let expectedInput;
+    try {
+      expectedInput = encodeDeployData({
+        abi: compiled.abi,
+        bytecode: compiled.bytecode,
+        args: deployment.arguments,
+      }).toLowerCase();
+    } catch (error) {
+      throw new Error(
+        `${label} constructor arguments cannot be encoded with the compiled artifact: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+    if (observedInput !== expectedInput) {
+      throw new Error(
+        `${label} CREATE transaction.input does not match the compiled deploy-profile artifact and constructor arguments.`,
+      );
+    }
+    deployment.creationCodeHash = keccak256(compiled.bytecode).toLowerCase();
+    deployment.deploymentInputHash = keccak256(observedInput).toLowerCase();
+  }
 }
 
 function findCreates(broadcast) {
@@ -202,6 +277,8 @@ function findCreates(broadcast) {
         `${contractName} deployedOnBlock`,
       ),
       contractName: transaction.contractName,
+      transactionInput: transaction.transaction?.input,
+      transactionTo: transaction.transaction?.to,
     });
   }
 
@@ -261,6 +338,7 @@ export function reconstructTokenlessDeploymentFromBroadcast(
   broadcast,
   {
     chainId = TOKENLESS_BASE_SEPOLIA_CHAIN_ID,
+    compiledArtifacts,
     feeRecipient,
     networkName = TOKENLESS_BASE_SEPOLIA_NETWORK,
   } = {},
@@ -291,6 +369,7 @@ export function reconstructTokenlessDeploymentFromBroadcast(
       ].join(", ")}.`,
     );
   }
+  if (compiledArtifacts !== undefined) bindCreateInputs(creates, compiledArtifacts);
 
   const testUsdc = oneDeployment(creates, "TestUSDC");
   const credentialIssuer = oneDeployment(creates, "CredentialIssuer");
@@ -369,6 +448,12 @@ export function reconstructTokenlessDeploymentFromBroadcast(
       address: deployment.address,
       artifact: CONTRACT_ARTIFACTS[label],
       deployedOnBlock: deployment.blockNumber,
+      ...(deployment.creationCodeHash
+        ? {
+            creationCodeHash: deployment.creationCodeHash,
+            deploymentInputHash: deployment.deploymentInputHash,
+          }
+        : {}),
     };
   }
 
@@ -399,6 +484,14 @@ export function reconstructTokenlessDeploymentFromBroadcast(
     beaconVerifier,
     beaconVerifierArtifact: BEACON_VERIFIER_ARTIFACT,
     beaconVerifierDeployedOnBlock: beaconVerifierDeployment.blockNumber,
+    ...(beaconVerifierDeployment.creationCodeHash
+      ? {
+          beaconVerifierCreationCodeHash:
+            beaconVerifierDeployment.creationCodeHash,
+          beaconVerifierDeploymentInputHash:
+            beaconVerifierDeployment.deploymentInputHash,
+        }
+      : {}),
     contracts,
     testCurrency: { ...TOKENLESS_TEST_CURRENCY },
   });
@@ -422,6 +515,53 @@ function validateTokenlessContractMetadata(
   } else if (requireRuntimeCodeEvidence) {
     throw new Error(`${name} runtimeCodeHash is missing.`);
   }
+  for (const field of ["creationCodeHash", "deploymentInputHash"]) {
+    if (contract[field] !== undefined) {
+      normalizeCodeHash(contract[field], `${name} ${field}`);
+    } else if (requireRuntimeCodeEvidence) {
+      throw new Error(`${name} ${field} is missing.`);
+    }
+  }
+}
+
+const CODE_EVIDENCE_ORDER = Object.freeze([
+  "TestUSDC",
+  "CredentialIssuer",
+  "QuicknetTBeaconVerifier",
+  "TokenlessPanel",
+  "TokenlessFeedbackBonus",
+  "X402PanelSubmitter",
+]);
+
+export function tokenlessCodeEvidenceHash(artifact) {
+  const entries = [];
+  for (const name of CODE_EVIDENCE_ORDER) {
+    const metadata =
+      name === BEACON_VERIFIER_ARTIFACT
+        ? {
+            artifact: artifact.beaconVerifierArtifact,
+            runtimeCodeHash: artifact.beaconVerifierRuntimeCodeHash,
+            creationCodeHash: artifact.beaconVerifierCreationCodeHash,
+            deploymentInputHash: artifact.beaconVerifierDeploymentInputHash,
+          }
+        : artifact.contracts?.[name];
+    if (!metadata) continue;
+    if (metadata.artifact !== TOKENLESS_DEPLOYMENT_ARTIFACTS[name]) {
+      throw new Error(
+        `${name} artifact must be ${TOKENLESS_DEPLOYMENT_ARTIFACTS[name]}.`,
+      );
+    }
+    entries.push(
+      [
+        name,
+        metadata.artifact,
+        normalizeCodeHash(metadata.runtimeCodeHash, `${name} runtimeCodeHash`),
+        normalizeCodeHash(metadata.creationCodeHash, `${name} creationCodeHash`),
+        normalizeCodeHash(metadata.deploymentInputHash, `${name} deploymentInputHash`),
+      ].join(":"),
+    );
+  }
+  return keccak256(stringToHex(entries.join("|"))).toLowerCase();
 }
 
 function hasExactTestCurrencyMetadata(value) {
@@ -437,6 +577,7 @@ export function validateTokenlessDeploymentArtifact(
   artifact,
   {
     requireRuntimeCodeEvidence = false,
+    expectedCreationCodeHashes,
     expectedBeaconVerifierRuntimeCodeHash,
   } = {},
 ) {
@@ -457,6 +598,18 @@ export function validateTokenlessDeploymentArtifact(
   }
   if (artifact.deploymentComplete !== true) {
     throw new Error("Tokenless deployment artifact is not marked complete.");
+  }
+  if (artifact.sourceCompatibility !== undefined) {
+    if (artifact.sourceCompatibility === "fresh_deployment_required") {
+      throw new Error(
+        "Tokenless deployment artifact is stale and requires a fresh complete deployment.",
+      );
+    }
+    throw new Error(
+      `Unsupported tokenless deployment source compatibility ${String(
+        artifact.sourceCompatibility,
+      )}.`,
+    );
   }
   if (artifact.deploymentProfile !== "test") {
     throw new Error("Tokenless deployment artifact profile must be test.");
@@ -484,6 +637,19 @@ export function validateTokenlessDeploymentArtifact(
       artifact.beaconVerifierRuntimeCodeHash,
       "beaconVerifierRuntimeCodeHash",
     );
+  }
+  for (const [field, label] of [
+    ["beaconVerifierCreationCodeHash", "beacon verifier creationCodeHash"],
+    [
+      "beaconVerifierDeploymentInputHash",
+      "beacon verifier deploymentInputHash",
+    ],
+  ]) {
+    if (artifact[field] !== undefined) {
+      normalizeCodeHash(artifact[field], label);
+    } else if (requireRuntimeCodeEvidence) {
+      throw new Error(`${label} is missing.`);
+    }
   }
   if (expectedBeaconVerifierRuntimeCodeHash !== undefined) {
     const expectedHash = normalizeCodeHash(
@@ -527,6 +693,37 @@ export function validateTokenlessDeploymentArtifact(
     validateTokenlessContractMetadata(name, contracts[name], {
       requireRuntimeCodeEvidence,
     });
+  }
+  if (expectedCreationCodeHashes !== undefined) {
+    for (const name of CODE_EVIDENCE_ORDER) {
+      const metadata =
+        name === BEACON_VERIFIER_ARTIFACT
+          ? {
+              creationCodeHash: artifact.beaconVerifierCreationCodeHash,
+            }
+          : contracts[name];
+      if (!metadata) continue;
+      const expectedHash = normalizeCodeHash(
+        expectedCreationCodeHashes[name],
+        `compiled ${name} creationCodeHash`,
+      );
+      if (metadata.creationCodeHash !== expectedHash) {
+        throw new Error(
+          `${name} creation bytecode does not match the current compiled deploy-profile artifact.`,
+        );
+      }
+    }
+  }
+  if (requireRuntimeCodeEvidence) {
+    const observedEvidenceHash = normalizeCodeHash(
+      artifact.codeEvidenceHash,
+      "codeEvidenceHash",
+    );
+    if (observedEvidenceHash !== tokenlessCodeEvidenceHash(artifact)) {
+      throw new Error(
+        "Tokenless deployment code evidence hash does not match its contract evidence.",
+      );
+    }
   }
   if (!hasExactTestCurrencyMetadata(artifact.testCurrency)) {
     throw new Error(

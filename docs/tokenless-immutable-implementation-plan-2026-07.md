@@ -35,14 +35,15 @@ The ordered application migration source of truth is
 [`packages/nextjs/drizzle/meta/_journal.json`](../packages/nextjs/drizzle/meta/_journal.json); its final entry is the
 authoritative head. Read that entry directly rather than trusting a head number copied into prose here, which drifts as
 migrations land. The runtime deployment schema target is `tokenless-v4`, whose complete identity adds
-the Feedback Bonus address as a fifth slot. The active disposable Base Sepolia test bundle begins at block `44915850`:
+the Feedback Bonus address as a fifth slot. The disposable bundle beginning at block `44915850` is now stale after a fund-core fix; a fresh complete Base Sepolia deployment is required. Its former key is retained as evidence:
 
 ```text
 tokenless-v4:84532:0x0b2a1dbb8723583e5e0d4bfa9df0ed94a69b708b:0x09ea70d6de57fdfb5072f9e215f58e29976d7ee4:0xf4fa3259589f77a140c7fd82ffdf9e00a3e5402c:0xd6e6c750f5e465d2d43e6ae20d8b196f200b42e4
 ```
 
-Every hosted address, generated interface, indexer start block, and service health check must match that complete key;
-historical artifacts are evidence only and are never compatibility inputs.
+After redeployment, every hosted address, generated interface, indexer start block, and service health check must match
+the replacement complete key. The former key and historical artifacts are evidence only and are never compatibility
+inputs.
 
 ## Trust and authority
 

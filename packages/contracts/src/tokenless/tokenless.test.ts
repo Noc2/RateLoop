@@ -59,16 +59,20 @@ function tupleComponentNames(
   return new Set(parameter.components?.map((component) => component.name));
 }
 
-test("publishes one exact fresh v4 deployment without rewriting historical evidence", () => {
+test("fails the stale v4 deployment closed without rewriting historical evidence", () => {
   assert.equal(tokenlessDeploymentSchema, "rateloop-tokenless-deployment-v4");
   assert.deepEqual(tokenlessDeploymentStatus, {
     schemaVersion: "rateloop-tokenless-deployment-v4",
-    status: "released",
+    status: "fresh_deployment_required",
     chainId: 84532,
     deploymentKey: activeDeployment.deploymentKey,
   });
   assert.deepEqual(Object.keys(tokenlessDeployedContracts), ["84532"]);
   assert.equal(activeDeployment.schemaVersion, tokenlessDeploymentSchema);
+  assert.equal(
+    activeDeployment.sourceCompatibility,
+    "fresh_deployment_required",
+  );
   assert.equal(activeDeployment.deploymentComplete, true);
   assert.equal(activeDeployment.deploymentProfile, "test");
   assert.equal(activeDeployment.networkName, "baseSepolia");

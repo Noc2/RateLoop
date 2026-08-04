@@ -30,7 +30,7 @@ describe("framework integration documentation", () => {
     ]);
     expect(claude).toContain("optional thirdweb-created app wallet");
     expect(claude).not.toContain("do not restore thirdweb");
-    expect(design).toContain("active disposable Base Sepolia test bundle");
+    expect(design).toContain("fresh complete Base Sepolia deployment is required");
     expect(design).toContain("44915850");
     expect(design).toContain("historical artifacts are evidence only");
     expect(design).toContain("Wilson lower confidence bound");
