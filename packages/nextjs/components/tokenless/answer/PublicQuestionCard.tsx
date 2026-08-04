@@ -987,7 +987,6 @@ export function PublicQuestionCard({
           ) : null}
           <p className="mt-5 text-sm leading-6 text-base-content/55">{t("instructions")}</p>
           <div className="mt-8 flex flex-wrap gap-x-5 gap-y-2 border-t border-base-content/10 pt-4 text-xs text-base-content/55">
-            <span>{t("guaranteed", { amount: `$${usdc(task.earnings.guaranteedBaseAtomic)}` })}</span>
             <span>{t("qualityBonus", { amount: `$${usdc(task.earnings.possibleBonusAtomic)}` })}</span>
             <span>{t("surpriseBonus", { amount: `$${usdc(task.earnings.possibleSurpriseBonusAtomic)}` })}</span>
             <span>{t("attempt", { amount: `$${usdc(task.earnings.attemptCompensationAtomic)}` })}</span>

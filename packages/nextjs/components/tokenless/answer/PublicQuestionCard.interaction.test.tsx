@@ -236,6 +236,7 @@ test("a public reviewer can choose a rating, exact crowd forecast, and optional 
       />,
     );
     const screen = within(document.body);
+    assert.equal(screen.getAllByText(/^Guaranteed \$/u).length, 1);
     const prepare = screen.getByRole("button", { name: "Create recovery backup" }) as HTMLButtonElement;
     assert.equal(prepare.disabled, true);
     assert.equal(screen.queryByRole("spinbutton", { name: /what percentage/iu }), null);
