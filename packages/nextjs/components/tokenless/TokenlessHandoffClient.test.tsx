@@ -5,6 +5,7 @@ import {
   decodeTokenlessHandoffFragment,
   formatBpsPercent,
   formatUsdcAtomic,
+  handoffVerdictStatusLabel,
   parseTokenlessHandoffRecoveryOperation,
   tokenlessHandoffWaitBudgets,
   tokenlessHandoffWaitDeadline,
@@ -27,6 +28,14 @@ const { renderToStaticMarkup } = require("react-dom/server") as {
   renderToStaticMarkup: (element: React.ReactElement) => string;
 };
 const handoffSource = readFileSync(new URL("./TokenlessHandoffClient.tsx", import.meta.url), "utf8");
+
+test("handoff verdicts use explicit customer-facing labels", () => {
+  assert.equal(handoffVerdictStatusLabel("publishable", "en"), "Publishable");
+  assert.equal(handoffVerdictStatusLabel("under_quorum_compensated", "de"), "Vergütet — nicht genügend Antworten");
+  assert.equal(handoffVerdictStatusLabel("future_status", "en"), "Status unavailable");
+  assert.equal(handoffVerdictStatusLabel("future_status", "de"), "Status nicht verfügbar");
+  assert.doesNotMatch(handoffSource, /verdictStatus\.replaceAll/u);
+});
 
 test("insufficient prepaid handoffs link directly to workspace top-up settings", () => {
   assert.match(handoffSource, /Top up balance/);

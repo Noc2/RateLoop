@@ -43,6 +43,30 @@ export const HANDOFF_AUTO_WAIT_MAX_MS = 5 * 60_000;
 const HANDOFF_WAIT_TRANSPORT_TIMEOUT_MS = 35_000;
 const HANDOFF_RESULT_TRANSPORT_TIMEOUT_MS = 15_000;
 
+const VERDICT_STATUS_LABELS = {
+  pending: { en: "Pending", de: "Ausstehend" },
+  publishable: { en: "Publishable", de: "Veröffentlichbar" },
+  inconclusive: { en: "Inconclusive", de: "Nicht eindeutig" },
+  delisted: { en: "Delisted", de: "Nicht gelistet" },
+  zero_commit_refunded: { en: "Refunded — no responses", de: "Erstattet — keine Antworten" },
+  under_quorum_compensated: {
+    en: "Compensated — not enough responses",
+    de: "Vergütet — nicht genügend Antworten",
+  },
+  beacon_failure_compensated: {
+    en: "Compensated — randomness unavailable",
+    de: "Vergütet — Zufallswert nicht verfügbar",
+  },
+} as const;
+
+export function handoffVerdictStatusLabel(status: string, locale: string) {
+  const label = Object.prototype.hasOwnProperty.call(VERDICT_STATUS_LABELS, status)
+    ? VERDICT_STATUS_LABELS[status as keyof typeof VERDICT_STATUS_LABELS]
+    : null;
+  if (!label) return locale === "de" ? "Status nicht verfügbar" : "Status unavailable";
+  return locale === "de" ? label.de : label.en;
+}
+
 export type TokenlessHandoffPayload = {
   version: typeof HANDOFF_VERSION;
   handoffId: string;
@@ -872,7 +896,7 @@ export function TokenlessHandoffClient() {
               </p>
             ) : result ? (
               <dl className="mt-6 grid gap-5 sm:grid-cols-2">
-                <SummaryItem label="Status" value={result.verdictStatus.replaceAll("_", " ")} />
+                <SummaryItem label="Status" value={handoffVerdictStatusLabel(result.verdictStatus, locale)} />
                 <SummaryItem label="Selected" value={displaySelected(result)} />
                 <SummaryItem
                   label="Participants"
@@ -1320,7 +1344,7 @@ export function TokenlessHandoffClient() {
                   </p>
                 </div>
                 <dl className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-                  <SummaryItem label="Status" value={result.verdictStatus.replaceAll("_", " ")} />
+                  <SummaryItem label="Status" value={handoffVerdictStatusLabel(result.verdictStatus, locale)} />
                   <SummaryItem label="Selected" value={displaySelected(result, request.question)} />
                   <SummaryItem
                     label="Preference share"
