@@ -48,13 +48,23 @@ export interface KeeperRound {
 }
 
 export function revealTalliesAfterVote(
-  current: { revealCount: number; upVotes: number },
+  current: {
+    compensatedRevealCount: number;
+    revealCount: number;
+    upVotes: number;
+  },
   vote: number,
   scoringEligible: boolean,
-): { revealCount: number; upVotes: number } {
+): { compensatedRevealCount: number; revealCount: number; upVotes: number } {
   if (vote !== 0 && vote !== 1) throw new Error("vote must be 0 or 1");
-  if (!scoringEligible) return current;
+  if (!scoringEligible) {
+    return {
+      ...current,
+      compensatedRevealCount: current.compensatedRevealCount + 1,
+    };
+  }
   return {
+    compensatedRevealCount: current.compensatedRevealCount + 1,
     revealCount: current.revealCount + 1,
     upVotes: current.upVotes + vote,
   };

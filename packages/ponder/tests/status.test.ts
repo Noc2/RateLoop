@@ -159,18 +159,18 @@ describe("tokenless public and keeper state", () => {
     );
   });
 
-  it("counts only scoring-eligible reveals and their revealed up-votes", () => {
+  it("counts every compensated reveal while limiting scoring tallies to eligible reveals", () => {
     expect(
-      revealTalliesAfterVote({ revealCount: 2, upVotes: 1 }, 1, true),
-    ).toEqual({ revealCount: 3, upVotes: 2 });
+      revealTalliesAfterVote({ compensatedRevealCount: 2, revealCount: 2, upVotes: 1 }, 1, true),
+    ).toEqual({ compensatedRevealCount: 3, revealCount: 3, upVotes: 2 });
     expect(
-      revealTalliesAfterVote({ revealCount: 3, upVotes: 2 }, 0, true),
-    ).toEqual({ revealCount: 4, upVotes: 2 });
+      revealTalliesAfterVote({ compensatedRevealCount: 3, revealCount: 3, upVotes: 2 }, 0, true),
+    ).toEqual({ compensatedRevealCount: 4, revealCount: 4, upVotes: 2 });
     expect(
-      revealTalliesAfterVote({ revealCount: 3, upVotes: 2 }, 1, false),
-    ).toEqual({ revealCount: 3, upVotes: 2 });
+      revealTalliesAfterVote({ compensatedRevealCount: 4, revealCount: 3, upVotes: 2 }, 1, false),
+    ).toEqual({ compensatedRevealCount: 5, revealCount: 3, upVotes: 2 });
     expect(() =>
-      revealTalliesAfterVote({ revealCount: 0, upVotes: 0 }, 2, false),
+      revealTalliesAfterVote({ compensatedRevealCount: 0, revealCount: 0, upVotes: 0 }, 2, false),
     ).toThrow("vote must be 0 or 1");
   });
 });

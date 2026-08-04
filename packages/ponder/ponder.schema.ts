@@ -36,6 +36,7 @@ export const tokenlessRound = onchainTable(
     admissionPolicyHash: t.hex().notNull(),
     commitCount: t.integer().notNull().default(0),
     revealCount: t.integer().notNull().default(0),
+    compensatedRevealCount: t.integer().notNull().default(0),
     frozenRevealCount: t.integer().notNull().default(0),
     aggregateCursor: t.integer().notNull().default(0),
     scoreCursor: t.integer().notNull().default(0),

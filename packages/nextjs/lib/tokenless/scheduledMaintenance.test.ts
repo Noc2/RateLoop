@@ -313,6 +313,34 @@ test("scheduled maintenance publishes each due round once and deduplicates a cro
   assert.deepEqual(published, ["operation_due_1"]);
 });
 
+test("settlement work remains due after evidence append and stops only after result publication", async () => {
+  await seedConfirmedExecution("operation_evidence_only");
+  await seedConfirmedExecution("operation_published");
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_workspaces (workspace_id, name, status, created_at, updated_at)
+          VALUES ('ws_scheduled_settlement', 'Scheduled settlement', 'active', ?, ?);
+          INSERT INTO tokenless_transparency_events
+          (event_id, operation_key, workspace_id, deployment_key, round_id, sequence, event_type,
+           evidence_hash, evidence_json, occurred_at, recorded_at)
+          VALUES ('event_scheduled_settlement', 'operation_evidence_only', 'ws_scheduled_settlement',
+                  'tokenless-v3:test', 42, 1, 'round.terminal', 'event-hash', '{}', ?, ?);
+          INSERT INTO tokenless_result_publications
+          (publication_id, operation_key, publication_version, verdict_status, evidence_root,
+           result_json, published_at, evaluation_hash)
+          VALUES ('publication_scheduled_settlement', 'operation_published', 1,
+                  'zero_commit_refunded', 'root', '{}', ?, 'evaluation-hash')`,
+    args: [NOW, NOW, NOW, NOW, NOW],
+  });
+
+  const seeded = await seedTokenlessScheduledWork(NOW);
+  assert.equal(seeded.settlements, 1);
+  const items = await dbClient.execute({
+    sql: `SELECT subject_key FROM tokenless_scheduled_work_items
+          WHERE kind = 'publish_finalized_round' ORDER BY subject_key`,
+  });
+  assert.deepEqual(items.rows, [{ subject_key: "operation_evidence_only" }]);
+});
+
 test("a failed maintenance bucket can be reclaimed and completed exactly once", async () => {
   const bucket = Math.floor(NOW.getTime() / (5 * 60_000));
   const idempotencyKey = `tokenless-maintenance:${bucket}`;

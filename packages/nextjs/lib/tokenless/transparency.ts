@@ -46,6 +46,11 @@ const WEBHOOK_DELIVERY_LEASE_MS = 60_000;
 const BPS_MAX = 10_000;
 const MAX_PONDER_COMMITS = 500;
 const FINALIZED_ROUND_STATE = 5;
+const TERMINAL_ROUND_STATUSES = {
+  6: "zero_commit_refunded",
+  7: "under_quorum_compensated",
+  8: "beacon_failure_compensated",
+} as const;
 const RBTS_SCORING_VERSION = 2;
 const RBTS_SCORING_SEED_DOMAIN = "rateloop-tokenless-rbts-v1";
 const UINT256_MODULUS = 1n << 256n;
@@ -92,6 +97,23 @@ export type IndexedFinalizedEvidence = {
     totalSquaredRbtsScoreBps2?: string;
     version: typeof RBTS_SCORING_VERSION;
   };
+  roundTerms: {
+    admissionPolicyHash: string;
+    commitDeadline: string;
+    contentId: string;
+    termsHash: string;
+  };
+  chain: { blockNumber: string; blockHash: string; transactionHash: string; timestamp: string };
+};
+
+export type IndexedTerminalEvidence = {
+  deploymentKey: string;
+  roundId: string;
+  verdictStatus: (typeof TERMINAL_ROUND_STATUSES)[keyof typeof TERMINAL_ROUND_STATUSES];
+  commitCount: number;
+  timelyRevealCount: number;
+  compensatedRevealCount: number;
+  economics: TokenlessResult["economics"];
   roundTerms: {
     admissionPolicyHash: string;
     commitDeadline: string;
@@ -150,7 +172,10 @@ function digest(value: string) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-async function requireCanonicalEvidenceFinality(evidence: IndexedFinalizedEvidence, signal?: AbortSignal) {
+async function requireCanonicalEvidenceFinality(
+  evidence: Pick<IndexedFinalizedEvidence, "chain" | "deploymentKey">,
+  signal?: AbortSignal,
+) {
   try {
     const config = loadTokenlessChainConfig();
     await assertCanonicalTokenlessEvidenceBlock({
@@ -1484,6 +1509,228 @@ export async function deriveFinalizedRoundEvidence(input: {
   return (await deriveFinalizedRoundEvidenceBundle(input)).evidence;
 }
 
+function validateTerminalEvidence(value: IndexedTerminalEvidence) {
+  if (
+    !UNSIGNED_INTEGER.test(value.roundId) ||
+    !value.deploymentKey ||
+    !Number.isSafeInteger(value.commitCount) ||
+    value.commitCount < 0 ||
+    !Number.isSafeInteger(value.timelyRevealCount) ||
+    value.timelyRevealCount < 0 ||
+    !Number.isSafeInteger(value.compensatedRevealCount) ||
+    value.compensatedRevealCount < value.timelyRevealCount ||
+    value.compensatedRevealCount > value.commitCount ||
+    !Object.values(TERMINAL_ROUND_STATUSES).includes(value.verdictStatus)
+  ) {
+    throw new TokenlessServiceError("Indexed terminal evidence is invalid.", 400, "invalid_round_evidence");
+  }
+  if (
+    !UNSIGNED_INTEGER.test(value.chain.blockNumber) ||
+    !BYTES32.test(value.chain.blockHash) ||
+    !BYTES32.test(value.chain.transactionHash) ||
+    !UNSIGNED_INTEGER.test(value.chain.timestamp) ||
+    !BYTES32.test(value.roundTerms.admissionPolicyHash) ||
+    !UNSIGNED_INTEGER.test(value.roundTerms.commitDeadline) ||
+    !BYTES32.test(value.roundTerms.contentId) ||
+    !BYTES32.test(value.roundTerms.termsHash)
+  ) {
+    throw new TokenlessServiceError("Terminal chain evidence is malformed.", 400, "invalid_round_evidence");
+  }
+  assertTokenlessSettlementAccounting(
+    value.economics,
+    value.verdictStatus === "zero_commit_refunded" ? "zero_commit_refunded" : "compensated",
+  );
+}
+
+export async function deriveTerminalRoundEvidence(input: {
+  operationKey: string;
+  fetchImpl?: typeof fetch;
+  ponderUrl?: string;
+  signal?: AbortSignal;
+}) {
+  const source = await dbClient.execute({
+    sql: `SELECT o.workspace_id, e.*, a.economics_json
+          FROM tokenless_ask_ownership o
+          JOIN tokenless_chain_executions e ON e.operation_key = o.operation_key
+          JOIN tokenless_agent_asks a ON a.operation_key = o.operation_key
+          WHERE o.operation_key = ? LIMIT 1`,
+    args: [input.operationKey],
+  });
+  const execution = source.rows[0] as Row | undefined;
+  if (!execution || !rowString(execution, "workspace_id") || !rowString(execution, "round_id")) {
+    throw new TokenlessServiceError("Ask chain execution was not found.", 404, "ask_not_found");
+  }
+  if (rowString(execution, "state") !== "confirmed") {
+    throw new TokenlessServiceError("Ask chain execution is not confirmed.", 409, "indexed_evidence_pending", true);
+  }
+  const terms = objectValue(JSON.parse(rowString(execution, "round_terms_json")!), "Frozen round terms") as Row;
+  const base = configuredPonderUrl(input.ponderUrl);
+  const roundId = rowString(execution, "round_id")!;
+  const roundUrl = ponderEndpoint(base, `/rounds/${encodeURIComponent(roundId)}`);
+  const commitsUrl = ponderEndpoint(base, `/rounds/${encodeURIComponent(roundId)}/commits`);
+  commitsUrl.searchParams.set("limit", String(MAX_PONDER_COMMITS));
+  const fetchImpl = input.fetchImpl ?? fetch;
+  const [rawDeployment, rawRound, rawCommits] = await Promise.all([
+    fetchPonderJson(fetchImpl, ponderEndpoint(base, "/deployment"), "Ponder deployment", input.signal),
+    fetchPonderJson(fetchImpl, roundUrl, "Indexed round", input.signal),
+    fetchPonderJson(fetchImpl, commitsUrl, "Indexed commits", input.signal),
+  ]);
+  const deployment = objectValue(rawDeployment, "Ponder deployment") as unknown as PonderDeployment;
+  const round = objectValue(rawRound, "Indexed round") as PonderRound;
+  if (!Array.isArray(rawCommits)) {
+    throw new TokenlessServiceError("Indexed commits are malformed.", 409, "indexed_evidence_invalid");
+  }
+  exactIndexedIdentity({ deployment, execution, round, terms });
+
+  const state = integerValue(round.state, "Indexed round state");
+  const verdictStatus = TERMINAL_ROUND_STATUSES[state as keyof typeof TERMINAL_ROUND_STATUSES];
+  if (!verdictStatus) {
+    throw new TokenlessServiceError("Indexed round is not terminal.", 409, "indexed_evidence_pending", true);
+  }
+  const commitCount = integerValue(round.commitCount, "Indexed commit count");
+  const timelyRevealCount = integerValue(round.revealCount, "Indexed timely reveal count");
+  const compensatedRevealCount = integerValue(round.compensatedRevealCount, "Indexed compensated reveal count");
+  const minimumReveals = integerValue(round.minimumReveals, "Indexed minimum reveals");
+  if (commitCount > MAX_PONDER_COMMITS || rawCommits.length !== commitCount) {
+    throw new TokenlessServiceError("Indexed commit projection is incomplete.", 409, "indexed_evidence_pending", true);
+  }
+  const commits = rawCommits.map((value, index) => objectValue(value, `Indexed commit ${index}`) as PonderCommit);
+  const revealedCount = commits.filter(commit => commit.revealed === true).length;
+  const scoringEligibleCount = commits.filter(
+    commit => commit.revealed === true && commit.scoringEligible === true,
+  ).length;
+  if (
+    revealedCount !== compensatedRevealCount ||
+    scoringEligibleCount !== timelyRevealCount ||
+    compensatedRevealCount > commitCount ||
+    timelyRevealCount > compensatedRevealCount
+  ) {
+    throw new TokenlessServiceError(
+      "Indexed terminal reveal counts are inconsistent.",
+      409,
+      "indexed_evidence_invalid",
+    );
+  }
+
+  const totalCompensation = BigInt(unsignedValue(round.totalCompensation, "Indexed total compensation"));
+  const attemptCompensation = BigInt(unsignedValue(round.attemptCompensation, "Indexed attempt compensation"));
+  const compensationPerRecipient = BigInt(
+    unsignedValue(round.compensationPerRecipient, "Indexed compensation per recipient"),
+  );
+  const claimDeadline = BigInt(unsignedValue(round.claimDeadline, "Indexed claim deadline"));
+  if (
+    (verdictStatus === "zero_commit_refunded" &&
+      (commitCount !== 0 ||
+        timelyRevealCount !== 0 ||
+        compensatedRevealCount !== 0 ||
+        compensationPerRecipient !== 0n ||
+        totalCompensation !== 0n ||
+        claimDeadline !== 0n)) ||
+    (verdictStatus === "under_quorum_compensated" &&
+      (commitCount < 1 ||
+        compensatedRevealCount < 1 ||
+        timelyRevealCount >= minimumReveals ||
+        compensationPerRecipient !== attemptCompensation ||
+        totalCompensation !== attemptCompensation * BigInt(compensatedRevealCount) ||
+        claimDeadline === 0n)) ||
+    (verdictStatus === "beacon_failure_compensated" &&
+      (commitCount < 1 ||
+        timelyRevealCount !== 0 ||
+        compensatedRevealCount !== 0 ||
+        compensationPerRecipient !== attemptCompensation ||
+        totalCompensation !== 0n ||
+        claimDeadline === 0n))
+  ) {
+    throw new TokenlessServiceError(
+      "Indexed terminal state is internally inconsistent.",
+      409,
+      "indexed_evidence_invalid",
+    );
+  }
+
+  const finalizedBlock = unsignedValue(round.finalizedBlock, "Terminal block");
+  const finalizedAt = unsignedValue(round.finalizedAt, "Terminal timestamp");
+  if (
+    BigInt(finalizedBlock) < BigInt(rowString(execution, "deployment_block")!) ||
+    BigInt(finalizedBlock) < BigInt(unsignedValue(round.createdBlock, "Created block"))
+  ) {
+    throw new TokenlessServiceError(
+      "Terminal evidence predates the pinned deployment.",
+      409,
+      "evidence_identity_mismatch",
+    );
+  }
+
+  const bountyAmount = BigInt(unsignedValue(round.bountyAmount, "Indexed bounty amount"));
+  const feeAmount = BigInt(unsignedValue(round.feeAmount, "Indexed fee amount"));
+  const attemptReserve = BigInt(unsignedValue(round.attemptReserve, "Indexed attempt reserve"));
+  const totalFundedAtomic = (bountyAmount + feeAmount + attemptReserve).toString();
+  if (totalFundedAtomic !== rowString(execution, "total_funded_atomic") || totalCompensation > attemptReserve) {
+    throw new TokenlessServiceError(
+      "Indexed funding does not match the pinned execution.",
+      409,
+      "round_terms_mismatch",
+    );
+  }
+  const reserveRefund = attemptReserve - totalCompensation;
+  const funderRefund = BigInt(unsignedValue(round.funderRefund, "Indexed funder refund"));
+  if (funderRefund !== bountyAmount + feeAmount + reserveRefund) {
+    throw new TokenlessServiceError("Indexed terminal refund does not conserve.", 409, "indexed_evidence_invalid");
+  }
+  const quoteEconomics = objectValue(JSON.parse(rowString(execution, "economics_json")!), "Stored economics");
+  const fee = objectValue(quoteEconomics.fee, "Stored fee economics");
+  const evidence: IndexedTerminalEvidence = {
+    deploymentKey: rowString(execution, "deployment_key")!,
+    roundId,
+    verdictStatus,
+    commitCount,
+    timelyRevealCount,
+    compensatedRevealCount,
+    economics: {
+      asset: "USDC",
+      decimals: 6,
+      bounty: { fundedAtomic: bountyAmount.toString(), paidAtomic: "0", refundedAtomic: bountyAmount.toString() },
+      fee: {
+        bps: integerValue(fee.bps, "Stored fee bps"),
+        fundedAtomic: feeAmount.toString(),
+        paidAtomic: "0",
+        refundedAtomic: feeAmount.toString(),
+      },
+      attemptReserve: {
+        fundedAtomic: attemptReserve.toString(),
+        compensatedAtomic: totalCompensation.toString(),
+        refundedAtomic: reserveRefund.toString(),
+      },
+      refund: {
+        bountyAtomic: bountyAmount.toString(),
+        feeAtomic: feeAmount.toString(),
+        attemptReserveAtomic: reserveRefund.toString(),
+        totalAtomic: funderRefund.toString(),
+      },
+      compensation: {
+        perAcceptedRevealCapAtomic: attemptCompensation.toString(),
+        recipientCount: compensatedRevealCount,
+        totalAtomic: totalCompensation.toString(),
+      },
+      totalFundedAtomic,
+    },
+    roundTerms: {
+      admissionPolicyHash: exactBytes32(round.admissionPolicyHash, "Indexed admission policy hash"),
+      commitDeadline: unsignedValue(round.commitDeadline, "Indexed commit deadline"),
+      contentId: exactBytes32(round.contentId, "Indexed content id"),
+      termsHash: exactBytes32(round.termsHash, "Indexed terms hash"),
+    },
+    chain: {
+      blockNumber: finalizedBlock,
+      blockHash: exactBytes32(round.finalizedBlockHash, "Terminal block hash"),
+      transactionHash: exactBytes32(round.finalizedTxHash, "Terminal transaction hash"),
+      timestamp: finalizedAt,
+    },
+  };
+  validateTerminalEvidence(evidence);
+  return evidence;
+}
+
 function immutableFinalizedEvidenceIdentity(evidence: IndexedFinalizedEvidence) {
   return {
     deploymentKey: evidence.deploymentKey,
@@ -1607,6 +1854,77 @@ export async function appendFinalizedRoundEvidence(input: {
   return { eventId, evidenceHash };
 }
 
+export async function appendTerminalRoundEvidence(input: {
+  operationKey: string;
+  fetchImpl?: typeof fetch;
+  ponderUrl?: string;
+  signal?: AbortSignal;
+}) {
+  const evidence = await deriveTerminalRoundEvidence(input);
+  await requireCanonicalEvidenceFinality(evidence, input.signal);
+  if (
+    !UNSIGNED_INTEGER.test(evidence.chain.timestamp) ||
+    BigInt(evidence.chain.timestamp) > BigInt(Math.floor(Date.now() / 1_000) + 300)
+  ) {
+    throw new TokenlessServiceError("Terminal timestamp is invalid.", 409, "indexed_evidence_invalid");
+  }
+  const ownership = await dbClient.execute({
+    sql: "SELECT workspace_id FROM tokenless_ask_ownership WHERE operation_key = ? LIMIT 1",
+    args: [input.operationKey],
+  });
+  const workspaceId = rowString(ownership.rows[0] as Row | undefined, "workspace_id");
+  if (!workspaceId) throw new TokenlessServiceError("Ask chain execution was not found.", 404, "ask_not_found");
+
+  const evidenceJson = stableTransparencyJson(evidence);
+  const evidenceHash = digest(`round.terminal:${evidenceJson}`);
+  const eventId = `tpe_${digest(`${input.operationKey}:${evidenceHash}`).slice(0, 32)}`;
+  const existing = await dbClient.execute({
+    sql: `SELECT event_id, evidence_hash, evidence_json FROM tokenless_transparency_events
+          WHERE operation_key = ? AND event_type = 'round.terminal' LIMIT 1`,
+    args: [input.operationKey],
+  });
+  const existingRow = existing.rows[0] as Row | undefined;
+  if (existingRow) {
+    if (
+      rowString(existingRow, "evidence_hash") !== evidenceHash ||
+      rowString(existingRow, "evidence_json") !== evidenceJson
+    ) {
+      throw new TokenlessServiceError("Terminal evidence is immutable for this ask.", 409, "evidence_conflict");
+    }
+    return { eventId: rowString(existingRow, "event_id")!, evidenceHash };
+  }
+  const sequenceResult = await dbClient.execute({
+    sql: "SELECT COALESCE(MAX(sequence), 0) + 1 AS sequence FROM tokenless_transparency_events WHERE operation_key = ?",
+    args: [input.operationKey],
+  });
+  const sequence = Number(rowString(sequenceResult.rows[0] as Row | undefined, "sequence") ?? "1");
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_transparency_events
+          (event_id, operation_key, workspace_id, deployment_key, round_id, sequence, event_type,
+           evidence_hash, evidence_json, occurred_at, recorded_at)
+          VALUES (?, ?, ?, ?, ?, ?, 'round.terminal', ?, ?, ?, ?)
+          ON CONFLICT (operation_key, evidence_hash) DO NOTHING`,
+    args: [
+      eventId,
+      input.operationKey,
+      workspaceId,
+      evidence.deploymentKey,
+      evidence.roundId,
+      sequence,
+      evidenceHash,
+      evidenceJson,
+      new Date(Number(evidence.chain.timestamp) * 1_000),
+      new Date(),
+    ],
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_asks SET status = 'submitted', verdict_status = 'pending', updated_at = ?
+          WHERE operation_key = ? AND result_json IS NULL`,
+    args: [new Date(), input.operationKey],
+  });
+  return { eventId, evidenceHash };
+}
+
 async function appendPostRoundIntegrityInput(input: {
   operationKey: string;
   evidenceHash: string;
@@ -1682,6 +2000,131 @@ export function wilsonIntervalBps(successes: number, sampleSize: number) {
     lower: Math.max(0, Math.floor((center - margin) * BPS_MAX)),
     upper: Math.min(BPS_MAX, Math.ceil((center + margin) * BPS_MAX)),
   };
+}
+
+export async function publishTerminalRoundResult(input: {
+  operationKey: string;
+  appOrigin: string;
+  now?: Date;
+  signal?: AbortSignal;
+}) {
+  throwIfMaintenanceCancelled(input.signal);
+  const eventResult = await dbClient.execute({
+    sql: `SELECT evidence_json, evidence_hash FROM tokenless_transparency_events
+          WHERE operation_key = ? AND event_type = 'round.terminal' ORDER BY sequence ASC`,
+    args: [input.operationKey],
+  });
+  if (eventResult.rows.length !== 1) {
+    throw new TokenlessServiceError("Terminal round evidence is not indexed.", 409, "evidence_pending");
+  }
+  const event = eventResult.rows[0] as Row;
+  const evidence = JSON.parse(rowString(event, "evidence_json")!) as IndexedTerminalEvidence;
+  validateTerminalEvidence(evidence);
+  const root = evidenceRoot([rowString(event, "evidence_hash")!]);
+  const evaluationHash = `sha256:${digest(`terminal:${stableTransparencyJson(evidence)}`)}`;
+  const publication = await dbClient.execute({
+    sql: `SELECT publication_id, verdict_status, evidence_root, evaluation_hash, result_json
+          FROM tokenless_result_publications
+          WHERE operation_key = ? AND publication_version = 1 LIMIT 1`,
+    args: [input.operationKey],
+  });
+  const existingPublication = publication.rows[0] as Row | undefined;
+  if (existingPublication) {
+    const result = parseTokenlessResult(JSON.parse(rowString(existingPublication, "result_json")!));
+    if (
+      rowString(existingPublication, "verdict_status") !== evidence.verdictStatus ||
+      rowString(existingPublication, "evidence_root") !== root ||
+      rowString(existingPublication, "evaluation_hash") !== evaluationHash ||
+      result.verdictStatus !== evidence.verdictStatus ||
+      result.terminal !== true
+    ) {
+      throw new TokenlessServiceError("Published terminal evidence is immutable.", 409, "publication_conflict");
+    }
+    return {
+      evidenceRoot: root,
+      publicationId: rowString(existingPublication, "publication_id")!,
+      result,
+    };
+  }
+
+  const askResult = await dbClient.execute({
+    sql: `SELECT q.request_json, q.response_json
+          FROM tokenless_agent_asks a JOIN tokenless_agent_quotes q ON q.quote_id = a.quote_id
+          WHERE a.operation_key = ? LIMIT 1`,
+    args: [input.operationKey],
+  });
+  const ask = askResult.rows[0] as Row | undefined;
+  if (!ask) throw new TokenlessServiceError("Ask not found.", 404, "ask_not_found");
+  const quote = JSON.parse(rowString(ask, "response_json")!) as Row;
+  const audience = quote.audience as Row;
+  const commitDeadlineMilliseconds = Number(BigInt(evidence.roundTerms.commitDeadline) * 1_000n);
+  const commitDeadline = new Date(commitDeadlineMilliseconds);
+  if (!Number.isSafeInteger(commitDeadlineMilliseconds) || !Number.isFinite(commitDeadline.getTime())) {
+    throw new TokenlessServiceError("Frozen commit deadline is invalid.", 409, "invalid_round_evidence");
+  }
+  const feedback = await listAuthorizedTerminalPublicFeedback({
+    operationKey: input.operationKey,
+    reviewerSource: audience.source,
+    terminal: true,
+  });
+  throwIfMaintenanceCancelled(input.signal);
+  const now = input.now ?? new Date();
+  const result = parseTokenlessResult({
+    schemaVersion: TOKENLESS_SCHEMA_VERSION,
+    operationKey: input.operationKey,
+    roundId: evidence.roundId,
+    verdictStatus: evidence.verdictStatus,
+    terminal: true,
+    responseWindowSeconds: quote.responseWindowSeconds,
+    commitDeadline: commitDeadline.toISOString(),
+    requestProfile: quote.requestProfile ?? null,
+    reviewEconomics: quote.reviewEconomics ?? null,
+    economics: evidence.economics,
+    audience: {
+      admissionPolicyHash: audience.admissionPolicyHash,
+      label: audience.label,
+      participantCount: evidence.compensatedRevealCount,
+      source: audience.source,
+    },
+    verdict: null,
+    feedback,
+    methodologyUrl: `${input.appOrigin.replace(/\/$/, "")}/docs/evidence#commissioned-paid-panels`,
+    updatedAt: now.toISOString(),
+  });
+  const publicationId = `pub_${digest(`${input.operationKey}:${root}:${evidence.verdictStatus}`).slice(0, 32)}`;
+  await requireCanonicalEvidenceFinality(evidence, input.signal);
+  throwIfMaintenanceCancelled(input.signal);
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_result_publications
+          (publication_id, operation_key, publication_version, verdict_status, evidence_root,
+           result_json, published_at, evaluation_hash)
+          VALUES (?, ?, 1, ?, ?, ?, ?, ?)
+          ON CONFLICT (operation_key, publication_version) DO NOTHING`,
+    args: [
+      publicationId,
+      input.operationKey,
+      evidence.verdictStatus,
+      root,
+      JSON.stringify(result),
+      now,
+      evaluationHash,
+    ],
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_asks
+          SET status = 'submitted', verdict_status = ?, result_json = ?, updated_at = ?
+          WHERE operation_key = ?`,
+    args: [evidence.verdictStatus, JSON.stringify(result), now, input.operationKey],
+  });
+  await enqueuePublicationWebhooks({
+    publicationId,
+    operationKey: input.operationKey,
+    result,
+    appOrigin: input.appOrigin,
+    now,
+    signal: input.signal,
+  });
+  return { evidenceRoot: root, publicationId, result };
 }
 
 export async function reviewAndPublishResult(input: {
@@ -1885,6 +2328,22 @@ export async function reviewAndPublishResult(input: {
     signal: input.signal,
   });
   return { evidenceRoot: root, publicationId, reasonCodes: evaluation.reasonCodes, evaluation, result };
+}
+
+export async function appendAndPublishSettledRound(input: {
+  operationKey: string;
+  appOrigin: string;
+  now?: Date;
+  signal?: AbortSignal;
+}) {
+  try {
+    await appendFinalizedRoundEvidence({ operationKey: input.operationKey, signal: input.signal });
+    await reviewAndPublishResult(input);
+  } catch (error) {
+    if (!(error instanceof TokenlessServiceError) || error.code !== "indexed_evidence_pending") throw error;
+    await appendTerminalRoundEvidence({ operationKey: input.operationKey, signal: input.signal });
+    await publishTerminalRoundResult(input);
+  }
 }
 
 async function enqueuePublicationWebhooks(input: {

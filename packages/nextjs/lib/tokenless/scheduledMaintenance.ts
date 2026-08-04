@@ -57,11 +57,7 @@ import {
 import { type TokenlessScheduledWorkKind, tokenlessScheduledWorkItemId } from "~~/lib/tokenless/scheduledWorkItems";
 import { TokenlessServiceError, sweepExpiredTokenlessQuotes } from "~~/lib/tokenless/server";
 import { processSurpriseBountyPayments } from "~~/lib/tokenless/surpriseBountyService";
-import {
-  appendFinalizedRoundEvidence,
-  deliverPendingWebhooks,
-  reviewAndPublishResult,
-} from "~~/lib/tokenless/transparency";
+import { appendAndPublishSettledRound, deliverPendingWebhooks } from "~~/lib/tokenless/transparency";
 
 type Row = Record<string, unknown>;
 type WorkKind = TokenlessScheduledWorkKind;
@@ -210,9 +206,9 @@ export async function seedTokenlessScheduledWork(now = new Date(), scanLimit = 1
     dbClient.execute({
       sql: `SELECT e.operation_key
             FROM tokenless_chain_executions e
-            LEFT JOIN tokenless_transparency_events t
-              ON t.operation_key = e.operation_key AND t.event_type = 'round.finalized'
-            WHERE e.state = 'confirmed' AND e.round_id IS NOT NULL AND t.event_id IS NULL
+            LEFT JOIN tokenless_result_publications p
+              ON p.operation_key = e.operation_key AND p.publication_version = 1
+            WHERE e.state = 'confirmed' AND e.round_id IS NOT NULL AND p.publication_id IS NULL
             ORDER BY e.updated_at ASC LIMIT ?`,
       args: [limit],
     }),
@@ -498,8 +494,7 @@ const defaultProcessors: MaintenanceProcessors = {
   preparePublicNetworkAudience: preparePublicNetworkAudienceForBinding,
   cleanupPublicNetworkFoundation: abandonStalePublicNetworkFoundation,
   async publishFinalizedRound({ operationKey, appOrigin, now, signal }) {
-    await appendFinalizedRoundEvidence({ operationKey, signal });
-    await reviewAndPublishResult({ operationKey, appOrigin, now, signal });
+    await appendAndPublishSettledRound({ operationKey, appOrigin, now, signal });
   },
   async recoverChainExecution({ operationKey, signal }) {
     throwIfMaintenanceCancelled(signal);

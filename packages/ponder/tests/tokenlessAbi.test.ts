@@ -153,6 +153,7 @@ describe("tokenless panel indexing ABI", () => {
     expect(tokenlessRound.finalizedBlock.columnType).toBe("PgEvmBigint");
     expect(tokenlessRound.finalizedBlockHash.columnType).toBe("PgHex");
     expect(tokenlessRound.finalizedTxHash.columnType).toBe("PgHex");
+    expect(tokenlessRound.compensatedRevealCount.columnType).toBe("PgInteger");
     expect(tokenlessRound.scoringSeed.columnType).toBe("PgHex");
     expect(tokenlessRound.entropy.columnType).toBe("PgHex");
     expect(tokenlessRound.totalFinalizedLiability.columnType).toBe(

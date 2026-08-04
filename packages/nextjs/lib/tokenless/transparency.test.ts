@@ -15,11 +15,14 @@ import { tokenlessCommitKey } from "~~/lib/tokenless/rater/settlementRecovery";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import {
   appendFinalizedRoundEvidence,
+  appendTerminalRoundEvidence,
   assertPublicWebhookDestination,
   createWorkspaceWebhook,
   deliverPendingWebhooks,
+  deriveTerminalRoundEvidence,
   inspectWorkspaceTransparency,
   listWorkspaceWebhooks,
+  publishTerminalRoundResult,
   recomputeRbtsSettlement,
   reviewAndPublishResult,
   stableTransparencyJson,
@@ -211,6 +214,7 @@ function indexedRound(overrides: Record<string, unknown> = {}) {
     claimGracePeriod: roundTerms.claimGracePeriod,
     commitCount: 5,
     revealCount: 5,
+    compensatedRevealCount: 5,
     frozenRevealCount: 5,
     aggregateCursor: 5,
     scoreCursor: 5,
@@ -245,6 +249,7 @@ function indexedCommits(responseHash?: string) {
       rbtsScoreBps: score.rbtsScoreBps,
       committedAt: String(Math.floor(NOW.getTime() / 1_000) + index * 10),
       revealed: true,
+      scoringEligible: true,
     };
   });
 }
@@ -659,6 +664,142 @@ test("finalized evidence rejects malformed Ponder provenance and altered frozen 
       }),
     /provenance hash is invalid/,
   );
+});
+
+test("all incomplete terminal states publish conserved results instead of polling forever", async () => {
+  const fullRefund = "46875000";
+  const unrevealedCommits = indexedCommits().map(commit => ({
+    ...commit,
+    revealed: false,
+    scoringEligible: false,
+  }));
+  const zeroCommit = await deriveTerminalRoundEvidence({
+    operationKey: OPERATION,
+    fetchImpl: ponderFetch({
+      commits: [],
+      round: indexedRound({
+        state: 6,
+        commitCount: 0,
+        revealCount: 0,
+        compensatedRevealCount: 0,
+        compensationPerRecipient: "0",
+        totalCompensation: "0",
+        funderRefund: fullRefund,
+        claimDeadline: "0",
+      }),
+    }),
+    ponderUrl: "https://ponder.example.test",
+  });
+  assert.equal(zeroCommit.verdictStatus, "zero_commit_refunded");
+  assert.equal(zeroCommit.economics.refund.totalAtomic, fullRefund);
+
+  const beaconFailure = await deriveTerminalRoundEvidence({
+    operationKey: OPERATION,
+    fetchImpl: ponderFetch({
+      commits: unrevealedCommits,
+      round: indexedRound({
+        state: 8,
+        revealCount: 0,
+        compensatedRevealCount: 0,
+        compensationPerRecipient: "4000000",
+        totalCompensation: "0",
+        funderRefund: fullRefund,
+        claimDeadline: "1784484000",
+      }),
+    }),
+    ponderUrl: "https://ponder.example.test",
+  });
+  assert.equal(beaconFailure.verdictStatus, "beacon_failure_compensated");
+  assert.equal(beaconFailure.economics.compensation.recipientCount, 0);
+
+  const underQuorumCommits = indexedCommits().map((commit, index) => ({
+    ...commit,
+    revealed: index < 3,
+    scoringEligible: index < 2,
+  }));
+  const underQuorumRound = indexedRound({
+    state: 7,
+    revealCount: 2,
+    compensatedRevealCount: 3,
+    compensationPerRecipient: "4000000",
+    totalCompensation: "12000000",
+    funderRefund: "34875000",
+    claimDeadline: "1784484000",
+  });
+  const underQuorum = await deriveTerminalRoundEvidence({
+    operationKey: OPERATION,
+    fetchImpl: ponderFetch({ commits: underQuorumCommits, round: underQuorumRound }),
+    ponderUrl: "https://ponder.example.test",
+  });
+  assert.equal(underQuorum.verdictStatus, "under_quorum_compensated");
+  assert.equal(underQuorum.timelyRevealCount, 2);
+  assert.equal(underQuorum.compensatedRevealCount, 3);
+  assert.equal(underQuorum.economics.compensation.totalAtomic, "12000000");
+  assert.equal(underQuorum.economics.refund.totalAtomic, "34875000");
+
+  await assert.rejects(
+    () =>
+      deriveTerminalRoundEvidence({
+        operationKey: OPERATION,
+        fetchImpl: ponderFetch({
+          commits: underQuorumCommits,
+          round: { ...underQuorumRound, totalCompensation: "8000000" },
+        }),
+        ponderUrl: "https://ponder.example.test",
+      }),
+    /internally inconsistent/,
+  );
+
+  const appended = await appendTerminalRoundEvidence({
+    operationKey: OPERATION,
+    fetchImpl: ponderFetch({ commits: underQuorumCommits, round: underQuorumRound }),
+    ponderUrl: "https://ponder.example.test",
+  });
+  const replayedAppend = await appendTerminalRoundEvidence({
+    operationKey: OPERATION,
+    fetchImpl: ponderFetch({ commits: underQuorumCommits, round: underQuorumRound }),
+    ponderUrl: "https://ponder.example.test",
+  });
+  assert.equal(replayedAppend.eventId, appended.eventId);
+
+  canonicalFinalizedBlockHash = `0x${"bc".repeat(32)}`;
+  await assert.rejects(
+    () =>
+      publishTerminalRoundResult({
+        operationKey: OPERATION,
+        appOrigin: "https://app.example.test",
+        now: NOW,
+      }),
+    (error: unknown) =>
+      error instanceof TokenlessServiceError && error.code === "indexed_evidence_pending" && error.retryable,
+  );
+  canonicalFinalizedBlockHash = FINALIZED_BLOCK_HASH;
+
+  const published = await publishTerminalRoundResult({
+    operationKey: OPERATION,
+    appOrigin: "https://app.example.test",
+    now: NOW,
+  });
+  const replayedPublication = await publishTerminalRoundResult({
+    operationKey: OPERATION,
+    appOrigin: "https://app.example.test",
+    now: new Date(NOW.getTime() + 1_000),
+  });
+  assert.equal(published.result.verdictStatus, "under_quorum_compensated");
+  assert.equal(published.result.audience.participantCount, 3);
+  assert.equal(published.result.verdict, null);
+  assert.equal(replayedPublication.publicationId, published.publicationId);
+  assert.equal(replayedPublication.evidenceRoot, published.evidenceRoot);
+  const stored = await dbClient.execute({
+    sql: `SELECT a.verdict_status, a.result_json, t.event_type
+          FROM tokenless_agent_asks a
+          JOIN tokenless_transparency_events t ON t.operation_key = a.operation_key
+          WHERE a.operation_key = ?`,
+    args: [OPERATION],
+  });
+  assert.equal(stored.rows[0]?.verdict_status, "under_quorum_compensated");
+  assert.equal(stored.rows[0]?.event_type, "round.terminal");
+  assert.equal(JSON.parse(String(stored.rows[0]?.result_json)).terminal, true);
 });
 
 test("evidence waits for the configured confirmation depth, then publishes idempotently", async () => {
