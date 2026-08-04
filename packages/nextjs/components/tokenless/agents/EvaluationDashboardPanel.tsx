@@ -25,7 +25,7 @@ import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { Link } from "~~/i18n/navigation";
 import type { AssuranceMetricsSnapshot } from "~~/lib/tokenless/assuranceMetrics";
-import type { DeciderDecisionTrend, EvaluationDashboard, EvaluationRun } from "~~/lib/tokenless/evaluationDashboard";
+import type { EvaluationDashboard, EvaluationRun } from "~~/lib/tokenless/evaluationDashboard";
 import { readJson } from "~~/lib/tokenless/http";
 import type { OversightRunCaseView } from "~~/lib/tokenless/oversightCaseView";
 
@@ -223,27 +223,13 @@ function DecisionSignals({ run }: { run: EvaluationRun }) {
   );
 }
 
-function deciderTrendLabel(trend: DeciderDecisionTrend | undefined, copy: Translate) {
-  if (!trend) return null;
-  const parts: string[] = [];
-  if (trend.clientDecisions.total > 0) {
-    parts.push(copy("goTrend", { goCount: trend.clientDecisions.goCount, count: trend.clientDecisions.total }));
-  }
-  if (trend.overrides.total > 0) {
-    parts.push(copy("acceptedTrend", { acceptedCount: trend.overrides.acceptedCount, count: trend.overrides.total }));
-  }
-  return parts.length > 0 ? `${parts.join(" · ")}.` : null;
-}
-
 function ClientDecisionButtons({
   run,
   workspaceId,
-  trend,
   onDecided,
 }: {
   run: EvaluationRun;
   workspaceId: string;
-  trend?: DeciderDecisionTrend;
   onDecided: (decision: NonNullable<EvaluationRun["clientDecision"]>) => void;
 }) {
   const ui = useAgentTranslations("ui");
@@ -253,7 +239,6 @@ function ClientDecisionButtons({
   const [busy, setBusy] = useState(false);
   const { capture, clear, fieldErrors, formError } = useFormErrors();
   const explanationMissing = run.explanationRequired && note.trim().length < 10;
-  const trendLabel = deciderTrendLabel(trend, copy);
 
   async function submit(decision: NonNullable<EvaluationRun["clientDecision"]>) {
     setBusy(true);
@@ -280,7 +265,6 @@ function ClientDecisionButtons({
 
   return (
     <div className="mt-3">
-      {trendLabel ? <p className="mt-1 text-xs text-base-content/55">{trendLabel}</p> : null}
       {run.explanationRequired ? (
         <div className="mt-2 rounded-lg border border-warning/20 bg-warning/[0.06] p-3">
           <p className="text-xs font-semibold text-warning/90">
@@ -328,15 +312,7 @@ function ClientDecisionButtons({
 
 const OVERRIDE_OUTCOMES = ["accepted", "disregarded", "overridden", "reversed"] as const;
 
-function OverrideRecordForm({
-  run,
-  workspaceId,
-  trend,
-}: {
-  run: EvaluationRun;
-  workspaceId: string;
-  trend?: DeciderDecisionTrend;
-}) {
+function OverrideRecordForm({ run, workspaceId }: { run: EvaluationRun; workspaceId: string }) {
   const ui = useAgentTranslations("ui");
   const copy = useAgentTranslations("evidencePanels.evaluation");
   const errors = useAgentTranslations("errors");
@@ -376,7 +352,6 @@ function OverrideRecordForm({
     }
   }
 
-  const trendLabel = deciderTrendLabel(trend, copy);
   const reasonsTooShort = reasons.trim().length < 10;
   return (
     <form className="mt-4 border-t border-base-content/10 pt-4" onSubmit={event => event.preventDefault()}>
@@ -386,7 +361,6 @@ function OverrideRecordForm({
       <p className="mt-1 text-xs text-base-content/55">
         <AgentText id="translated110" />
       </p>
-      {trendLabel ? <p className="mt-1 text-xs text-base-content/55">{trendLabel}</p> : null}
       <DecisionSignals run={run} />
       {recorded ? (
         <p className="mt-2 text-xs text-success" role="status">
@@ -596,13 +570,11 @@ function OversightCaseDetail({ run, workspaceId }: { run: EvaluationRun; workspa
 function RunCard({
   run,
   workspaceId,
-  trend,
   evidenceHref,
   onDecided,
 }: {
   run: EvaluationRun;
   workspaceId: string;
-  trend?: DeciderDecisionTrend;
   evidenceHref: string | null;
   onDecided: (runId: string, decision: NonNullable<EvaluationRun["clientDecision"]>) => void;
 }) {
@@ -663,7 +635,6 @@ function RunCard({
               <ClientDecisionButtons
                 run={run}
                 workspaceId={workspaceId}
-                trend={trend}
                 onDecided={clientDecision => onDecided(run.runId, clientDecision)}
               />
             </>
@@ -812,7 +783,7 @@ function RunCard({
           </button>
           {overrideOpen ? (
             <div id={`override-record-${run.runId}`}>
-              <OverrideRecordForm run={run} workspaceId={workspaceId} trend={trend} />
+              <OverrideRecordForm run={run} workspaceId={workspaceId} />
             </div>
           ) : null}
         </div>
@@ -1161,7 +1132,6 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
                   key={run.runId}
                   run={run}
                   workspaceId={workspaceId}
-                  trend={dashboard.deciderTrend}
                   evidenceHref={
                     run.evidencePacketAvailable ? evidenceHrefForRun(workspaceId, run.runId, currentSearch) : null
                   }

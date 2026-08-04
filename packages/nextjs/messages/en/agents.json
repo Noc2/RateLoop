@@ -1498,8 +1498,6 @@
       "reviewerDissent": "Reviewer dissent",
       "calibrationFailureRate": "Calibration failure rate",
       "quorumCaseUnanimity": "Quorum-case unanimity",
-      "goTrend": "Recent decisions: {goCount}/{count} go",
-      "acceptedTrend": "Recorded outcomes: {acceptedCount}/{count} accepted",
       "signOffCharactersRemaining": "At least 10 characters are required before you can sign off — {count} to go.",
       "outcomeCharactersRemaining": "At least 10 characters are required before you can record an outcome — {count} to go.",
       "caseDetails": "Reviewer responses",

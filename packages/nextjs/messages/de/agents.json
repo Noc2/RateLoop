@@ -1503,8 +1503,6 @@
       "reviewerDissent": "Abweichung der Prüfenden",
       "calibrationFailureRate": "Kalibrierungsfehlerrate",
       "quorumCaseUnanimity": "Einstimmigkeit bei Quorum-Fällen",
-      "goTrend": "Letzte Entscheidungen: {goCount}/{count} weiter",
-      "acceptedTrend": "Erfasste Ergebnisse: {acceptedCount}/{count} akzeptiert",
       "signOffCharactersRemaining": "Vor der Freigabe sind mindestens 10 Zeichen erforderlich — noch {count}.",
       "outcomeCharactersRemaining": "Vor dem Erfassen eines Ergebnisses sind mindestens 10 Zeichen erforderlich — noch {count}.",
       "caseDetails": "Antworten der Prüfenden",

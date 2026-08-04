@@ -80,10 +80,7 @@ test("evaluation dashboard leads with results and progressively discloses detail
   assert.match(source, /Record outcome/);
   assert.match(source, /aria-expanded=\{overrideOpen\}/);
   assert.match(source, /overrideOpen \? \(/);
-  assert.doesNotMatch(
-    source,
-    /run\.status === "completed" \? <OverrideRecordForm run=\{run\} workspaceId=\{workspaceId\} trend=\{trend\} \/>/,
-  );
+  assert.doesNotMatch(source, /run\.status === "completed" \? <OverrideRecordForm/);
 });
 
 test("completed runs expose an oversight case detail that respects lane boundaries", () => {
@@ -160,11 +157,9 @@ test("anti-rubber-stamping: available signals sit above every decision control a
   assert.doesNotMatch(source, /even for go/);
   assert.match(source, /explanationMissing = run\.explanationRequired && note\.trim\(\)\.length < 10/);
   assert.match(source, /disabled=\{busy \|\| explanationMissing\}/);
-  // The decider's own trend shows beside both forms.
-  assert.match(source, /deciderTrendLabel/);
-  assert.match(source, /Recent decisions: \{goCount\}\/\{count\} go/);
-  assert.match(source, /Recorded outcomes: \{acceptedCount\}\/\{count\} accepted/);
-  assert.match(source, /trend=\{dashboard\.deciderTrend\}/);
+  // Prior choices never anchor the active decision or override forms.
+  assert.doesNotMatch(source, /deciderTrendLabel|Recent decisions|Recorded outcomes/);
+  assert.doesNotMatch(source, /trend=\{dashboard\.deciderTrend\}/);
   // Nothing anywhere is preselected.
   assert.doesNotMatch(source, /defaultChecked|checked=\{true\}|aria-pressed=\{true\}/);
   assert.doesNotMatch(source, /defaultValue=\{?"(go|revise|stop|accepted|disregarded|overridden|reversed)/);
