@@ -11,6 +11,7 @@ import {
 import { dispatchWorkspaceMcp } from "~~/lib/mcp/workspaceProtocol";
 import { authenticateAgentMcpPrincipal } from "~~/lib/tokenless/agentIntegrations";
 import { AGENT_OAUTH_SAFE_SCOPES } from "~~/lib/tokenless/agentOAuth";
+import { reportAgentProtocolFailure } from "~~/lib/tokenless/agentProtocolObservability";
 import { BoundedRequestBodyError, readBoundedJsonRequestBody } from "~~/lib/tokenless/boundedRequestBody";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -168,6 +169,12 @@ export async function POST(request: NextRequest) {
     return response;
   } catch (error) {
     if (error instanceof TokenlessServiceError) {
+      reportAgentProtocolFailure({
+        endpoint: "workspace_mcp",
+        method: "POST",
+        status: error.status,
+        errorCode: error.code,
+      });
       const response = rpcError(
         error.status,
         error.message,
@@ -177,7 +184,13 @@ export async function POST(request: NextRequest) {
       for (const [key, value] of cors) response.headers.set(key, value);
       return error.status === 401 ? applyOAuthChallenge(response, request) : response;
     }
-    console.error("[workspace-mcp] unexpected POST error", error);
+    reportAgentProtocolFailure({
+      endpoint: "workspace_mcp",
+      method: "POST",
+      status: 500,
+      errorCode: "internal_error",
+      error,
+    });
     const response = rpcError(500, "RateLoop workspace MCP request failed.", "internal_error", -32603);
     for (const [key, value] of cors) response.headers.set(key, value);
     return response;
@@ -196,7 +209,22 @@ export async function OPTIONS(request: NextRequest) {
     headers.set("X-Content-Type-Options", "nosniff");
     return new Response(null, { headers, status: 204 });
   } catch (error) {
-    if (error instanceof TokenlessServiceError) return rpcError(error.status, error.message, error.code);
+    if (error instanceof TokenlessServiceError) {
+      reportAgentProtocolFailure({
+        endpoint: "workspace_mcp",
+        method: "OPTIONS",
+        status: error.status,
+        errorCode: error.code,
+      });
+      return rpcError(error.status, error.message, error.code);
+    }
+    reportAgentProtocolFailure({
+      endpoint: "workspace_mcp",
+      method: "OPTIONS",
+      status: 500,
+      errorCode: "internal_error",
+      error,
+    });
     return rpcError(500, "RateLoop workspace MCP request failed.", "internal_error", -32603);
   }
 }
@@ -241,10 +269,23 @@ export async function GET(request: NextRequest) {
     return new Response(payload, { headers });
   } catch (error) {
     if (error instanceof TokenlessServiceError) {
+      reportAgentProtocolFailure({
+        endpoint: "workspace_mcp",
+        method: "GET",
+        status: error.status,
+        errorCode: error.code,
+      });
       const response = rpcError(error.status, error.message, error.code);
       for (const [key, value] of cors) response.headers.set(key, value);
       return error.status === 401 ? applyOAuthChallenge(response, request) : response;
     }
+    reportAgentProtocolFailure({
+      endpoint: "workspace_mcp",
+      method: "GET",
+      status: 500,
+      errorCode: "internal_error",
+      error,
+    });
     const response = rpcError(500, "RateLoop workspace MCP stream failed.", "internal_error", -32603);
     for (const [key, value] of cors) response.headers.set(key, value);
     return response;
@@ -274,10 +315,23 @@ export async function DELETE(request: NextRequest) {
     return new Response(null, { headers, status: 204 });
   } catch (error) {
     if (error instanceof TokenlessServiceError) {
+      reportAgentProtocolFailure({
+        endpoint: "workspace_mcp",
+        method: "DELETE",
+        status: error.status,
+        errorCode: error.code,
+      });
       const response = rpcError(error.status, error.message, error.code);
       for (const [key, value] of cors) response.headers.set(key, value);
       return error.status === 401 ? applyOAuthChallenge(response, request) : response;
     }
+    reportAgentProtocolFailure({
+      endpoint: "workspace_mcp",
+      method: "DELETE",
+      status: 500,
+      errorCode: "internal_error",
+      error,
+    });
     const response = rpcError(500, "RateLoop workspace MCP session termination failed.", "internal_error", -32603);
     for (const [key, value] of cors) response.headers.set(key, value);
     return response;

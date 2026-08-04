@@ -16,6 +16,7 @@ import {
   readAgentOAuthFormField,
   readAgentOAuthResource,
 } from "~~/lib/tokenless/agentOAuthHttp";
+import { reportAgentProtocolFailure } from "~~/lib/tokenless/agentProtocolObservability";
 
 export const runtime = "nodejs";
 
@@ -77,6 +78,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(response, { headers: { "Cache-Control": "no-store", Pragma: "no-cache" } });
   } catch (error) {
     const response = agentOAuthErrorResponse(error, "The OAuth token exchange failed.");
+    reportAgentProtocolFailure({
+      endpoint: "oauth_token",
+      method: "POST",
+      status: response.status,
+      errorCode: response.body.error,
+      ...(response.status >= 500 ? { error } : {}),
+    });
     return NextResponse.json(response.body, { status: response.status, headers: response.headers });
   }
 }
