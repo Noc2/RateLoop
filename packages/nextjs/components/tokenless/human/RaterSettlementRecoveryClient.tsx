@@ -6,6 +6,7 @@ import { eth_getTransactionByHash, getRpcClient, prepareTransaction, sendTransac
 import { baseSepolia } from "thirdweb/chains";
 import { ConnectButton, ThirdwebProvider, useActiveAccount } from "thirdweb/react";
 import { Field, SelectField } from "~~/components/tokenless/forms/Field";
+import { settlementRoundStatusLabel } from "~~/components/tokenless/human/humanStatePresentation";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { readBrowserSession } from "~~/lib/auth/client";
 import { rateLoopThirdwebWallets, thirdwebBrowserClient } from "~~/lib/thirdweb/client";
@@ -311,7 +312,7 @@ function SettlementRecoveryControls() {
           <dl className="grid gap-3 text-sm sm:grid-cols-2">
             <div>
               <dt className="text-base-content/55">{t("roundStatus")}</dt>
-              <dd className="mt-1 font-medium">{snapshot.roundStatus.replaceAll("_", " ")}</dd>
+              <dd className="mt-1 font-medium">{settlementRoundStatusLabel(snapshot.roundStatus, t)}</dd>
             </div>
             <div>
               <dt className="text-base-content/55">{t("outcome")}</dt>

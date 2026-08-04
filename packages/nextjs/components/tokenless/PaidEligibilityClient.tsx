@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { ChoiceInput, Field, SelectField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import { assuranceCapabilityLabel, eligibilityStatusLabel } from "~~/components/tokenless/human/humanStatePresentation";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { Link } from "~~/i18n/navigation";
 import { readBrowserSession } from "~~/lib/auth/client";
@@ -60,10 +61,6 @@ async function readJson(response: Response, fallbackMessage: string) {
     );
   }
   return body;
-}
-
-function formatCapability(value: string) {
-  return value.replaceAll("_", " ");
 }
 
 export function PaidEligibilityClient() {
@@ -202,26 +199,11 @@ export function PaidEligibilityClient() {
   return (
     <div className="space-y-5">
       <Card as="section" className="rounded-2xl p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-base-content/10 pb-4">
+        <div className="border-b border-base-content/10 pb-4">
           <div>
             <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-green)]">{t("eyebrow")}</p>
-            <h2 className="mt-2 text-xl font-semibold">
-              {!state
-                ? t("status.checking")
-                : state.status === "eligible" ||
-                    state.status === "declined" ||
-                    state.status === "review" ||
-                    state.status === "blocked" ||
-                    state.status === "expired"
-                  ? t(`status.${state.status}`)
-                  : t("status.notStarted")}
-            </h2>
+            <h2 className="mt-2 text-xl font-semibold">{eligibilityStatusLabel(state?.status, t)}</h2>
           </div>
-          <span
-            className={`rounded-md px-3 py-1.5 text-xs font-medium ${eligible ? "bg-success/10 text-success" : "bg-base-content/[0.05] text-base-content/55"}`}
-          >
-            {eligible ? t("capabilityChecked") : (state?.status ?? t("status.checking"))}
-          </span>
         </div>
 
         {eligible ? (
@@ -246,8 +228,10 @@ export function PaidEligibilityClient() {
             </div>
             <div className="border-l-2 border-base-content/20 pl-4 sm:col-span-2">
               <span className="text-xs text-base-content/55">{t("capabilities")}</span>
-              <strong className="mt-1 block text-sm font-medium capitalize">
-                {state.capabilities?.length ? state.capabilities.map(formatCapability).join(" · ") : t("noCapability")}
+              <strong className="mt-1 block text-sm font-medium">
+                {state.capabilities?.length
+                  ? state.capabilities.map(capability => assuranceCapabilityLabel(capability, t)).join(" · ")
+                  : t("noCapability")}
               </strong>
             </div>
           </div>
