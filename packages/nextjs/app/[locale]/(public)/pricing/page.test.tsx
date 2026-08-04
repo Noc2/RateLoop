@@ -21,8 +21,11 @@ test("pricing page shows three tiers and discloses costs progressively", async (
   assert.doesNotMatch(html, /Workspace plans cover completed review decisions/);
   assert.match(html, /Free/);
   assert.match(html, /\$29/);
-  assert.match(html, /25 completed review decisions/);
-  assert.match(html, /250 completed review decisions/);
+  assert.match(html, /1 active agent/);
+  assert.match(html, /3 active agents/);
+  assert.match(html, /1 invited reviewer group/);
+  assert.match(html, /5 invited reviewer groups/);
+  assert.doesNotMatch(html, /completed review decisions|decision allowance/iu);
   assert.match(html, /href="\/agents\/billing\?workspace=ws\+second"/);
   assert.match(html, /href="\/agents\/billing\?workspace=ws\+second&amp;billing=upgrade"/);
   assert.doesNotMatch(html, /subject=RateLoop%20Demo/);
@@ -44,7 +47,7 @@ test("pricing page shows three tiers and discloses costs progressively", async (
   assert.doesNotMatch(html, /reviewer costs|bounty|execution fee|USDC|stablecoin/i);
   assert.doesNotMatch(html, /7\.5%/);
   assert.doesNotMatch(html, /\$149/);
-  assert.match(html, /there are no overages/i);
+  assert.doesNotMatch(html, /What counts as a decision|there are no overages/i);
   assert.match(html, /First 12 months/i);
   assert.match(html, /60 days/);
   assert.match(html, /20% off/);
@@ -80,8 +83,10 @@ test("German pricing localizes plan details rendered through plan cards", async 
   ).replace(/\s+/g, " ");
 
   assert.match(html, /Keine Karte erforderlich/);
-  assert.match(html, /25 abgeschlossene Prüfentscheidungen pro Kalendermonat/);
-  assert.match(html, /250 abgeschlossene Prüfentscheidungen pro Abrechnungszeitraum/);
+  assert.match(html, /1 aktiver Agent/);
+  assert.match(html, /3 aktive Agenten/);
+  assert.match(html, /1 eingeladene Prüfgruppe/);
+  assert.match(html, /5 eingeladene Prüfgruppen/);
   assert.match(html, /Early Access wählen/);
   assert.match(html, /Individuelle Integrationen/);
   assert.match(html, /Demo anfragen/);

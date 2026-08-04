@@ -102,9 +102,9 @@ export default function TermsPage({ params }: { params?: PublicLocaleParams } = 
         <h2 id="workspace-subscriptions">Workspace subscriptions</h2>
         <p>
           RateLoop may offer a recurring business-to-business workspace subscription. The displayed price, billing
-          period, included review-decision allowance, and applicable tax are confirmed before checkout. Subscriptions
-          renew automatically until cancelled. Cancellation takes effect at the end of the paid period; already-accepted
-          review work may finish and historical evidence is not deleted merely because a plan ends.
+          period, plan limits, and applicable tax are confirmed before checkout. Subscriptions renew automatically until
+          cancelled. Cancellation takes effect at the end of the paid period; already-accepted review work may finish
+          and historical evidence is not deleted merely because a plan ends.
         </p>
         <p>
           The Early Access price applies for the first 12 months. RateLoop will give at least 60 days&apos; notice
@@ -116,7 +116,7 @@ export default function TermsPage({ params }: { params?: PublicLocaleParams } = 
         <p>
           A workspace subscription pays for access to the RateLoop software and its plan limits. It does not include
           participant bounty, attempt reserve, or the separately disclosed public-panel execution fee. Those panel costs
-          are itemized before funding and do not increase a workspace&apos;s subscription allowance.
+          are itemized before funding and do not change a workspace&apos;s subscription limits.
         </p>
         <h2 id="billing-refunds">Billing, taxes, and refunds</h2>
         <p>

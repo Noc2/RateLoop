@@ -28,7 +28,7 @@ export type TokenlessBillingPlan = {
  */
 export const TOKENLESS_HOSTED_REVIEW_COPY = {
   planBenefit: "Invited unpaid reviews",
-  planSummary: "Workspace plans cover completed review decisions with invited, unpaid reviewers.",
+  planSummary: "Workspace plans support invited, unpaid review workflows.",
 } as const;
 
 export const TOKENLESS_BILLING_PLANS = {
@@ -70,6 +70,14 @@ export function formatUsdPrice(cents: number) {
     minimumFractionDigits: fractionDigits,
     maximumFractionDigits: fractionDigits,
   }).format(cents / 100);
+}
+
+export function activeAgentLimitLabel(count: number) {
+  return `${count} active ${count === 1 ? "agent" : "agents"}`;
+}
+
+export function privateGroupLimitLabel(count: number) {
+  return `${count} invited reviewer ${count === 1 ? "group" : "groups"}`;
 }
 
 export function getBillingPlan(planKey: string): TokenlessBillingPlan | null {

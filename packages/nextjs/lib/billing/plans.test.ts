@@ -4,9 +4,11 @@ import {
   LEGACY_EARLY_ACCESS_PRICE_VERSION,
   TOKENLESS_BILLING_PLANS,
   TOKENLESS_HOSTED_REVIEW_COPY,
+  activeAgentLimitLabel,
   formatUsdPrice,
   getBillingPlan,
   getPlanByPriceVersion,
+  privateGroupLimitLabel,
 } from "./plans";
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -14,7 +16,7 @@ import { test } from "node:test";
 test("billing plan definitions freeze the launch limits and price versions", () => {
   assert.deepEqual(TOKENLESS_HOSTED_REVIEW_COPY, {
     planBenefit: "Invited unpaid reviews",
-    planSummary: "Workspace plans cover completed review decisions with invited, unpaid reviewers.",
+    planSummary: "Workspace plans support invited, unpaid review workflows.",
   });
   assert.deepEqual(TOKENLESS_BILLING_PLANS.free, {
     key: "free",
@@ -51,4 +53,14 @@ test("workspace prices format from their canonical cent amounts", () => {
   assert.equal(formatUsdPrice(TOKENLESS_BILLING_PLANS.free.monthlyPriceCents), "$0");
   assert.equal(formatUsdPrice(TOKENLESS_BILLING_PLANS.early_access.monthlyPriceCents), "$29");
   assert.throws(() => formatUsdPrice(29.5), /non-negative integer/);
+});
+
+test("customer-facing resource labels come from the enforced plan limits", () => {
+  assert.equal(activeAgentLimitLabel(TOKENLESS_BILLING_PLANS.free.activeAgents), "1 active agent");
+  assert.equal(activeAgentLimitLabel(TOKENLESS_BILLING_PLANS.early_access.activeAgents), "3 active agents");
+  assert.equal(privateGroupLimitLabel(TOKENLESS_BILLING_PLANS.free.activePrivateGroups), "1 invited reviewer group");
+  assert.equal(
+    privateGroupLimitLabel(TOKENLESS_BILLING_PLANS.early_access.activePrivateGroups),
+    "5 invited reviewer groups",
+  );
 });

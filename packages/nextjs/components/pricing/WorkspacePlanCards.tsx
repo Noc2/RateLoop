@@ -3,7 +3,13 @@ import { LocalizedPublicContent, translatePublicString } from "~~/components/doc
 import { PublicLink as Link } from "~~/components/docs/PublicLink";
 import { Card } from "~~/components/tokenless/ui/Card";
 import type { Locale } from "~~/i18n/config";
-import { TOKENLESS_BILLING_PLANS, TOKENLESS_HOSTED_REVIEW_COPY, formatUsdPrice } from "~~/lib/billing/plans";
+import {
+  TOKENLESS_BILLING_PLANS,
+  TOKENLESS_HOSTED_REVIEW_COPY,
+  activeAgentLimitLabel,
+  formatUsdPrice,
+  privateGroupLimitLabel,
+} from "~~/lib/billing/plans";
 
 type WorkspacePlanCardsProps = {
   subscriptionsEnabled: boolean;
@@ -52,8 +58,8 @@ export function WorkspacePlanCards({
             </div>
           }
           features={[
-            copy(`${freePlan.decisionsPerPeriod} completed review decisions each calendar month`),
-            copy(`${freePlan.activeAgents} active agent`),
+            copy(activeAgentLimitLabel(freePlan.activeAgents)),
+            copy(privateGroupLimitLabel(freePlan.activePrivateGroups)),
             copy(TOKENLESS_HOSTED_REVIEW_COPY.planBenefit),
           ]}
           footer={
@@ -81,8 +87,8 @@ export function WorkspacePlanCards({
             </div>
           }
           features={[
-            copy(`${earlyAccessPlan.decisionsPerPeriod} completed review decisions each subscription period`),
-            copy(`${earlyAccessPlan.activeAgents} active agents`),
+            copy(activeAgentLimitLabel(earlyAccessPlan.activeAgents)),
+            copy(privateGroupLimitLabel(earlyAccessPlan.activePrivateGroups)),
             copy("Unlimited invited, unpaid reviewers"),
             copy(
               "First 12 months. Then 20% off the comparable plan; 60 days’ notice before changes. Cancel before they apply.",

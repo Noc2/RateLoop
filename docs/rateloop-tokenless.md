@@ -360,12 +360,12 @@ customer-held-key boundary.
 
 ## 8. Scale and limits
 
-Two plans. Free allows **25 completed decisions per calendar month**, one active
-agent, one private group. Early Access allows **250 decisions**, three agents, five
-groups, at $29/month against a $99 list price. No proration, no carryover.
-
-Those quotas are the single most informative fact about the intended customer, and
-they are worth reading alongside §2 of the audience document.
+Two plans. Free allows one active agent and one invited reviewer group. Early
+Access allows three agents and five groups, at $29/month against a $99 list price.
+The primary hosted invited-review path does not expose a universal completed-decision
+allowance. Internal decision caps remain safety boundaries for the explicit assurance
+APIs that enforce them; they are not a customer-facing quota until every hosted path
+shares the same enforcement.
 
 On-chain caps include 500 commits per round and a 20% fee ceiling. The MCP surface
 is limited to 60 requests per minute per client identity, and fails closed without

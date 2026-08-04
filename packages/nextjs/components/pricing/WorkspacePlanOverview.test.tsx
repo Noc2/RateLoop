@@ -13,23 +13,21 @@ const { renderToStaticMarkup } = require("react-dom/server") as {
   renderToStaticMarkup: (element: React.ReactElement) => string;
 };
 
-test("workspace plan overview binds every public price and allowance to the canonical plans", () => {
+test("workspace plan overview binds public prices and enforced resource limits to the canonical plans", () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
   const html = renderToStaticMarkup(<WorkspacePlanOverview />).replace(/\s+/g, " ");
 
   assert.equal(html.match(/<article/g)?.length, 3);
   assert.match(html, new RegExp(formatUsdPrice(TOKENLESS_BILLING_PLANS.free.monthlyPriceCents).replace("$", "\\$")));
-  assert.match(html, new RegExp(`${TOKENLESS_BILLING_PLANS.free.decisionsPerPeriod} completed review decisions`));
   assert.match(html, new RegExp(`${TOKENLESS_BILLING_PLANS.free.activeAgents} active agent`));
+  assert.match(html, new RegExp(`${TOKENLESS_BILLING_PLANS.free.activePrivateGroups} invited reviewer group`));
   assert.match(
     html,
     new RegExp(formatUsdPrice(TOKENLESS_BILLING_PLANS.early_access.monthlyPriceCents).replace("$", "\\$")),
   );
-  assert.match(
-    html,
-    new RegExp(`${TOKENLESS_BILLING_PLANS.early_access.decisionsPerPeriod} completed review decisions`),
-  );
   assert.match(html, new RegExp(`${TOKENLESS_BILLING_PLANS.early_access.activeAgents} active agents`));
+  assert.match(html, new RegExp(`${TOKENLESS_BILLING_PLANS.early_access.activePrivateGroups} invited reviewer groups`));
+  assert.doesNotMatch(html, /completed review decisions|decision allowance/iu);
   assert.match(html, /First 12 months/);
   assert.match(html, /Enterprise/);
   assert.match(html, /Custom volumes and terms/);
@@ -59,5 +57,8 @@ test("all workspace plan consumers share the hosted invited-unpaid availability 
   assert.match(overview, new RegExp(TOKENLESS_HOSTED_REVIEW_COPY.planSummary));
   assert.match(cards, new RegExp(TOKENLESS_HOSTED_REVIEW_COPY.planBenefit));
   assert.equal(settingsSource.match(/TOKENLESS_HOSTED_REVIEW_COPY\.planBenefit/g)?.length, 2);
+  assert.doesNotMatch(`${overview}\n${cards}\n${settingsSource}`, /decisionsPerPeriod|Workspace review decision usage/);
+  assert.match(settingsSource, /activeAgentLimitLabel\(billing\.limits\.activeAgents\)/);
+  assert.match(settingsSource, /privateGroupLimitLabel\(billing\.limits\.activePrivateGroups\)/);
   assert.doesNotMatch(settingsSource, /Paid (?:reviewer )?panels? available/);
 });

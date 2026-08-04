@@ -5,7 +5,6 @@ import {
   translatePublicString,
 } from "~~/components/docs/LocalizedPublicContent";
 import { WorkspacePlanCards } from "~~/components/pricing/WorkspacePlanCards";
-import { Card } from "~~/components/tokenless/ui/Card";
 import { resolveDemoBookingUrl } from "~~/lib/marketing/demoBooking";
 
 export async function generateMetadata({ params }: { params: Promise<{ locale?: string }> }): Promise<Metadata> {
@@ -58,16 +57,6 @@ export default async function PricingPage({
               demoBookingUrl={demoBookingUrl}
             />
           </section>
-
-          <Card as="section" className="mt-16 max-w-2xl rounded-2xl p-7 sm:p-9">
-            <article>
-              <h2 className="text-2xl font-semibold">What counts as a decision?</h2>
-              <p className="mt-3 text-base leading-7 text-base-content/60">
-                One final verdict counts as a decision. Drafts, failures, and cancellations do not count; there are no
-                overages.
-              </p>
-            </article>
-          </Card>
         </div>
       </div>
     </LocalizedPublicContent>

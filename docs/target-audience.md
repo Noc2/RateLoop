@@ -37,19 +37,15 @@ world.
 
 ### What pricing implies
 
-|                      | Free   | Early Access          |
-| -------------------- | ------ | --------------------- |
-| Price                | $0     | **$29/mo** (list $99) |
-| Decisions per period | **25** | **250**               |
+|                       | Free   | Early Access          |
+| --------------------- | ------ | --------------------- |
+| Price                 | $0     | **$29/mo** (list $99) |
+| Active agents         | 1      | 3                     |
+| Invited review groups | 1      | 5                     |
 
-The period differs by plan: Free uses a strict UTC calendar month, Early Access the
-Stripe subscription anniversary window.
-| Active agents | 1 | 3 |
-
-Read against the adaptive sampler's 10% monitoring floor, **250 decisions a month is
-roughly 2,500 reviewable outputs, about 83 a day.** At the "always" setting it is 250
-outputs total. That is a pilot, a single agent in a single workflow, or a
-low-volume high-consequence decision path. It is not a production workload.
+The hosted product sells workspace access and these enforced resource limits. It
+does not present the backend's 25/250 explicit-assurance safety caps as a universal
+quota because the primary invited-review path does not enforce them uniformly.
 
 There is no per-seat and no per-review price, so **the ceiling per customer before
 "Enterprise" is $99 a month**. For comparison, published compliance-platform pricing

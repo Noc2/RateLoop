@@ -1,13 +1,20 @@
-import { LocalizedPublicContent } from "~~/components/docs/LocalizedPublicContent";
+import { LocalizedPublicContent, translatePublicString } from "~~/components/docs/LocalizedPublicContent";
 import { PublicLink as Link } from "~~/components/docs/PublicLink";
 import { Card } from "~~/components/tokenless/ui/Card";
 import type { Locale } from "~~/i18n/config";
-import { TOKENLESS_BILLING_PLANS, TOKENLESS_HOSTED_REVIEW_COPY, formatUsdPrice } from "~~/lib/billing/plans";
+import {
+  TOKENLESS_BILLING_PLANS,
+  TOKENLESS_HOSTED_REVIEW_COPY,
+  activeAgentLimitLabel,
+  formatUsdPrice,
+  privateGroupLimitLabel,
+} from "~~/lib/billing/plans";
 
 const freePlan = TOKENLESS_BILLING_PLANS.free;
 const earlyAccessPlan = TOKENLESS_BILLING_PLANS.early_access;
 
 export function WorkspacePlanOverview({ locale = "en" }: { locale?: Locale }) {
+  const copy = (source: string) => translatePublicString(source, locale, "site");
   return (
     <LocalizedPublicContent locale={locale} section="site">
       <div>
@@ -19,9 +26,9 @@ export function WorkspacePlanOverview({ locale = "en" }: { locale?: Locale }) {
               {formatUsdPrice(freePlan.monthlyPriceCents)}
             </p>
             <p className="mt-5 text-sm leading-6 text-base-content/65">
-              {freePlan.decisionsPerPeriod} completed review decisions each calendar month
+              {copy(activeAgentLimitLabel(freePlan.activeAgents))}
               <span aria-hidden="true"> · </span>
-              {freePlan.activeAgents} active agent
+              {copy(privateGroupLimitLabel(freePlan.activePrivateGroups))}
             </p>
           </Card>
 
@@ -40,9 +47,9 @@ export function WorkspacePlanOverview({ locale = "en" }: { locale?: Locale }) {
               <p className="pb-0.5 text-sm text-base-content/55">per workspace/month</p>
             </div>
             <p className="mt-5 text-sm leading-6 text-base-content/65">
-              {earlyAccessPlan.decisionsPerPeriod} completed review decisions each subscription period
+              {copy(activeAgentLimitLabel(earlyAccessPlan.activeAgents))}
               <span aria-hidden="true"> · </span>
-              {earlyAccessPlan.activeAgents} active agents
+              {copy(privateGroupLimitLabel(earlyAccessPlan.activePrivateGroups))}
             </p>
           </Card>
 

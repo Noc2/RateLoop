@@ -12,7 +12,13 @@ import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { WorkspacePublicContentLink } from "~~/components/tokenless/navigation/WorkspacePublicContentLink";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { ConfirmDialog } from "~~/components/tokenless/ui/ConfirmDialog";
-import { TOKENLESS_BILLING_PLANS, TOKENLESS_HOSTED_REVIEW_COPY, formatUsdPrice } from "~~/lib/billing/plans";
+import {
+  TOKENLESS_BILLING_PLANS,
+  TOKENLESS_HOSTED_REVIEW_COPY,
+  activeAgentLimitLabel,
+  formatUsdPrice,
+  privateGroupLimitLabel,
+} from "~~/lib/billing/plans";
 import type { WorkspaceBillingSummary } from "~~/lib/billing/workspaceBillingTypes";
 import { WorkspaceRequestScope } from "~~/lib/tokenless/workspaceRequestScope";
 
@@ -753,8 +759,6 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
     }
   }
 
-  const usageTotal = billing ? billing.usage.completed + billing.usage.reserved : 0;
-  const usagePercent = billing?.usage.limit ? Math.min(100, Math.round((usageTotal / billing.usage.limit) * 100)) : 0;
   const billingWarning = billing?.checkoutBlockedReason === "subscription_requires_attention";
   const editingIdentityProvider = identity?.providers.find(provider => provider.providerId === identityForm.providerId);
   const identityFormDirty =
@@ -919,38 +923,14 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
 
                 {billing ? (
                   <>
-                    <div className="mt-5 flex items-end justify-between gap-4 text-sm">
-                      <div>
-                        <span className="text-2xl font-semibold">{billing.usage.completed}</span>
-                        <span className="text-base-content/55"> completed</span>
-                        {billing.usage.reserved ? (
-                          <span className="text-base-content/55"> · {billing.usage.reserved} reserved</span>
-                        ) : null}
-                      </div>
-                      <span className="text-base-content/55">{billing.usage.limit} limit</span>
-                    </div>
-                    <div
-                      role="progressbar"
-                      aria-label="Workspace review decision usage"
-                      aria-valuemin={0}
-                      aria-valuemax={billing.usage.limit}
-                      aria-valuenow={usageTotal}
-                      className="mt-3 h-2 overflow-hidden rounded-full bg-base-content/10"
-                    >
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-[var(--rateloop-blue)] to-[var(--rateloop-green)]"
-                        style={{ width: `${usagePercent}%` }}
-                      />
-                    </div>
-                    <div className="mt-4 grid gap-2 text-xs text-base-content/55 sm:grid-cols-2">
-                      <span>
-                        {billing.limits.activeAgents} active {billing.limits.activeAgents === 1 ? "agent" : "agents"}
-                      </span>
+                    <div className="mt-5 grid gap-2 text-xs text-base-content/55 sm:grid-cols-3">
+                      <span>{activeAgentLimitLabel(billing.limits.activeAgents)}</span>
+                      <span>{privateGroupLimitLabel(billing.limits.activePrivateGroups)}</span>
                       <span>{TOKENLESS_HOSTED_REVIEW_COPY.planBenefit}</span>
                     </div>
                     {billing.periodEnd ? (
                       <p className="mt-3 text-xs text-base-content/55">
-                        Current usage period ends {dateLabel(billing.periodEnd, locale)}.
+                        Current billing period ends {dateLabel(billing.periodEnd, locale)}.
                       </p>
                     ) : null}
                     <div className="mt-5 flex flex-wrap items-center gap-3">
@@ -1066,10 +1046,8 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                               ) : null}
                             </p>
                             <ul className="mt-3 space-y-1 text-sm leading-6 text-base-content/65">
-                              <li>{plan.decisionsPerPeriod} completed decisions per period</li>
-                              <li>
-                                {plan.activeAgents} active {plan.activeAgents === 1 ? "agent" : "agents"}
-                              </li>
+                              <li>{activeAgentLimitLabel(plan.activeAgents)}</li>
+                              <li>{privateGroupLimitLabel(plan.activePrivateGroups)}</li>
                               <li>{TOKENLESS_HOSTED_REVIEW_COPY.planBenefit}</li>
                             </ul>
                           </article>
