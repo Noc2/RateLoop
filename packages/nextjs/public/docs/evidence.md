@@ -48,11 +48,13 @@ Schema: `rateloop.human-assurance.evidence.v4`
 Reviewer identities and raw or decryptable rationales are excluded. Host-reported execution metadata remains marked
 `independentlyVerified:false`; it does not establish that the reported model produced the output.
 
-### Complete synthetic example
+### Complete synthetic packet example
 
-An agent proposes an answer for release. Three invited reviewers check whether the answer is supported; two prefer the
-candidate and one prefers the baseline, so the frozen rule passes. The owner records Go separately after reading the
-result. The packet preserves the review result, its boundaries, and the recomputation inputs.
+The synthetic candidate says: “Enable the new response policy for a 10% rollout; the supplied seven-day error report
+shows no failed requests.” Three invited reviewers compare that answer with the baseline and the supplied synthetic
+evidence. Two prefer the candidate and one prefers the baseline, so the frozen rule passes. The owner records Go in a
+separate packet-bound decision after reading the result. The downloadable packet preserves the review result, its
+boundaries, and the recomputation inputs; it does not contain or sign the separate owner decision.
 
 - [Download the synthetic v4 packet](./examples/synthetic-evidence-v4.json)
 - [Download its standalone synthetic SPKI pin](./examples/synthetic-evidence-v4.spki.txt)

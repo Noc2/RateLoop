@@ -73,7 +73,9 @@ test("evidence docs explain exact artifacts, checks, mappings, and boundaries", 
   assert.match(html, /limits are part of the verification record, not an apology/i);
   assert.match(html, /no evidence export by itself makes anyone compliant/i);
   assert.match(html, /rateloop\.human-assurance\.evidence\.v4/i);
-  assert.match(html, /Complete synthetic example/i);
+  assert.match(html, /Complete synthetic packet example/i);
+  assert.match(html, /Enable the new response policy for a 10% rollout/i);
+  assert.match(html, /does not contain or sign the separate owner decision/i);
   assert.match(html, /Download packet/i);
   assert.match(html, /Download synthetic key pin/i);
   assert.match(html, /ed25519:2d5798c16bafaed29bdbcca0/i);
@@ -136,7 +138,9 @@ test("machine docs mirror evidence boundaries and are linked from agent setup", 
   );
 
   assert.match(evidence, /rateloop\.human-assurance\.evidence\.v4/);
-  assert.match(evidence, /Complete synthetic example/i);
+  assert.match(evidence, /Complete synthetic packet example/i);
+  assert.match(evidence, /Enable the new response policy for a 10% rollout/i);
+  assert.match(evidence, /does not contain or sign the separate owner decision/i);
   assert.match(evidence, /synthetic-evidence-v4\.json/);
   assert.match(evidence, /synthetic-evidence-v4\.spki\.txt/);
   assert.match(evidence, /ed25519:2d5798c16bafaed29bdbcca0/);
@@ -189,8 +193,8 @@ test("machine docs mirror evidence boundaries and are linked from agent setup", 
 
 test("the synthetic example has a German recipient path", () => {
   assert.equal(
-    translatePublicString("Complete synthetic example", "de", "docs"),
-    "Vollständiges synthetisches Beispiel",
+    translatePublicString("Complete synthetic packet example", "de", "docs"),
+    "Vollständiges synthetisches Paketbeispiel",
   );
   assert.equal(translatePublicString("Download packet", "de", "docs"), "Paket herunterladen");
   assert.match(

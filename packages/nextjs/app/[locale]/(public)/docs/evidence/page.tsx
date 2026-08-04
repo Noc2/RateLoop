@@ -229,12 +229,14 @@ export default function EvidencePage({ params }: { params?: PublicLocaleParams }
           verified.
         </p>
         <Card as="section" variant="marketing" className="not-prose my-8 rounded-2xl border-l-2 p-5 sm:p-6">
-          <h3 className="text-lg font-bold text-base-content">Complete synthetic example</h3>
+          <h3 className="text-lg font-bold text-base-content">Complete synthetic packet example</h3>
           <p className="mt-3 max-w-4xl text-sm leading-7 text-base-content/70">
-            An agent proposes an answer for release. Three invited reviewers check whether the answer is supported; two
-            prefer the candidate and one prefers the baseline, so the frozen rule passes. The owner records Go
-            separately after reading the result. The packet preserves the review result, its boundaries, and the inputs
-            needed to verify it.
+            The synthetic candidate says: “Enable the new response policy for a 10% rollout; the supplied seven-day
+            error report shows no failed requests.” Three invited reviewers compare that answer with the baseline and
+            the supplied synthetic evidence. Two prefer the candidate and one prefers the baseline, so the frozen rule
+            passes. The owner records Go in a separate packet-bound decision after reading the result. The downloadable
+            packet preserves the review result, its boundaries, and the inputs needed to verify it; it does not contain
+            or sign the separate owner decision.
           </p>
           <div className="mt-4 flex flex-wrap gap-3">
             <a
