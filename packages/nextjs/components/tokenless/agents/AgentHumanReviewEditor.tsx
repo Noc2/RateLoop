@@ -680,10 +680,8 @@ export function AgentHumanReviewEditor({
           />
           {draft.mode === "adaptive" ? (
             <div className="flex items-start gap-2 rounded-xl border border-base-content/10 p-4 text-sm text-base-content/70">
-              <p>{policyCopy.limits.adaptiveDetail}</p>
-              <InfoPopover label={ui("aboutAdaptiveCoverage")}>
-                <AgentText id="translated035" />
-              </InfoPopover>
+              <p>{policyCopy.limits.adaptiveSummary}</p>
+              <InfoPopover label={ui("aboutAdaptiveCoverage")}>{policyCopy.limits.adaptiveDetail}</InfoPopover>
             </div>
           ) : null}
           {draft.mode === "adaptive" || draft.mode === "fixed" ? (

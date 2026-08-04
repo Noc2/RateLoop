@@ -21,6 +21,11 @@ test("the contextual editor owns every human-review dimension through one canoni
   assert.match(source, /policyCopy\.limits\.fixedRate/);
   assert.match(source, /policyCopy\.limits\.maximumGap/);
   assert.match(source, /policyCopy\.question\.criterion/);
+  assert.match(source, /<p>\{policyCopy\.limits\.adaptiveSummary\}<\/p>/);
+  assert.match(
+    source,
+    /<InfoPopover label=\{ui\("aboutAdaptiveCoverage"\)\}>\s*\{policyCopy\.limits\.adaptiveDetail\}/,
+  );
   assert.match(source, /policyCopy\.limits\.adaptiveDetail/);
   assert.match(source, /policyCopy\.timing\.responseWindow/);
   assert.match(source, /policyCopy\.payment\.bountyPerReviewer/);
