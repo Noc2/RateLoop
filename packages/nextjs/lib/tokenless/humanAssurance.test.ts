@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { afterEach, beforeEach, test } from "node:test";
+import type { PoolClient } from "pg";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
-import { freezeAssuranceRunOrchestration } from "~~/lib/tokenless/assuranceRunOrchestration";
+import { freezeAssuranceRunOrchestration, importAssuranceCases } from "~~/lib/tokenless/assuranceRunOrchestration";
+import { lockAssuranceSuiteForMutation } from "~~/lib/tokenless/assuranceSuiteMutation";
 import {
   addAssuranceCase,
   archiveAssuranceProject,
@@ -354,6 +356,24 @@ test("workspace authorization fails closed across tenants and non-product roles"
   );
 });
 
+test("all suite manifest mutations share one row-lock boundary", async () => {
+  let statement = "";
+  let values: readonly unknown[] = [];
+  await lockAssuranceSuiteForMutation(
+    {
+      query: (async (sql: string, args?: readonly unknown[]) => {
+        statement = sql;
+        values = args ?? [];
+        return { rows: [] };
+      }) as PoolClient["query"],
+    },
+    "has_lock_boundary",
+    7,
+  );
+  assert.match(statement, /FROM tokenless_assurance_suites[\s\S]+LIMIT 1 FOR UPDATE$/u);
+  assert.deepEqual(values, ["has_lock_boundary", 7]);
+});
+
 test("suite, case, and run manifests freeze immutably with strict lifecycle transitions", async () => {
   const { principal } = await principalFor(ADDRESS_A, "Acme");
   const { projectId } = await createProject(principal);
@@ -416,6 +436,30 @@ test("suite, case, and run manifests freeze immutably with strict lifecycle tran
         instructions: "This must never be accepted after the suite is frozen.",
         baselineArtifactId: `${projectId}_baseline`,
         candidateArtifactId: `${projectId}_candidate`,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "assurance_suite_immutable",
+  );
+  await assert.rejects(
+    () => markAssuranceCaseReady({ principal, caseId: suite.caseId }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "assurance_suite_immutable",
+  );
+  await assert.rejects(
+    () =>
+      importAssuranceCases({
+        principal,
+        suiteId: suite.suiteId,
+        suiteVersion: suite.version,
+        format: "json",
+        payload: JSON.stringify({
+          cases: [
+            {
+              title: "Late bulk mutation",
+              instructions: "This must never be accepted after the suite is frozen.",
+              baselineArtifactId: `${projectId}_baseline`,
+              candidateArtifactId: `${projectId}_candidate`,
+            },
+          ],
+        }),
       }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "assurance_suite_immutable",
   );

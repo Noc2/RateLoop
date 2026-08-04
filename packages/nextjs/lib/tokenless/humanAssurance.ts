@@ -15,6 +15,7 @@ import { consumeWorkspaceUsageAllocations, releaseWorkspaceUsageAllocations } fr
 import { dbClient, dbPool, serializePoolClientQueries } from "~~/lib/db";
 import type { TokenlessWorkspaceRole } from "~~/lib/db/productSchema";
 import { assertCredentialDataPolicy, assertDataIngressPolicy } from "~~/lib/privacy/dataPolicy";
+import { lockAssuranceSuiteForMutation } from "~~/lib/tokenless/assuranceSuiteMutation";
 import { promoteCompletedRunGoldQualifications } from "~~/lib/tokenless/goldQuality";
 import { recordAssuranceMechanismHealth } from "~~/lib/tokenless/mechanismHealth";
 import type { ProductPrincipal } from "~~/lib/tokenless/productCore";
@@ -511,17 +512,18 @@ async function loadSuiteForWrite(principal: AssurancePrincipal, suiteId: string,
 }
 
 async function requireArtifact(
+  client: Pick<PoolClient, "query">,
   projectId: string,
   artifactId: string,
   expectedRole?: "baseline" | "candidate" | "context",
 ) {
-  const result = await dbClient.execute({
-    sql: `SELECT artifact_id, project_id, role, digest, content_type,
-                 redaction_status, renderer_policy
-          FROM tokenless_assurance_artifacts
-          WHERE artifact_id = ? AND project_id = ? LIMIT 1`,
-    args: [artifactId, projectId],
-  });
+  const result = await client.query(
+    `SELECT artifact_id, project_id, role, digest, content_type,
+            redaction_status, renderer_policy
+     FROM tokenless_assurance_artifacts
+     WHERE artifact_id = $1 AND project_id = $2 LIMIT 1`,
+    [artifactId, projectId],
+  );
   const row = result.rows[0] as QueryRow | undefined;
   if (!row || (expectedRole && rowString(row, "role") !== expectedRole)) {
     throw new TokenlessServiceError(
@@ -544,50 +546,65 @@ export async function addAssuranceCase(input: {
   contextArtifactIds?: string[];
   objectiveReference?: string;
 }) {
-  const suite = await loadSuiteForWrite(input.principal, input.suiteId, input.suiteVersion);
-  if (rowString(suite, "status") !== "draft") {
-    throw new TokenlessServiceError("Frozen suites cannot be changed.", 409, "assurance_suite_immutable");
-  }
-  const projectId = rowString(suite, "project_id")!;
+  await loadSuiteForWrite(input.principal, input.suiteId, input.suiteVersion);
   const contextIds = [...new Set(input.contextArtifactIds ?? [])];
-  await Promise.all([
-    requireArtifact(projectId, input.baselineArtifactId, "baseline"),
-    requireArtifact(projectId, input.candidateArtifactId, "candidate"),
-    ...contextIds.map(id => requireArtifact(projectId, id, "context")),
-  ]);
-  const positions = await dbClient.execute({
-    sql: `SELECT COALESCE(MAX(position), -1) AS position
-          FROM tokenless_assurance_cases
-          WHERE suite_id = ? AND suite_version = ?`,
-    args: [input.suiteId, input.suiteVersion],
-  });
-  const position = (rowNumber(positions.rows[0] as QueryRow, "position") ?? -1) + 1;
+  const title = requiredText(input.title, "Case title", 200);
+  const instructions = requiredText(input.instructions, "Case instructions", 10_000);
   const caseId = `hac_${randomUUID().replaceAll("-", "")}`;
   const now = new Date();
-  await dbClient.execute({
-    sql: `INSERT INTO tokenless_assurance_cases
-          (case_id, project_id, suite_id, suite_version, position, title,
-           instructions, baseline_artifact_id, candidate_artifact_id,
-           context_artifact_ids_json, objective_reference, status, created_at,
-           updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)`,
-    args: [
-      caseId,
-      projectId,
-      input.suiteId,
-      input.suiteVersion,
-      position,
-      requiredText(input.title, "Case title", 200),
-      requiredText(input.instructions, "Case instructions", 10_000),
-      input.baselineArtifactId,
-      input.candidateArtifactId,
-      JSON.stringify(contextIds),
-      input.objectiveReference?.trim() || null,
-      now,
-      now,
-    ],
-  });
-  return { caseId, position, projectId };
+  const client = serializePoolClientQueries(await dbPool.connect());
+  try {
+    await client.query("BEGIN");
+    const suite = await lockAssuranceSuiteForMutation(client, input.suiteId, input.suiteVersion);
+    if (!suite) {
+      throw new TokenlessServiceError("Assurance suite not found.", 404, "assurance_suite_not_found");
+    }
+    if (suite.status !== "draft") {
+      throw new TokenlessServiceError("Frozen suites cannot be changed.", 409, "assurance_suite_immutable");
+    }
+    const projectId = suite.project_id;
+    await Promise.all([
+      requireArtifact(client, projectId, input.baselineArtifactId, "baseline"),
+      requireArtifact(client, projectId, input.candidateArtifactId, "candidate"),
+      ...contextIds.map(id => requireArtifact(client, projectId, id, "context")),
+    ]);
+    const positions = await client.query(
+      `SELECT COALESCE(MAX(position), -1) AS position
+       FROM tokenless_assurance_cases
+       WHERE suite_id = $1 AND suite_version = $2`,
+      [input.suiteId, input.suiteVersion],
+    );
+    const position = (rowNumber(positions.rows[0] as QueryRow, "position") ?? -1) + 1;
+    await client.query(
+      `INSERT INTO tokenless_assurance_cases
+       (case_id, project_id, suite_id, suite_version, position, title,
+        instructions, baseline_artifact_id, candidate_artifact_id,
+        context_artifact_ids_json, objective_reference, status, created_at,
+        updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'draft', $12, $12)`,
+      [
+        caseId,
+        projectId,
+        input.suiteId,
+        input.suiteVersion,
+        position,
+        title,
+        instructions,
+        input.baselineArtifactId,
+        input.candidateArtifactId,
+        JSON.stringify(contextIds),
+        input.objectiveReference?.trim() || null,
+        now,
+      ],
+    );
+    await client.query("COMMIT");
+    return { caseId, position, projectId };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function markAssuranceCaseReady(input: { principal: AssurancePrincipal; caseId: string }) {
@@ -605,29 +622,55 @@ export async function markAssuranceCaseReady(input: { principal: AssurancePrinci
     throw new TokenlessServiceError("Assurance case not found.", 404, "assurance_case_not_found");
   }
   await requireProjectAccess(input.principal, projectId, { active: true });
-  if (rowString(row, "suite_status") !== "draft") {
-    throw new TokenlessServiceError("Frozen suites cannot be changed.", 409, "assurance_suite_immutable");
-  }
-  const artifactIds = [
-    rowString(row, "baseline_artifact_id")!,
-    rowString(row, "candidate_artifact_id")!,
-    ...(JSON.parse(rowString(row, "context_artifact_ids_json")!) as string[]),
-  ];
-  const artifacts = await Promise.all(artifactIds.map(id => requireArtifact(projectId, id)));
-  if (artifacts.some(artifact => !["approved", "not_required"].includes(rowString(artifact, "redaction_status")!))) {
-    throw new TokenlessServiceError(
-      "Every case artifact must pass redaction review before it is ready.",
-      409,
-      "assurance_case_redaction_pending",
+  const suiteId = rowString(row, "suite_id")!;
+  const suiteVersion = rowNumber(row, "suite_version")!;
+  const client = serializePoolClientQueries(await dbPool.connect());
+  try {
+    await client.query("BEGIN");
+    const suite = await lockAssuranceSuiteForMutation(client, suiteId, suiteVersion);
+    if (!suite || suite.project_id !== projectId) {
+      throw new TokenlessServiceError("Assurance case not found.", 404, "assurance_case_not_found");
+    }
+    if (suite.status !== "draft") {
+      throw new TokenlessServiceError("Frozen suites cannot be changed.", 409, "assurance_suite_immutable");
+    }
+    const caseResult = await client.query(
+      `SELECT baseline_artifact_id, candidate_artifact_id, context_artifact_ids_json
+       FROM tokenless_assurance_cases
+       WHERE case_id = $1 AND suite_id = $2 AND suite_version = $3 LIMIT 1`,
+      [input.caseId, suiteId, suiteVersion],
     );
+    const assuranceCase = caseResult.rows[0] as QueryRow | undefined;
+    if (!assuranceCase) {
+      throw new TokenlessServiceError("Assurance case not found.", 404, "assurance_case_not_found");
+    }
+    const artifactIds = [
+      rowString(assuranceCase, "baseline_artifact_id")!,
+      rowString(assuranceCase, "candidate_artifact_id")!,
+      ...(JSON.parse(rowString(assuranceCase, "context_artifact_ids_json")!) as string[]),
+    ];
+    const artifacts = await Promise.all(artifactIds.map(id => requireArtifact(client, projectId, id)));
+    if (artifacts.some(artifact => !["approved", "not_required"].includes(rowString(artifact, "redaction_status")!))) {
+      throw new TokenlessServiceError(
+        "Every case artifact must pass redaction review before it is ready.",
+        409,
+        "assurance_case_redaction_pending",
+      );
+    }
+    await client.query(
+      `UPDATE tokenless_assurance_cases
+       SET status = 'ready', updated_at = $1
+       WHERE case_id = $2 AND status = 'draft'`,
+      [new Date(), input.caseId],
+    );
+    await client.query("COMMIT");
+    return { caseId: input.caseId, status: "ready" as const };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
   }
-  await dbClient.execute({
-    sql: `UPDATE tokenless_assurance_cases
-          SET status = 'ready', updated_at = ?
-          WHERE case_id = ? AND status = 'draft'`,
-    args: [new Date(), input.caseId],
-  });
-  return { caseId: input.caseId, status: "ready" as const };
 }
 
 export async function freezeAssuranceSuite(input: {
@@ -635,79 +678,93 @@ export async function freezeAssuranceSuite(input: {
   suiteId: string;
   suiteVersion: number;
 }) {
-  const suite = await loadSuiteForWrite(input.principal, input.suiteId, input.suiteVersion);
-  const existingHash = rowString(suite, "manifest_hash");
-  if (rowString(suite, "status") === "frozen" && existingHash) {
-    return { manifestHash: existingHash as `sha256:${string}`, status: "frozen" as const };
-  }
-  if (rowString(suite, "status") !== "draft") {
-    throw new TokenlessServiceError("This suite cannot be frozen.", 409, "invalid_assurance_suite_transition");
-  }
-  const cases = await dbClient.execute({
-    sql: `SELECT * FROM tokenless_assurance_cases
-          WHERE suite_id = ? AND suite_version = ? ORDER BY position ASC`,
-    args: [input.suiteId, input.suiteVersion],
-  });
-  if (cases.rows.length === 0 || cases.rows.some(row => rowString(row as QueryRow, "status") !== "ready")) {
-    throw new TokenlessServiceError(
-      "A suite needs at least one ready case before it can be frozen.",
-      409,
-      "assurance_suite_not_ready",
+  await loadSuiteForWrite(input.principal, input.suiteId, input.suiteVersion);
+  const client = serializePoolClientQueries(await dbPool.connect());
+  try {
+    await client.query("BEGIN");
+    const suite = await lockAssuranceSuiteForMutation(client, input.suiteId, input.suiteVersion);
+    if (!suite) {
+      throw new TokenlessServiceError("Assurance suite not found.", 404, "assurance_suite_not_found");
+    }
+    if (suite.status === "frozen" && suite.manifest_hash) {
+      await client.query("COMMIT");
+      return { manifestHash: suite.manifest_hash as `sha256:${string}`, status: "frozen" as const };
+    }
+    if (suite.status !== "draft") {
+      throw new TokenlessServiceError("This suite cannot be frozen.", 409, "invalid_assurance_suite_transition");
+    }
+    const cases = await client.query(
+      `SELECT * FROM tokenless_assurance_cases
+       WHERE suite_id = $1 AND suite_version = $2 ORDER BY position ASC`,
+      [input.suiteId, input.suiteVersion],
     );
+    if (cases.rows.length === 0 || cases.rows.some(row => rowString(row as QueryRow, "status") !== "ready")) {
+      throw new TokenlessServiceError(
+        "A suite needs at least one ready case before it can be frozen.",
+        409,
+        "assurance_suite_not_ready",
+      );
+    }
+    const rubricResult = await client.query(
+      `SELECT rubric_json FROM tokenless_assurance_rubrics
+       WHERE rubric_id = $1 AND version = $2 LIMIT 1`,
+      [suite.rubric_id, suite.rubric_version],
+    );
+    const rubricJson = rowString(rubricResult.rows[0] as QueryRow, "rubric_json");
+    if (!rubricJson) throw new Error("Suite rubric is missing.");
+    const frozenCases = [];
+    for (const rawCase of cases.rows) {
+      const assuranceCase = rawCase as QueryRow;
+      const artifactIds = [
+        rowString(assuranceCase, "baseline_artifact_id")!,
+        rowString(assuranceCase, "candidate_artifact_id")!,
+        ...(JSON.parse(rowString(assuranceCase, "context_artifact_ids_json")!) as string[]),
+      ];
+      const artifacts = await Promise.all(artifactIds.map(id => requireArtifact(client, suite.project_id, id)));
+      frozenCases.push({
+        caseId: rowString(assuranceCase, "case_id"),
+        position: rowNumber(assuranceCase, "position"),
+        title: rowString(assuranceCase, "title"),
+        instructions: rowString(assuranceCase, "instructions"),
+        objectiveReference: rowString(assuranceCase, "objective_reference"),
+        artifacts: artifacts.map(artifact => ({
+          artifactId: rowString(artifact, "artifact_id"),
+          role: rowString(artifact, "role"),
+          digest: rowString(artifact, "digest"),
+          contentType: rowString(artifact, "content_type"),
+          rendererPolicy: rowString(artifact, "renderer_policy"),
+        })),
+      });
+    }
+    const manifest = {
+      schemaVersion: HUMAN_ASSURANCE_SCHEMA_VERSION,
+      kind: "suite_manifest",
+      suiteId: input.suiteId,
+      version: input.suiteVersion,
+      projectId: suite.project_id,
+      rubric: JSON.parse(rubricJson),
+      cases: frozenCases,
+    };
+    const manifestJson = canonicalizeHumanAssuranceDocument(manifest);
+    const manifestHash = hashHumanAssuranceDocument(manifest);
+    const result = await client.query(
+      `UPDATE tokenless_assurance_suites
+       SET status = 'frozen', manifest_hash = $1, manifest_json = $2,
+           frozen_at = $3, updated_at = $3
+       WHERE suite_id = $4 AND version = $5 AND status = 'draft'`,
+      [manifestHash, manifestJson, new Date(), input.suiteId, input.suiteVersion],
+    );
+    if (result.rowCount !== 1) {
+      throw new TokenlessServiceError("The suite changed while it was being frozen.", 409, "assurance_suite_conflict");
+    }
+    await client.query("COMMIT");
+    return { manifestHash, status: "frozen" as const };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
   }
-  const rubricResult = await dbClient.execute({
-    sql: `SELECT rubric_json FROM tokenless_assurance_rubrics
-          WHERE rubric_id = ? AND version = ? LIMIT 1`,
-    args: [rowString(suite, "rubric_id"), rowNumber(suite, "rubric_version")],
-  });
-  const rubricJson = rowString(rubricResult.rows[0] as QueryRow, "rubric_json");
-  if (!rubricJson) throw new Error("Suite rubric is missing.");
-  const frozenCases = [];
-  for (const rawCase of cases.rows) {
-    const assuranceCase = rawCase as QueryRow;
-    const artifactIds = [
-      rowString(assuranceCase, "baseline_artifact_id")!,
-      rowString(assuranceCase, "candidate_artifact_id")!,
-      ...(JSON.parse(rowString(assuranceCase, "context_artifact_ids_json")!) as string[]),
-    ];
-    const artifacts = await Promise.all(artifactIds.map(id => requireArtifact(rowString(suite, "project_id")!, id)));
-    frozenCases.push({
-      caseId: rowString(assuranceCase, "case_id"),
-      position: rowNumber(assuranceCase, "position"),
-      title: rowString(assuranceCase, "title"),
-      instructions: rowString(assuranceCase, "instructions"),
-      objectiveReference: rowString(assuranceCase, "objective_reference"),
-      artifacts: artifacts.map(artifact => ({
-        artifactId: rowString(artifact, "artifact_id"),
-        role: rowString(artifact, "role"),
-        digest: rowString(artifact, "digest"),
-        contentType: rowString(artifact, "content_type"),
-        rendererPolicy: rowString(artifact, "renderer_policy"),
-      })),
-    });
-  }
-  const manifest = {
-    schemaVersion: HUMAN_ASSURANCE_SCHEMA_VERSION,
-    kind: "suite_manifest",
-    suiteId: input.suiteId,
-    version: input.suiteVersion,
-    projectId: rowString(suite, "project_id"),
-    rubric: JSON.parse(rubricJson),
-    cases: frozenCases,
-  };
-  const manifestJson = canonicalizeHumanAssuranceDocument(manifest);
-  const manifestHash = hashHumanAssuranceDocument(manifest);
-  const result = await dbClient.execute({
-    sql: `UPDATE tokenless_assurance_suites
-          SET status = 'frozen', manifest_hash = ?, manifest_json = ?,
-              frozen_at = ?, updated_at = ?
-          WHERE suite_id = ? AND version = ? AND status = 'draft'`,
-    args: [manifestHash, manifestJson, new Date(), new Date(), input.suiteId, input.suiteVersion],
-  });
-  if (result.rowCount !== 1) {
-    throw new TokenlessServiceError("The suite changed while it was being frozen.", 409, "assurance_suite_conflict");
-  }
-  return { manifestHash, status: "frozen" as const };
 }
 
 export async function createAssuranceAudiencePolicy(input: {

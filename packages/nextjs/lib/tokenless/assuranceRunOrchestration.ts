@@ -7,6 +7,7 @@ import { reserveWorkspaceUsageAllocations } from "~~/lib/billing/entitlements";
 import { dbPool, serializePoolClientQueries } from "~~/lib/db";
 import type { TokenlessWorkspaceRole } from "~~/lib/db/productSchema";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
+import { lockAssuranceSuiteForMutation } from "~~/lib/tokenless/assuranceSuiteMutation";
 import { selectGoldCasesForFrozenRun } from "~~/lib/tokenless/goldQuality";
 import {
   type AssurancePrincipal,
@@ -517,19 +518,17 @@ export async function importAssuranceCases(input: {
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
-    const suiteResult = await client.query(
-      `SELECT s.project_id, s.status, p.workspace_id
-       FROM tokenless_assurance_suites s
-       JOIN tokenless_assurance_projects p ON p.project_id = s.project_id
-       WHERE s.suite_id = $1 AND s.version = $2 LIMIT 1`,
-      [input.suiteId, input.suiteVersion],
+    const suite = await lockAssuranceSuiteForMutation(client, input.suiteId, input.suiteVersion);
+    const projectId = suite?.project_id;
+    if (!projectId) serviceError("Assurance suite not found.", "assurance_suite_not_found", 404);
+    const projectResult = await client.query(
+      `SELECT workspace_id FROM tokenless_assurance_projects WHERE project_id = $1 LIMIT 1`,
+      [projectId],
     );
-    const suite = suiteResult.rows[0] as QueryRow | undefined;
-    const projectId = rowString(suite, "project_id");
-    const workspaceId = rowString(suite, "workspace_id");
-    if (!projectId || !workspaceId) serviceError("Assurance suite not found.", "assurance_suite_not_found", 404);
+    const workspaceId = rowString(projectResult.rows[0] as QueryRow | undefined, "workspace_id");
+    if (!workspaceId) serviceError("Assurance suite not found.", "assurance_suite_not_found", 404);
     await assertWorkspaceWriteAccess(client, input.principal, workspaceId);
-    if (rowString(suite, "status") !== "draft") {
+    if (suite.status !== "draft") {
       serviceError("Frozen suites cannot accept case imports.", "assurance_suite_immutable", 409);
     }
     const countResult = await client.query(
