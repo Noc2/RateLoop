@@ -105,7 +105,7 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-function installFetch(runs: Record<string, unknown>[]) {
+function installFetch(runs: Record<string, unknown>[], untrustedPacketKeyCount = 0) {
   const previousFetch = globalThis.fetch;
   let auditors: Array<Record<string, unknown>> = [];
   let shares: Array<Record<string, unknown>> = [];
@@ -156,7 +156,7 @@ function installFetch(runs: Record<string, unknown>[]) {
       });
     }
     if (url.endsWith("/assurance/trusted-keys")) {
-      return Response.json({ keys: [], untrustedPacketKeyCount: 0 });
+      return Response.json({ keys: [], untrustedPacketKeyCount });
     }
     if (url.endsWith("/assurance/projects")) {
       return Response.json({ projects: [{ projectId: "project-release-controls", name: "Release controls" }] });
@@ -186,6 +186,31 @@ function installFetch(runs: Record<string, unknown>[]) {
     globalThis.fetch = previousFetch;
   };
 }
+
+test("German untrusted-key warnings keep their noun and verb together", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup } = await import("@testing-library/react");
+
+  try {
+    for (const [count, warning] of [
+      [1, "1 Paketsignaturschlüssel ist nicht im konfigurierten Vertrauensanker enthalten."],
+      [2, "2 Paketsignaturschlüssel sind nicht im konfigurierten Vertrauensanker enthalten."],
+    ] as const) {
+      const restoreFetch = installFetch([], count);
+      try {
+        const view = await mount(true, "de");
+        const alert = await view.findByRole("alert");
+        assert.equal(alert.textContent, warning);
+        await act(async () => cleanup());
+      } finally {
+        restoreFetch();
+      }
+    }
+  } finally {
+    await act(async () => cleanup());
+    restoreDom();
+  }
+});
 
 async function mount(canManage: boolean, locale: "de" | "en" = "en") {
   const { render } = await import("@testing-library/react");

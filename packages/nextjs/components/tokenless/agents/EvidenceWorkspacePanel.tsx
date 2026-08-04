@@ -1442,8 +1442,9 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
 
       {!loading && canManage && untrustedPacketKeyCount > 0 ? (
         <p className="rounded-xl border border-error/20 bg-error/[0.06] p-3 text-sm text-error" role="alert">
-          {untrustedPacketKeyCount} <AgentText id="translated161" />{" "}
-          {copy(untrustedPacketKeyCount === 1 ? "keyIs" : "keysAre")} <AgentText id="translated162" />
+          {copy(untrustedPacketKeyCount === 1 ? "untrustedPacketKeyOne" : "untrustedPacketKeyMany", {
+            count: untrustedPacketKeyCount,
+          })}
         </p>
       ) : null}
 
