@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   ASSURANCE_API_RESPONSE_HEADERS,
   authenticateAssuranceApiPrincipal,
+  authorizeAssuranceApiRead,
   getAssuranceApiRunStatus,
 } from "~~/lib/tokenless/assuranceIntegrations";
 import { tokenlessErrorResponse } from "~~/lib/tokenless/server";
@@ -13,7 +14,9 @@ type Context = { params: Promise<{ runId: string }> };
 
 export async function GET(request: NextRequest, context: Context) {
   try {
-    const principal = await authenticateAssuranceApiPrincipal(request.headers.get("authorization"));
+    const principal = authorizeAssuranceApiRead(
+      await authenticateAssuranceApiPrincipal(request.headers.get("authorization")),
+    );
     const { runId } = await context.params;
     return NextResponse.json(await getAssuranceApiRunStatus({ principal, runId }), {
       headers: ASSURANCE_API_RESPONSE_HEADERS,

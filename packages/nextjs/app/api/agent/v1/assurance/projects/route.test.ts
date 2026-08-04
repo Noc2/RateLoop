@@ -1,4 +1,6 @@
 import { NextRequest } from "next/server";
+import { GET as GET_RUN } from "../runs/[runId]/route";
+import { GET as GET_PROJECT } from "./[projectId]/route";
 import { GET, POST } from "./route";
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
@@ -39,6 +41,30 @@ test("project routes require an API key and disable shared caching on errors", a
   assert.equal(response.status, 401);
   assert.equal(response.headers.get("cache-control"), CACHE_CONTROL);
   assert.equal((await response.json()).code, "workspace_api_key_required");
+});
+
+test("every assurance GET route requires evaluation read access", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Scoped reads", ownerAddress: ADDRESS });
+  const [{ token: publishingToken }, { token: evaluationToken }] = await Promise.all([
+    createWorkspaceApiKey({ workspaceId, name: "Publishing only", scopes: ["panel:publish"] }),
+    createWorkspaceApiKey({ workspaceId, name: "Evaluation reads", scopes: ["evaluation:read"] }),
+  ]);
+  const consumers = [
+    (token: string) => GET(request("GET", token)),
+    (token: string) => GET_PROJECT(request("GET", token), { params: Promise.resolve({ projectId: "hap_missing" }) }),
+    (token: string) => GET_RUN(request("GET", token), { params: Promise.resolve({ runId: "hau_missing" }) }),
+  ];
+
+  for (const consume of consumers) {
+    const denied = await consume(publishingToken);
+    assert.equal(denied.status, 403);
+    assert.equal(denied.headers.get("cache-control"), CACHE_CONTROL);
+    assert.equal((await denied.json()).code, "insufficient_scope");
+  }
+
+  assert.equal((await consumers[0]!(evaluationToken)).status, 200);
+  assert.equal((await consumers[1]!(evaluationToken)).status, 404);
+  assert.equal((await consumers[2]!(evaluationToken)).status, 404);
 });
 
 test("project POST rejects malformed JSON as a private 400 response", async () => {

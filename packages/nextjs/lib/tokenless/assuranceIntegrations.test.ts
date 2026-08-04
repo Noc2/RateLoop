@@ -95,6 +95,38 @@ test("workspace API keys create and list only their own assurance projects", asy
   );
 });
 
+test("every assurance read service requires evaluation read access", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Read boundary", ownerAddress: ADDRESS_A });
+  const [{ token: publishingToken }, { token: evaluationToken }] = await Promise.all([
+    createWorkspaceApiKey({ workspaceId, name: "Publishing only", scopes: ["panel:publish"] }),
+    createWorkspaceApiKey({ workspaceId, name: "Evaluation reads", scopes: ["evaluation:read"] }),
+  ]);
+  const publishingPrincipal = await authenticateAssuranceApiPrincipal(`Bearer ${publishingToken}`);
+  const evaluationPrincipal = await authenticateAssuranceApiPrincipal(`Bearer ${evaluationToken}`);
+  const consumers = [
+    () => listAssuranceApiProjects(publishingPrincipal),
+    () => getAssuranceApiProject({ principal: publishingPrincipal, projectId: "hap_missing" }),
+    () => getAssuranceApiRunStatus({ principal: publishingPrincipal, runId: "hau_missing" }),
+  ];
+
+  for (const consume of consumers) {
+    await assert.rejects(
+      consume,
+      (error: unknown) => error instanceof TokenlessServiceError && error.code === "insufficient_scope",
+    );
+  }
+
+  assert.deepEqual((await listAssuranceApiProjects(evaluationPrincipal)).projects, []);
+  await assert.rejects(
+    () => getAssuranceApiProject({ principal: evaluationPrincipal, projectId: "hap_missing" }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "assurance_project_not_found",
+  );
+  await assert.rejects(
+    () => getAssuranceApiRunStatus({ principal: evaluationPrincipal, runId: "hau_missing" }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "assurance_run_not_found",
+  );
+});
+
 test("run status is aggregate-only and fails closed across workspaces", async () => {
   const first = await workspaceWithKey("Evaluation team", ADDRESS_A);
   const second = await workspaceWithKey("Other tenant", ADDRESS_B);

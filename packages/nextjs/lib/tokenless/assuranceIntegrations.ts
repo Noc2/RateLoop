@@ -15,7 +15,11 @@ import {
   listAssuranceProjects,
 } from "~~/lib/tokenless/humanAssurance";
 import { preparePrivateReviewFoundation } from "~~/lib/tokenless/privateReviewFoundation";
-import { type ProductPrincipal, authenticateProductPrincipal } from "~~/lib/tokenless/productCore";
+import {
+  type ProductPrincipal,
+  authenticateProductPrincipal,
+  requireProductPrincipalScope,
+} from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 export type AssuranceApiPrincipal = Extract<ProductPrincipal, { kind: "api_key" }>;
@@ -37,6 +41,11 @@ export async function authenticateAssuranceApiPrincipal(authorization: string | 
       "workspace_api_key_required",
     );
   }
+  return principal;
+}
+
+export function authorizeAssuranceApiRead(principal: AssuranceApiPrincipal) {
+  requireProductPrincipalScope(principal, "evaluation:read");
   return principal;
 }
 
@@ -98,6 +107,7 @@ export async function createAssuranceApiPrivateReview(input: {
 }
 
 export async function listAssuranceApiProjects(principal: AssuranceApiPrincipal) {
+  authorizeAssuranceApiRead(principal);
   const projects = await listAssuranceProjects(principal);
   return {
     schemaVersion: HUMAN_ASSURANCE_SCHEMA_VERSION,
@@ -120,6 +130,7 @@ export async function createAssuranceApiProject(input: {
 }
 
 export async function getAssuranceApiProject(input: { principal: AssuranceApiPrincipal; projectId: string }) {
+  authorizeAssuranceApiRead(input.principal);
   return {
     schemaVersion: HUMAN_ASSURANCE_SCHEMA_VERSION,
     projectId: input.projectId,
@@ -128,6 +139,7 @@ export async function getAssuranceApiProject(input: { principal: AssuranceApiPri
 }
 
 export async function getAssuranceApiRunStatus(input: { principal: AssuranceApiPrincipal; runId: string }) {
+  authorizeAssuranceApiRead(input.principal);
   return {
     schemaVersion: HUMAN_ASSURANCE_SCHEMA_VERSION,
     ...(await getAssuranceRunAggregateState(input)),

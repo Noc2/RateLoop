@@ -3,6 +3,7 @@ import { JsonRequestBodyError, readJsonRequestBody } from "~~/lib/mcp/requestBod
 import {
   ASSURANCE_API_RESPONSE_HEADERS,
   authenticateAssuranceApiPrincipal,
+  authorizeAssuranceApiRead,
   createAssuranceApiProject,
   listAssuranceApiProjects,
   parseAssuranceApiProjectRequest,
@@ -15,7 +16,9 @@ export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
   try {
-    const principal = await authenticateAssuranceApiPrincipal(request.headers.get("authorization"));
+    const principal = authorizeAssuranceApiRead(
+      await authenticateAssuranceApiPrincipal(request.headers.get("authorization")),
+    );
     return NextResponse.json(await listAssuranceApiProjects(principal), { headers: ASSURANCE_API_RESPONSE_HEADERS });
   } catch (error) {
     const response = tokenlessErrorResponse(error);
