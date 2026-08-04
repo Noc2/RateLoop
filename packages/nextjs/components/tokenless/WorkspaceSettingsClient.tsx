@@ -140,6 +140,20 @@ function dateLabel(value: string | null, locale = "en") {
       );
 }
 
+function billingPeriodEndLabel(value: string, locale: string) {
+  const date = dateLabel(value, locale);
+  return locale === "de"
+    ? `Der aktuelle Abrechnungszeitraum endet am ${date}.`
+    : `Current billing period ends ${date}.`;
+}
+
+function scheduledCancellationLabel(value: string | null, locale: string) {
+  const date = dateLabel(value, locale);
+  return locale === "de"
+    ? `Die Kündigung ist für den ${date} vorgesehen. Early Access bleibt bis dahin aktiv.`
+    : `Cancellation is scheduled for ${date}. Early Access remains active through that date.`;
+}
+
 function billingUpgradeIntentMessage(billing: WorkspaceBillingSummary) {
   if (billing.plan === "early_access") return "This workspace is already on Early Access.";
   if (!billing.canManageBilling) {
@@ -918,21 +932,20 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                 ) : null}
                 {billing?.cancelAtPeriodEnd ? (
                   <div className="mt-4 rounded-lg bg-base-content/[0.05] p-3 text-sm leading-6 text-base-content/65">
-                    Cancellation is scheduled for {dateLabel(billing.periodEnd, locale)}. Early Access remains active
-                    through that date.
+                    {scheduledCancellationLabel(billing.periodEnd, locale)}
                   </div>
                 ) : null}
 
                 {billing ? (
                   <>
                     <div className="mt-5 grid gap-2 text-xs text-base-content/55 sm:grid-cols-3">
-                      <span>{activeAgentLimitLabel(billing.limits.activeAgents)}</span>
-                      <span>{privateGroupLimitLabel(billing.limits.activePrivateGroups)}</span>
+                      <span>{activeAgentLimitLabel(billing.limits.activeAgents, locale)}</span>
+                      <span>{privateGroupLimitLabel(billing.limits.activePrivateGroups, locale)}</span>
                       <span>{TOKENLESS_HOSTED_REVIEW_COPY.planBenefit}</span>
                     </div>
                     {billing.periodEnd ? (
                       <p className="mt-3 text-xs text-base-content/55">
-                        Current billing period ends {dateLabel(billing.periodEnd, locale)}.
+                        {billingPeriodEndLabel(billing.periodEnd, locale)}
                       </p>
                     ) : null}
                     <div className="mt-5 flex flex-wrap items-center gap-3">
@@ -1048,8 +1061,8 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                               ) : null}
                             </p>
                             <ul className="mt-3 space-y-1 text-sm leading-6 text-base-content/65">
-                              <li>{activeAgentLimitLabel(plan.activeAgents)}</li>
-                              <li>{privateGroupLimitLabel(plan.activePrivateGroups)}</li>
+                              <li>{activeAgentLimitLabel(plan.activeAgents, locale)}</li>
+                              <li>{privateGroupLimitLabel(plan.activePrivateGroups, locale)}</li>
                               <li>{TOKENLESS_HOSTED_REVIEW_COPY.planBenefit}</li>
                             </ul>
                           </article>

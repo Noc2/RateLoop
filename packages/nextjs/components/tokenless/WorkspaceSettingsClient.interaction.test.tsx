@@ -1,7 +1,7 @@
 import React from "react";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
+import { AgentTestProviders, withEnglishAppTestProviders } from "~~/components/tokenless/testing/AgentTestProviders";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 function workspacesResponse() {
@@ -46,6 +46,52 @@ function billingProfileResponse() {
     billingAddress: { country: null, line1: null, line2: null, city: null, postalCode: null, state: null },
   };
 }
+
+test("German workspace billing keeps dynamic plan limits and dates localized", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup, render, within } = await import("@testing-library/react");
+  const userEvent = (await import("@testing-library/user-event")).default;
+  const { WorkspaceSettingsClient } = await import("./WorkspaceSettingsClient");
+  const previousFetch = globalThis.fetch;
+  window.history.replaceState(null, "", "/de/agents/billing?workspace=workspace-1");
+
+  globalThis.fetch = async input => {
+    const url = String(input);
+    if (url === "/api/account/workspaces") return Response.json(workspacesResponse());
+    if (url.endsWith("/billing")) {
+      return Response.json(
+        billingResponse({
+          periodEnd: "2026-09-01T00:00:00.000Z",
+          limits: { activeAgents: 1, activePrivateGroups: 1, paidPanels: false },
+        }),
+      );
+    }
+    if (url.endsWith("/billing/topups")) {
+      return Response.json({ enabled: false, topups: [], ledger: [], reservations: [] });
+    }
+    throw new Error(`Unexpected workspace settings request: ${url}`);
+  };
+
+  try {
+    const view = render(<WorkspaceSettingsClient initialWorkspaceId="workspace-1" />, {
+      wrapper: ({ children }) => <AgentTestProviders locale="de">{children}</AgentTestProviders>,
+    });
+    assert.ok(await view.findByText("1 aktiver Agent"));
+    assert.ok(view.getByText("1 eingeladene Prüfgruppe"));
+    assert.ok(view.getByText("Der aktuelle Abrechnungszeitraum endet am 1. Sept. 2026."));
+    assert.equal(view.queryByText(/active agent|invited reviewer group|Current billing period ends/iu), null);
+
+    await userEvent.setup({ document }).click(view.getByRole("button", { name: "Tarife vergleichen" }));
+    const comparison = document.getElementById("workspace-plan-comparison");
+    assert.ok(comparison);
+    assert.ok(within(comparison).getByText("3 aktive Agenten"));
+    assert.ok(within(comparison).getByText("5 eingeladene Prüfgruppen"));
+  } finally {
+    await act(async () => cleanup());
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});
 
 test("arriving from pricing with billing=upgrade acknowledges the intent and lands on the upgrade action", async () => {
   const restoreDom = installTestDom();

@@ -63,4 +63,14 @@ test("customer-facing resource labels come from the enforced plan limits", () =>
     privateGroupLimitLabel(TOKENLESS_BILLING_PLANS.early_access.activePrivateGroups),
     "5 invited reviewer groups",
   );
+  assert.equal(activeAgentLimitLabel(TOKENLESS_BILLING_PLANS.free.activeAgents, "de"), "1 aktiver Agent");
+  assert.equal(activeAgentLimitLabel(TOKENLESS_BILLING_PLANS.early_access.activeAgents, "de"), "3 aktive Agenten");
+  assert.equal(
+    privateGroupLimitLabel(TOKENLESS_BILLING_PLANS.free.activePrivateGroups, "de"),
+    "1 eingeladene Prüfgruppe",
+  );
+  assert.equal(
+    privateGroupLimitLabel(TOKENLESS_BILLING_PLANS.early_access.activePrivateGroups, "de"),
+    "5 eingeladene Prüfgruppen",
+  );
 });

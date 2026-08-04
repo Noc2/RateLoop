@@ -72,11 +72,13 @@ export function formatUsdPrice(cents: number) {
   }).format(cents / 100);
 }
 
-export function activeAgentLimitLabel(count: number) {
+export function activeAgentLimitLabel(count: number, locale: string = "en") {
+  if (locale === "de") return `${count} ${count === 1 ? "aktiver Agent" : "aktive Agenten"}`;
   return `${count} active ${count === 1 ? "agent" : "agents"}`;
 }
 
-export function privateGroupLimitLabel(count: number) {
+export function privateGroupLimitLabel(count: number, locale: string = "en") {
+  if (locale === "de") return `${count} ${count === 1 ? "eingeladene Prüfgruppe" : "eingeladene Prüfgruppen"}`;
   return `${count} invited reviewer ${count === 1 ? "group" : "groups"}`;
 }
 
