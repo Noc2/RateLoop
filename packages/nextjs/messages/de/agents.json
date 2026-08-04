@@ -98,6 +98,27 @@
     "description": "Der Link ist möglicherweise ungültig, abgelaufen oder wurde ersetzt. Öffne Verbindungen in deinem Arbeitsbereich, um eine neue Verbindungsnachricht zu erstellen.",
     "action": "Verbindungen öffnen"
   },
+  "connectIntent": {
+    "metadataTitle": "Agent-Verbindung",
+    "metadataDescription": "Eine sichere Verbindung mit einem RateLoop-Arbeitsbereich fortsetzen.",
+    "recoveryTitle": "Diese Verbindung klären",
+    "completeBy": "Abschließen bis",
+    "status": {
+      "issued": { "label": "Bereit für den Agenten", "action": "Kehren Sie zum Agenten zurück, damit er die Verbindung starten kann." },
+      "install_required": { "label": "Einrichtung im Agent-Host abschließen", "action": "Schließen Sie die Installation oder Vertrauensabfrage ab und kehren Sie zur selben Agent-Aufgabe zurück." },
+      "authorizing": { "label": "Autorisierung erforderlich", "action": "Schließen Sie die vom Agent-Host geöffnete RateLoop-Autorisierung ab." },
+      "approval_required": { "label": "Freigabe erforderlich", "action": "Prüfen Sie die Zugriffsanfrage, bevor Sie diese Verbindung zulassen." },
+      "testing": { "label": "Verbindung wird geprüft", "action": "Keine Aktion erforderlich. RateLoop prüft die Verbindung." },
+      "connected": { "label": "Agent verbunden", "action": "Keine Aktion erforderlich. Er kann nur Prüfanforderungen und Entscheidungen abrufen." },
+      "action_required": { "label": "Aktion erforderlich", "action": "Kehren Sie zum Agenten zurück und folgen Sie dem Wiederherstellungsschritt der ursprünglichen Verbindung." },
+      "cancelled": { "label": "Verbindung abgebrochen", "action": "Erstellen Sie in RateLoop eine neue Verbindungsnachricht, um es erneut zu versuchen." },
+      "expired": { "label": "Verbindung abgelaufen", "action": "Erstellen Sie in RateLoop eine neue Verbindungsnachricht, um es erneut zu versuchen." },
+      "rejected": { "label": "Verbindung abgelehnt", "action": "Erstellen Sie nur dann eine neue Verbindungsnachricht, wenn Sie es erneut versuchen möchten." },
+      "revoked": { "label": "Zugriff widerrufen", "action": "Erstellen Sie eine neue Verbindungsnachricht, um diesen Agenten erneut zu verbinden." },
+      "superseded": { "label": "Verbindung ersetzt", "action": "Verwenden Sie die neuere Verbindungsnachricht für diesen Arbeitsbereich." },
+      "unknown": { "label": "Verbindung läuft", "action": "Kehren Sie zum Agenten zurück und fahren Sie mit der ursprünglichen Verbindung fort." }
+    }
+  },
   "adaptive": {
     "title": "Adaptive Abdeckung",
     "description": "Prüfraten ändern sich erst, wenn alle Nachweisprüfungen bestanden sind.",

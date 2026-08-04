@@ -98,6 +98,27 @@
     "description": "The link may be invalid, expired, or replaced. Open Connections in your workspace to create a new connection message.",
     "action": "Open Connections"
   },
+  "connectIntent": {
+    "metadataTitle": "Agent connection",
+    "metadataDescription": "Resume a secure RateLoop workspace connection.",
+    "recoveryTitle": "Resolve this connection",
+    "completeBy": "Complete by",
+    "status": {
+      "issued": { "label": "Ready for the agent", "action": "Return to the agent so it can start the connection." },
+      "install_required": { "label": "Finish setup in the agent host", "action": "Complete the install or trust prompt, then return to the same agent task." },
+      "authorizing": { "label": "Authorization needed", "action": "Complete the RateLoop authorization prompt opened by your agent host." },
+      "approval_required": { "label": "Approval required", "action": "Review the access request before allowing this connection." },
+      "testing": { "label": "Verifying connection", "action": "No action needed. RateLoop is checking the connection." },
+      "connected": { "label": "Agent connected", "action": "No action needed. It can check review requirements and decisions only." },
+      "action_required": { "label": "Action required", "action": "Return to the agent and follow its recovery step using the original connection." },
+      "cancelled": { "label": "Connection cancelled", "action": "Create a new connection message in RateLoop to try again." },
+      "expired": { "label": "Connection expired", "action": "Create a new connection message in RateLoop to try again." },
+      "rejected": { "label": "Connection rejected", "action": "Create a new connection message only if you want to try again." },
+      "revoked": { "label": "Access revoked", "action": "Create a new connection message to reconnect this agent." },
+      "superseded": { "label": "Connection replaced", "action": "Use the newer connection message for this workspace." },
+      "unknown": { "label": "Connection in progress", "action": "Return to the agent and continue with the original connection." }
+    }
+  },
   "adaptive": {
     "title": "Adaptive coverage",
     "description": "Review rates change only after evidence gates pass.",

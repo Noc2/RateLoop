@@ -1,70 +1,63 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 import { PublicAgentConnectionStatus } from "~~/components/tokenless/agents/PublicAgentConnectionStatus";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { PageHeading } from "~~/components/tokenless/ui/PageHeading";
+import type { Locale } from "~~/i18n/config";
 import { getOptionalAppUrl } from "~~/lib/env/server";
 import { getPublicAgentConnectionIntent } from "~~/lib/tokenless/agentConnectionIntents";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = {
-  title: "Agent connection",
-  description: "Resume a secure RateLoop workspace connection.",
-  referrer: "no-referrer",
-  robots: { follow: false, index: false },
-};
+export async function generateMetadata({ params }: { params: Promise<{ locale: Locale }> }): Promise<Metadata> {
+  const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: "agents.connectIntent" });
+  return {
+    title: t("metadataTitle"),
+    description: t("metadataDescription"),
+    referrer: "no-referrer",
+    robots: { follow: false, index: false },
+  };
+}
 
-const STATUS_COPY: Record<string, { label: string; action: string; showDeadline?: boolean }> = {
-  issued: {
-    label: "Ready for the agent",
-    action: "Return to the agent so it can start the connection.",
-    showDeadline: true,
-  },
-  install_required: {
-    label: "Finish setup in the agent host",
-    action: "Complete the install or trust prompt, then return to the same agent task.",
-    showDeadline: true,
-  },
-  authorizing: {
-    label: "Authorization needed",
-    action: "Complete the RateLoop authorization prompt opened by your agent host.",
-    showDeadline: true,
-  },
-  approval_required: {
-    label: "Approval required",
-    action: "Review the access request before allowing this connection.",
-    showDeadline: true,
-  },
-  testing: {
-    label: "Verifying connection",
-    action: "No action needed. RateLoop is checking the connection.",
-    showDeadline: true,
-  },
-  connected: {
-    label: "Agent connected",
-    action: "No action needed. It can check review requirements and decisions only.",
-  },
-  action_required: {
-    label: "Action required",
-    action: "Return to the agent and follow its recovery step using the original connection.",
-    showDeadline: true,
-  },
-  cancelled: { label: "Connection cancelled", action: "Create a new connection message in RateLoop to try again." },
-  expired: { label: "Connection expired", action: "Create a new connection message in RateLoop to try again." },
-  rejected: { label: "Connection rejected", action: "Create a new connection message only if you want to try again." },
-  revoked: { label: "Access revoked", action: "Create a new connection message to reconnect this agent." },
-  superseded: { label: "Connection replaced", action: "Use the newer connection message for this workspace." },
-};
+const STATUS_KEYS = new Set([
+  "issued",
+  "install_required",
+  "authorizing",
+  "approval_required",
+  "testing",
+  "connected",
+  "action_required",
+  "cancelled",
+  "expired",
+  "rejected",
+  "revoked",
+  "superseded",
+]);
+const DEADLINE_STATUSES = new Set([
+  "issued",
+  "install_required",
+  "authorizing",
+  "approval_required",
+  "testing",
+  "action_required",
+]);
 
-export default async function AgentConnectionPage({ params }: { params: Promise<{ intentId: string }> }) {
-  const { intentId } = await params;
+export default async function AgentConnectionPage({
+  params,
+}: {
+  params: Promise<{ intentId: string; locale: Locale }>;
+}) {
+  const { intentId, locale } = await params;
+  const t = await getTranslations({ locale, namespace: "agents.connectIntent" });
   const intent = await getPublicAgentConnectionIntent(intentId).catch(() => null);
   if (!intent) notFound();
 
-  const status = STATUS_COPY[intent.status] ?? {
-    label: "Connection in progress",
-    action: "Return to the agent and continue with the original connection.",
-    showDeadline: true,
+  const statusKey = STATUS_KEYS.has(intent.status) ? intent.status : "unknown";
+  const status = {
+    label: t(`status.${statusKey}.label`),
+    action: t(`status.${statusKey}.action`),
+    showDeadline: DEADLINE_STATUSES.has(intent.status) || statusKey === "unknown",
   };
   const recoveryAction = intent.status === "action_required" ? intent.recoveryAction : null;
   const appOrigin = getOptionalAppUrl()?.replace(/\/$/, "") ?? "";
@@ -100,7 +93,7 @@ export default async function AgentConnectionPage({ params }: { params: Promise<
             role="alert"
           >
             <h2 id="connection-recovery-heading" className="text-sm font-semibold text-warning">
-              Resolve this connection
+              {t("recoveryTitle")}
             </h2>
             <p className="mt-1 text-sm leading-6 text-warning/80">{recoveryAction}</p>
           </section>
@@ -110,7 +103,18 @@ export default async function AgentConnectionPage({ params }: { params: Promise<
 
         {status.showDeadline && intent.hardExpiresAt ? (
           <p className="mt-6 border-t border-base-content/10 pt-5 text-sm text-base-content/55">
-            Complete by <time dateTime={intent.hardExpiresAt}>{new Date(intent.hardExpiresAt).toLocaleString()}</time>
+            {t("completeBy")}{" "}
+            <time dateTime={intent.hardExpiresAt}>
+              {new Intl.DateTimeFormat(locale, {
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+                month: "short",
+                timeZone: "UTC",
+                timeZoneName: "short",
+                year: "numeric",
+              }).format(new Date(intent.hardExpiresAt))}
+            </time>
           </p>
         ) : null}
       </Card>

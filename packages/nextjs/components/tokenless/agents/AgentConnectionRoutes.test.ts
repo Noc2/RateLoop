@@ -30,6 +30,8 @@ const publicNotFound = readFileSync(
   "utf8",
 );
 const publicClient = readFileSync(new URL("./PublicAgentConnectionStatus.tsx", import.meta.url), "utf8");
+const englishMessages = readFileSync(new URL("../../../messages/en/agents.json", import.meta.url), "utf8");
+const germanMessages = readFileSync(new URL("../../../messages/de/agents.json", import.meta.url), "utf8");
 const oauthRecovery = readFileSync(
   new URL(
     "../../../app/api/account/workspaces/[workspaceId]/agent-integrations/[integrationId]/recover-oauth/route.ts",
@@ -79,14 +81,19 @@ test("public connection page exposes safe human and machine handoff state", () =
   assert.match(publicPage, /data-rateloop-agent-connection="2026-07-17"/);
   assert.match(publicPage, /rateloop_connect_workspace/);
   assert.match(publicPage, /rateloop_claim_connection_intent/);
-  assert.match(publicPage, /Agent connected/);
-  assert.match(publicPage, /Complete by/);
+  assert.match(publicPage, /getTranslations\(\{ locale, namespace: "agents\.connectIntent" \}\)/);
+  assert.match(publicPage, /new Intl\.DateTimeFormat\(locale,/);
+  assert.match(publicPage, /timeZone: "UTC"/);
+  assert.doesNotMatch(publicPage, /\.toLocaleString\(\)/);
+  assert.match(englishMessages, /Agent connected/);
+  assert.match(englishMessages, /Complete by/);
+  assert.match(germanMessages, /Agent verbunden/);
   assert.doesNotMatch(publicPage, /For the workspace owner|For agents and hosts|generic connection guide/);
   assert.doesNotMatch(publicPage, /<span className="badge[\s\S]{0,100}\{intent\.status\}/);
   assert.match(publicPage, /referrer: "no-referrer"/);
   assert.match(publicPage, /robots: \{ follow: false, index: false \}/);
   assert.match(publicPage, /intent\.status === "action_required" \? intent\.recoveryAction : null/);
-  assert.match(publicPage, /Resolve this connection/);
+  assert.match(publicPage, /t\("recoveryTitle"\)/);
   assert.match(publicPage, /role="alert"/);
   assert.match(publicPage, /!recoveryAction \? <PublicAgentConnectionStatus \/> : null/);
 });
