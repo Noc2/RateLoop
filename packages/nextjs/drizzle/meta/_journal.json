@@ -1331,6 +1331,13 @@
       "when": 1785333600000,
       "tag": "0190_workspace_api_key_scope_cleanup",
       "breakpoints": true
+    },
+    {
+      "idx": 191,
+      "version": "7",
+      "when": 1785337200000,
+      "tag": "0191_remove_quote_api_key_scope",
+      "breakpoints": true
     }
   ]
 }

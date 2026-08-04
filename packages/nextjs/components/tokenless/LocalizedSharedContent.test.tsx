@@ -61,7 +61,6 @@ test("workspace API key permissions render complete German labels and descriptio
   );
 
   for (const expected of [
-    "Prüfangebote anfordern",
     "Prüfarbeit starten",
     "Workspace-Guthaben ausgeben",
     "Prüfergebnisse lesen",
@@ -72,7 +71,7 @@ test("workspace API key permissions render complete German labels and descriptio
   ]) {
     assert.match(html, new RegExp(expected, "u"));
   }
-  assert.doesNotMatch(html, /Request review quotes|Start review work|Read review results|completed review decisions/u);
+  assert.doesNotMatch(html, /Start review work|Read review results|completed review decisions/u);
 });
 
 test("the public evidence client renders its German privacy and form copy through the provider", () => {

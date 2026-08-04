@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 import { newDb } from "pg-mem";
-import { TOKENLESS_AGENT_SCOPES } from "~~/lib/tokenless/productCore";
 
 const MIGRATION_BREAKPOINT = "--> statement-breakpoint";
 const migration = readFileSync(join(process.cwd(), "drizzle", "0190_workspace_api_key_scope_cleanup.sql"), "utf8");
@@ -49,7 +48,7 @@ function applyMigration(database: ReturnType<typeof newDb>) {
   for (const statement of statements(migration)) database.public.none(statement);
 }
 
-test("workspace API-key scope cleanup removes only the retired grant and keeps runtime-valid scopes", () => {
+test("workspace API-key scope cleanup removes only the retired webhook grant", () => {
   const database = createLegacySchema();
   database.public.none(`
     INSERT INTO tokenless_workspace_api_keys (key_id, scopes_json) VALUES
@@ -66,13 +65,8 @@ test("workspace API-key scope cleanup removes only the retired grant and keeps r
   for (const scopeSet of representativeScopeSets) {
     const migrated = migratedByKey.get(scopeSet.keyId);
     assert.deepEqual(migrated, [...scopeSet.after]);
-    assert.equal(
-      migrated?.every(scope => TOKENLESS_AGENT_SCOPES.some(runtimeScope => runtimeScope === scope)),
-      true,
-    );
   }
 
-  assert.equal(TOKENLESS_AGENT_SCOPES.includes("webhook:use" as never), false);
   assert.deepEqual(
     migratedByKey
       .get("legacy_full")

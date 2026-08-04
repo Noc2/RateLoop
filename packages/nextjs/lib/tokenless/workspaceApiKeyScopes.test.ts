@@ -4,7 +4,6 @@ import test from "node:test";
 
 test("workspace API key scopes all have task-language labels and explanations", () => {
   assert.deepEqual(WORKSPACE_API_KEY_SCOPES, [
-    "quote:read",
     "panel:publish",
     "payment:submit",
     "result:read",

@@ -39,7 +39,6 @@ const SIGNATURE_PATTERN = /^0x[0-9a-fA-F]{130}$/;
 const ASK_ROLES = new Set<TokenlessWorkspaceRole>(["owner", "admin", "member"]);
 
 export const TOKENLESS_AGENT_SCOPES = [
-  "quote:read",
   "panel:publish",
   "payment:submit",
   "result:read",

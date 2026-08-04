@@ -38,7 +38,6 @@ test("API key permissions explain their tasks while the request keeps the raw sc
     const view = render(<WorkspaceApiKeysPanel workspaceId="workspace-1" />);
     const user = userEvent.setup({ document });
     const expectedPermissions = [
-      ["Request review quotes", "Check panel availability and pricing before starting public review work."],
       ["Start review work", "Publish review panels and assignments for this workspace."],
       ["Spend workspace funds", "Reserve or submit payment when starting paid review work."],
       ["Read review results", "Retrieve completed review decisions and their supporting details."],
@@ -52,10 +51,8 @@ test("API key permissions explain their tasks while the request keeps the raw sc
       assert.ok(view.getByText(label));
       assert.ok(view.getByText(description));
     }
-    assert.equal(view.queryByText("quote:read"), null);
     assert.equal(view.queryByText("payment:submit"), null);
 
-    await user.click(view.getByRole("checkbox", { name: /Request review quotes/ }));
     await user.click(view.getByRole("checkbox", { name: /Read evaluation state/ }));
     await user.click(view.getByRole("checkbox", { name: /Spend workspace funds/ }));
     await user.click(view.getByRole("checkbox", { name: /Send evaluation telemetry/ }));
@@ -101,7 +98,7 @@ test("API key revocation waits for explicit confirmation and keeps the dialog bu
           apiKeyId: "api-key-1",
           name: "Production agent",
           keyPrefix: "rlk_live",
-          scopes: ["quote:read", "result:read"],
+          scopes: ["result:read"],
           expiresAt: "2026-10-01T00:00:00.000Z",
           revokedAt: null,
           lastUsedAt: null,

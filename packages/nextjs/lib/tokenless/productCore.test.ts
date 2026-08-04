@@ -655,7 +655,7 @@ test("policy-bound agent keys enforce exact audience and panel caps and reserve 
     workspaceId,
     name: "Invited-panel agent",
     policyId: policy.policyId,
-    scopes: ["quote:read", "panel:publish", "payment:submit", "result:read"],
+    scopes: ["panel:publish", "payment:submit", "result:read"],
   });
   await recordPrepaidLedgerEntry({ workspaceId, amountAtomic: "100000000", source: "invoice" });
   const first = await quoteAndRequest(workspaceId, "delegated:first:12345678");

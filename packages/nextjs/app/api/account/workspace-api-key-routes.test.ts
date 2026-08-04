@@ -65,7 +65,7 @@ test("workspace API key routes authorize managers, reveal once, list metadata, a
 
   const crossOrigin = await createApiKey(
     request(path, {
-      body: { name: "Bad origin", scopes: ["quote:read"] },
+      body: { name: "Bad origin", scopes: ["result:read"] },
       method: "POST",
       origin: "https://attacker.example",
       token: owner.token,
@@ -91,7 +91,7 @@ test("workspace API key routes authorize managers, reveal once, list metadata, a
       body: {
         expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
         name: "Production agent",
-        scopes: ["quote:read", "result:read"],
+        scopes: ["result:read", "evaluation:read"],
       },
       method: "POST",
       origin: APP_ORIGIN,
@@ -106,7 +106,7 @@ test("workspace API key routes authorize managers, reveal once, list metadata, a
     token: string;
   };
   assert.match(createdBody.token, /^rlk_[a-f0-9]{16}_[A-Za-z0-9_-]{43}$/u);
-  assert.deepEqual(createdBody.apiKey.scopes, ["quote:read", "result:read"]);
+  assert.deepEqual(createdBody.apiKey.scopes, ["result:read", "evaluation:read"]);
 
   const stored = await dbClient.execute({
     sql: "SELECT key_hash, key_prefix FROM tokenless_workspace_api_keys WHERE key_id = ?",

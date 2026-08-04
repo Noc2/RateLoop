@@ -63,7 +63,7 @@ export function WorkspaceApiKeysPanel({ workspaceId }: { workspaceId: string }) 
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [name, setName] = useState("");
-  const [scopes, setScopes] = useState<WorkspaceApiKeyScope[]>(["quote:read", "result:read", "evaluation:read"]);
+  const [scopes, setScopes] = useState<WorkspaceApiKeyScope[]>(["result:read", "evaluation:read"]);
   const [revealedToken, setRevealedToken] = useState<string | null>(null);
   const [revokeConfirmation, setRevokeConfirmation] = useState<ApiKeySummary | null>(null);
   const { capture, clear, fieldErrors, formError } = useFormErrors();

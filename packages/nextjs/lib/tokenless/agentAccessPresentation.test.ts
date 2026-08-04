@@ -17,7 +17,7 @@ function oauth(overrides: Record<string, unknown> = {}) {
     credentialExpiresAt: FUTURE,
     tokenFamilyStatus: "active",
     oauthRecoveryAvailable: false,
-    grantedScopes: ["quote:read", "result:read"],
+    grantedScopes: ["result:read"],
     ...overrides,
   };
 }

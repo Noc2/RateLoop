@@ -835,6 +835,13 @@ export function createMemoryDatabaseResources(
       Array.isArray(left) && Array.isArray(right) && right.every(value => left.includes(value)),
   });
   memoryDb.public.registerOperator({
+    operator: "-",
+    left: DataType.jsonb,
+    right: DataType.text,
+    returns: DataType.jsonb,
+    implementation: (left, right) => (Array.isArray(left) ? left.filter(value => value !== right) : left),
+  });
+  memoryDb.public.registerOperator({
     operator: "~",
     left: DataType.text,
     right: DataType.text,

@@ -1,8 +1,4 @@
 export const WORKSPACE_API_KEY_SCOPE_DETAILS = {
-  "quote:read": {
-    label: "Request review quotes",
-    description: "Check panel availability and pricing before starting public review work.",
-  },
   "panel:publish": {
     label: "Start review work",
     description: "Publish review panels and assignments for this workspace.",
