@@ -15,7 +15,12 @@ test("connection troubleshooting explains install-time OAuth and keeps recovery 
   assert.match(messages, /Authentication complete/);
   assert.match(messages, /should not need to type another message/);
   assert.match(messages, /still missing on a later turn and Codex offers no action/);
-  assert.match(messages, /rateloop.*rateloop-workspace/s);
-  assert.match(messages, /same task with the original connection message/);
+  assert.match(messages, /inspect the native plugin inventory once/);
+  assert.match(messages, /install rateloop-workspace only if it is absent/);
+  assert.match(messages, /already installed and enabled/);
+  assert.match(messages, /preserve the task and original connection intent/);
+  assert.match(messages, /follow only an action Codex actually presents/);
+  assert.match(messages, /do not reinstall or uninstall plugins/);
+  assert.match(messages, /do not.*start another login.*edit MCP configuration/s);
   assert.doesNotMatch(source, /create a new connection|paste.*link/i);
 });

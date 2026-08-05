@@ -77,7 +77,7 @@
   },
   "troubleshooting": {
     "summary": "Authentifizierung abgeschlossen, aber die Verbindung wartet noch?",
-    "body": "Bei neuen Installationen wird RateLoop autorisiert, bevor die Verbindungsaufgabe startet. Wenn Codex bei einer bestehenden Installation „Authentifizierung abgeschlossen“ anzeigt, kehre zur selben Aufgabe zurück und nutze „Fortfahren“, falls angeboten; du solltest keine weitere Nachricht eingeben müssen. Wenn die Tools in einem späteren Durchlauf weiterhin fehlen und Codex keine Aktion anbietet, deinstalliere beide RateLoop-Plugins—rateloop und rateloop-workspace—und setze dieselbe Aufgabe mit der ursprünglichen Verbindungsnachricht fort."
+    "body": "Bei neuen Installationen wird RateLoop autorisiert, bevor die Verbindungsaufgabe startet. Wenn Codex bei einer bestehenden Installation „Authentifizierung abgeschlossen“ anzeigt, kehre zur selben Aufgabe zurück und nutze „Fortfahren“, falls angeboten; du solltest keine weitere Nachricht eingeben müssen. Wenn die Tools in einem späteren Durchlauf weiterhin fehlen und Codex keine Aktion anbietet, prüfe einmal die native Plugin-Liste und installiere rateloop-workspace nur, wenn es fehlt. Wenn es bereits installiert und aktiviert ist, behalte die Aufgabe und den ursprünglichen Verbindungsversuch bei, folge nur einer von Codex tatsächlich angezeigten Aktion und installiere oder deinstalliere keine Plugins, starte keine weitere Anmeldung und ändere die MCP-Konfiguration nicht."
   },
   "secret": {
     "title": "{label} jetzt kopieren",

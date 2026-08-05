@@ -77,7 +77,7 @@
   },
   "troubleshooting": {
     "summary": "Authentication finished, but still waiting?",
-    "body": "New installs authorize RateLoop before the connection task starts. If Codex shows “Authentication complete” for an existing install, return to the same task and use Continue if offered; you should not need to type another message. If the tools are still missing on a later turn and Codex offers no action, uninstall both RateLoop plugins—rateloop and rateloop-workspace—then resume the same task with the original connection message."
+    "body": "New installs authorize RateLoop before the connection task starts. If Codex shows “Authentication complete” for an existing install, return to the same task and use Continue if offered; you should not need to type another message. If the tools are still missing on a later turn and Codex offers no action, inspect the native plugin inventory once and install rateloop-workspace only if it is absent. If it is already installed and enabled, preserve the task and original connection intent, follow only an action Codex actually presents, and do not reinstall or uninstall plugins, start another login, or edit MCP configuration."
   },
   "secret": {
     "title": "Copy {label} now",
