@@ -77,7 +77,11 @@ describe("RateLoop agent host assets", () => {
     expect(workspaceManifest.mcpServers).toBe("./.mcp.json");
     expect(workspaceMcp).toEqual({
       mcpServers: {
-        "rateloop-workspace": { type: "http", url: workspaceMcpUrl },
+        "rateloop-workspace": {
+          type: "http",
+          url: workspaceMcpUrl,
+          oauth_resource: workspaceMcpUrl,
+        },
       },
     });
     expect(marketplace.name).toBe("rateloop");

@@ -70,7 +70,7 @@ export const CODEX_WORKSPACE_PLUGIN_MARKETPLACE_COMMAND =
   "codex plugin marketplace add Noc2/RateLoop@tokenless --sparse .agents/plugins --sparse plugins/rateloop --sparse plugins/rateloop-workspace";
 export const CODEX_WORKSPACE_PLUGIN_INSTALL_COMMAND = "codex plugin add rateloop-workspace@rateloop";
 export const CODEX_WORKSPACE_PLUGIN_SETUP_COMMAND = `${CODEX_WORKSPACE_PLUGIN_MARKETPLACE_COMMAND}\n${CODEX_WORKSPACE_PLUGIN_INSTALL_COMMAND}`;
-export const CODEX_WORKSPACE_PLUGIN_VERSION = "rateloop-workspace@0.1.4+codex.20260803000000";
+export const CODEX_WORKSPACE_PLUGIN_VERSION = "rateloop-workspace@0.1.5+codex.20260805000000";
 
 /**
  * Per-host syntax below was checked against the named vendors' documentation on
