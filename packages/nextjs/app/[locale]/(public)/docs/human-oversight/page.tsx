@@ -149,8 +149,9 @@ export default function HumanOversightPage({ params }: { params?: PublicLocalePa
           RateLoop records oversight designations with attestation records — competence basis, training completed, and
           authority granted — exportable as an assignment record, and emits audit events on every role assignment and
           change. Reviewer and oversight-person training and calibration records can support measures under Article 4 to
-          develop sufficient AI literacy. Choosing those people, supporting their literacy, and ensuring their
-          competence, training, and authority remains yours.
+          develop AI literacy. Article 4, as amended by Regulation (EU) 2026/1744, requires measures that support that
+          development and does not require guaranteeing any specific level for any individual. Choosing those people,
+          supporting their literacy, and ensuring their competence, training, and authority remains yours.
         </p>
         <p>
           Audit and evidence exports map to the Commission&apos;s draft Article 73 serious-incident reporting template —

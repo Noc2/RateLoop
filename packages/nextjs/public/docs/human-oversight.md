@@ -109,9 +109,10 @@ Legal context: relevant where a provider addresses Article 14(4)(e) intervention
 Article 26(2) requires oversight to be assigned to natural persons with competence, training, and authority. RateLoop
 records oversight designations with attestation records — competence basis, training completed, and authority granted
 — exportable as an assignment record, and emits audit events on every role assignment and change. Reviewer and
-oversight-person training and calibration records can support measures under Article 4 to develop sufficient AI
-literacy. Choosing those people, supporting their literacy, and ensuring their competence, training, and authority
-remains yours.
+oversight-person training and calibration records can support measures under Article 4 to develop AI literacy. Article
+4, as amended by Regulation (EU) 2026/1744, requires measures that support that development and does not require
+guaranteeing any specific level for any individual. Choosing those people, supporting their literacy, and ensuring
+their competence, training, and authority remains yours.
 
 Audit and evidence exports map to the Commission's draft Article 73 serious-incident reporting template — labelled
 draft-aligned until the template is final — and the workspace's oversight configuration exports as a factual

@@ -78,7 +78,8 @@ test("human-oversight docs lead with capabilities and keep legal context seconda
   assert.match(html, /id="designation-and-literacy"/);
   assert.match(html, /attestation records — competence basis, training completed, and authority granted/i);
   assert.match(html, /audit events on every role assignment and change/i);
-  assert.match(html, /support measures under Article 4 to develop sufficient AI literacy/i);
+  assert.match(html, /support measures under Article 4 to develop AI literacy/i);
+  assert.match(html, /does not require guaranteeing any specific level for any individual/i);
   assert.match(
     html,
     /Choosing those people, supporting their literacy, and ensuring their competence, training, and authority remains yours\./,
