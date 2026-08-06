@@ -699,3 +699,149 @@ One correction: the `caller_credential_kind` migration flagged earlier is the **
 answer. That column records which credential the integration is bound to, not how the
 request arrived, and it feeds evidence hashes and the idempotency namespace. Recording
 browser provenance in the audit trail is cheaper and more honest.
+
+## Tier 6 — the security and positioning round
+
+A final audit went after the security posture a German questionnaire actually probes, and
+the regulatory footing of the pitch itself. Three of its findings change decisions.
+
+### 6.1 The pitch is aimed at a deadline that moved — and there is a better one, live today
+
+This document's urgency rests on AI Act Article 26 deployer obligations. **Article 26 sits
+in Chapter III Section 3, which Regulation (EU) 2026/1744 deferred to 2 December 2027** for
+Annex III systems. Article 26(2) oversight, 26(6) retention and 26(7) worker information do
+not bite for another sixteen months. The product's own compliance map already records the
+deferral; this document did not.
+
+**Article 50(4) is live now and was written for this product.** The AI-generated-text
+disclosure duty falls away where the content *"has undergone a process of human review or
+editorial control and where a natural or legal person holds editorial responsibility."*
+That is enforceable today, at up to €15m or 3%, and RateLoop is precisely the evidence that
+the exemption was earned.
+
+**Re-point the deck.** It is a slide reorder, and every hour spent on Tier 4 paper before
+this is an hour spent selling a 2027 problem.
+
+Also note Article 4 was softened to *taking measures to support the development of* AI
+literacy — selling literacy evidence is weaker than it was in 2025.
+
+*One dissenting source places Article 26 outside the deferral, but reaches that by putting
+it in Section 4, which is notifying authorities. The premise is wrong. Still worth counsel
+sign-off before a deck is built on it.*
+
+### 6.2 `yarn security:audit` scans nothing. Verified.
+
+`yarn npm audit --recursive --environment production` reports **`totalDependencies: 0`**
+against **1,918 resolved packages** in the lockfile. Yarn 3.2.3's audit does not traverse
+this workspace, and the CI job has been reporting green over a scan of nothing.
+
+It is not theoretical. `hono` is pinned to `4.12.27` in `packages/ponder/package.json:18`
+and three more times in root `resolutions` — pins written to clear an *older* advisory now
+hold the tree below the fix for **GHSA-8j4g-w8fx-2239**, a ReDoS in CORS middleware fixed in
+4.12.34. And `packages/ponder/src/api/index.ts:161` mounts `cors({ origin: "*" })` on every
+route of a publicly reachable Railway service. Unauthenticated remote CPU burn.
+
+**The 56 Dependabot alerts are misleading in your favour.** They are computed against the
+default branch, and `.github/dependabot.yml` targets `tokenless`, so `main` never receives
+the fixes. Tokenless is materially cleaner than the count implies — but `next` is at exactly
+the minimum fixed version, with zero headroom.
+
+*Half a day: unpin hono, replace the audit script, and add a `schedule:` trigger — the
+dependency job currently only runs on push, unlike CodeQL which runs weekly.*
+
+### 6.3 The AVV makes five security claims the deployment cannot evidence
+
+This inverts an earlier conclusion in this document, which said the DPA's substance was good
+and only its form failed. Annex 1 of the DPA claims **tested recovery procedures**
+(no backup policy, no restore drill, no RTO/RPO exists anywhere), **segregated production
+roles** (a one-person UG), **monitored operational failures** (failures are detected and
+recorded; nobody is notified — there is no alerting of any kind), **access logging**
+(operator access via migration scripts or direct psql is not logged), and **prompt
+deprovisioning** (undefined interval).
+
+The irony is exact: the claim gate's file collection **is** recursive over the public app
+directory, so the DPA page is scanned — but the eighteen rules are all about evidence
+capabilities, and there is **no rule class for security or TOM assertions**. The gate that
+protects the marketing does not protect the contract.
+
+A German DPO asks for the last restore-test record before anything else. Marketing
+over-claim costs a slide; an unevidenced TOM annex is a term of a signed AVV.
+
+### 6.4 Security items a questionnaire or pentest would raise
+
+- **The Better Auth admin plugin is mounted, including impersonation.** `betterAuth.ts:156`
+  enables `admin({ defaultRole: "user" })`. The route handler deliberately blocks twelve SSO
+  and SCIM management paths and **does not block `/admin/*`**. The schema carries `role`,
+  `banned`, `banReason` and `impersonatedBy`. No application code grants admin, so the
+  endpoints 403 today — but the questionnaire item is *"can vendor staff sign in as a user?"*
+  and the honest answer is currently "an impersonation endpoint is deployed, gated by a
+  database column." Nothing uses the plugin. **One hour.**
+- **No rate limiting on authentication.** The DB-backed limiter is well built and consumed by
+  six route files; `betterAuth()` configures no `rateLimit` and no `secondaryStorage`, so the
+  default is in-memory — per-lambda on Vercel, which is not a limit. Nothing throttles
+  *requesting* email codes. Email-bombing an arbitrary address is a standard finding, and the
+  limiter already exists.
+- **Raw error objects on the main API error path.** `server.ts:854` logs the error object; a
+  `pg` unique-violation carries the conflicting value in `detail`, so personal data reaches
+  runtime logs. The fix is already written in `lib/auth/publicRouteError.ts` — apply it.
+- **The CSP still advertises the retired web3 stack** — thirdweb, WalletConnect, Worldcoin
+  bridge, Base mainnet. A reviewer reading it learns an architecture you no longer have. And
+  there is no `report-to`, so CSP violations, the cheapest intrusion signal available, go
+  nowhere.
+- **No error tracking, APM, alerting or log drain anywhere.** The single hit is an OTLP
+  *ingest* endpoint: RateLoop receives its customers' traces and emits none of its own.
+
+### 6.5 The one capability worth building — and it is already written
+
+**Surface `employmentDataGovernance` as a workspace mode defaulting to `aggregate_only`.**
+
+`lib/tokenless/employmentDataGovernance.ts` is a complete model — `processingMode`,
+`worksCouncilStatus` including `agreement_recorded`, `dpiaStatus`, lawful basis, worker
+notice — with a **twelve-gate block** that refuses to activate per-reviewer analytics until
+every gate is recorded. It has one caller, no API route and no UI.
+
+This is the answer to 5.1. Not a document promising no performance monitoring, but **a mode
+that cannot produce per-reviewer evaluative output while it is on**, with those twelve gates
+as the only way to turn it off, plus an exportable pack for the works council.
+
+Why this over the alternatives: a penetration test is a document you buy that goes stale; a
+trust page is packaging; qualified timestamping is a differentiator, not an unblocker; B8
+changes the demo, not the procurement file. **Every other item on this list is an absence.
+This one is a present hazard** — the product records which named person reviewed what, when,
+with their rationale, and renders it per reviewer. A works council that reaches the obvious
+conclusion does not merely block the deal; it tells the buyer your product pulled *them*
+into high-risk obligations.
+
+You are also the only vendor who can ship it in days rather than months, because the model,
+the gates and the vocabulary already exist behind no route.
+
+### 6.6 More that is under-sold, and two corrections
+
+Not previously counted: **CycloneDX SBOM and signed build provenance** for both container
+services; **CodeQL `security-extended` weekly**, Trivy with a hard gate, Slither, all actions
+SHA-pinned; **exemplary OAuth 2.1** with exact redirect matching, mandatory S256 PKCE and
+resource indicators; **a real Löschkonzept in code** — 30-day deletion, 365-day audit,
+3,650-day billing retention matching § 147 AO and § 257 HGB; **a working Art. 15/17/20 DSAR
+pipeline**; **audit metadata key rejection** for authorization, cookie, email, JWT, OTP,
+password, private key, refresh token, secret and signature, which is a control that belongs
+in a TOM annex verbatim; and **no XSS surface for agent-submitted content** — the only two
+`dangerouslySetInnerHTML` uses are a static theme bootstrap and escaped JSON, and no markdown
+renderer is installed. For a product whose job is showing untrusted model output to humans in
+a browser, that is a good answer nobody is giving.
+
+Two corrections: **the Löschkonzept largely exists** — it is a document generated from three
+constants, not a project. And **"Frankfurt-pinned" is over-precise**: Vercel is `fra1` but
+the indexer runs in `europe-west4-drams3a` (Netherlands). Both EEA, no transfer issue, and
+the DPA already says EEA — so say EEA.
+
+**Do not spend on ISO/IEC 42001 in 2026.** No harmonised standard is published in the OJ, so
+it confers no Article 40 presumption, and the audit found no verifiable German buyer demand —
+every source claiming otherwise was vendor SEO. Cheaper credible signals exist: a **CSA STAR
+Level 1** public registry entry, and the **EU Cloud Code of Conduct** at SME pricing, which
+attacks the actual legal gate since Article 28(5) makes adherence to an approved code an
+explicit way to demonstrate Article 28(1) sufficient guarantees.
+
+One tiering insight worth more than any certificate: German industrial buyers grade the ask
+to the data class. *Intern* gets a management-signed self-assessment; only *vertraulich* and
+above demand TISAX or ISO 27001. **Argue the data classification down to *intern* wherever
+it is true and you are in the self-assessment tier, not the certificate tier.**
