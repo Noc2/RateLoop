@@ -8,8 +8,8 @@ import { Card } from "~~/components/tokenless/ui/Card";
  * this notice the page renders an unexplained gap, and the anchors that link to
  * `#paid-work`, `#earnings` and the rest resolve to nothing.
  */
-export function PaidWorkUnavailableNotice({ reason }: { reason: string }) {
-  const t = useTranslations("paidWorkUnavailable");
+export function PaidWorkUnavailableNotice() {
+  const t = useTranslations("human.paidWorkUnavailable");
   return (
     <Card as="section" id="paid-work" className="scroll-mt-24 rounded-2xl p-6" aria-labelledby="paid-work-heading">
       <div className="border-b border-base-content/10 pb-4">
@@ -19,7 +19,6 @@ export function PaidWorkUnavailableNotice({ reason }: { reason: string }) {
         </h2>
       </div>
       <p className="mt-4 text-sm text-base-content/80">{t("body")}</p>
-      <p className="mt-2 text-sm text-base-content/60">{reason}</p>
     </Card>
   );
 }

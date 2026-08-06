@@ -7,7 +7,7 @@ import { RaterSettlementRecoveryClient } from "~~/components/tokenless/human/Rat
 import { ReviewerAccessPanel } from "~~/components/tokenless/human/ReviewerAccessPanel";
 import { ReviewerEarningsClient } from "~~/components/tokenless/human/ReviewerEarningsClient";
 import { WorldIdProfilePanel } from "~~/components/tokenless/human/WorldIdProfilePanel";
-import { configuredHumanReviewLaneMessage, configuredHumanReviewLanes } from "~~/lib/tokenless/reviewCapabilities";
+import { configuredHumanReviewLanes } from "~~/lib/tokenless/reviewCapabilities";
 
 export function HumanProfileContent({ worldIdEnabled }: { worldIdEnabled: boolean }) {
   const lanes = configuredHumanReviewLanes();
@@ -37,7 +37,7 @@ export function HumanProfileContent({ worldIdEnabled }: { worldIdEnabled: boolea
           </section>
         </>
       ) : (
-        <PaidWorkUnavailableNotice reason={configuredHumanReviewLaneMessage("privateInvitedPaid")} />
+        <PaidWorkUnavailableNotice />
       )}
     </>
   );
