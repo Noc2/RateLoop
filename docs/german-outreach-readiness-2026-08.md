@@ -1,8 +1,15 @@
 # Before pitching German companies — readiness list
 
-Written 6 August 2026 against `d65c67183`, from four agent audits: an end-to-end product
-walkthrough, a German commercial and legal review, a claim-integrity audit that re-ran the
-in-product claim gate against the sales collateral, and a regulatory currency check.
+Written 6 August 2026, last revised against `90b7b2d91`. Sources: four audits of the
+product and its collateral, then a second round covering internal consistency, German
+enterprise procurement, the first-run journey, architecture health, and 2026 regulatory
+change.
+
+**Completed items have been removed rather than ticked.** Eleven readiness items and four
+build items landed between `2853daf74` and `90b7b2d91` — the pitch URL, the ODR notice, the
+pricing page, the AI-literacy wording, the README caveats, the reviewer-profile empty state,
+reasons in the agent envelope, majority panel resolution, and the FINRA/ISO/NIST citations.
+Each is a separate commit with tests. What remains is below.
 
 This list is long because the gap is not in one place. The German *story* is ready and the
 German *surface* is unusually good. The German *paper* is not, the *product* has one
@@ -11,35 +18,6 @@ protects the website does not protect the deck.
 
 Nothing here is legal or tax advice. Items marked **counsel** or **Steuerberater** should
 not be drafted in-house.
-
-## What has been implemented since this list was written
-
-Nine changes landed on `tokenless` between `2853daf74` and `6d5420cdf`. Each is a separate
-commit with its tests.
-
-| Item | Status |
-| ---- | ------ |
-| 0.1 pitch URL | **Done.** `/rate` now forwards only a legacy invite link and sends everyone else to `/`. |
-| 0.4 Impressum ODR paragraph | **Done.** Removed, with its six catalogue entries. The USt-IdNr and telephone number still need values only you have. |
-| 0.5 pricing page | **Done.** Public $29, the struck $99 and the 20% discount are gone from the pricing page, the home overview, the terms and both catalogues. Sandbox €0 and the €2,500 Founding Pilot are published with a net-of-VAT line, and no recurring price. Regression guards assert the anchor cannot return. |
-| 0.6 "sufficient AI literacy" | **Done.** Restated as the omnibus amended Article 4, in both pages, both machine mirrors and both catalogues, with the pinning test updated and a second assertion added. |
-| 1.2 root README | **Done.** Unreachable capabilities are now caveated where they are claimed, not sixteen lines later. |
-| 2.3 reasons in the envelope | **Done.** The agent result now carries an aggregate summary, suppressed below the same threshold the evidence export uses. Reviewers are told their reasoning may be forwarded. |
-| 2.5 empty reviewer profile | **Done.** The blank region now explains why paid-work sections are absent. |
-| 6.1 FINRA citation | **Done.** 24-09 no longer carries human-review language; the 2026 Oversight Report and Rule 3110.07 are their own mappings. Bare A.6, MEASURE and MANAGE narrowed to specific controls. |
-| 6.2 OSCAL regulation cite | **Done.** The 2026/1744 amendment is recorded on the EU framework. |
-
-**Still open and worth knowing why.** 0.2 and 0.3 need a domain mailbox and a booking URL —
-values, not code. Tier 3 payment work is unchanged, and deliberately so: the pilot is
-hand-invoiced, which needs no billing code. Tier 4 is counsel and procurement work. Of the
-build list, B4 (single-file verifier), B5 (majority resolution), B6 (operator verification
-script), B7 (localised email), B8 (browser review path), B9 (decision meter), the PDF
-export, the status page and the translation guard are not done.
-
-One correction found while implementing: **the browser verifier at `/docs/evidence/verify`
-already exists** — public, unauthenticated, and it verifies without uploading the packet. It
-is the strongest demo asset available today and B4 is only about giving an auditor a file
-they can run themselves.
 
 ## The decision that governs everything else
 
@@ -63,19 +41,7 @@ before they sign, not after.
 
 These are cheap, and each one currently costs you credibility in the first five minutes.
 
-### 0.1 The pitch URL lands on an empty reviewer inbox
-
-`https://rateloop-tokenless.vercel.app/rate` does not render a product page.
-[`rate/page.tsx:19-20`](../packages/nextjs/app/[locale]/(app)/rate/page.tsx) redirects
-through `rateRedirectHref`
-([`humanNavigation.ts:61-64`](../packages/nextjs/components/tokenless/human/humanNavigation.ts))
-to `/human/review` — the **reviewer's work queue**. A German procurement lead following
-that link sees "No review work is assigned to you right now."
-
-Send prospects to `/` or `/agents`. This is a one-line change to what you paste into an
-email, and it is the single highest-return item on this list.
-
-### 0.2 The contact of record is a personal ProtonMail address
+### 0.1 The contact of record is a personal ProtonMail address
 
 `hawigxyz@proton.me` is simultaneously the Impressum contact
 ([`imprint/page.tsx:44`](../packages/nextjs/app/[locale]/(public)/legal/imprint/page.tsx)),
@@ -86,82 +52,10 @@ objection address, the cookies contact, and the Enterprise "Book demo" button
 In Germany this reads as "not a real company" to a Rechtsabteilung or Einkauf. A domain
 mailbox is an hour of work and changes how every legal document is received.
 
-### 0.3 There is no working booking link
+### 0.2 There is no working booking link
 
 `TOKENLESS_DEMO_BOOKING_URL` is empty (`.env.example:290`), so "Book demo" falls back to
 `mailto:` ([`demoBooking.ts:12-26`](../packages/nextjs/lib/marketing/demoBooking.ts)).
-
-### 0.4 Two Impressum defects under § 5 DDG
-
-The page correctly cites **§ 5 DDG** — the right statute, since DDG replaced TMG in May
-2024 — and carries the company, Rechtsform, ladungsfähige Anschrift, Geschäftsführer,
-`HRB 24975, Amtsgericht Bad Kreuznach`, and a § 18 Abs. 2 MStV responsible person. Two
-things are missing:
-
-- **No USt-IdNr.** Required by § 5 Abs. 1 Nr. 6 DDG *sofern vorhanden*, and you will need
-  one to invoice EU B2B at all.
-- **No second fast contact channel.** § 5 Abs. 1 Nr. 2 requires means of *unmittelbare
-  Kommunikation* beyond email. Per **EuGH C-298/07**, email alone is insufficient; a
-  contact form counts only if answered within roughly 30–60 minutes. A telephone number is
-  the only unambiguously safe option. There is no phone number anywhere in the repo.
-
-Also **delete the ODR paragraph** (`:65-80`). Regulation (EU) 2024/3228 repealed the ODR
-Regulation and the platform shut on 20 July 2025 — the reference is now itself a defect.
-The § 36 VSBG sentence applies only to Verbraucher and is unnecessary for pure B2B.
-
-Exposure is not really the €50,000 Bußgeld ceiling; it is an Abmahnung plus a
-strafbewehrte Unterlassungserklärung, typically €2,500–5,100 per repeat including an
-accidental regression after a redesign.
-
-### 0.5 The pricing page contradicts your own deck
-
-The Kundenpitch quotes **€ 2.500 netto**. The live page shows **$29** with a struck-through
-**$99** and a blanket 20% future discount
-([`WorkspacePlanCards.tsx:24,81,94`](../packages/nextjs/components/pricing/WorkspacePlanCards.tsx),
-[`terms/page.tsx:111`](../packages/nextjs/app/[locale]/(public)/legal/terms/page.tsx),
-and both message catalogues). Your own Preisempfehlung lists removing these as steps 1–3
-**"vor Outreach"**. They are still live in six places.
-
-A prospect who opens the pricing page during your pitch sees a different offer than the one
-you just made. Worse: the card always renders `$29`, but its button swaps to **"Request
-pilot"** whenever self-serve checkout is disabled — which the operating rules require. So
-the page shows **a $29 price tag whose only available action is to ask for a €2,500 pilot.**
-
-**Resolution: delete the public $29 anchor.** Research settled this against the earlier
-position that it could stay as a founding offer:
-
-- Its own condition was never met. It was to be kept "only if its displayed limits and
-  checkout state are true", and neither is.
-- **Every verified competitor publishes no price** — Vanta, Drata, Secureframe, OneTrust,
-  Credo AI, Holistic AI, and the closest comparable, Munich-based trail, which sells a
-  structured proof of concept instead.
-- A published $29 is not an anchor you discount from; it is a net price a buyer can quote
-  back at you, making €2,500 an 86× markup to justify.
-- The seller is a German UG. Quoting USD to German buyers is an unforced credibility loss.
-- There is a German legal wrinkle: the Preisangabenverordnung binds consumer-facing offers,
-  and a court has held a publicly accessible shop must be assumed to address consumers
-  unless the trader takes **suitable control measures** to ensure only business buyers can
-  purchase (BGH I ZR 99/08 — technical gating satisfies the test but is not the test).
-  Removing the public price removes the exposure.
-
-The pricing page should show **Sandbox €0** and the **Founding Pilot at €2,500 netto,
-6 weeks, 50% creditable**, with "Alle Preise netto zzgl. 19 % USt." **Publish no recurring
-price until three pilots have closed**, then €1,200/month — see the business plan for the
-derivation, and note it replaces the €249 tier, at which break-even needs 24–30 customers.
-
-None of this needs billing code. The pilot is invoiced by hand in EUR with 19% USt.,
-collected by SEPA transfer, entirely outside the product.
-
-### 0.6 "sufficient AI literacy" is still shipped
-
-The Vertriebsleitfaden `.docx` flagged this for correction before outreach; the rewritten
-markdown source no longer carries the note, so it survives only here. It is live in
-`docs/human-oversight/page.tsx:152`, `docs/evidence/page.tsx:88`,
-`public/docs/evidence.md:24`, and both catalogues at `:528` and `:630` — and it is locked
-in by a test assertion at `docs/human-oversight/page.test.tsx:81`, so fixing it means
-touching the test too. The Omnibus softened Article 4 to *taking measures to support the
-development* of AI literacy, with an explicit statement that no specific level need be
-guaranteed.
 
 ## Tier 1 — the claim problem
 
@@ -187,24 +81,7 @@ The gate also cannot see `.docx` or `.pptx` at all — there is no OOXML extract
 in the repo — and does not scan the root `README.md`, which is in the deployment-claim file
 list for a different purpose but is never passed to the claim scan.
 
-### 1.2 The specific claims to fix before the first conversation
-
-| Where | Claim | Problem |
-| ----- | ----- | ------- |
-| Kundenpitch slide 5 | „Signiertes, exportierbares Paket" | German twin of a build-blocked English claim. `managed_evidence_signing`, `published_evidence_signing_key_history` and `offline_evidence_packet_verifier` are all `false` |
-| Kundenpitch slides 4–5 | The Go/Revise/Stop decision is inside the signed packet | The product documents the opposite: the owner decision is a **separate** artifact (`public/docs/evidence.md:57`) |
-| Vertriebsleitfaden ¶183 | „Erzeugt signierte, integritätsprüfbare Nachweispakete" | Sits in the guide's **"belastbar"** column — the document tells the salesperson this claim is safe. It is the German equivalent of a phrase that fails the build |
-| Vertriebsleitfaden ¶155 | Offline verification as a **contractual success gate** | Worst possible placement for a gated claim |
-| Vertriebsleitfaden ¶191 | „Pseudonyme pro Run" | Reviewer identities are excluded and pseudonymised, but per-run rotation is unconfirmed. Do not assert it |
-| Root `README.md:3-4,14-16` | USDC payment, proof-of-human admission, RBTS, Surprisingly Popular | All unreachable; the mock-token caveat is 16 lines later under a different heading |
-
-Note the mechanism for signing genuinely works — Ed25519 signing, a public unauthenticated
-trusted-keys endpoint, a CLI verifier and a synthetic example packet all ship. The
-capability flags mean "deployed and exercised for public claims", not "code exists"
-(`:29-31`). So the honest form is to describe the mechanism and state that it has not been
-externally exercised, rather than to claim the capability.
-
-### 1.3 What is genuinely safe to say
+### 1.2 What is genuinely safe to say
 
 Verified against shipped code. Use these.
 
@@ -227,7 +104,7 @@ Your deck's slide 6 („LIEFERT NICHT") and the Vertriebsleitfaden's „Macht un
 compliant?" → „**Nein.**" are the strongest claim discipline in the entire corpus. Keep
 them verbatim.
 
-### 1.4 Never say these, in either language
+### 1.3 Never say these, in either language
 
 "Compliance-ready" · "RateLoop makes/keeps you compliant" · "garantiert Konformität" ·
 "RateLoop is SOC 2 / ISO 42001 / HIPAA certified" · "RateLoop ist DSGVO-konform" ·
@@ -268,24 +145,7 @@ Note that "set the panel to 1 for the demo" is not available: `MINIMUM_REVIEW_PA
 is enforced server-side and mirrored in the editor. Changing it is a code change, not a
 setting. See B5.
 
-### 2.3 The agent envelope withholds the reasons — but the browser already shows them
-
-`rationale: { summaryAllowed: false, aggregateSummary: null }` is **hardcoded**
-([`privateReviewResponses.ts:742`](../packages/nextjs/lib/tokenless/privateReviewResponses.ts)),
-so the customer's agent receives an outcome enum only.
-
-**An earlier draft of this document concluded "either ship it or stop promising it". That
-was wrong, and the correction makes this much cheaper.** Reasons are collected by default
-(`rationaleMode` defaults to `required`), stored encrypted, decrypted for the invited lane
-because the workspace owns them, served over a session route, and **rendered on screen per
-reviewer with disagreement** at
-[`EvaluationDashboardPanel.tsx:546`](../packages/nextjs/components/tokenless/agents/EvaluationDashboardPanel.tsx).
-
-So the landing-page promise is honoured in the product UI and broken only in the API. The
-projection layer already knows how to carry an aggregate summary. This is a one-file change,
-not a feature build. See B2.
-
-### 2.4 The setup chain before a first review is long and unguided
+### 2.3 The setup chain before a first review is long and unguided
 
 [`privateReviewFoundation.ts:183-402`](../packages/nextjs/lib/tokenless/privateReviewFoundation.ts)
 requires all of: an active agent integration bound to an approved, non-superseded
@@ -297,27 +157,7 @@ classification through the deadline, and cohort membership with capacity headroo
 
 There is no guided wizard past the initial connect step.
 
-### 2.5 Everything visible will be empty
-
-Dashboards render "No decisions in this period.", "No completed cases in this period.",
-"No active reviewers yet.", "No evaluations yet". The reviewer profile renders **nothing at
-all** — no explanatory text — where paid work would be
-([`HumanProfileContent.tsx:11-40`](../packages/nextjs/components/tokenless/human/HumanProfileContent.tsx)).
-Landing-page social proof is filtered out rather than shown as zero, so there is no
-traction claim at all. Selecting a paid or network review path throws "Dieser Prüfpfad ist
-noch nicht verfügbar." — **at save time, after the prospect has watched you fill in the
-whole form.**
-
-**One correction to an earlier draft of this document.** It claimed Free and Early Access
-are "functionally identical" because the decision meter never counts. That is wrong. Active
-agent limits are enforced at three production call sites and private-group limits at one,
-so 1-vs-3 agents and 1-vs-5 groups are real. **Only the decision allowance is unenforced** —
-and the precise remaining problem is sharper than "no reason to upgrade": a paying workspace
-would see **"0 of 250"** if it were displayed — but no component renders it and three tests
-forbid rendering it, so this is dormant rather than a live defect. Wire the meter before
-selling a plan that advertises a decision count, not before outreach.
-
-### 2.6 Chain inspection leads somewhere you do not want to go
+### 2.4 Chain inspection leads somewhere you do not want to go
 
 Contracts resolve to Base Sepolia with a `MockERC20` "TestUSDC". Do not invite
 blockchain-literate questions, and do not describe settlement in the present tense.
@@ -495,52 +335,6 @@ Ranked by commercial return **per hour of work**. Absolute impact differs and is
 Every item was checked against the code; several existing estimates moved once the code was
 read properly.
 
-### B1. Make `/rate` a product page — 1–2 hours
-
-Branch in [`rate/page.tsx:19-20`](../packages/nextjs/app/[locale]/(app)/rate/page.tsx): if
-`assignment`, `terms` or `invite` is present, keep the reviewer forward; otherwise redirect
-to `/`. `canonicalReviewSearchParams` already tells you whether any reviewer parameter
-survived, so the conditional is one line.
-
-Safer than it looks: **nothing in the product links to `/rate` any more.** Reviewer
-invitations build `/human/review` directly. It is a pure legacy alias.
-
-*Unlocks:* the URL in every email and deck footer stops landing on an empty gig inbox.
-*Test risk:* low — the hosted smoke test only asserts a `<main>` renders and status < 500.
-
-### B2. Return the reasons in the agent envelope — 1 day
-
-Widen the select in `terminalEnvelopeForDelivery` to include the rationale columns, reuse
-`decryptWorkspaceOwnedRationale` (already proven in the evidence projection), and gate
-`summaryAllowed` on the frozen profile's `rationaleMode !== "off"`.
-
-**80% built.** `humanReviewResultProjection.ts` already trims and emits
-`{ mode: "aggregate_summary", summary }` when `summaryAllowed` is true, and the
-`summaryAllowed: true` path is already exercised in its tests.
-
-Decide one thing first, in about thirty minutes: the envelope is deliberately an
-**aggregate** surface that strips per-reviewer identity. Emit a synthesised aggregate, never
-a per-reviewer list, and keep small-cell suppression consistent with the export.
-
-*Unlocks:* you can show the landing-page claim and the API response in the same meeting.
-*Test risk:* medium, bounded — the withholding test only asserts behaviour when
-`summaryAllowed` is false; one integration test pins the literal null and needs updating.
-
-### B3. Empty states that explain instead of showing nothing — ½–1 day
-
-Four demo surfaces render nothing at all. The worst is
-[`HumanProfileContent.tsx:20,38`](../packages/nextjs/components/tokenless/human/HumanProfileContent.tsx),
-where five sections vanish with no text and their anchor links dead-end.
-
-**The copy is already written and unused:** `HUMAN_REVIEW_LANE_UNAVAILABLE_MESSAGES` in
-[`reviewCapabilities.ts:183-191`](../packages/nextjs/lib/tokenless/reviewCapabilities.ts) is
-ready-made explanatory text for exactly these lanes. Render it in the `: null` branch.
-
-While there: the server emits "in this **window**" while the UI says "in this **period**".
-A German compliance reader will notice the disagreement.
-
-*Test risk:* medium — several assertions match literal source text.
-
 ### B4. A single-file offline verifier — ½ day
 
 **Correction to an earlier estimate.** This was listed at 2–3 days on the belief that no
@@ -557,23 +351,6 @@ clone the monorepo and run `yarn workspace`.
 
 *Unlocks:* an interne Revision or Wirtschaftsprüfer will not verify a vendor's signature by
 visiting the vendor's own website. They want a file.
-
-### B5. Make the demo incapable of returning "inconclusive" — 1–2 days
-
-Resolve on a **decisive majority** rather than unanimous participation.
-[`directPrivateReviewEvidence.ts:212`](../packages/nextjs/lib/tokenless/directPrivateReviewEvidence.ts)
-already computes the right threshold — `Math.floor(panelSize / 2) + 1`. Reuse it, and pair it
-with a frozen tie-break policy on the request profile defaulting to today's behaviour so
-nothing existing changes.
-
-Do **not** take the alternative route of lowering `MINIMUM_REVIEW_PANEL_SIZE` to 1: it
-ripples into cohort bounds, quote minimums and the aggregation floor, and "one reviewer" is
-not a panel — a German buyer will say so.
-
-*Independent value:* waiting for a straggler after the majority has decided is a latency bug,
-not a safety feature.
-*Test risk:* **high** — this is the most test-dense area in the codebase, and changing
-outcome derivation changes result-commitment inputs.
 
 ### B6. Operator business verification as a CLI script — ½ day
 
@@ -682,36 +459,6 @@ The pricing hypothesis is no longer open — see 0.5. The Preisempfehlung was ri
 commercial research document has been removed, so `docs/sales/` and the business plan are
 now the single owners of price.
 
-## Two corrections to make in code, not in a document
-
-These came out of the regulatory research and matter because they are claims a German
-compliance buyer may actually check.
-
-### 6.1 The FINRA citation is wrong
-
-[`assuranceComplianceMap.mjs:208-218`](../packages/nextjs/config/assuranceComplianceMap.mjs)
-maps "records of human review, configured escalation, model metadata … for a member firm's
-supervision analysis" to **FINRA Regulatory Notice 24-09**. The notice supports none of
-that — it is a reminder that existing rules apply to Gen AI, and its only mention of a
-human is a parenthetical about compliance personnel receiving surveillance summaries. The
-language actually relied on is from FINRA's **2026 Annual Regulatory Oversight Report**
-(9 December 2025).
-
-Separately, the same file cites bare `A.6` (`:132`), `MEASURE` (`:170`) and `MANAGE`
-(`:180`) — whole ISO life-cycle objectives and whole NIST functions. That claims two of the
-RMF's four functions. Narrow to A.6.2.6/A.6.2.8 and A.9.2, and to MEASURE 2.8, MEASURE 3.3,
-MANAGE 2.4 and MANAGE 4.1, all of which the product genuinely evidences.
-
-Worth knowing while you are there: **Rule 3110.07** is the strongest citation available to
-this product and neither the map nor the legal analysis uses it. It requires evidence of
-review to identify the reviewer, the item reviewed, the date and the action taken — a
-binding, named record schema matching what you already emit, needing no new AI regulation.
-
-### 6.2 The OSCAL map cites a superseded regulation
-
-It cites Regulation (EU) 2024/1689 but not the **2026/1744** amendment already used
-elsewhere in `docs/`. Add it.
-
 ## Ordering
 
 If you do nothing else, do Tier 0 — it is a day of work and it changes the first
@@ -725,3 +472,230 @@ and the pentest need external parties.
 Payment (Tier 3) can wait until a pilot is verbally agreed, since the first invoices will
 be manual anyway — but not longer, because the second and third customers will not accept
 a hand-written invoice in USD.
+
+## Tier 5 — what the second review round found
+
+Five agents re-audited the product after the first round of fixes landed. These are new,
+and several outrank items already on this list.
+
+### 5.1 The works council is the deal blocker, not the paperwork
+
+A product that records **which named human reviewed which AI output and when** is
+objectively suitable for performance monitoring, and settled BAG doctrine reads
+§ 87 Abs. 1 Nr. 6 BetrVG on objective suitability alone — intent is irrelevant.
+Co-determination is enforceable; introduction without agreement can be enjoined.
+
+Two things make this heavier than the earlier note suggested:
+
+- **§ 80 Abs. 3 Satz 2 BetrVG**: where a works council must assess the introduction of AI,
+  an external expert is **statutorily presumed necessary**. The employer cannot argue it
+  away and pays for it. That inserts a third party who must be briefed and who will read
+  your documentation.
+- **§ 90 Abs. 1** requires the employer to inform the works council *rechtzeitig unter
+  Vorlage der erforderlichen Unterlagen*, and it now names AI explicitly. **The buyer
+  cannot satisfy this without documentation from you, and cannot do it after signing.**
+  This is why deals stall between letter of intent and signature.
+
+Realistically one to two quarters for a first-of-its-kind agreement; faster only if it can
+roll under an existing framework agreement for IT systems. Do not put a number in
+collateral — there is no defensible published figure, and a works council will read a
+confident estimate as naive.
+
+**What to build, because a contractual promise will not close a works council:**
+aggregation thresholds, a switch that disables per-user reporting and leaderboards, and
+pseudonymisation options. **What to write:** a field-level data catalogue, a roles and
+permissions matrix, exactly what the audit trail records and who can query it, subprocessors
+with jurisdictions including any LLM, and a change-notification commitment.
+
+### 5.2 EU Data Act Chapter VI already applies, and Germany already enforces it
+
+Regulation (EU) 2023/2854 has applied since 12 September 2025, and the German
+implementing act (DADG) has been in force since 30 May 2026 with the Bundesnetzagentur as
+competent authority. Assume you are in scope: the test is whether a customer can
+self-provision, not company size.
+
+Article 25 requires specific contract terms — **2 months maximum notice to switch, 30 days
+maximum transition, 30 days minimum data retrieval afterwards, certified erasure, an
+exhaustive exportable-data inventory**. Article 26 requires publishing the switching
+procedure and formats. Article 28 requires disclosing infrastructure jurisdiction and
+anti-unlawful-access measures. From **12 January 2027 switching charges are prohibited
+outright**, egress included.
+
+This folds into Tier 4 rather than replacing it: the same order form and terms work covers
+it, and the Article 28 disclosure is the subprocessor table from 4.4.
+
+### 5.3 "Hosted in Frankfurt" is no longer an answer
+
+Bitkom's 2026 cloud report: 85% of German companies say they are too dependent on US cloud
+providers, 64% are actively rethinking, and 37% would accept fewer features or higher cost
+for exclusively-German processing. The controlling point buyers now make is that the CLOUD
+Act attaches to the **provider's jurisdiction, not the data centre's location**.
+
+The vocabulary has also changed. BSI published **C3A** (Criteria enabling Cloud Computing
+Autonomy) on 27 April 2026, adopting the EU Cloud Sovereignty Framework's structure, and
+**C5:2026** in March with 168 criteria. C5 is a prerequisite for a C3A assessment. Note
+that **EUCS does not exist** — never adopted, sovereignty requirements stripped in 2024 —
+so "we cannot obtain EUCS certification because there is none" is a correct and defensible
+answer.
+
+For an AI-oversight product the sharpest follow-up is: *which LLM provider processes
+customer content, in which jurisdiction.* Have that answer written down.
+
+### 5.4 Corrections to this document
+
+- **NIS2**: the German implementing act has been in force since 6 December 2025 with **no
+  transition period**. Every regulated customer must document you as a supplier.
+- **The Cyber Resilience Act does not apply** to standalone SaaS (Recitals 11–12 and the
+  Commission's guidance of 27 July 2026). It bites only if you ship an installed agent,
+  SDK or extension.
+- **BFSG does not apply either** — B2B has no consumer, and you are additionally a
+  Kleinstunternehmen. But **§ 121 Abs. 2 GWB forces public-sector buyers to ask anyway**,
+  and BITV 2.0 explicitly covers intranets and staff-facing tools, so a public-sector
+  customer's internal use is in scope even though your sale is not. Prepare an accessibility
+  statement and an EN 301 549 conformance report; note that public tenders treat
+  accessibility work as **not separately billable**.
+- **LkSG reporting is dead but the duties are not.** BAFA stopped reviewing reports in
+  October 2025 and the portal is closed, but §§ 3–10 remain and large customers cascade
+  them contractually. A one-page supplier self-disclosure covers most of it, and BAFA's own
+  FAQ — stating that obligations cannot simply be passed down — is the lever for resisting
+  over-broad flow-down.
+- **The translation-regression guard already exists** (`i18n/messages.test.ts`), asserting
+  full key-set and placeholder parity. It was listed here as unbuilt. What is missing is a
+  *terminology and register* guard — see 5.5.
+
+### 5.5 The German UI is complete but not consistent
+
+Key parity is exact at 3,988 leaves and there is **no numeric, date or legal-citation
+divergence** between the languages. Three problems sit on top of that:
+
+- **The register splits exactly along the pitch boundary.** German marketing and legal copy
+  is ~200 formal *Sie*; the signed-in product is largely informal *du* — 76 in agents, 44 in
+  review, 35 in account. The buyer is addressed as *Sie* on the website and as *du* the
+  moment they sign in. For Mittelstand and enterprise this is the fastest credibility signal
+  in the product and it is mechanical to fix.
+- **The same object has two German names.** The setup wizard says *Arbeitsbereich* 53 times;
+  every other catalogue says *Workspace* 153 times. The evaluator creates one thing and is
+  then shown another.
+- **The core deliverable has four German nouns** — *Belegpaket*, *Nachweispaket*,
+  *Entscheidungspaket*, *Prüfnachweisarchiv* — and two English ones on a single screen.
+
+A catalogue test in the shape of the existing parity test would pin both register and
+terminology permanently.
+
+### 5.6 The German DPA drops qualifiers the English carries
+
+Three instances, same key paths, so the German AVV is materially a different contract:
+
+- **Audit rights.** English limits on-site access to once a year *unless a confirmed breach
+  or supervisory authority requires more*. German says *grundsätzlich jährlich begrenzt* and
+  drops the exception entirely. That is the Art. 28(3)(h) right, and the German reads as
+  capping something a Landesdatenschutzbehörde can compel regardless.
+- **Documented instructions.** English says processing required by *Union or Member State
+  law*; German says merely *gesetzlich vorgeschrieben*. That restriction is the substantive
+  point of Art. 28(3)(a) — it is what stops a processor deviating because a third-country
+  authority demanded it. As written the German appears to authorise the Schrems II scenario,
+  and you disclose US subprocessors.
+- **Retention** carries the same drop in the deletion carve-out.
+
+This is the finding most likely to be discovered *after* a deal is won. Counsel work, but
+flag it now.
+
+### 5.7 Contract-level inconsistencies a technical reviewer finds in an afternoon
+
+- **`no_decision` is in the SDK's published JSON Schema and forbidden by the database.**
+  Anyone generating types writes an unreachable branch; submitting it is rejected by a CHECK
+  constraint. The schema is the first artefact an enterprise reviews.
+- **Panel-size bounds disagree across six layers** — server 2–100, wizard 2–500, another
+  editor 2–100, readiness check ≥1 with no maximum, **published SDK 1–500**. The only bound
+  an integrator can read is wrong in both directions, and the wizard's own test pins 500 as
+  correct. In one German form the label is localised, the client error is English with the
+  wrong maximum, and the server error is English with a raw camelCase field name.
+- **A tied panel emits nothing to the SIEM.** `inconclusive` from a genuine tie and
+  `cancelled_before_commit` produce no event at all — and the tie is exactly the case worth
+  demonstrating. Two of nine lifecycle states are invisible to a buyer whose evidence story
+  is "everything lands in our SIEM".
+- **Five vocabularies for one outcome**: `positive/negative`, `agree/disagree`,
+  `endorsed/rejected`, and two different German label pairs on two panels fed by the same
+  source. No mapping table exists anywhere.
+- **The in-product billing page still shows $29** while the Terms now state that no
+  recurring list price is published. One click behind "Compare plans", which is where the
+  pricing page's own button sends the visitor.
+
+### 5.8 Engineering health
+
+Only the items that change what to do next:
+
+- **The status table in `implementation-plan.md` overstates three lanes.** Rows 2.3, 2.4 and
+  2.5 are marked implemented, but `supervisionOverridePatterns`, `employmentDataGovernance`,
+  `reviewerEngagement` and `dsaReferenceNetworkProvenance` — 2,746 lines — have **zero
+  production callers**. Planning six months off that table will mis-estimate. Correcting
+  three rows costs minutes.
+- **`knip` cannot see any of this.** It registers test files as entry points, so a module
+  imported only by its own test counts as used, and it reports zero unused files. The
+  dead-code tool is blind to the dominant dead-code pattern (~8,200 product lines staged
+  behind gates, ~14,900 including tests and SQL).
+- **Do not remove the off lanes.** The seam is clean — under 1% of live lines are
+  lane-branches, and the unpaid adapter imports no paid module. Removal is ~1,800 lines of
+  surgery on working revenue code for no functional gain. Two narrow fixes are worth it: 75
+  lines of network-only logic and five dead joins inside the live task fetch.
+- **The highest-leverage refactor is snapshotting the pg-mem schema.** 331 harness
+  initialisations each replay all 191 migrations — roughly 7.8 million lines of SQL per CI
+  run, and pg-mem tests measure 8× slower than others. pg-mem ships `backup()`/`restore()`
+  for exactly this. **One file, 40–60 lines, zero test rewrites**, and it stops every future
+  migration making every existing test slower.
+- **`deployedContracts.ts` is generated but not byte-verified.** The ponder and keeper
+  copies are; this one is only regex-checked, so a hand-edit of its four addresses passes the
+  whole suite. One `assert.equal` closes it.
+- **No test reads a `.sol` file.** Thirteen Solidity constants — the 5-minute reveal floor,
+  6-hour beacon grace, 24-hour scoring margin, fee cap, base pay — are independently retyped
+  in TypeScript. Values match today; nothing enforces it, and divergence surfaces as an
+  on-chain revert with funds committed.
+- **The Wilson interval is implemented twice** — TypeScript and a hand-transcribed SQL
+  expression — with no test asserting they agree. It drives adaptive review rates and
+  published confidence intervals.
+
+### 5.9 Nothing detects deployment drift
+
+The deployed site sat **23 commits behind `tokenless` for an entire working session**, and
+the only reason it surfaced was a direct question. `deploymentEnabled.tokenless` is `false`,
+so pushes deliberately never deploy — but nothing compares the deployed commit against the
+branch. A CI check, or simply enabling auto-deploy, closes it.
+
+### 5.10 Revised order
+
+1. **The reviewer-profile regression** — shipped broken, fixed in `90b7b2d91`. Redeploy.
+2. **The German register and terminology split** (5.5) — half a day, and it is the fastest
+   credibility signal a Mittelstand buyer reads.
+3. **Design items 1–6** in [design-consistency-2026-08.md](design-consistency-2026-08.md) —
+   a morning, and it fixes everything a prospect can see.
+4. **The works-council pack** (5.1) — start now; it gates the calendar, not the pitch.
+5. **Data Act Article 25 terms** (5.2) folded into the Tier 4 order form and AGB work.
+6. **The German DPA qualifiers** (5.6) — counsel, but brief them this week.
+7. **Panel-size bounds and the `no_decision` schema mismatch** (5.7) — before any technical
+   diligence.
+8. **pg-mem snapshotting and the `deployedContracts` byte check** (5.8) — engineering
+   hygiene that compounds.
+
+### 5.11 What B8 needs decided before it is built
+
+The browser review path was scoped in detail and is **6–9 days, not 4–8**. Two of its
+obstacles are product decisions, not implementation:
+
+- **A human-authored request has no model execution**, but the pipeline requires at least
+  one generation span with a provider and a requested model. Declaring `provider: "human"`
+  validates today and puts browser requests in their own evaluation scope — arguably right,
+  since it stops them contaminating the agent's adaptive calibration — but that string
+  reaches the evidence record a buyer reads.
+- **"Request a review" may legitimately answer "no review required."** In `manual` policy
+  mode the decision is always `recommended`, so a manual-mode workspace could never use the
+  page. Forcing it means either restricting the page by policy mode or adding a
+  `human_requested` reason code, which changes what the evidence record means.
+
+A third: the design requires rehydrating an agent's credential from database state with no
+credential presented, so an owner session gains the agent's `panel:publish` authority.
+Defensible — the owner granted that scope — but it should be deliberate and audited.
+
+One correction: the `caller_credential_kind` migration flagged earlier is the **wrong**
+answer. That column records which credential the integration is bound to, not how the
+request arrived, and it feeds evidence hashes and the idempotency namespace. Recording
+browser provenance in the audit trail is cheaper and more honest.

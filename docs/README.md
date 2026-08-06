@@ -9,6 +9,7 @@ implementation is written against, and each is read by at least one test.
 | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
 | [business-plan.md](business-plan.md)                                         | What is being sold, to whom, at what price, against which competitors, and what would prove the whole thing wrong.                  |
 | [german-outreach-readiness-2026-08.md](german-outreach-readiness-2026-08.md) | What to fix before pitching German companies — the claims, the product gap, the payment gates, and the paper procurement will ask for. |
+| [design-consistency-2026-08.md](design-consistency-2026-08.md)               | Why the sign-in button differs between surfaces, and the component-layer drift behind it. |
 
 ## Working references
 
