@@ -7,8 +7,14 @@ That order matters for one specific reason. The product has a claim gate that fa
 build when a public page or shipped doc makes a claim the deployment cannot support
 ([`publicEvidenceClaims.ts`](../../packages/nextjs/lib/tokenless/publicEvidenceClaims.ts)).
 **The gate cannot read `.docx` or `.pptx`, and only three of its eighteen rules carry German
-patterns.** So the collateral is the one place in this repository where an unsupportable
-claim can ship silently. Reviewing markdown in a diff is the only control there is.
+patterns** — so this collateral is doubly invisible to it.
+
+**But it is not the only blind spot, and treating it as one is how the last mistake
+happened.** The gate scans public pages, message catalogues and `public/docs`. It does not
+scan **any** of `docs/` — not this folder, not the business plan, not the readiness list.
+Three days after the German collateral was corrected to stop claiming a signed,
+offline-verifiable packet, the business plan asserted exactly that in English and nothing
+caught it. Reviewing the markdown in a diff is the only control anywhere in `docs/`.
 
 | Source | Build output |
 | ------ | ------------ |
@@ -32,7 +38,7 @@ collateral was making, in German, claims the product refuses to print in English
 | Leitfaden claim table | „Erzeugt signierte, integritätsprüfbare Nachweispakete" listed as *belastbar* | Moved to the caveat column with the mechanism wording |
 | Leitfaden success gates | „offline prüfen" as a contractual gate | Restated as the CLI/browser procedure, not a guaranteed capability |
 | Leitfaden | „Pseudonyme pro Run" | Removed pending confirmation |
-| Pricing, all three | €2.500 pilot against a live public $29 page | Public $29 anchor deleted; pilot is the entry price |
+| Pricing, all three | €2.500 pilot against a live public $29 page | Pilot is the entry price. The public $29 anchor is **decided for deletion, not yet deleted** — it is still live on the site |
 
 ## The three rules
 
@@ -90,8 +96,8 @@ The Office files here are ahead of the product in two places that will be checke
 
 - The public pricing page still shows $29 against a struck-through $99. Until that is fixed,
   **do not open the pricing page in a pitch.**
-- „sufficient AI literacy" is still shipped in five places and the Leitfaden itself flags it
-  for pre-outreach correction.
+- „sufficient AI literacy" is still shipped in five places, and it is pinned by a test
+  assertion, so fixing it means touching the test too. Tracked in the readiness list at 0.6.
 
 Both are Tier 0 items in
 [german-outreach-readiness-2026-08.md](../german-outreach-readiness-2026-08.md), which is the

@@ -12,12 +12,24 @@ errors.
 ## 1. Summary
 
 RateLoop records a company's own named experts reviewing its AI system's outputs, and
-emits a signed, exportable evidence record of that review that verifies without us.
+emits an exportable, reconstructable evidence record of that review.
 
 The sellable configuration today is narrow and should be described narrowly: **customer-invited,
-unpaid, named reviewers; driven by an AI agent over MCP; producing a signed evidence
-export.** Paid reviewer panels, USDC settlement and the public reviewer network exist in
-the codebase and are switched off. They are a different company and are not modelled here.
+unpaid, named reviewers; driven by an AI agent over MCP; producing a reconstructable evidence
+export.**
+
+A note on how this document talks about signing, because it applies throughout. The export
+*does* carry an Ed25519 signature over a canonicalised payload, the public keys *are*
+published at an unauthenticated endpoint, and both a CLI and a browser verifier ship. But
+the capability flags governing public claims — `managed_evidence_signing`,
+`published_evidence_signing_key_history`, `offline_evidence_packet_verifier` — are all
+`false`, and they mean "deployed and exercised for public claims", not "code exists". **So
+this plan describes the mechanism and never asserts the capability**, the same rule
+[`sales/README.md`](sales/README.md) imposes on the German collateral. An earlier draft of
+this rewrite broke that rule in three places.
+
+Paid reviewer panels, USDC settlement and the public reviewer network exist in the codebase
+and are switched off. They are a different company and are not modelled here.
 
 **The wedge is ISO/IEC 42001, not the EU AI Act.** The Act's Article 14 is a design
 requirement on providers with no record-keeping obligation attached; its high-risk
@@ -39,12 +51,21 @@ The product does four things no combination of a spreadsheet and a shared inbox 
 1. **Freezes the question before the answers.** Policy, review question and options are
    committed before assignments go out, so the evaluation cannot be reshaped after the
    fact.
-2. **Collects judgments independently.** Reviewers do not see each other's answers. A
-   spreadsheet structurally cannot do this.
-3. **Samples reproducibly.** HMAC-keyed selection with a recorded inclusion probability, so
-   the sample can be defended rather than asserted.
-4. **Emits a record that verifies without the vendor.** Ed25519 over a canonicalised
-   payload, a published key history, and a verifier that runs offline.
+2. **Collects judgments independently.** Reviewers submit without seeing each other's
+   answers. **Do not call this "blinded".** Variant-swap blinding is a hardcoded no-op on
+   the live invited lane (`blinding = { swap: false }` in
+   [`directPrivateReviewEvidence.ts:301`](../packages/nextjs/lib/tokenless/directPrivateReviewEvidence.ts)),
+   real blinding exists only in the switched-off paid lane, and "independent blinded panels"
+   is a permanently forbidden claim. The blinding claim was formally withdrawn in
+   `92226d127`; an earlier draft of this rewrite reinstated it. Independence of submission
+   is true, sufficient, and something a spreadsheet structurally cannot do.
+3. **Samples reproducibly.** HMAC-keyed selection with a recorded inclusion probability.
+   Note this is an internal mechanism, not something the packet currently exposes — the
+   coverage fields that would carry it are behind a capability flag that is off, so it is a
+   design argument and not yet a sales claim.
+4. **Emits a record a third party can reconstruct.** An Ed25519 signature over a
+   canonicalised payload, a published key history at an unauthenticated endpoint, and a
+   verifier — with the caveat above about how to describe it.
 
 ### The licensing consequence, which changes what "moat" means
 
@@ -67,10 +88,12 @@ Any plan section that implies the code is the moat is wrong.
 ### Primary: the ISO/IEC 42001 human-oversight control, evidenced continuously
 
 - **It is in force now.** No waiting for December 2027.
-- **The budget exists and is already committed.** German SME certification runs from about
-  €8,000; Mittelstand initial certification is quoted between €30,000 and €150,000, with
-  annual surveillance audits at €3,000–10,000. RateLoop attaches to that line rather than
-  creating a new one.
+- **The budget exists and is already committed.** German SME certification is quoted from
+  about €8,000, with most published ranges falling between €5,000 and €50,000 and
+  surveillance audits in the low thousands. Treat these as indicative only: **the
+  certification bodies publish no prices at all**, so every figure in circulation comes from
+  consultancies. What matters is not the number but that the line item already exists —
+  RateLoop attaches to it rather than creating a new one.
 - **A management-system auditor asks whether the control *operated*, not whether it is
   documented.** That is a records question. It is the question this product answers.
 - **The certification bodies sell no software for it.** TÜV SÜD, TÜV Rheinland, TÜV NORD,
@@ -80,12 +103,14 @@ Any plan section that implies the code is the moat is wrong.
   operation.** Credo AI's own published definition of evidence is a stakeholder sign-off
   *confirming that a control has been met* — an assertion about a control, not a record of
   it running.
-- **There is German standards cover.** DIN SPEC 92006 and 92007, published 29 June 2026,
-  set requirements for AI testing tools including traceability and reproducibility.
+- **There is German standards cover.** DIN SPEC 92006 (dated 2026-02) covers AI testing
+  tools; DIN SPEC 92007 (2026-06) covers reference and test data sets. An earlier draft
+  dated both to 29 June and described both as covering testing tools. The point stands: German
+  standards now name traceability and reproducibility as requirements for AI testing tools.
 
 **The sentence:** *Your ISO 42001 auditor will ask you to show the human-oversight control
-operating. We produce that record continuously, from your own named staff, and it verifies
-without us.*
+operating. We produce that record continuously, from your own named staff, and we ship a
+verifier so a third party can check it themselves.*
 
 ### Secondary: DSA Article 20(6)
 
@@ -148,7 +173,8 @@ the single most important market fact in this document, and §10 takes it seriou
 
 ### The window
 
-The German AI implementation act took effect 29 July 2026, making the Bundesnetzagentur the
+The German AI market-surveillance act took effect 29 July 2026, with the Bundesnetzagentur
+taking up its coordinating role with full effect from 2 August 2026 — making it the
 national market surveillance authority with a complaints inbox and a free service desk for
 SMEs. Article 50 transparency obligations applied from 2 August 2026. High-risk obligations
 land 2 December 2027.
@@ -173,12 +199,18 @@ KMS keys, RFC 3161 timestamps, offline verification with OpenSSL, and a named re
 identity in its demo record.
 
 **This is the same artefact layer.** The prior claim that no vendor emits signed evidence
-of human review is dead. Two others are adjacent: **Meridian Intelligence Group** ships
-floor-triggered human review with **patent-pending two-key attestation** — worth a
-freedom-to-operate check before any funding conversation — and **KLA Digital** sells a
-runtime control plane with a tamper-evident record and a four-week governed pilot.
+of human review is dead. **KLA Digital** (Monaco) is adjacent: a runtime control plane with a
+tamper-evident record and a four-week governed pilot.
 
-What none of them has is **sampling design, blinded multi-rater collection, and
+Two cautions on SYEN before this drives a decision. Every technical detail matches its own
+homepage, but **there is no third-party validation at all** — no press, funding, customers or
+analyst coverage — and its terms date from May 2026, so "founded 2024" is unverified. Treat
+it as a credible published capability, not a proven deployed one. A prior draft also named
+**Meridian Intelligence Group** as shipping "patent-pending two-key attestation"; that
+description could not be found on any of the company's properties and **should be treated as
+unverified** rather than as grounds for a freedom-to-operate check.
+
+What none of them has is **sampling design, independent multi-rater collection, and
 chance-corrected agreement over it.** Sell the measurement, not the signature.
 
 ### AI governance platforms: the unit of evidence is wrong
@@ -205,16 +237,21 @@ about €1.75M raised; Trustible fewer than 25 and $4.6M. The money is in the GR
 
 **A Magic Quadrant Leader is giving this category away as a bundle sweetener.** The distance
 from "approval workflow with an audit trail" to "per-output reviewer record" is one sprint,
-and Vanta has 1,884 employees to walk it.
+and Vanta — around a thousand employees — has the capacity to walk it. Note its 30 July
+launch is **early access with a waitlist**, not general availability; that is a few months
+of room, not none.
 
 ### Evaluation platforms: two checkable gaps survive
 
 Across LangSmith, Langfuse, Braintrust, Arize, Confident AI, W&B Weave, Comet Opik, Label
 Studio and Patronus:
 
-- **Not one computes Cohen's or Fleiss' kappa, or Krippendorff's alpha.** Label Studio
-  Enterprise, the most annotation-native, deliberately uses its own consensus metric
-  instead.
+- **Not one computes Krippendorff's alpha or Fleiss' kappa.** Be precise here, because the
+  broader version of this claim is false: **Langfuse ships Score Analytics with Cohen's
+  Kappa by name**, and Label Studio has a `use_kappa` project field. Cohen's kappa is
+  two-rater only. RateLoop implements Krippendorff's nominal alpha
+  ([`agentReviewQuality.ts:155`](../packages/nextjs/lib/tokenless/agentReviewQuality.ts)),
+  which generalises past two raters — that is the actual, narrower differentiator.
 - **Not one emits a signed or tamper-evident export.** The best on offer is an
   enterprise-tier platform activity log.
 
@@ -243,8 +280,14 @@ corporate platform fee.**
 Only three limits are enforced in code today: **active agents**, **active private groups**,
 and a paid-panels boolean. The decision meter is fully built but its only production caller
 sits on a switched-off lane, so **plan decision limits on the sellable lane are not
-enforced** — and a paying workspace sees "0 of 250" forever, which is a live credibility
-defect in the billing UI.
+enforced**. It is returned by the billing API but **no component renders it**, and three
+tests actively forbid rendering it — so this is dormant, not a live UI defect. An earlier
+draft claimed the opposite.
+
+**Retention has the same problem as a price axis.** `TokenlessBillingPlan` has no retention
+field and `evidenceRetention.ts` references no plan or entitlement, so the tiers below are
+not enforceable today either. Wiring it is under a day, but it must be done before the
+tiers are sold, or this repeats the mistake it was chosen to avoid.
 
 Per-decision pricing fails on three independent grounds: it is not wired to the sellable
 lane; the adaptive sampler is *designed* to shrink the metered quantity from 100% to a 10%
@@ -298,7 +341,7 @@ It is derived from break-even (§7), not from comparables — but the comparable
 | External DPO retainer — a named human with statutory liability | €125–450/month |
 | Matproof, EU-hosted compliance platform, Germany | €480 / €1,200 per month |
 | Proliance ISMS Core | €1,000/month |
-| German AI Act readiness consulting, fixed price | €1,950 / €4,500 one-off |
+| German AI Act readiness consulting, fixed price (single vendor, unconfirmed) | €1,950 / €4,500 one-off |
 | Larger German AI Act implementation engagements | €25,000–120,000 |
 
 **€29/month sits below the German commodity compliance floor, which frames the product as a
@@ -381,12 +424,24 @@ around it.
 
 ### Break-even
 
-| Price/month | Customers needed (year 1, lean) |
-| ----------- | ------------------------------- |
-| €249 | 24 |
-| €799 | 7.4 |
-| **€1,200** | **4.9** |
-| €2,500 | 2.4 |
+**State the assumption, because the table is meaningless without it.** These figures cover
+running costs **plus a €4,000/month founder draw** — roughly €5,900/month in total, against
+the ~€1,900/month of costs in the section above. This is break-even in the sense of "the
+operator can live on it", not "the company stops losing money". Purely cost-covering
+break-even at €1,200 is about **two** customers; the number that matters for a decision to
+keep going is the one below.
+
+| Price/month | Customers to cover costs + a €4,000 draw | Customers to cover costs alone |
+| ----------- | ---------------------------------------- | ------------------------------ |
+| €249 | 24 | 8 |
+| €799 | 7.4 | 2.4 |
+| **€1,200** | **4.9** | **1.6** |
+| €2,500 | 2.4 | 0.8 |
+
+Support load moves these: at two hours per customer per month and €100/hour of opportunity
+cost, each customer contributes about €1,000 rather than €1,200, and the €1,200 row becomes
+roughly 5.9 customers. At €249 the contribution is €49 and the row becomes 39 — which is the
+real reason that tier cannot work, and a sharper one than the headline number.
 
 **Minimum viable configuration: five customers at €14,400 = €72,000 ARR.**
 
@@ -397,6 +452,36 @@ costs of about €23,000 excluding salary — a contribution of roughly €1,550
 one third. Required runway: €60,000–90,000 of savings or other income.** The collateral does
 not say this; the operator should say it to themselves.
 
+## 7a. Three things a buyer will ask that this plan could not answer
+
+An audit of this document found these missing. They are recorded as open rather than
+answered, because inventing answers is how the errors in §11 happened.
+
+**The ICP is undefined.** §12 says "change the ICP, not the price" and §8 says sell to two
+people, but no sector, size band, revenue range or trigger event is stated anywhere. It is
+the most load-bearing variable in the plan and it is blank. The candidate shape from the
+wedge — a German company between roughly 50 and 500 employees, pursuing or holding ISO
+42001, with AI in a customer- or employee-affecting decision path and internal experts who
+are allowed to see the material — is a hypothesis to test in the first ten conversations,
+not a finding.
+
+**There is no demand evidence.** Not one customer interview, letter of intent, waitlist
+entry or design partner. Every input here is desk research. §10 concedes buyer indifference
+is the *modal* outcome, and yet the plan spends roughly €15,000 on a penetration test and
+counsel before the first conversation. **The cheapest possible test is twenty calls, and the
+schedule does not start them until October.** Move them earlier; nothing else in this
+document survives if they go badly.
+
+**There is no key-custody or continuity commitment, and this is the sharpest gap.** The
+product sells six to one hundred and twenty months of retention. §2 names the accumulating
+signed archive and being the contractual counterparty as the only two real moats. Both are
+held by one person in a UG with twelve to twenty-four months of runway. There is no key
+escrow, no succession plan, and no wind-down data commitment — and §12 contemplates winding
+down without saying what happens to customers' evidence. **German procurement will ask this
+in the first call**, and "we would let you know" is not an answer that survives it. Decide
+it before outreach: at minimum an export-on-termination guarantee in the order form and a
+named escrow for the signing keys.
+
 ## 8. Go to market
 
 Germany first, permissioned intros only — §7 UWG rules out cold email sequences.
@@ -404,7 +489,7 @@ Germany first, permissioned intros only — §7 UWG rules out cold email sequenc
 **Sell to two people.** The engineer installs it; privacy or legal owns the budget. A
 pitch that only lands with one of them stalls.
 
-**Attach to the certification budget.** "The €500-a-month thing that makes your €10,000
+**Attach to the certification budget.** "The €1,200-a-month thing that makes your €10,000
 surveillance audit cheaper and faster" is a far better story than "audit alternative."
 
 **Frame the missing certificate correctly.** RateLoop holds no ISO 27001 and no SOC 2. The
@@ -421,7 +506,7 @@ credibility problem as well as a procurement one.
 
 | Month | Work | Milestone |
 | ----- | ---- | --------- |
-| Aug 2026 | Tier 0 of the readiness list — one day. Settle the one-product story. Remove the public $29. Fix "0 of 250" in the billing UI. | Site and collateral tell one story |
+| Aug 2026 | Tier 0 of the readiness list — one day. Settle the one-product story. Remove the public $29. Wire retention to the plan before selling the tiers. | Site and collateral tell one story |
 | Sep | Browser path to request a review; return the reasons; standalone verifier; operator verification route. Counsel briefed. Pentest booked. | Product demonstrable in a browser |
 | Oct | 50 accounts researched, 20 scored, 10 permissioned intros, 8 discovery calls, 2 pilot offers | **≥1 signed pilot** |
 | Nov–Dec | Deliver pilots 1–2, recording hours per activity. Pentest report; trust page. | 2 pilots delivered; median hours known |
@@ -433,14 +518,23 @@ credibility problem as well as a procurement one.
 
 **1. Buyer indifference is the modal outcome.** The German barrier list does not contain
 anything resembling this problem. The IAPP's own four-category vendor taxonomy has no
-human-oversight category. Every regulation that mandates human review mandates the
-*capability*, not the *record*. **There is no procurement checklist with a line item for
-this**, and creating a category is a well-funded company's job.
+human-oversight category. **There is no procurement checklist with a line item for this**,
+and creating a category is a well-funded company's job.
+
+*Correction to an earlier draft, which claimed "every regulation that mandates human review
+mandates the capability, not the record".* That is true of Article 14 and false in general.
+**Article 12 requires high-risk systems to allow automatic logging over their lifetime, and
+for biometric identification the logs must record the "personnel involved in result
+verification" — a statutory who-reviewed-it record. Article 26(6) requires deployers to keep
+those logs for at least six months.** The product's own six-month retention floor matches
+that minimum exactly, and this plan had not connected the two. It is the strongest AI Act
+hook available and it is not Article 14.
 
 **2. The spreadsheet objection is stronger here than previously admitted**, because the
 reviewers are unpaid and internal. The customer's honest alternative is a shared sheet and a
-monthly export. The answer must be what a sheet structurally cannot do — blind collection,
-committed sampling, and a record that verifies without the vendor. If the pitch is "we track
+monthly export. The answer must be what a sheet structurally cannot do — independent collection,
+committed sampling, and a record a third party can reconstruct. Describe those as mechanisms,
+not capabilities — see §2. If the pitch is "we track
 who reviewed what", the spreadsheet wins.
 
 **3. Incumbents are moving now.** Vanta seven days ago, Drata two days ago, ServiceNow
@@ -449,7 +543,9 @@ workflow layer has one too.
 
 **4. The protocol substitutes the workflow half for free.** MCP elicitation is a standard
 primitive: a server requests structured human input and the client returns accept, decline
-or cancel. Every MCP client gets human-in-the-loop pause for nothing. It persists no
+or cancel. It is **opt-in — a client must declare the `elicitation` capability** — so this is
+not quite "free for every client", but it is free for any client that wants it, which is the
+part that matters. It persists no
 evidence — which is exactly the remaining product — but the workflow half is now table
 stakes in the protocol this is built on.
 
@@ -483,6 +579,12 @@ engineering capacity nor money is the constraint. Distribution is.**
 
 Recorded because the pattern is the finding.
 
+0. **This rewrite's own first draft claimed a "signed evidence export that verifies without
+   us" and "a verifier that runs offline"** — in English, unqualified, three days after the
+   German collateral was corrected to stop saying exactly that. `docs/` is outside the claim
+   gate's scan, so nothing caught it; a consistency audit did. The lesson is in §2: the
+   mechanism-not-capability rule applies to internal strategy documents too, because their
+   sentences end up in decks.
 1. **"No vendor emits signed evidence of human review" — false.** SYEN Systems ships it.
    The differentiation is the measurement design, not the signature.
 2. **"Free and Early Access are functionally identical" — false.** Agent and group limits
@@ -512,7 +614,7 @@ interest and a scheduled follow-up are zero.
 | 31 Oct 2026 | ≥2 written pilot offers and ≥1 signed order form | Zero signed → change the ICP, not the price. |
 | 31 Dec 2026 | 1 pilot delivered against all six gates, **and someone outside the customer's engineering team opened the evidence packet** | Packet never read externally → the evidence thesis is unconfirmed and this is an eval tool. Reprice self-serve and stop selling evidence. |
 | 31 Mar 2027 | ≥3 paid pilots | Below 3 → the category is not convincing and a cheaper subscription will not fix it. |
-| 30 Jun 2027 | ≥1 pilot→annual conversion at ≥€1,000/month | Zero from ≥3 completed pilots → the pilot is paid consulting with no product tail. |
+| 30 Jun 2027 | ≥1 pilot→annual conversion at ≥€1,200/month — the floor from §6, not below it | Zero from ≥3 completed pilots → the pilot is paid consulting with no product tail. |
 | 31 Dec 2027 | ≥5 paying customers, ≥€60k ARR | Below → wind down or find a co-founder. |
 
 Continuous tripwires:
@@ -525,6 +627,6 @@ Continuous tripwires:
   assumption fails.
 - **The mindshare test.** If in the first five conversations the buyer's mental model is
   "one trusted reviewer, thirty traces, a spreadsheet", then agreement statistics and
-  blinded panels read as academic overhead and the entire statistical differentiation is
+  independent multi-rater panels read as academic overhead and the whole statistical differentiation is
   worth nothing to that buyer. Test this explicitly and early. It is cheap, and it
   invalidates the positioning if it fails.

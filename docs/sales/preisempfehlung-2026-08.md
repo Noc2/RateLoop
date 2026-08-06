@@ -25,6 +25,15 @@ Alle Preise **netto zzgl. 19 % USt.**, Rechnung in EUR, Zahlung per SEPA-Überwe
 | **Assurance** | **€ 1.200/Monat, jährlich vorausbezahlt (€ 14.400)** | 3 | 5 | 24 Monate |
 | **Assurance+** | **€ 2.500/Monat (€ 30.000)** | 10 | 15 | 60 Monate |
 
+Dazu ein Pilot-Zuschnitt für Fälle mit Sicherheitsprüfung, Integrationsaufwand,
+Policy-Mapping oder Beschaffungsbegleitung: **ab € 7.500 netto, 6–8 Wochen**. Nur anbieten,
+wenn einer dieser Punkte tatsächlich zutrifft — sonst gilt der Standardpilot.
+
+**Achtung, Durchsetzbarkeit:** Agent- und Gruppengrenzen sind im Code durchgesetzt und
+dürfen zugesagt werden. **Die Aufbewahrungsdauer ist es nicht** — der Plan-Datensatz kennt
+kein Retention-Feld. Vor dem Verkauf der Staffel verdrahten, sonst wird derselbe Fehler
+wiederholt, wegen dem die Entscheidungs-Allowance nicht verkauft wird.
+
 ## 2. Warum der öffentliche $-29-Anker weg muss
 
 1. **Seine eigene Bedingung ist nicht erfüllt.** Er sollte bleiben, „solange die

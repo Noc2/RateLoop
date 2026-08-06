@@ -20,8 +20,11 @@ Neun Folien, schwarzer Grund, Space Grotesk, Vierfarb-Spektrum, wie gehabt.
 wurden durch die Verordnung (EU) 2026/1744 auf den **2. Dezember 2027** verschoben. Wer
 im August 2026 mit einer Hochrisiko-Frist verkauft, wirkt bei jedem Gegenüber mit
 kompetenter Rechtsabteilung uninformiert. Was gilt: Art. 50 Transparenz seit dem
-2. August 2026, und die Bundesnetzagentur ist seit dem 29. Juli 2026 zuständige
-Marktüberwachungsbehörde mit Beschwerdestelle und KI-Servicedesk.
+2. August 2026, und das deutsche KI-Marktüberwachungsgesetz ist am 29. Juli 2026 in Kraft
+getreten; die Bundesnetzagentur nimmt ihre Rolle als koordinierende
+Marktüberwachungsbehörde mit Beschwerdestelle und KI-Servicedesk **mit voller Wirkung ab
+dem 2. August 2026** wahr. Wer die beiden Daten verwechselt, verliert genau bei dem
+Gegenüber, das diese Folie überzeugen soll.
 
 ## 02 — Ausgangslage
 
@@ -171,5 +174,13 @@ Art. 28, AI Act Art. 26. Dazu DPA, Subprozessorenliste, Datenorte, Aufbewahrung 
 Incident-Prozess."
 
 **„Wer prüft denn?"** → „Ihre eigenen benannten Fachleute. Kein Netzwerk, kein
-Crowdsourcing, keine unabhängige Stichprobe — und das ist bewusst so: jede einschlägige
-Regelung verlangt die Aufsicht durch Personen, die **Sie** benannt haben."
+Crowdsourcing, keine unabhängige Stichprobe."
+
+**[GEÄNDERT]** Der frühere Nachsatz — „jede einschlägige Regelung verlangt die Aufsicht
+durch Personen, die Sie benannt haben" — ist gestrichen. Er ist als pauschale Aussage über
+*jede* Regelung nicht haltbar (Art. 20 Abs. 6 DSA etwa verlangt „angemessen qualifiziertes
+Personal", nicht vom Kunden benannte Personen) und macht aus einer Produktgrenze eine
+behauptete Rechtspflicht. Falls nachgefragt wird, ist die belastbare Fassung: „Die
+Regelungen, an denen sich unsere Kunden orientieren, stellen auf Personen ab, die der
+Verantwortliche einsetzt. Ob und wie das für Sie gilt, beurteilt Ihre Rechtsabteilung —
+wir beraten nicht rechtlich."

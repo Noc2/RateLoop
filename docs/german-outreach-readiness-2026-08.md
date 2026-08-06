@@ -123,7 +123,8 @@ collected by SEPA transfer, entirely outside the product.
 
 ### 0.6 "sufficient AI literacy" is still shipped
 
-Your own Vertriebsleitfaden § 8 flags this for correction before outreach. It is live in
+The Vertriebsleitfaden `.docx` flagged this for correction before outreach; the rewritten
+markdown source no longer carries the note, so it survives only here. It is live in
 `docs/human-oversight/page.tsx:152`, `docs/evidence/page.tsx:88`,
 `public/docs/evidence.md:24`, and both catalogues at `:528` and `:630` — and it is locked
 in by a test assertion at `docs/human-oversight/page.test.tsx:81`, so fixing it means
@@ -281,8 +282,9 @@ are "functionally identical" because the decision meter never counts. That is wr
 agent limits are enforced at three production call sites and private-group limits at one,
 so 1-vs-3 agents and 1-vs-5 groups are real. **Only the decision allowance is unenforced** —
 and the precise remaining problem is sharper than "no reason to upgrade": a paying workspace
-sees **"0 of 250" forever** in the billing UI, which is a live credibility defect rather
-than a dormant one.
+would see **"0 of 250"** if it were displayed — but no component renders it and three tests
+forbid rendering it, so this is dormant rather than a live defect. Wire the meter before
+selling a plan that advertises a decision count, not before outreach.
 
 ### 2.6 Chain inspection leads somewhere you do not want to go
 

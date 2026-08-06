@@ -28,9 +28,12 @@ ISO 42001 gilt heute, hat einen Termin, einen Auditor und ein bestehendes Budget
 Frage des Auditors ist nicht „haben Sie eine Aufsichts-Policy", sondern „zeigen Sie mir,
 dass die Kontrolle im Zeitraum **gewirkt** hat". Genau das liefern wir.
 
-Nutzbare Zahlen: Zertifizierung im deutschen Mittelstand ab ca. € 8.000, für größere
-Häuser € 30.000–150.000 initial, jährliches Überwachungsaudit € 3.000–10.000. RateLoop
-hängt sich an diese Budgetlinie, statt eine neue zu eröffnen.
+Nutzbare Zahlen, **vorsichtig verwenden**: ISO-42001-Zertifizierung wird für kleinere
+deutsche Unternehmen ab ca. € 8.000 genannt, veröffentlichte Spannen liegen meist zwischen
+€ 5.000 und € 50.000, Überwachungsaudits im niedrigen vierstelligen Bereich. **Die
+Zertifizierungsstellen veröffentlichen keine Preise**, alle kursierenden Zahlen stammen von
+Beratungen. Nicht als Fakt zitieren — der Punkt ist nicht die Zahl, sondern dass die
+Budgetlinie bereits existiert. RateLoop hängt sich daran, statt eine neue zu eröffnen.
 
 ## 2. Ideales Kundenprofil
 
@@ -143,7 +146,7 @@ nur das Kommandozeilenwerkzeug. Ein Erfolgstor muss diese Unterscheidung aushalt
 | Aussage | Einordnung, die mitgesagt werden muss |
 | ------- | ------------------------------------- |
 | **[GEÄNDERT] Signierte, integritätsprüfbare Nachweispakete** | „Der Export trägt eine Ed25519-Signatur und eine Key-ID, die öffentlichen Schlüssel sind abrufbar, Verifier und Beispielpaket liegen bei. Wir vermarkten das noch nicht als verifizierte Fähigkeit, weil der Signaturpfad extern noch nicht erprobt ist." |
-| Offline prüfbar | Kommandozeile ja; Browser-Verifier lädt Schlüssel über das Netz |
+| Nachvollziehbarkeit des Pakets | „Es liegt ein Verifier bei — im Browser und als Kommandozeilenwerkzeug. **Offline-Prüfbarkeit sagen wir nicht zu**, solange die Fähigkeit als öffentliche Aussage gesperrt ist." Der Browser-Verifier lädt die öffentlichen Schlüssel ohnehin über das Netz |
 | Verschlüsselte Inhalte | „Autorisierte RateLoop-Workloads können entschlüsseln. Es gibt keine kundengehaltenen Schlüssel." |
 | Pilotpreis | „Kommerzielles Angebot, kein veröffentlichter Listenpreis" |
 | Base-Sepolia-Deployment | Testnetz, Mock-Token, kein Deployment mit realem Wert |
@@ -166,10 +169,17 @@ DSGVO, NIS2-Lieferkette, DORA Art. 28, AI Act Art. 26. Wir liefern die Evidenz d
 Pentest-Bericht und ISO-27001-Fahrplan mit Datum, sobald vorhanden.
 
 **„Warum nicht eine Tabelle?"** → Die ehrlichste Frage im Buch, weil die Prüfenden intern
-und unbezahlt sind. Antwort nur auf dem, was eine Tabelle strukturell nicht kann:
-Verblindung, festgeschriebene Stichprobe mit dokumentierter Einschlusswahrscheinlichkeit,
-und ein Nachweis, der **ohne uns** prüfbar ist. Wenn der Pitch „wir protokollieren, wer was
-geprüft hat" lautet, gewinnt die Tabelle.
+und unbezahlt sind. **[GEÄNDERT]** Antwort nur auf dem, was eine Tabelle strukturell nicht
+kann **und was heute belastbar ist**: die Prüffrage steht vor den Antworten fest und ist
+nachträglich nicht veränderbar, und die Urteile entstehen unabhängig — in einer Tabelle
+sieht jeder, was die anderen eingetragen haben.
+
+*Nicht* mit der Stichprobenmethodik oder mit „ein Nachweis, der ohne uns prüfbar ist"
+antworten. Beides ist als öffentliche Aussage gesperrt: die Abdeckungsfelder im Paket
+hängen an einem abgeschalteten Capability-Flag, und für die Signatur gilt die
+Mechanik-Formulierung aus §8.
+
+Wenn der Pitch „wir protokollieren, wer was geprüft hat" lautet, gewinnt die Tabelle.
 
 **„Was sagt der Betriebsrat?"** → Sehr ernst nehmen. Ein System, das festhält, welcher
 benannte Mensch welche KI-Ausgabe wann geprüft hat, ist § 87 Abs. 1 Nr. 6 BetrVG — objektiv
