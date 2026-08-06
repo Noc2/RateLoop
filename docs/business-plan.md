@@ -1,472 +1,530 @@
-# RateLoop tokenless — business plan
+# RateLoop — business plan
 
-Written 29–30 July 2026 against `d49862fa3`, from market, pricing, legal, procurement
-and evaluation-methodology research plus a capability audit.
+Rewritten 6 August 2026 against `423c33f12`, from four research passes: external market
+and competitive research, a unit-economics model built from the deployed infrastructure, a
+pricing study of the German market, and a product audit of what a customer can actually do
+today.
 
-**This is a relaunch plan.** The main site becomes a placeholder that promises nothing.
-The tokenless product is the next chapter and has never taken a payment.
+It replaces a version written on 29 July that has since been overtaken in five places. The
+corrections are recorded in §11, because the pattern of error matters as much as the
+errors.
 
----
+## 1. Summary
 
-## 1. Position: lead with evaluation, price on compliance
+RateLoop records a company's own named experts reviewing its AI system's outputs, and
+emits a signed, exportable evidence record of that review that verifies without us.
 
-The compliance framing is the wrong door and the right lock.
+The sellable configuration today is narrow and should be described narrowly: **customer-invited,
+unpaid, named reviewers; driven by an AI agent over MCP; producing a signed evidence
+export.** Paid reviewer panels, USDC settlement and the public reviewer network exist in
+the codebase and are switched off. They are a different company and are not modelled here.
 
-**The door.** Gartner published a _Market Guide for AI Evaluation and Observability
-Platforms_ on 2 February 2026, predicting adoption by software engineering teams rising
-**18% in 2025 to 60% by 2028**. A separate Gartner release two weeks later sized the AI
-governance platform market at **$492M worldwide for 2026** — the only tier-one figure in play, and the smallest by 5×, split
-across OneTrust, IBM, Credo AI and everyone else. Engineering budget is larger, faster,
-and reachable without procurement, legal review or a DPA negotiation.
+**The wedge is ISO/IEC 42001, not the EU AI Act.** The Act's Article 14 is a design
+requirement on providers with no record-keeping obligation attached; its high-risk
+obligations moved to 2 December 2027. ISO 42001 is in force now, has a scheduled audit, a
+named auditor and an existing invoice, and asks a question RateLoop answers exactly: *show
+me that the human-oversight control operated during the period.*
 
-**The lock.** Compliance budgets are non-discretionary and survive cost-cutting.
-Evaluation tooling is what gets cut in a consolidation year, and 2026 is one.
+**The price is €1,200/month, not €29.** That is not a positioning preference. It is the
+lowest price at which one operator can reach break-even at an achievable customer count.
 
-**They are the same artefact.** A deterministically sampled, blinded, multi-rater
-verdict on live production output — reported as chance-corrected agreement plus a
-confidence-bounded endorsement rate — is simultaneously an engineering quality signal
-_and_ a candidate input to the systematic real-world performance record that Article 72
-post-market monitoring will require of Annex III providers from **2 December 2027**.
-Regulation (EU) 2026/1744 replaced the promised harmonised monitoring-plan implementing
-act with Commission guidance, including a voluntary template, due by 2 September 2027.
-The record is therefore a preparation artefact, not present-tense compliance. One
-measurement, two budgets once the provider has mapped it into its own monitoring plan.
+**The honest risk is that nobody buys.** Not that a competitor wins — that the category
+does not exist as a budget line. §10 treats this as the modal outcome rather than a
+footnote.
 
-Every precedent runs in one direction. Snyk went developer-first from 2015 and only
-built the security-buyer narrative after thousands of developers were already using it.
-Sigstore had compliance as its origin and engineering ergonomics as its adoption driver,
-and never dropped either. Drata and Vanta lead with the operational control signal and
-sell the audit artefact as a byproduct. **Compliance-first-then-engineering has no
-documented precedent in either a success or a failure.**
+## 2. What is actually being sold
 
-So: **enter through the engineer who has an unvalidated judge today. Renew through the
-risk owner who needs the same record dated and retained.** Do not lead with compliance
-to an engineer, or with evaluation to a risk buyer.
+The product does four things no combination of a spreadsheet and a shared inbox does:
 
----
+1. **Freezes the question before the answers.** Policy, review question and options are
+   committed before assignments go out, so the evaluation cannot be reshaped after the
+   fact.
+2. **Collects judgments independently.** Reviewers do not see each other's answers. A
+   spreadsheet structurally cannot do this.
+3. **Samples reproducibly.** HMAC-keyed selection with a recorded inclusion probability, so
+   the sample can be defended rather than asserted.
+4. **Emits a record that verifies without the vendor.** Ed25519 over a canonicalised
+   payload, a published key history, and a verifier that runs offline.
 
-## 2. The wedge, and why it is unoccupied
+### The licensing consequence, which changes what "moat" means
 
-Human review is already the most common evaluation method — among organisations that
-already run evals, **59.8% rely on it** for nuanced or high-stakes work, ahead of
-LLM-as-judge at 53.3% (n=1,340 respondents, of whom about half run evals at all). So the thesis is not novel; the instrumentation is.
+**The entire codebase is MIT-licensed** (`LICENSE`, Hawig Ventures UG; `"license": "MIT"`
+in every package). There is no software licence to sell, and anyone may run this.
 
-Automated judges are measurably unreliable exactly where they matter. Chance correction
-deflates reported agreement by **33–41 percentage points**. Preference flips average
-**13.6%**. Against domain experts, agreement falls to
-**68% for dietitians and 64% for clinical psychologists**, versus 80% for _lay users in
-the same two domains_ — the gap is expert-versus-layperson, not domain-versus-benchmark,
-which an earlier draft got wrong. Prompting does not fix it. Most damning: one finance study found a judge at **κ = 0.86 on
-questions it could answer itself and κ = 0.16 on questions it could not.** The judge is
-reliable precisely where you do not need it.
+What is actually defensible is therefore narrower and worth stating plainly:
 
-Anthropic's own engineering guidance names human grading the **gold standard used to
-calibrate model-based graders**, with its binding weakness stated plainly: _access to
-human experts at scale_.
+- **The hosted operation** — someone runs it, keeps keys, and answers when it breaks.
+- **The accumulating signed archive** — a customer's own history under one key lineage.
+  This compounds; the software does not.
+- **Being the counterparty on the contract** — the DPA, the retention commitment, the
+  entity that can be sued. This is most of what a German buyer is paying for.
+- **The brand and the trademark** — the only exclusive asset, and currently unregistered.
 
-**The differentiation claim, corrected twice and now narrow enough to survive.**
+Any plan section that implies the code is the moat is wrong.
 
-An earlier draft said no platform computes chance-corrected agreement and none uses
-blinded panels. **Both are false.** Langfuse's Score Analytics computes Cohen's kappa,
-F1, confusion matrices and correlation coefficients. LangSmith runs genuinely blind
-multi-annotator review — reviewers cannot see each other's scores — with reservations
-and configurable reviewer counts. Galileo shipped a raw-percentage annotator-agreement
-chart in May 2026. Confident AI reports a per-metric confusion matrix against human
-labels. Label Studio Enterprise has consensus and pairwise agreement, gold-standard
-honeypots, annotator performance scoring and bot detection — more mature quality control
-than any evaluation vendor.
+## 3. The wedge
 
-**What is actually unoccupied is the join.** Each capability exists somewhere and no
-product has two of them at once:
+### Primary: the ISO/IEC 42001 human-oversight control, evidenced continuously
 
-- **Langfuse has the statistics and cannot collect the data.** A second annotator's
-  submission overwrites the first; the maintainers' own workaround leaves prior labels
-  visible, so there is no blinded path. Its kappa compares two _score sources_, not
-  multiple human raters.
-- **LangSmith collects genuinely separate blind labels and computes nothing from
-  them.** Its "alignment score" is raw percentage match.
-- **Braintrust states outright that it does not support blind review**, and averages
-  multiple scores together. Weave shows "has annotation" badges before you rate,
-  anchoring the second rater. Datadog resolves disagreement by intersection, majority
-  vote or averaging — destroying the signal, though its CSV export keeps per-reviewer
-  columns so a customer could compute kappa themselves.
-- **Arize publishes a guide prescribing Cohen's kappa, Fleiss' kappa and Krippendorff's
-  alpha, and ships none of them.**
+- **It is in force now.** No waiting for December 2027.
+- **The budget exists and is already committed.** German SME certification runs from about
+  €8,000; Mittelstand initial certification is quoted between €30,000 and €150,000, with
+  annual surveillance audits at €3,000–10,000. RateLoop attaches to that line rather than
+  creating a new one.
+- **A management-system auditor asks whether the control *operated*, not whether it is
+  documented.** That is a records question. It is the question this product answers.
+- **The certification bodies sell no software for it.** TÜV SÜD, TÜV Rheinland, TÜV NORD,
+  DEKRA, DQS, BSI and Fraunhofer IAIS sell audits, consulting, training and one free
+  questionnaire. Verified absence across all of them.
+- **The AI governance platforms document the control; they do not evidence its
+  operation.** Credo AI's own published definition of evidence is a stakeholder sign-off
+  *confirming that a control has been met* — an assertion about a control, not a record of
+  it running.
+- **There is German standards cover.** DIN SPEC 92006 and 92007, published 29 June 2026,
+  set requirements for AI testing tools including traceability and reproducibility.
 
-So the honest claim is: **blind independent multi-rater collection, chance-corrected
-agreement over it, a confidence bound, reproducible sampling, and a signed artefact — in
-one product.** Every piece exists in isolation; nothing joins them.
+**The sentence:** *Your ISO 42001 auditor will ask you to show the human-oversight control
+operating. We produce that record continuously, from your own named staff, and it verifies
+without us.*
 
-Two further gaps worth naming, both verified across the category. **No vendor computes
-statistical significance on experiment comparisons.** And **no signed, machine-readable
-evaluation artefact exists anywhere** — model cards are prose, leaderboards are HTML,
-audits are PDFs. The signing technology exists (sigstore, in-toto, C2PA's conformance
-programme) and the assurance market exists, and nobody has joined those either. Verifiable
-inference proved the machine ran correctly; nobody proves _N qualified humans
-independently rated the same items and reached this level of agreement_.
+### Secondary: DSA Article 20(6)
 
-Do not sell the arithmetic. Krippendorff's alpha calculators are free and several
-qualitative-research tools have computed these coefficients for decades — ATLAS.ti built
-its implementation with Krippendorff himself. **The commercial object is the
-independence, the panel and the verifiability, never the coefficient.**
+The only regime found that is in force, per-decision, and explicitly requires a qualified
+human: complaint-handling decisions must be taken *under the supervision of appropriately
+qualified staff, and not solely on the basis of automated means.* The public DSA database
+holds over 3.4 billion statements of reasons from 363 platforms, 42% flagged fully
+automated.
 
-**Verified in code, and one claim withdrawn.** Nominal Krippendorff's alpha at
-`agentReviewQuality.ts:155` — textbook, correct, and the strongest verified claim in this
-document. Wilson bounds across six files (two implementations, algebraically identical —
-a drift risk worth fixing). HMAC-keyed sampling at `adaptiveReview.ts:175`.
+The constraint is volume: obligated platforms exceed a small panel's capacity immediately,
+and Article 19 disapplies the section for micro and small enterprises — removing the
+companies whose volumes would fit. **So this is a sampling-and-assurance play, not a gating
+play.** Sell a defensible sample, not full coverage.
 
-**Blinding is withdrawn.** It exists only in the switched-off paid lane. On the live
-lane `directPrivateReviewEvidence.ts:296` sets `blinding = { swap: false }` — a literal
-written into the commitment as bookkeeping, blinding nothing — and reviewers are stored
-as `customer_invited` and `customer_named`. **They are invited and named by the party
-being reviewed, which is the opposite of structural independence.** Three other documents
-in this set already say the independence question is unresolved; selling it as shipped
-was wrong.
+### The proof point nobody is using
 
-**Two limits on alpha, both corrected once.** An earlier draft said the default panel
-size was one and the privacy floor three. Neither is current: the default was raised to
-**two** in July, and the floor **tracks the panel** rather than being fixed.
+**AI Act Article 14(5)** requires, for one Annex III category, that no action be taken
+unless the system's identification *has been separately verified and confirmed by at least
+two natural persons.* That is statutory two-rater independent verification — the product's
+default panel size, written into EU law. It is narrow and dated December 2027, so it is a
+slide, not a market. But it legitimises multi-rater panels to a sceptical buyer, and no
+competitor cites it.
 
-The practical problem is worse in its corrected form. Alpha is not suppressed — it is
-computed on **two-rater cases**, the weakest possible reliability data, where it is a
-near-deterministic transform of the unanimity rate already displayed and its sampling
-variance is very large. **No confidence interval is reported at all**, only a
-small-sample boolean. And because the aggregation floor equals the panel size, every case
-where one of two reviewers did not respond drops out — non-randomly, which biases alpha.
+### What to stop claiming
 
-Do not report alpha as a headline without a bootstrap interval. Also note the database
-constraint still permits a panel of one and the SDK accepts up to five hundred, against
-an enforced floor of two — three bounds that disagree.
+- **"Human oversight for the EU AI Act."** Article 14 binds providers at design time and
+  imposes no evidence duty.
+- **"Nobody signs evidence of human review."** False since at least 2026. See §5.
+- **"Independent reviewers."** They are invited and named by the party being reviewed. The
+  correct word is **attributable**.
+- **"AI literacy creates a records market."** Article 4 was softened by the Digital Omnibus
+  to supporting the development of literacy, with no specific level guaranteed.
 
-### What the measurement foundation does and does not yet do
+## 4. Market, sized honestly
 
-A later DSA-focused implementation pass changed the repository state. The
-[implementation plan](./implementation-plan.md) is the design and status authority when
-this market narrative conflicts with it.
+| Figure | Value | Kind |
+| ------ | ----- | ---- |
+| AI governance platform spend, 2024 | ~$65M worldwide | closest thing to observed spend |
+| Same, 2026 | $492M | Gartner forecast |
+| Same, 2030 | $1B–1.4B | Gartner forecast |
+| EU AI Act compliance cost per high-risk product/year | €29,277, of which human oversight €7,764 | 2021 Commission cost *model*, not invoices |
 
-- **Design-weighted point estimation is implemented, not released.** The repository now
-  computes weighted confusion matrices and typed accuracy, precision and recall from
-  frozen reference evidence. Public intervals remain disabled until an external method
-  reviewer accepts the variance design.
-- **A separate DSA reference channel now covers automated `pass` and `fail`.** It is kept
-  out of operational adaptive rollups. The persisted report, authorized-panel consumer,
-  immutable publication versions and provider pilots remain open.
-- **Alpha measures the panel, not the agent.** It is inter-rater reliability. A customer
-  reading "reviewer consistency" as an agent quality score is being misled.
-- **You cannot compare two versions of the same agent.** Every quality surface is bound
-  to current versions; ship a v2 and v1's numbers vanish from the UI with no read path
-  back. This kills "did my agent get better?" outright.
-- **The operational adaptive sample is not the DSA reference sample.** Its point estimate
-  now uses the recorded history-conditioned propensities, while the DSA channel freezes a
-  separate closed frame and future-beacon draw. Neither supports a public interval until
-  its declared variance method passes external review.
-- The sampler key is never disclosed, so coverage is auditable by RateLoop rather than
-  independently verifiable.
+**The category was smaller than one mid-size SaaS company as recently as 2024, and the
+IAPP's vendor directory lists 105 entries chasing it.** A 105-vendor directory against a
+$500M forecast is the signature of a category being explained rather than bought. Only
+three of those vendors are German.
 
-### So the honest wedge is narrower, and still unoccupied
+**Who owns the budget.** Across 670+ practitioners: privacy 22%, legal and compliance 22%,
+IT 17%, data governance 10%. **Roughly 44% sits with privacy and legal — the people who
+bought GDPR tooling, from the same budget line.** This is a direct challenge to entering
+through the engineer: the engineer is where the product installs most easily, and the
+privacy or legal owner is where the money is. Plan for a two-audience sale.
 
-Three claims survive the audit, and they are enough:
+**Germany.** AI use among companies with 20+ employees rose from 17% to 41% year on year;
+48% are planning. Stated barriers: GDPR 77%, skills 70%, cost 58%, unclear use cases 51%,
+legal uncertainty 48%.
 
-1. **Per-use-case human endorsement with a confidence bound.** For each workflow and
-   risk tier: what share of outputs a blinded panel endorsed, with a Wilson 95% interval
-   and an explicit small-sample flag. That _is_ an agent-quality measure, and it is
-   use-case specific rather than benchmark-generic.
-2. **Where the task itself is ambiguous.** Alpha, unanimity and dissent hotspots identify
-   the workflows and risk tiers on which qualified humans cannot agree with each other.
-   **Nobody else computes this, and it is the most useful thing in the product** — where
-   your reviewers disagree is where an automated judge is also unreliable, and where a
-   confident score is a lie.
-3. **A tamper-evident record of exactly which outputs were reviewed and why**, with
-   recorded inclusion probability and a coverage export carrying hashes and commitments.
-   **The export is not signed** — an earlier draft said it was — and the capability is
-   pinned false in the claim gate, so it cannot appear in public copy until both are
-   fixed.
+**Nothing in that barrier list resembles "we cannot prove a human reviewed it."** That is
+the single most important market fact in this document, and §10 takes it seriously.
 
-**The old positioning sentence, retained only as background:**
+### The window
 
-> Generic benchmarks cannot tell you whether your agent is good enough for your use
-> case. We put a sampled, blinded panel of qualified humans on your live production
-> output and return two numbers per use case: what share they endorsed, with a
-> confidence bound — and how much they agreed with each other, chance-corrected, so you
-> know which parts of the job are genuinely ambiguous.
+The German AI implementation act took effect 29 July 2026, making the Bundesnetzagentur the
+national market surveillance authority with a complaints inbox and a free service desk for
+SMEs. Article 50 transparency obligations applied from 2 August 2026. High-risk obligations
+land 2 December 2027.
 
-For the risk buyer, the same sentence plus: _and a dated, sampled, reproducible input a
-provider can map into its post-market monitoring plan ahead of the December 2027
-deadline._ The Commission's voluntary template is not due until September 2027, so do
-not claim that the current artifact already satisfies a final official format. Note
-Article 72 binds the **provider**, not the deployer — this set's own legal document flags
-deployer-facing Article 72 citations as a defect, and an earlier draft reproduced it.
+That is a **16-month gap in which buyers feel exposed, a named regulator exists, and no
+conformity-assessment infrastructure serves them** — zero notified bodies designated, the
+only accreditation scoped to biometrics. TÜV SÜD has been selling a *voluntary* AI
+conformity certificate into that vacuum since November 2025. The window closes as notified
+bodies stand up and harmonised standards land.
 
-Do not sell generic judge calibration first. The active wedge is reproducible DSA
-automated-means reporting evidence: a reconciled decision population, system-specific
-reference labels, design-weighted cells and an offline-reproducible official-template
-section. It is not released until the method review, two provider pilots and durable
-publication path are complete.
-
----
-
-## 3. Where things stand
-
-**Works today:** self-serve signup, agent connection over MCP OAuth or API key, review
-policy configuration, invited reviewers, signed evidence packets, a browser verifier,
-expiring auditor share links, audit and OSCAL exports. A three-account hosted test
-exercises the whole chain.
-
-**Revenue is blocked by three things, none architectural:** Stripe is off behind two
-flags; the verified-business gate guarding checkout can only be satisfied by a function
-with no route or UI, so customer #1 hits a wall; and **the decisions meter is wired only
-to the switched-off paid lane**, so the usage counter reads zero forever while the
-pricing page promises an allowance.
-
-Fix the meter _after_ deciding what it should be.
-
----
-
-## 4. Pricing and the numbers that actually bind
-
-The current meter is decisions, and it is wrong three ways — with two corrections an
-earlier draft needed.
-
-**It compares badly per unit.** $29 for 250 decisions is $0.116, but that is the
-promotional price; **at the $99 list it is $0.396**, and quoting the lower figure
-flattered the comparison. Amazon A2I orchestrated the same work at $0.02–0.03 per object
-with no charge for your own reviewers, so the honest gap is 5–20×. (A2I closed to new
-customers on 30 July 2026 — a historical anchor now, but the one a buyer's memory uses.)
-
-**It suppresses the behaviour being sold.** Metered review budgets mean fewer reviews,
-which means thinner evidence.
-
-**The metered thing is the shrinking thing.** Adaptive coverage steps
-100% → 50% → 25% → 10% by design. Note the sign, because an earlier draft had it
-backwards: **nothing is charged per decision today** — both plans are flat fees with an
-allowance, no overage, no usage record — so falling consumption raises revenue _per
-decision_. The problem is not that revenue falls. It is that of four limits already
-implemented, the only one presented as the headline is the only one designed to shrink,
-which forecloses usage-based expansion before it starts.
-
-**Meter on governed agents and retention years.** Both grow. Retention costs almost
-nothing to serve and is where willingness to pay sits — evidence with short retention
-is worthless to an auditor.
-
-**Price against expert-hours, not eval-tool seats.** Next to LangSmith at $39/seat you
-look absurd; next to expert review at $85/hour you are cheap — €2,000/month is under 24
-hours of expert judgement. Regulated-evidence artefacts price 10–40× commodity review:
-Stripe Identity €1.25/verification, Sumsub $1.35–1.85, Skribble €4–5 per qualified
-signature, Checkr $30–95 per report.
-
-**One constraint any retention promise must respect:** a 30-day retention option is not
-implementable. There is a six-month retention floor in `evidenceRetention.ts` _and_ a
-database CHECK constraint, with its recorded basis being Article 26(6).
-
-Two corrections an earlier draft got wrong. **Retention depth has no AI Act basis** —
-Article 26(6) is _six months_, not six years. The real anchors are §195 BGB's three-year
-limitation and the new Product Liability Directive's **ten-year long-stop** (25 years
-for latent injury, with court-ordered evidence disclosure), transposing 9 December 2026.
-And **qualified timestamps are per-unit COGS on the core artefact** — at €2.50 per token,
-sixty decisions cost €150. Timestamp the packet, not every decision.
-
-Two inputs have no credible benchmark and must be treated as scenarios rather than
-estimates: months to first paying customer, and free-to-paid conversion, where the
-top-to-bottom quintile spread is **10×**. Stripe Atlas's median time to first payment is
-34 days from incorporation across 23,000 companies — not category-specific, but the right
-order of magnitude for a product that already exists and has users.
-
----
+Expect prospects to arrive with the wrong deadline. German vendor content published as
+recently as this spring still says high-risk obligations bite in August 2026.
 
 ## 5. Competition
 
-**Evaluation platforms** — LangSmith ($39/seat), Braintrust ($249/mo flat, no per-seat
-charge at any tier), Langfuse ($29/$199/$2,499, MIT core including annotation queues),
-Arize ($50/mo, unlimited users and annotations on every tier), Galileo ($100/mo),
-Confident AI ($200/$2,000, Apache-2.0 core). Well funded and consolidating: Datadog
-acquired Adaptive ML in June 2026 and invested in Patronus's $50M Series B, Humanloop's
-platform sunset in September 2025, and Argilla has been frozen since March 2025.
+### The three that actually overlap
 
-**All of them sell software with unlimited or cheap seats. None wants a services
-margin**, which is why none supplies humans — and why the labour side went to Mercor,
-Handshake and Surge instead, selling labour plus rubrics rather than tooling.
+**SYEN Systems** (US, founded 2024) sells a cryptographically linked, tamper-evident
+evidence chain for AI decisions, capturing policy, identity, data, model execution, **human
+review** and outcome in one signed entry — Ed25519 over canonicalised payloads, customer-controlled
+KMS keys, RFC 3161 timestamps, offline verification with OpenSSL, and a named reviewer
+identity in its demo record.
 
-**Signed-evidence micro-vendors** — the closest is Monaco-based **KLA Digital**, selling
-tamper-evident records and human approvals **from €5,000 per application with no free
-tier and no self-serve**. The lane below them is empty. (An earlier draft described
-their cryptography in specifics that are not on their reachable pages; the load-bearing
-fact — price floor, no self-serve — holds.)
+**This is the same artefact layer.** The prior claim that no vendor emits signed evidence
+of human review is dead. Two others are adjacent: **Meridian Intelligence Group** ships
+floor-triggered human review with **patent-pending two-key attestation** — worth a
+freedom-to-operate check before any funding conversation — and **KLA Digital** sells a
+runtime control plane with a tamper-evident record and a four-week governed pilot.
 
-**The honest statement:** for most buyers the alternative is a spreadsheet, a Slack
-thread and a domain expert's memory. What this sells against that is a number that
-survives being questioned.
+What none of them has is **sampling design, blinded multi-rater collection, and
+chance-corrected agreement over it.** Sell the measurement, not the signature.
 
-**Two warnings.** HumanLayer was the human-in-the-loop approval SDK and **pivoted away anyway**, with its
-repository now carrying an explicit deprecation notice (revenue figures circulating for
-it trace to an estimate aggregator and a single job posting — do not rely on them) to a coding IDE, while
-OpenAI's Agents SDK shipped native approve-and-resume. HITL as a standalone product gets
-absorbed into frameworks. And Datadog shipped production-to-human annotation queues in
-March 2026 explicitly for judge calibration: **the workflow is being commoditised in
-real time.** Only the statistics and the labour supply remain unclaimed.
+### AI governance platforms: the unit of evidence is wrong
 
----
+Across Credo AI, Holistic AI, Trustible, Saidot, Monitaur, ModelOp, IBM watsonx.governance
+and the rest, the evidentiary unit is the **AI system, use case, model or control — never
+the individual output.** Gartner's first Magic Quadrant for the category (June 2026) sets
+inclusion criteria — AI discovery and registry, policy enforcement, dynamic risk scoring,
+10+ paid deployments in 2+ regions — that RateLoop cannot meet and **should not try to**.
+It is a different shape.
 
-## 6. Go to market
+The pure-plays are capitalised at startup scale: Saidot has fewer than 10 employees and
+about €1.75M raised; Trustible fewer than 25 and $4.6M. The money is in the GRC incumbents.
 
-**One ICP, named.** Teams running a customer-facing agent where a quality claim has to
-survive challenge by someone outside the team. The DSA transparency database publishes **359 active platforms** for free — that is a
-live counter of platforms currently filing, not the obligated population, and Article 20
-is disapplied for micro and small enterprises, which excludes much of this ICP — naming ten of them is an hour's work and is
-the difference between a plan and an intention.
+### The substitution threat, which is live and moving
 
-**The sharpest artifact is the harmonised Article 15(1)(e)/42(2)(c)
-automated-means section.** It requires recurring, system-specific accuracy, precision and
-recall rows in a mandatory format. Article 20(6) supervision evidence is adjacent and
-separate; Article 42(2)(b) staff qualification disclosure is not the launch headline.
+- **Vanta** shipped a dedicated AI Governance product on **30 July 2026** — seven days ago
+  — with $504M raised and roughly $300M ARR. It does not do per-output human review, and
+  Article 14 is absent from its EU AI Act page.
+- **Drata** opened AI Agent Governance limited availability on **4 August 2026** — two days
+  ago.
+- **ServiceNow bundled AI Control Tower into every pricing tier** in April 2026 rather than
+  selling it as an add-on, and has given it away free for a year alongside Now Assist.
 
-### The strongest citation found anywhere, and it is not about AI
+**A Magic Quadrant Leader is giving this category away as a bundle sweetener.** The distance
+from "approval workflow with an audit trail" to "per-output reviewer record" is one sprint,
+and Vanta has 1,884 employees to walk it.
 
-**FINRA Rule 3110.07** requires evidence of review to "clearly identify the reviewer,
-the internal communication or correspondence that was reviewed, the date of review, and
-the actions taken" — and states plainly: **"Merely opening a communication is not
-sufficient review."**
+### Evaluation platforms: two checkable gaps survive
 
-That is a binding rule with a **named record schema matching what this product already
-emits**, applying to AI-assisted review today with no new AI regulation needed. Rule
-3110.09 requires preparer and reviewer names to be ascertainable from retained records;
-SEC Rule 17a-4(b)(4) preserves communications "and any approvals thereof"; 17a-4(f)
-requires a time-stamped audit trail including the identity of whoever created or
-modified a record.
+Across LangSmith, Langfuse, Braintrust, Arize, Confident AI, W&B Weave, Comet Opik, Label
+Studio and Patronus:
 
-**But it gives no volume driver.** FINRA Notice 07-59 permits sampling explicitly:
-**"There is no prescribed minimum or fixed percentage that is required by
-regulation."** The FCA has published nothing either. **No US or UK regulator prescribes
-a sampling rate.** Sell the defensibility of a chosen methodology, never compliance with
-a mandated review volume.
+- **Not one computes Cohen's or Fleiss' kappa, or Krippendorff's alpha.** Label Studio
+  Enterprise, the most annotation-native, deliberately uses its own consensus metric
+  instead.
+- **Not one emits a signed or tamper-evident export.** The best on offer is an
+  enterprise-tier platform activity log.
 
-**And the pre-use approval hook is eroding.** FINRA proposed in July 2026 to delete
-mandatory principal pre-use approval of retail communications, **citing the speed and
-volume of AI-generated communications as a reason**. The evidence-of-review obligation
-is being carried across and made universal instead — a better fit for a continuous audit
-trail than a one-off signature.
+Blind multi-rater collection is rare and partial: LangSmith hides other reviewers' scores
+but shows their comments; Langfuse does not support multiple annotators on one trace at all.
 
-**The direction of travel is this plan's thesis in miniature.** The SEC withdrew its
-predictive-analytics proposal in June 2025; the CFPB withdrew both AI adverse-action
-circulars in May 2025; the banking agencies replaced SR 11-7 in April 2026 with guidance
-that is expressly non-enforceable and **scopes generative and agentic AI out entirely**;
-the FCA states outright that it does not plan to introduce extra regulations for AI. What
-grows instead is the expectation of evidence — prompt and output logs, model version and
-timestamp, exam attention to AI supervision procedures, board-approved outcomes
-reporting.
+The EU AI Act appears in this segment as marketing only — LangChain published an AI Act
+mapping in April 2026 with no new feature and no mention of signed logs.
 
-**The market is for evidence infrastructure, not for compliance with a human-review
-mandate.** That is the clearest external confirmation of this plan's direction found
-anywhere in the research, and simultaneously the sharpest warning against selling a
-mandate that does not exist.
+**And the segment is consolidating away.** Humanloop was acqui-hired by Anthropic and its
+platform is offline; Langfuse went to ClickHouse; Galileo to Cisco; Weights & Biases to
+CoreWeave. That is both the strongest argument for positioning away from eval tooling and
+the most plausible exit.
 
-**Free artefacts worth producing:** a pre-drafted MCC-AI Annex E/F pack (Annex F is a
-blank "measures to ensure human oversight" box every AI supplier to an EU public body
-must fill), and a CSA STAR Level 1 self-assessment — free, no prerequisites, publicly
-registered, and the format cloud marketplaces accept.
+### Human-data vendors are an adjacent market, not a competitor
 
-**ISO/IEC 42001 controls A.6.2.8 and A.9.4 apply before the AI Act does.** That deadline
-exists now, the budget line exists, and it is jurisdiction-agnostic.
+Scale, Surge, Toloka, Prolific, Mercor and clickworker supply *their* people doing *their*
+work. None sells an evidence artefact about *your* named staff reviewing *your* AI.
+Prolific is the pricing reference: minimum £6.00/$8.00 per participant-hour with a **42.8%
+corporate platform fee.**
 
-**Not worth pursuing:** channel partnerships — no European SI publishes a door below
-~€1M ARR, and certification bodies cannot resell into accounts they certify. Corporate
-innovation programmes convert screened startups at ~1.4%.
+## 6. Pricing and revenue model
 
-**Refuse white-label.** The product sells evidence independent of the party being
-reviewed. Rebadged as an integrator's own output it is not independent.
+### The metering constraint decides this
 
----
+Only three limits are enforced in code today: **active agents**, **active private groups**,
+and a paid-panels boolean. The decision meter is fully built but its only production caller
+sits on a switched-off lane, so **plan decision limits on the sellable lane are not
+enforced** — and a paying workspace sees "0 of 250" forever, which is a live credibility
+defect in the billing UI.
 
-## 7. What is actually defensible
+Per-decision pricing fails on three independent grounds: it is not wired to the sellable
+lane; the adaptive sampler is *designed* to shrink the metered quantity from 100% to a 10%
+floor; and at $29 for 250 decisions it prices at $0.116 per decision against comparable
+orchestration at $0.02–0.03.
 
-**Not the cryptography.** Hash-chaining an annotation table is a sprint. And from
-December 2026, eIDAS qualified electronic ledgers carry a statutory presumption of
-sequential ordering and integrity — supervised providers can offer the primitive as a
-regulated service. **The tamper-evidence layer has a known expiry date as a
-differentiator.** Ride them; do not compete.
+**So the value metric is active agents, with evidence-retention years as the second axis.**
+Retention is already stored, validated, versioned and audit-logged, allows 6–120 months,
+and costs under €0.20/month to serve for a decade. It is the cleanest unpriced margin in
+the product.
 
-**Not data network effects — architecturally foreclosed, deliberately.** Review data is
-per-customer, confidential, covered by a no-training commitment, and the plan forbids an
-inference model in the core. Say this out loud so it stops being quietly assumed.
+### The structure
 
-**Three things plausibly survive 24 months:**
+| | Price | Agents | Groups | Retention |
+| --- | --- | --- | --- | --- |
+| Sandbox | €0 | 1 | 1 | 6 months |
+| **Founding Pilot** | **€2,500 net, 6 weeks** | 3 | 5 | 12 months |
+| **Assurance** | **€1,200/month, annual prepay (€14,400)** | 3 | 5 | 24 months |
+| **Assurance+** | **€2,500/month, annual prepay (€30,000)** | 10 | 15 | 60 months |
 
-1. **The accumulating evidence archive.** The only asset that appreciates with elapsed
-   time and cannot be back-filled, because each record was signed contemporaneously by a
-   named reviewer. A customer switching in month 20 abandons 20 months of evidence.
-   The standalone open verifier is not marketing — **it is the precondition**, because a
-   buyer only accumulates an irreplaceable archive with a solo vendor if the archive
-   survives the vendor.
-2. **The CI gate that blocks on a human decision.** The only item in either document
-   that creates a real switching cost: a pipeline gate is removed by a deliberate act
-   with a named owner. Everything else is observational and removable silently. It is
-   currently late in the build order and **belongs first**.
-3. **Standards participation.** There is no specification of what oversight evidence
-   must look like — and CEN-CENELEC JTC 21 is drafting the document that will create
-   one. SME participation is fee-exempt and explicitly encouraged. The value is 12–24
-   months of advance notice of the artefact spec. Slow, unpaid, and exactly the horizon
-   in question.
+All prices **netto zzgl. 19% USt.**, invoiced in EUR, paid by SEPA transfer, annual prepay.
 
-All three compound with _elapsed time_, so the dominant strategy is the one that
-maximises months alive: minimise burn, take revenue early.
+**Publish no recurring price until three pilots have closed.** Publish the pilot and the
+sandbox only.
 
-**And the honest framing: at zero customers, defensibility is the wrong thing to spend
-pages on.**
+### Why the public $29 must go
 
----
+The public pricing page currently shows $29 against a struck-through $99 with a blanket 20%
+future discount, while the German collateral quotes €2,500 — and the only available action
+on that card is "Request pilot" because self-serve checkout is deliberately disabled. **A
+prospect sees a $29 price tag whose sole button asks for a €2,500 pilot.**
 
-## 8. Risks, and what actually kills this
+A published $29 is not a list price to discount from. It is a net price a buyer can point
+at, and it reframes a €2,500 pilot as an 86× markup requiring justification. Every verified
+competitor in the category — Vanta, Drata, Secureframe, OneTrust, Credo AI, Holistic AI,
+and the closest comparable, Munich-based **trail**, which sells a structured proof of
+concept — publishes no price at all.
 
-**Nobody replies.** For bootstrapped companies this is the modal failure, not running
-out of money — in one dataset of 83 postmortems citing "no market need", only **2 cited
-insufficient funding** while **55% named a marketing problem** (an earlier draft said
-69%, which appears only on unrelated blogs).
+There is also a German legal wrinkle: the Preisangabenverordnung binds offers to consumers,
+but a court has held that a publicly accessible web shop must be assumed to address private
+customers too unless access is technically restricted. Removing the public self-serve price
+removes that exposure.
 
-**The closest documented analogue shut down in August 2025** — February 2026 is when the
-founder published the postmortem. Cydoc: solo founder,
-bootstrapped, regulated-adjacent AI, seven years. Cause was broken unit economics (~$70
-cost against a sub-$100 price), sales neglected because solo, and a moat undercut when a
-client built a simpler version in-house. **Explicitly not regulation.** Three of those
-four are live here.
+### Where €1,200 comes from
 
-**Point solutions lose to platforms in compliance categories.** GDPR built OneTrust —
-~$500M ARR — because it addressed continuous operational pain. The small undifferentiated
-GDPR-era vendors died quietly and left no postmortems. "Signed evidence for one workflow
-step" is structurally the wrong shape; the evaluation framing is what turns it into a
-recurring operational one.
+It is derived from break-even (§7), not from comparables — but the comparables support it:
 
-**The sharpest threat to the evaluation framing is a mindshare problem, not an evidence
-problem.** The most-followed practitioner in the field recommends a single trusted
-annotator over multiple raters — which makes inter-rater agreement definitionally
-inapplicable. If the buyer's mental model is "one expert, 30 traces, a spreadsheet",
-then alpha, Wilson bounds and blinded panels read as academic overhead. **Test this in
-the first five conversations.**
+| Reference | Price |
+| --------- | ----- |
+| German whistleblowing compliance SaaS (commodity floor) | €45–97/month |
+| External DPO retainer — a named human with statutory liability | €125–450/month |
+| Matproof, EU-hosted compliance platform, Germany | €480 / €1,200 per month |
+| Proliance ISMS Core | €1,000/month |
+| German AI Act readiness consulting, fixed price | €1,950 / €4,500 one-off |
+| Larger German AI Act implementation engagements | €25,000–120,000 |
 
-**Solo operations.** No admin UI, no error tracking, no on-call. Promising an evidence
-SLA at four-figure monthly prices is a contractual liability until that changes.
+**€29/month sits below the German commodity compliance floor, which frames the product as a
+toy.** €1,200 sits between the Matproof tiers and at the Proliance ISMS line — priced as
+infrastructure for a certification, which is what it is.
 
-### Kill criteria
+### Delete the €249 tier
 
-- **Definition of "will pay":** a card charged or a signed order. Not verbal interest.
-- **If 3+ of 10 convert:** the model works; execute.
-- **If 1–2 convert:** the price is right and the ICP is wrong. Re-target, do not rebuild.
-- **If 0 convert:** the pricing was never the problem. Move to the incident-and-quality
-  buyer inside engineering, or stop.
-- **Date:** set one. Thirty-four days from first outreach is the right order of
-  magnitude for a product that already exists.
+At €249, break-even needs 24–30 customers, which one operator cannot reach. Worse, a €2,500
+six-week pilot implies €1,667/month of value — 6.7× a €249 subscription. **The pilot and a
+€249 subscription cannot both be correctly priced.** Keep €249 only as an internal floor
+for a genuinely self-serve tier if self-serve ever ships; it is not what a pilot converts
+into.
 
----
+### The take rate, corrected
 
-## 9. The next ninety days
+If paid panels ever open: the platform fee is **10% of base bounty**, with a reviewer floor
+of 80% guaranteed on-chain. Effective take on what the customer actually pays is **9.09%
+when the attempt reserve goes unused and 5.26% when it is fully consumed.** The frequently
+quoted "~7.5%" is the midpoint of that range and is not a number the code produces at any
+single point.
 
-1. **Change the meter** to agents plus retention, per §4. Fix the pricing page's
-   decision-allowance claim, which the code does not support.
-2. **Name ten accounts** from the DSA provider list.
-3. **Run the demand test.** Lead with reproducible automated-means rows and the exact
-   limitations an auditor can independently recompute; keep Article 20 supervision as a
-   separate control artifact.
-4. **Then unblock revenue:** Stripe on, business verification path, meter wired.
-5. **Ship the standalone verifier and the CI gate** — the two items that compound.
+**The deployed contract caps the fee at 20%** (`MAX_FEE_BPS = 2_000`). Any proposal for a
+15–25% service fee breaches that at the top of the band and would require a fresh contract
+deployment and a complete new deployment key propagated across app, indexer, keeper and
+database.
 
-Verify before anything becomes customer-facing copy: the consolidated Article 113 text
-on the deferral, and Article 5(2)–(3) of Regulation 537/2014, neither of which could be
-retrieved from primary sources during research.
+At 9.09%, earning €10,000/month gross requires intermediating €110,000/month of bounty flow
+— roughly 1,786 reviewed cases, about four reviewer FTE. Against Prolific's 42.8%, **9.09%
+is an interface fee for settlement, not a services margin.** If RateLoop ever sources,
+screens and QAs reviewers, it is loss-making, and the fix is capped by the contract.
+
+## 7. Unit economics
+
+### Cost structure
+
+| Customers | Total infrastructure per month |
+| --------- | ------------------------------ |
+| 0 | ~€101 |
+| 10 | ~€128 |
+| 50 | ~€171 |
+| 200 | ~€341 |
+
+**At 200 customers, infrastructure is under €350/month — about 0.15% of revenue.
+Infrastructure is not a constraint on this business and never will be. The binding cost is
+one person's hours.**
+
+One finding worth acting on: roughly **42% of fixed infrastructure serves the chain**
+(indexer, keeper, paid RPC), which the only sellable lane never touches — the invited lane
+terminates off-chain. It cannot simply be switched off, because the indexer URL is a
+required production variable. That is a deliberate parity choice costing about €510/year.
+
+Non-infrastructure fixed costs dwarf it: accounting, insurance, and in year one a
+penetration test (~€9,000) and German counsel for the AGB, AVV, TOM annex and order form
+(~€6,000). **Year-one total burn is roughly €1,800/month before any founder salary.**
+
+### Margin
+
+At €1,200/month with two support hours per customer per month, gross margin is **83%**.
+COGS is almost entirely operator time:
+
+| Support hours/customer/month | GM at €1,200 | at €799 | at €249 |
+| --- | --- | --- | --- |
+| 1 | 91% | 87% | 60% |
+| 2 | 83% | 75% | 20% |
+| 3 | 75% | 62% | **−20%** |
+| 6 | 50% | 25% | −141% |
+
+**Break-even support load is 12 hours/month at €1,200 and 2.5 hours at €249.** One German
+security questionnaire — eight hours, and they do ask — wipes out three months of a €249
+customer.
+
+### The pilot is a qualification instrument, not revenue
+
+A €2,500 six-week pilot costs roughly **€0 in cash** and **52 operator hours the first
+time, 34 in steady state** — an effective €48–74/hour against a DACH senior technical rate
+of €112–225. With one person, **two pilots can run concurrently; 8–12 per year is
+realistic.** That caps pilot revenue at about €30,000/year before credits. Do not plan
+around it.
+
+### Break-even
+
+| Price/month | Customers needed (year 1, lean) |
+| ----------- | ------------------------------- |
+| €249 | 24 |
+| €799 | 7.4 |
+| **€1,200** | **4.9** |
+| €2,500 | 2.4 |
+
+**Minimum viable configuration: five customers at €14,400 = €72,000 ARR.**
+
+Realistic year one: six pilots signed, two conversions, **revenue about €41,000 against
+costs of about €23,000 excluding salary — a contribution of roughly €1,550/month.**
+
+**Year one does not pay a salary. Break-even lands in month 16–22 if conversion holds above
+one third. Required runway: €60,000–90,000 of savings or other income.** The collateral does
+not say this; the operator should say it to themselves.
+
+## 8. Go to market
+
+Germany first, permissioned intros only — §7 UWG rules out cold email sequences.
+
+**Sell to two people.** The engineer installs it; privacy or legal owns the budget. A
+pitch that only lands with one of them stalls.
+
+**Attach to the certification budget.** "The €500-a-month thing that makes your €10,000
+surveillance audit cheaper and faster" is a far better story than "audit alternative."
+
+**Frame the missing certificate correctly.** RateLoop holds no ISO 27001 and no SOC 2. The
+buyer is discharging *its* obligation — NIS2, DORA, GDPR Article 28(1) "sufficient
+guarantees", AI Act Article 26. Give them evidence for their file and the missing
+certificate becomes negotiable. For a Germany-first motion **ISO 27001 matters more than
+SOC 2**, and note that Vanta, Drata, Kertos and Naaia all hold ISO 42001 themselves and say
+so on their homepages — selling governance software without holding a certification is a
+credibility problem as well as a procurement one.
+
+**Prepare for the works council before it appears.** See §10.
+
+## 9. Twelve months
+
+| Month | Work | Milestone |
+| ----- | ---- | --------- |
+| Aug 2026 | Tier 0 of the readiness list — one day. Settle the one-product story. Remove the public $29. Fix "0 of 250" in the billing UI. | Site and collateral tell one story |
+| Sep | Browser path to request a review; return the reasons; standalone verifier; operator verification route. Counsel briefed. Pentest booked. | Product demonstrable in a browser |
+| Oct | 50 accounts researched, 20 scored, 10 permissioned intros, 8 discovery calls, 2 pilot offers | **≥1 signed pilot** |
+| Nov–Dec | Deliver pilots 1–2, recording hours per activity. Pentest report; trust page. | 2 pilots delivered; median hours known |
+| Jan–Feb 2027 | Pilots 3–4. First annual proposal at €1,200–1,500. | **3 paid pilots; ≥1 conversion** |
+| Mar–May | Pilots 5–7. Publish recurring tiers now, not before. Decide EUR/SEPA in code from actual invoice count. | ~€43k ARR |
+| Jun–Aug | Pilots 8–10. Renewal with customer #1. SLA drafted before the second annual signs. | **5 annual customers ≈ €72k ARR** |
+
+## 10. Risks
+
+**1. Buyer indifference is the modal outcome.** The German barrier list does not contain
+anything resembling this problem. The IAPP's own four-category vendor taxonomy has no
+human-oversight category. Every regulation that mandates human review mandates the
+*capability*, not the *record*. **There is no procurement checklist with a line item for
+this**, and creating a category is a well-funded company's job.
+
+**2. The spreadsheet objection is stronger here than previously admitted**, because the
+reviewers are unpaid and internal. The customer's honest alternative is a shared sheet and a
+monthly export. The answer must be what a sheet structurally cannot do — blind collection,
+committed sampling, and a record that verifies without the vendor. If the pitch is "we track
+who reviewed what", the spreadsheet wins.
+
+**3. Incumbents are moving now.** Vanta seven days ago, Drata two days ago, ServiceNow
+giving it away. The prior plan conceded the tamper-evidence layer has an expiry date; the
+workflow layer has one too.
+
+**4. The protocol substitutes the workflow half for free.** MCP elicitation is a standard
+primitive: a server requests structured human input and the client returns accept, decline
+or cancel. Every MCP client gets human-in-the-loop pause for nothing. It persists no
+evidence — which is exactly the remaining product — but the workflow half is now table
+stakes in the protocol this is built on.
+
+**5. Direct artefact substitution.** SYEN ships the same cryptography today with US
+framework mappings. One competent EU competitor doing the same against AI Act, DSA and ISO
+42001 erases the differentiation in a quarter.
+
+**6. The German works council is a deal-killer disguised as a feature.** A system recording
+which named human reviewed which AI output and when is textbook §87(1)(6) BetrVG territory
+— objectively capable of monitoring employee performance, intent irrelevant, and
+**introduction without works-council agreement is legally ineffective**. AI Act Article
+26(7) independently requires informing workers' representatives. Mitigations, all cheap and
+all product decisions: no per-reviewer throughput or accuracy metrics by default,
+aggregate-only reviewer views, and a ready-made Betriebsvereinbarung template shipped as a
+sales asset.
+
+**7. Procurement gates the product cannot pass.** No ISO 27001, no SOC 2, no pentest report,
+no trust page. In Germany ISO 27001 is the de-facto entry ticket and TISAX is contractually
+mandatory for anything automotive-adjacent.
+
+**8. Availability is a legal exposure, not a feature gap.** German SaaS is *Mietvertrag*,
+so with no SLA defining availability the implied standard is 100% and downtime reduces the
+fee by operation of law. Against one operator with no on-call and no error tracking, **an
+SLA is a revenue-protection instrument.**
+
+**9. Solo operations against 2–6 month German sales cycles**, a works-council gate and a
+DPA negotiation per deal. Build velocity is extraordinary and burn is negligible. **Neither
+engineering capacity nor money is the constraint. Distribution is.**
+
+## 11. What this rewrite corrected
+
+Recorded because the pattern is the finding.
+
+1. **"No vendor emits signed evidence of human review" — false.** SYEN Systems ships it.
+   The differentiation is the measurement design, not the signature.
+2. **"Free and Early Access are functionally identical" — false.** Agent and group limits
+   are enforced at four production call sites. Only the decision meter is not. The enforced
+   value of the paid tier is exactly +2 agents and +4 groups.
+3. **Qualified timestamps cost €0.035–0.19, not €2.50** — wrong by 25–50×. Sixty decisions
+   cost €3–6, not €150. The batching decision may still be right, but its cost
+   justification has evaporated.
+4. **The take rate is 5–9%, capped at 20% by the deployed contract** — not "~7.5%", and any
+   15–25% proposal breaches the contract at the top of its band.
+5. **The MIT licence means there is no software licence to sell.** Three pages on
+   defensibility never mentioned it.
+
+Two prior claims could not be verified this round and were removed rather than repeated:
+the Article 72 implementing-act status under Regulation (EU) 2026/1744, and the assertion
+that Datadog shipped human annotation queues — its LLM Observability documentation contains
+no human annotation product at all.
+
+## 12. Kill criteria
+
+"Will pay" means **a charged card or a signed order form with a payment date.** Verbal
+interest and a scheduled follow-up are zero.
+
+| Date | Test | If missed |
+| ---- | ---- | --------- |
+| 30 Sep 2026 | ≥8 qualified conversations from permissioned intros | Below 5 → the **channel** is broken, not the product. Fix distribution before anything else. |
+| 31 Oct 2026 | ≥2 written pilot offers and ≥1 signed order form | Zero signed → change the ICP, not the price. |
+| 31 Dec 2026 | 1 pilot delivered against all six gates, **and someone outside the customer's engineering team opened the evidence packet** | Packet never read externally → the evidence thesis is unconfirmed and this is an eval tool. Reprice self-serve and stop selling evidence. |
+| 31 Mar 2027 | ≥3 paid pilots | Below 3 → the category is not convincing and a cheaper subscription will not fix it. |
+| 30 Jun 2027 | ≥1 pilot→annual conversion at ≥€1,000/month | Zero from ≥3 completed pilots → the pilot is paid consulting with no product tail. |
+| 31 Dec 2027 | ≥5 paying customers, ≥€60k ARR | Below → wind down or find a co-founder. |
+
+Continuous tripwires:
+
+- **Pilot #3 still above 45 hours** → the eight-precondition setup chain is the real cost.
+  Automate before selling a fourth.
+- **Any customer above 6 support hours/month at €1,200** → below 50% margin. Above 12 →
+  negative.
+- **Conversion below one third at €1,200** → break-even moves past month 24 and the runway
+  assumption fails.
+- **The mindshare test.** If in the first five conversations the buyer's mental model is
+  "one trusted reviewer, thirty traces, a spreadsheet", then agreement statistics and
+  blinded panels read as academic overhead and the entire statistical differentiation is
+  worth nothing to that buyer. Test this explicitly and early. It is cheap, and it
+  invalidates the positioning if it fails.
