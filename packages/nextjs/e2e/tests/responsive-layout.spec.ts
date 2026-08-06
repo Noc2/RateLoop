@@ -84,19 +84,23 @@ async function expectRouteControls(page: Page, path: string, width: number): Pro
     await expect(page.locator("aside")).toHaveCount(0);
 
     if (width >= 1024) {
-      const orbBounds = await page.getByTestId("coming-soon-orb").evaluate(element => {
-        const lineBoxes = Array.from(element.querySelectorAll(".ell"), line => line.getBoundingClientRect());
+      const [headingBox, orbBounds] = await Promise.all([
+        heroHeading.boundingBox(),
+        page.getByTestId("coming-soon-orb").evaluate(element => {
+          const lineBoxes = Array.from(element.querySelectorAll(".ell"), line => line.getBoundingClientRect());
 
-        return {
-          bottom: Math.max(...lineBoxes.map(box => box.bottom)),
-          left: Math.min(...lineBoxes.map(box => box.left)),
-          right: Math.max(...lineBoxes.map(box => box.right)),
-          top: Math.min(...lineBoxes.map(box => box.top)),
-          viewportHeight: window.innerHeight,
-          viewportWidth: window.innerWidth,
-        };
-      });
+          return {
+            bottom: Math.max(...lineBoxes.map(box => box.bottom)),
+            left: Math.min(...lineBoxes.map(box => box.left)),
+            right: Math.max(...lineBoxes.map(box => box.right)),
+            top: Math.min(...lineBoxes.map(box => box.top)),
+            viewportHeight: window.innerHeight,
+            viewportWidth: window.innerWidth,
+          };
+        }),
+      ]);
 
+      expect(headingBox, "Coming-soon headline should have a layout box").not.toBeNull();
       expect(orbBounds.left, "Relaunch orb should not be clipped on the left").toBeGreaterThanOrEqual(-1);
       expect(orbBounds.right, "Relaunch orb should not be clipped on the right").toBeLessThanOrEqual(
         orbBounds.viewportWidth + 1,
@@ -105,6 +109,11 @@ async function expectRouteControls(page: Page, path: string, width: number): Pro
       expect(orbBounds.bottom, "Relaunch orb should not be clipped at the bottom").toBeLessThanOrEqual(
         orbBounds.viewportHeight + 1,
       );
+      if (headingBox) {
+        expect(orbBounds.left, "Coming-soon headline should not overlap the relaunch orb").toBeGreaterThanOrEqual(
+          headingBox.x + headingBox.width - 1,
+        );
+      }
     }
 
     if (width <= 390) {
@@ -191,6 +200,14 @@ test.describe("Responsive layout", () => {
     await expectNoNextErrorOverlay(page);
     await expectRouteControls(page, "/", 1247);
     await expectNoHorizontalOverflow(page, "coming-soon page at 1247x632");
+  });
+
+  test("coming-soon message stays clear of the orb on a large desktop", async ({ connectedPage: page }) => {
+    await page.setViewportSize({ width: 2048, height: 1229 });
+    await gotoWithRetry(page, "/", { skipInjectedWalletConnectionCheck: true, timeout: 45_000 });
+    await expectNoNextErrorOverlay(page);
+    await expectRouteControls(page, "/", 2048);
+    await expectNoHorizontalOverflow(page, "coming-soon page at 2048x1229");
   });
 
   test("stake selector dialog fits inside a phone viewport", async ({ connectedPage: page }) => {

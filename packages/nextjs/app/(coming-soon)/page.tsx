@@ -27,7 +27,10 @@ export default function ComingSoonPage() {
 
             <h1 className="hero-headline text-[2.7rem] leading-[0.94] text-base-content min-[375px]:text-[3.2rem] sm:text-[4.8rem] lg:text-[clamp(4.5rem,11vh,6.8rem)]">
               <span className="block">The Next Loop</span>{" "}
-              <span className="rateloop-text-gradient block w-fit">Begins Soon.</span>
+              <span className="block w-fit">
+                <span className="rateloop-text-gradient inline-block">Begins</span>{" "}
+                <span className="rateloop-text-gradient inline-block">Soon.</span>
+              </span>
             </h1>
 
             <p className="mt-7 max-w-[38rem] text-[1.05rem] leading-8 text-base-content/65 sm:text-xl sm:leading-9">
@@ -50,7 +53,7 @@ export default function ComingSoonPage() {
           <div
             aria-hidden="true"
             data-testid="coming-soon-orb"
-            className="relative z-0 -mx-[28vw] -mb-[24vw] mt-2 w-[156vw] sm:-mx-[18vw] sm:-mb-[18vw] sm:w-[118vw] lg:absolute lg:-right-12 lg:top-1/2 lg:m-0 lg:w-[clamp(40rem,62vw,70rem)] lg:-translate-y-1/2"
+            className="relative z-0 -mx-[28vw] -mb-[24vw] mt-2 w-[156vw] sm:-mx-[18vw] sm:-mb-[18vw] sm:w-[118vw] lg:absolute lg:-right-[clamp(7.75rem,11vw,14rem)] lg:top-1/2 lg:m-0 lg:w-[clamp(40rem,62vw,70rem)] lg:-translate-y-1/2"
           >
             <OrbAnimation />
           </div>

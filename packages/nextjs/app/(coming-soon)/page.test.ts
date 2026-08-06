@@ -7,7 +7,6 @@ const pageSource = readFileSync(new URL("./page.tsx", import.meta.url), "utf8");
 test("the root page presents only the coming-soon message and follow action", () => {
   assert.match(pageSource, /Coming Soon/);
   assert.match(pageSource, /The Next Loop/);
-  assert.match(pageSource, /Begins Soon\./);
   assert.match(
     pageSource,
     /Thank you to everyone who contributed, tested early ideas, and shared thoughtful feedback\./,
@@ -15,7 +14,9 @@ test("the root page presents only the coming-soon message and follow action", ()
   assert.match(pageSource, /https:\/\/x\.com\/RateLoop/);
   assert.match(pageSource, /Follow on X/);
   assert.match(pageSource, /<OrbAnimation \/>/);
-  assert.match(pageSource, /rateloop-text-gradient block w-fit/);
+  assert.match(pageSource, /rateloop-text-gradient inline-block">Begins/);
+  assert.match(pageSource, /rateloop-text-gradient inline-block">Soon\./);
+  assert.equal(pageSource.match(/rateloop-text-gradient/g)?.length, 2);
 
   assert.doesNotMatch(pageSource, /PublicShell|LandingNav|Wallet|promo-video|BetaNoticeBanner/);
 });
