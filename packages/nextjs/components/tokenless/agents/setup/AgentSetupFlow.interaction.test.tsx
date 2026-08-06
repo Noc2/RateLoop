@@ -289,6 +289,95 @@ test("a failed step load surfaces the reason instead of doing nothing", async ()
   }
 });
 
+test("a blocked clipboard keeps the one-time connection message visible across the setup refresh", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup, fireEvent, within } = await import("@testing-library/react");
+  const previousFetch = globalThis.fetch;
+  const previousClipboard = Object.getOwnPropertyDescriptor(globalThis.navigator, "clipboard");
+  const { calls, router } = stubRouter();
+  const connectionUrl = "https://rateloop-tokenless.vercel.app/connect/aci_test_browser_e2e#claim=test-secret";
+  const clipboardWrites: string[] = [];
+  let setupRefreshes = 0;
+
+  Object.defineProperty(globalThis.navigator, "clipboard", {
+    configurable: true,
+    value: {
+      writeText: async (value: string) => {
+        clipboardWrites.push(value);
+        throw new Error("Clipboard access blocked.");
+      },
+    },
+  });
+
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url.endsWith("/agent-setup/connect")) {
+      assert.equal(init?.method, "POST");
+      return Response.json({ connectionUrl });
+    }
+    if (url.includes("/agent-setup?step=connect")) {
+      setupRefreshes += 1;
+      const refreshedSetup = setupView("connect", {
+        revision: 8,
+        connection: {
+          ...setupView("connect").connection,
+          intentId: "intent-new",
+          integrationId: null,
+          status: "issued",
+        },
+      });
+      assert.equal(JSON.stringify(refreshedSetup).includes("#claim="), false);
+      assert.equal(JSON.stringify(refreshedSetup).includes("connectionUrl"), false);
+      return Response.json(refreshedSetup);
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  };
+
+  try {
+    await renderFlow(
+      setupView("connect", {
+        connection: {
+          ...setupView("connect").connection,
+          intentId: null,
+          integrationId: null,
+          status: "not_started",
+        },
+      }),
+      router,
+    );
+    const screen = within(document.body);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Create connection message" }));
+      await new Promise(resolve => globalThis.setTimeout(resolve, 10));
+    });
+
+    const messageField = await screen.findByRole("textbox", { name: "Connection message" });
+    assert.equal(messageField.tagName, "TEXTAREA");
+    const message = (messageField as HTMLTextAreaElement).value;
+    assert.equal(message.split(connectionUrl).length - 1, 1);
+    assert.equal(setupRefreshes, 1);
+    assert.deepEqual(calls, [], "the refresh must not remount the flow through router navigation");
+    assert.ok(screen.getAllByText("Clipboard access was blocked. Copy the visible message manually.").length >= 1);
+    assert.deepEqual(clipboardWrites, [message]);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Copy message" }));
+      await new Promise(resolve => globalThis.setTimeout(resolve, 10));
+    });
+    assert.deepEqual(clipboardWrites, [message, message]);
+    assert.equal(document.activeElement, messageField);
+    assert.equal((messageField as HTMLTextAreaElement).selectionStart, 0);
+    assert.equal((messageField as HTMLTextAreaElement).selectionEnd, message.length);
+  } finally {
+    await act(async () => cleanup());
+    globalThis.fetch = previousFetch;
+    if (previousClipboard) Object.defineProperty(globalThis.navigator, "clipboard", previousClipboard);
+    else Reflect.deleteProperty(globalThis.navigator, "clipboard");
+    restoreDom();
+  }
+});
+
 test("a recovered setup connection poll clears its refresh-failure banner", async () => {
   const restoreDom = installTestDom();
   const restoreVisibility = showDocument();

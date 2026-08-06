@@ -427,7 +427,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
       : selectableExpertiseDefinitions.filter(definition => definition.scope === "global")
   ).slice(0, 3);
   const loadStep = useCallback(
-    async (step: AgentSetupScreenStep, options?: { replace?: boolean; focus?: boolean }) => {
+    async (step: AgentSetupScreenStep, options?: { replace?: boolean; focus?: boolean; navigate?: boolean }) => {
       const url = agentSetupUrl(setup.workspaceId, step);
       // Claim a sequence number before the request so a slower load can never overwrite a newer
       // one. Without this, two overlapping loads (or a load overlapping the save in
@@ -441,6 +441,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
       if (sequence !== setupLoadSequence.current) return;
       focusOnNavigation.current = options?.focus ?? true;
       setSetup(next);
+      if (options?.navigate === false) return;
       if (options?.replace) router.replace(url);
       else router.push(url);
     },
@@ -760,7 +761,10 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
         setError(errors("clipboardMessage"));
         notifications.error(t("connectionMessageCopyBlocked"));
       }
-      await loadStep("connect", { replace: true, focus: false });
+      // Refresh the setup revision and connection state without replacing the current route.
+      // Replacing the same RSC route remounts this client component and discards the private,
+      // one-time connection message before the manual-copy fallback can render it.
+      await loadStep("connect", { focus: false, navigate: false });
     } catch {
       setError(errors("createConnection"));
     } finally {

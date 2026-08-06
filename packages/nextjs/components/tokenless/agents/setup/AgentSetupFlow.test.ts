@@ -394,6 +394,9 @@ test("connection creation keeps the complete message visible and confirms clipbo
   const exposeMessage = flowSource.indexOf("setConnectionMessage(message)");
   const automaticCopy = flowSource.indexOf("navigator.clipboard.writeText(message)");
   assert.ok(exposeMessage >= 0 && exposeMessage < automaticCopy);
+  assert.match(flowSource, /navigate\?: boolean/);
+  assert.match(flowSource, /if \(options\?\.navigate === false\) return/);
+  assert.match(flowSource, /loadStep\("connect", \{ focus: false, navigate: false \}\)/);
   assert.match(flowSource, /id="agent-setup-connection-message"/);
   assert.match(flowSource, /value=\{connectionMessage\}/);
   assert.match(localizedFlowSource, /Copy message/);
