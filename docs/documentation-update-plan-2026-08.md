@@ -242,12 +242,79 @@ is gone. Rewrite §2 as a record of what was found and fixed, keeping the two fi
 that are still live — the two meanings of "verified", and the `/legal/` tree carrying no
 AI Act claim.
 
-Additional regulatory research is being carried out separately on four questions: the
-current AI Act timeline as of August 2026, the three compliance frameworks the product
-now maps to but this document does not analyse, the tension between the document's
-instruction to delete a US securities row and the FINRA mapping since added, and what
-remains open on qualified timestamping. Those findings will be folded in before §2 is
-rewritten.
+A separate research pass settled four open questions. Its findings:
+
+**Timeline.** The table is stale in one row and wrong in two sentences. 2 August 2026 has
+passed: Article 50 transparency, Chapter IX market surveillance including the new
+Articles 75a–75d, and Article 101 GPAI fines are all now in force. Two dated items are
+still ahead and the document names only one — 2 December 2026 (Art. 50(2) marking for
+pre-existing generative systems, plus the two new Art. 5(1)(ba)–(bb) prohibitions the
+omnibus inserted) and 2 September 2027. Separately, `:29` says Articles 12, 14, 26 and 99
+"appear unamended"; Article 99 *was* amended, gaining a capped fine tier for small
+mid-caps and express Member State power to use warnings and non-monetary measures. And
+`:84-85` says a Commission implementing act for the Art. 72 template was due 2 February
+2026; the omnibus removed that requirement and replaced it with guidance due 2 September
+2027 — which strengthens the document's own commercial argument, since that leaves
+providers no template for most of the runway.
+
+**The three frameworks.** They are not the same kind of instrument and should never be
+listed as though they were. ISO/IEC 42001:2023 is certifiable and RateLoop holds no
+certification; it was adopted as EN ISO/IEC 42001:2026 by CEN on 13 March 2026, which is
+*not* a harmonised standard cited in the OJ and confers no Article 40 presumption. The
+NIST AI RMF is voluntary and creates no obligation. FINRA is the only binding one.
+
+**Two claim-integrity defects in code, not prose.** These matter more than the doc edits
+around them:
+
+- [`assuranceComplianceMap.mjs:208-218`](../packages/nextjs/config/assuranceComplianceMap.mjs)
+  maps "records of human review, configured escalation, model metadata … for a member
+  firm's supervision analysis" to FINRA **Regulatory Notice 24-09**. The notice supports
+  none of that — it is a reminder that existing rules apply to Gen AI, and its only
+  mention of a human is a parenthetical reference to compliance personnel receiving
+  surveillance summaries. The language actually relied on is from FINRA's **2026 Annual
+  Regulatory Oversight Report** (9 December 2025). Re-cite it.
+- The same file references bare `A.6` (`:132`), `MEASURE` (`:170`) and `MANAGE` (`:180`)
+  — whole life-cycle objectives and whole RMF functions. That claims far more coverage
+  than the evidence supports, and is the same one-to-one checklist defect this document
+  criticises in the Article 14(4) cards, at framework scale. Narrow to A.6.2.6/A.6.2.8
+  and A.9.2; and to MEASURE 2.8, MEASURE 3.3, MANAGE 2.4 and MANAGE 4.1, all of which
+  RateLoop genuinely evidences.
+
+**Rule 3110 is the strongest citation available to this product, and §1 analyses none of
+it.** Rule 3110.07 requires evidence of review to identify the reviewer, the item
+reviewed, the date, and the action taken — a binding, named record schema matching what
+the product already emits, with no new AI regulation required. Rule 3110.08 independently
+reproduces the document's own Article 26 argument: review may be delegated to persons who
+need not be registered, while the principal stays responsible. **The public paid network
+fails 3110 for exactly the reason it fails Article 26(2) — nobody designated it.** Add a
+FINRA column to the Invited/Public table at `:138-141`.
+
+**The 17a-4 tension has already resolved itself.** The securities row was deleted and its
+absence is asserted by regression tests. Adding a *supervision* rule where a
+*recordkeeping* rule was removed is a correction, not a reversal: 17a-4 prescribes a
+system a vendor cannot supply, 3110 prescribes evidence a vendor can. Rewrite "To avoid"
+item 7 to draw that line explicitly rather than banning the word FINRA. One loose end:
+`s3-object-lock-delivery-receipt` (`:59-65`) is now an orphaned evidence artifact,
+referenced by no mapping since the 17a-4 row went. Attach it to the Rule 3110 mapping as
+the retention leg or drop it from the map — the capability itself is real and shipped.
+
+**eIDAS.** `:241` says RateLoop performs "self-attestation with no independent anchor".
+That is now out of date: every completed attestation is published to the Sigstore public
+Rekor log, which is a core subprocessor, and the inclusion proof is verified against a
+pinned key. The accurate phrasing is "an independent anchor with no qualified status".
+What remains open is genuinely narrower than the document implies, and should be stated in
+two parts: no Article 42 qualified timestamp — the readiness checker already gates hosted
+release on `qualifiedTimestamping`, and its wording demands issuance-time Trusted List
+validation, which the current OpenSSL path check does not do — and, more importantly, the
+Article 41(2) presumption reaches **time and integrity only**. It would remove the
+argument that a bundle was backdated. It would not remove the argument that the review
+did not happen as recorded, which is the burden that actually puts RateLoop in the witness
+box. The current remedy paragraph reads as though procurement closes the whole gap; it
+closes half.
+
+**One thing to say plainly while rewriting §2:** the compliance map's disclaimer
+discipline — a per-mapping `nonClaim` plus a file-level claim boundary — is better than
+the AI Act pages this section criticises. Apply that pattern outward, not the reverse.
 
 ## Tier 3 — structural
 
