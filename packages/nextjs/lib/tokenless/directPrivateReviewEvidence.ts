@@ -18,6 +18,15 @@ import {
 type Row = Record<string, unknown>;
 type PacketGenerator = typeof generateAssuranceEvidencePacket;
 
+/**
+ * The smallest number of reviewers an aggregate may be built from. The decision
+ * evidence export and the agent-facing result envelope must apply the same
+ * threshold, or one surface can reveal what the other suppresses.
+ */
+export function directPrivateReviewMinimumAggregationSize(panelSize: number) {
+  return Math.floor(panelSize / 2) + 1;
+}
+
 const DEADLINE_TERMINAL_REQUIREMENT = "deadline_terminal_inconclusive_allowed";
 
 function text(row: Row | undefined, key: string) {
@@ -209,7 +218,7 @@ async function insertProjection(client: PoolClient, source: Row, now: Date) {
     metric: "candidate_preference_share_bps",
     operator: "gte",
     thresholdBps: 5_001,
-    minimumValidResponses: Math.floor(panelSize / 2) + 1,
+    minimumValidResponses: directPrivateReviewMinimumAggregationSize(panelSize),
   };
   const rationaleMode = text(source, "rationale_mode");
   const rubric = {

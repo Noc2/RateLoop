@@ -331,6 +331,7 @@
     "failureCount": "{count, plural, one {# failure tag} other {# failure tags}}",
     "editCase": "Edit case {case}",
     "objectiveReference": "Objective reference: {reference}",
-    "nextAssignment": "Review next assignment"
+    "nextAssignment": "Review next assignment",
+    "rationaleSharing": "Your reasoning may be summarised, together with the other reviewers', and returned to the workspace that requested this review. Your name and account are never included. Do not write anything into it you would not want the requester to read."
   }
 }

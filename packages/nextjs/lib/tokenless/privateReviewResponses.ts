@@ -7,11 +7,15 @@ import { dbClient, dbPool } from "~~/lib/db";
 import {
   assuranceRationaleDigest,
   assuranceReviewerKey,
+  decryptWorkspaceOwnedRationale,
   encryptAssuranceRationale,
   getAssuranceResponseKeyrings,
 } from "~~/lib/tokenless/assuranceResponses";
 import { aggregatePrivateForecastDeliveryInTransaction } from "~~/lib/tokenless/crowdForecastPersistence";
-import { enqueueDirectPrivateReviewEvidenceProjectionInTransaction } from "~~/lib/tokenless/directPrivateReviewEvidence";
+import {
+  directPrivateReviewMinimumAggregationSize,
+  enqueueDirectPrivateReviewEvidenceProjectionInTransaction,
+} from "~~/lib/tokenless/directPrivateReviewEvidence";
 import { hashHumanAssuranceDocument } from "~~/lib/tokenless/humanAssurance";
 import { transitionHumanReviewOpportunityLifecycleInTransaction } from "~~/lib/tokenless/humanReviewOpportunityLifecycle";
 import {
@@ -556,6 +560,53 @@ async function expireOutstandingDeliveryAssignments(client: PoolClient, delivery
   }
 }
 
+const AGGREGATE_RATIONALE_MAX_LENGTH = 2_000;
+const AGGREGATE_RATIONALE_SEPARATOR = " — ";
+
+/**
+ * Synthesises one aggregate reasoning summary for the agent-facing envelope.
+ *
+ * Reviewer identity never enters it: bodies arrive in response-commitment order,
+ * which is hash-derived and so correlates with neither identity nor submission
+ * time, they carry no index or label, and the whole summary is withheld below the
+ * same minimum-aggregation size the decision-evidence export applies.
+ *
+ * The length budget is not cosmetic. The envelope schema rejects a summary over
+ * AGGREGATE_RATIONALE_MAX_LENGTH, and that rejection would throw inside the
+ * finalising transaction and leave the review permanently unresolved.
+ */
+function aggregateReviewerRationale(input: {
+  bodies: string[];
+  panelSize: number;
+  rationaleMode: string | null;
+  responseCount: number;
+}) {
+  const withheld = { summaryAllowed: false, aggregateSummary: null };
+  if (input.rationaleMode !== "optional" && input.rationaleMode !== "required") return withheld;
+  const bodies = input.bodies.map(value => value.replace(/\s+/gu, " ").trim()).filter(value => value.length > 0);
+  if (bodies.length === 0 || bodies.length < directPrivateReviewMinimumAggregationSize(input.panelSize)) {
+    return withheld;
+  }
+  const header = `${bodies.length} of ${input.responseCount} reviewers explained this decision.`;
+  const budget = AGGREGATE_RATIONALE_MAX_LENGTH - header.length - AGGREGATE_RATIONALE_SEPARATOR.length * bodies.length;
+  const perBody = Math.floor(budget / bodies.length);
+  const segments =
+    perBody < 24
+      ? []
+      : bodies.map(value =>
+          value.length <= perBody
+            ? value
+            : `${value
+                .slice(0, perBody - 1)
+                .replace(/[\uD800-\uDBFF]$/u, "")
+                .trimEnd()}…`,
+        );
+  return {
+    summaryAllowed: true,
+    aggregateSummary: [header, ...segments].join(AGGREGATE_RATIONALE_SEPARATOR).trim(),
+  };
+}
+
 async function terminalEnvelopeForDelivery(
   client: PoolClient,
   deliveryId: string,
@@ -573,7 +624,7 @@ async function terminalEnvelopeForDelivery(
             p.mode AS policy_mode,p.agreement_threshold_bps,p.production_floor_bps,p.fixed_rate_bps,
             p.maximum_unreviewed_gap,p.rules_json,p.audience_policy_json,
             p.publishing_policy_id AS review_publishing_policy_id,
-            rp.compensation_mode,rp.bounty_per_seat_atomic,
+            rp.compensation_mode,rp.bounty_per_seat_atomic,rp.rationale_mode,
             b.canonical_hash AS binding_hash
      FROM tokenless_private_unpaid_review_deliveries d
      JOIN tokenless_private_review_requests f ON f.private_review_id=d.private_review_id
@@ -611,7 +662,9 @@ async function terminalEnvelopeForDelivery(
     return envelope;
   }
   const responses = await client.query(
-    `SELECT response_commitment,choice FROM tokenless_private_review_responses
+    `SELECT response_commitment,choice,rationale_ciphertext,rationale_key_ref,rationale_digest,
+            reviewer_key,delivery_id AS run_id,private_review_id AS case_id
+     FROM tokenless_private_review_responses
      WHERE delivery_id=$1 ORDER BY response_commitment ASC`,
     [deliveryId],
   );
@@ -622,6 +675,28 @@ async function terminalEnvelopeForDelivery(
   const responseDeadline = date(row, "response_deadline");
   if (trigger === "panel_complete" && !panelComplete) return null;
   if (trigger === "response_deadline_elapsed" && responseDeadline > now) return null;
+  const rationaleMode = text(row, "rationale_mode");
+  // Decryption must never block finalisation. A missing or rotated vault key is an
+  // operational fault; withholding the summary is the safe degradation, and it is
+  // logged so the degradation cannot pass for a policy decision.
+  let rationaleBodies: string[] = [];
+  if (rationaleMode === "optional" || rationaleMode === "required") {
+    try {
+      rationaleBodies = responses.rows
+        .map(value => value as Row)
+        .filter(
+          value =>
+            value.rationale_ciphertext !== null && value.rationale_key_ref !== null && value.rationale_digest !== null,
+        )
+        .map(value => decryptWorkspaceOwnedRationale(value));
+    } catch (cause) {
+      rationaleBodies = [];
+      console.error("private_review_rationale_aggregate_unavailable", {
+        deliveryId,
+        reason: cause instanceof Error ? cause.message : "unknown",
+      });
+    }
+  }
 
   const positive = responses.rows.filter(value => text(value as Row, "choice") === "positive").length;
   const negative = responseCount - positive;
@@ -739,7 +814,12 @@ async function terminalEnvelopeForDelivery(
       ],
     },
     outcome,
-    rationale: { summaryAllowed: false, aggregateSummary: null },
+    rationale: aggregateReviewerRationale({
+      bodies: rationaleBodies,
+      panelSize,
+      rationaleMode,
+      responseCount,
+    }),
     economics: {
       asset: "USDC",
       decimals: 6,

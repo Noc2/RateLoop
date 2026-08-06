@@ -486,6 +486,15 @@ test("direct private assignments surface in reviewer work and produce a terminal
   assert.equal(terminal?.lifecycle.state, "completed");
   assert.equal(terminal?.envelope?.panel.responseCount, 2);
   assert.equal(terminal?.envelope?.economics.guaranteedBase.mode, "off");
+  assert.equal(terminal?.envelope?.rationale.mode, "aggregate_summary");
+  const aggregateSummary = terminal?.envelope?.rationale.summary ?? "";
+  for (const rationale of rationales) assert.ok(aggregateSummary.includes(rationale), rationale);
+  assert.ok(aggregateSummary.length <= 2_000);
+  assert.doesNotMatch(aggregateSummary, /0x[0-9a-f]{6}/iu);
+  for (const assignment of delivered.assignments) {
+    assert.ok(!aggregateSummary.includes(assignment.reviewerAccountAddress));
+    assert.ok(!aggregateSummary.includes(assignment.assignmentId));
+  }
   assert.equal((await __landingSocialProofServerTestUtils.loadApplicationStats()).totalRatings, "2");
   const queuedProjection = await dbClient.execute({
     sql: `SELECT item_id,state FROM tokenless_scheduled_work_items

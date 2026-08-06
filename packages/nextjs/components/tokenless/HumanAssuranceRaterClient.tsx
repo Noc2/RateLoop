@@ -1727,6 +1727,9 @@ export function HumanAssuranceRaterClient({
                           required={task.rubric.rationale.mode === "required"}
                         />
                       ) : null}
+                      {task.rubric.rationale.mode !== "off" ? (
+                        <p className="mt-2 text-xs leading-5 text-base-content/60">{t("rationaleSharing")}</p>
+                      ) : null}
                     </Card>
                   );
                 })()

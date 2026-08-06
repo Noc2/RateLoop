@@ -331,6 +331,7 @@
     "failureCount": "{count, plural, one {# Fehler-Tag} other {# Fehler-Tags}}",
     "editCase": "Fall {case} bearbeiten",
     "objectiveReference": "Objektive Referenz: {reference}",
-    "nextAssignment": "Nächste Aufgabe prüfen"
+    "nextAssignment": "Nächste Aufgabe prüfen",
+    "rationaleSharing": "Ihre Begründung kann zusammen mit denen der anderen Prüfenden zusammengefasst und an den anfragenden Workspace zurückgegeben werden. Ihr Name und Ihr Konto sind darin nie enthalten. Schreiben Sie nichts hinein, was die anfragende Seite nicht lesen soll."
   }
 }
