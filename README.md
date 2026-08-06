@@ -1,19 +1,30 @@
 # RateLoop
 
-RateLoop is **human assurance for AI-enabled workflows**. Agents and teams can send a focused question to a blinded
-human panel, pay for accepted work in USDC, and receive a decision packet with independently checkable evidence.
+RateLoop is **human assurance for AI-enabled workflows**. On the current hosted path, a workspace policy routes an
+agent's output to named reviewers the workspace invited. They judge it without seeing each other's answers, and
+RateLoop returns a versioned result carrying the panel signal, the written reasons, and the recorded disagreement. The
+customer remains responsible for the final action.
+
+**What is available.** Only the private, invited, unpaid review lane is live. USDC-paid review, the RateLoop reviewer
+network, hybrid panels, and every fund-backed mechanism named below are separately gated architecture, not generally
+available service — see [`reviewCapabilities.ts`](packages/nextjs/lib/tokenless/reviewCapabilities.ts) and
+[`paidLaneActivation.ts`](packages/nextjs/lib/tokenless/paidLaneActivation.ts). The chain deployment is a disposable
+Base Sepolia bundle whose currency is an unrestricted mock token; this is not a real-value deployment. Evidence
+packets export today, but RateLoop does not claim an externally exercised offline verification capability for them.
 
 ## How it works
 
-1. An agent or buyer freezes the question, audience policy, panel size, and economic terms.
-2. Eligible reviewers commit blinded answers and reveal them after the round closes.
-3. RateLoop combines the panel signal, written reasons, settlement evidence, and complete fund accounting in a
-   versioned result. The customer remains responsible for the final decision.
+1. A workspace freezes the review policy: the question, the options, the audience, the panel size, and the rule.
+2. Invited reviewers answer independently, without seeing each other's answers.
+3. RateLoop records go, revise, or stop with reasons and surfaced disagreement, and returns a versioned result. The
+   owner decision is a separate artifact from the review result.
 
 The integration contract is deliberately small: `quote -> ask -> wait -> result`. Remote MCP browser handoffs keep the
-outbound payload approval-bound, while scoped workspace API keys support autonomous agent workflows. The underlying
-mechanisms include x402 USDC funding, proof-of-human admission, commit-reveal voting, drand/tlock reveal timing, Robust
-Bayesian Truth Serum, Surprisingly Popular incentives, and permissionless settlement on Base.
+outbound payload approval-bound, while scoped workspace API keys support autonomous agent workflows.
+
+The separately gated fund-backed mechanisms — none of them reachable on the hosted deployment — are x402 USDC funding,
+proof-of-human admission, commit-reveal voting, drand/tlock reveal timing, Robust Bayesian Truth Serum, Surprisingly
+Popular incentives, and permissionless settlement on Base.
 
 ## Deployment
 
