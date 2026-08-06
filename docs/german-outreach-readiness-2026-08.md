@@ -12,6 +12,35 @@ protects the website does not protect the deck.
 Nothing here is legal or tax advice. Items marked **counsel** or **Steuerberater** should
 not be drafted in-house.
 
+## What has been implemented since this list was written
+
+Nine changes landed on `tokenless` between `2853daf74` and `6d5420cdf`. Each is a separate
+commit with its tests.
+
+| Item | Status |
+| ---- | ------ |
+| 0.1 pitch URL | **Done.** `/rate` now forwards only a legacy invite link and sends everyone else to `/`. |
+| 0.4 Impressum ODR paragraph | **Done.** Removed, with its six catalogue entries. The USt-IdNr and telephone number still need values only you have. |
+| 0.5 pricing page | **Done.** Public $29, the struck $99 and the 20% discount are gone from the pricing page, the home overview, the terms and both catalogues. Sandbox €0 and the €2,500 Founding Pilot are published with a net-of-VAT line, and no recurring price. Regression guards assert the anchor cannot return. |
+| 0.6 "sufficient AI literacy" | **Done.** Restated as the omnibus amended Article 4, in both pages, both machine mirrors and both catalogues, with the pinning test updated and a second assertion added. |
+| 1.2 root README | **Done.** Unreachable capabilities are now caveated where they are claimed, not sixteen lines later. |
+| 2.3 reasons in the envelope | **Done.** The agent result now carries an aggregate summary, suppressed below the same threshold the evidence export uses. Reviewers are told their reasoning may be forwarded. |
+| 2.5 empty reviewer profile | **Done.** The blank region now explains why paid-work sections are absent. |
+| 6.1 FINRA citation | **Done.** 24-09 no longer carries human-review language; the 2026 Oversight Report and Rule 3110.07 are their own mappings. Bare A.6, MEASURE and MANAGE narrowed to specific controls. |
+| 6.2 OSCAL regulation cite | **Done.** The 2026/1744 amendment is recorded on the EU framework. |
+
+**Still open and worth knowing why.** 0.2 and 0.3 need a domain mailbox and a booking URL —
+values, not code. Tier 3 payment work is unchanged, and deliberately so: the pilot is
+hand-invoiced, which needs no billing code. Tier 4 is counsel and procurement work. Of the
+build list, B4 (single-file verifier), B5 (majority resolution), B6 (operator verification
+script), B7 (localised email), B8 (browser review path), B9 (decision meter), the PDF
+export, the status page and the translation guard are not done.
+
+One correction found while implementing: **the browser verifier at `/docs/evidence/verify`
+already exists** — public, unauthenticated, and it verifies without uploading the packet. It
+is the strongest demo asset available today and B4 is only about giving an auditor a file
+they can run themselves.
+
 ## The decision that governs everything else
 
 Two products can be described from this codebase, and only one of them exists.
