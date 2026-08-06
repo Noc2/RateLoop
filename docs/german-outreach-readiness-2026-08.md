@@ -111,7 +111,9 @@ position that it could stay as a founding offer:
 - The seller is a German UG. Quoting USD to German buyers is an unforced credibility loss.
 - There is a German legal wrinkle: the Preisangabenverordnung binds consumer-facing offers,
   and a court has held a publicly accessible shop must be assumed to address consumers
-  unless access is technically restricted. Removing the public price removes the exposure.
+  unless the trader takes **suitable control measures** to ensure only business buyers can
+  purchase (BGH I ZR 99/08 — technical gating satisfies the test but is not the test).
+  Removing the public price removes the exposure.
 
 The pricing page should show **Sandbox €0** and the **Founding Pilot at €2,500 netto,
 6 weeks, 50% creditable**, with "Alle Preise netto zzgl. 19 % USt." **Publish no recurring
@@ -350,9 +352,12 @@ indemnity 0, IP 0, SLA 0, force majeure 0, termination 0, severability 0.**
 In Germany this is the worst configuration, not a neutral one:
 
 - **SaaS is Mietvertrag** (BGH 15.11.2006 – XII ZR 120/04). Therefore **§ 536 BGB:
-  Minderung tritt kraft Gesetzes ein.** With no SLA defining availability you owe **100%
-  availability**, and every minute of downtime reduces the fee automatically — no notice,
-  no fault. An SLA's primary legal job in Germany is to be the Beschaffenheitsvereinbarung
+  Minderung tritt kraft Gesetzes ein** — it operates by law, with no declaration required
+  and no fault needed. **But do not overstate it:** §536(1) sentence 3 disregards
+  insignificant impairment, so "any downtime reduces the fee" is wrong, and §536(4) makes
+  Minderung non-excludable only for residential tenancy — a B2B contract may limit or
+  exclude it. The real exposure is that without an SLA the standard is whatever a court
+  reads into "fitness for contractual use", which is uncertain rather than absolute. An SLA's primary legal job in Germany is to be the Beschaffenheitsvereinbarung
   that defines what a Mangel *is*.
 - **§ 536a Abs. 1 Alt. 1 BGB** imposes verschuldensunabhängige Garantiehaftung for defects
   present at contract conclusion. This can be excluded in B2B AGB and should be. It is the
@@ -589,7 +594,8 @@ the migration alone.
   existing case view, not HTML-to-PDF via a headless browser.
 - **A status page** (½ day static). Do not publish an availability figure you cannot
   evidence — and note the German legal reason: with no *Beschaffenheitsvereinbarung* you owe
-  100% availability, so a conservative stated figure is protective, not weak.
+  an undefined availability standard that a court would have to construe, so a conservative
+  stated figure is protective, not weak.
 - **A translation-regression guard** (2 hours). Leaf counts are identical across `en` and
   `de` today; a recursive key-set equality assertion locks in your strongest asset. Note the
   failure mode is worse than assumed: `AgentsLocaleProvider` renders the **raw key string**

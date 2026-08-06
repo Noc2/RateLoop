@@ -116,9 +116,13 @@ verifier so a third party can check it themselves.*
 
 The only regime found that is in force, per-decision, and explicitly requires a qualified
 human: complaint-handling decisions must be taken *under the supervision of appropriately
-qualified staff, and not solely on the basis of automated means.* The public DSA database
-holds over 3.4 billion statements of reasons from 363 platforms, 42% flagged fully
-automated.
+qualified staff, and not solely on the basis of automated means.* **Scope it correctly** —
+the duty attaches to decisions on an internal complaint under Article 20(5), not to all
+content moderation. The public DSA database
+shows 3.43 billion statements of reasons from 363 platforms, 42% flagged fully automated.
+**Read that number correctly: it is a rolling 180-day window, not a cumulative archive.**
+The on-page label says "total", which is misleading — the counter does not monotonically
+grow, so no growth story can be projected from it.
 
 The constraint is volume: obligated platforms exceed a small panel's capacity immediately,
 and Article 19 disapplies the section for micro and small enterprises — removing the
@@ -134,10 +138,17 @@ default panel size, written into EU law. It is narrow and dated December 2027, s
 slide, not a market. But it legitimises multi-rater panels to a sceptical buyer, and no
 competitor cites it.
 
+**Cite it with the carve-out or not at all.** The four-eyes requirement is disapplied for
+systems used in law enforcement, migration, border control or asylum where Union or national
+law considers it disproportionate — that is, precisely the highest-stakes state uses.
+
 ### What to stop claiming
 
 - **"Human oversight for the EU AI Act."** Article 14 binds providers at design time and
-  imposes no evidence duty.
+  imposes no evidence duty *of its own*. But do not over-rotate: **Article 12(3)(d) requires
+  the logs to identify the natural persons involved in the Article 14(5) verification**, and
+  Article 19(1) and Article 26(6) set a six-month retention floor. The evidence duty exists;
+  it just lives in Articles 12, 19 and 26 rather than in 14.
 - **"Nobody signs evidence of human review."** False since at least 2026. See §5.
 - **"Independent reviewers."** They are invited and named by the party being reviewed. The
   correct word is **attributable**.
@@ -151,7 +162,14 @@ competitor cites it.
 | AI governance platform spend, 2024 | ~$65M worldwide | closest thing to observed spend |
 | Same, 2026 | $492M | Gartner forecast |
 | Same, 2030 | $1B–1.4B | Gartner forecast |
-| EU AI Act compliance cost per high-risk product/year | €29,277, of which human oversight €7,764 | 2021 Commission cost *model*, not invoices |
+| Modelled AI compliance cost per "AI unit" per year | up to €29,277, of which human oversight €7,764 | 2021 **contractor support study** (CEPS et al.), not the Commission's own impact assessment |
+
+**Do not quote the €29,277 as a per-high-risk-product cost.** It is a ceiling ("may rise
+to") against a labour-only figure of €10,977; it still contains a business-as-usual factor
+the study says would cut estimates by about 36%; it is per generic "AI unit" at an assumed
+€170,000 development cost, with high-risk entering only as a 10% extrapolation; and it
+models the 2020 White Paper's requirements, not the enacted Chapter III. The €7,764
+oversight line is almost entirely a 0.1-FTE headcount assumption, not tooling spend.
 
 **The category was smaller than one mid-size SaaS company as recently as 2024, and the
 IAPP's vendor directory lists 105 entries chasing it.** A 105-vendor directory against a
@@ -328,7 +346,9 @@ concept — publishes no price at all.
 
 There is also a German legal wrinkle: the Preisangabenverordnung binds offers to consumers,
 but a court has held that a publicly accessible web shop must be assumed to address private
-customers too unless access is technically restricted. Removing the public self-serve price
+customers too unless the trader takes **suitable control measures** to ensure only business
+buyers can purchase — technical gating is one way to satisfy that test, not the test itself
+(BGH I ZR 99/08). Removing the public self-serve price
 removes that exposure.
 
 ### Where €1,200 comes from
@@ -543,9 +563,12 @@ workflow layer has one too.
 
 **4. The protocol substitutes the workflow half for free.** MCP elicitation is a standard
 primitive: a server requests structured human input and the client returns accept, decline
-or cancel. It is **opt-in — a client must declare the `elicitation` capability** — so this is
-not quite "free for every client", but it is free for any client that wants it, which is the
-part that matters. It persists no
+or cancel. Two qualifiers matter. It is **opt-in** — a client must declare the `elicitation`
+capability — so it is free for any client that wants it, not automatic for all. And the
+mechanism has moved twice since the 2025-06-18 revision that introduced it: the current
+2026-07-28 spec routes it through multi-round-trip requests with per-request capability
+declaration and two modes, and deprecates sampling and roots. Check the current spec before
+building an argument on it. It persists no
 evidence — which is exactly the remaining product — but the workflow half is now table
 stakes in the protocol this is built on.
 
@@ -556,8 +579,13 @@ framework mappings. One competent EU competitor doing the same against AI Act, D
 **6. The German works council is a deal-killer disguised as a feature.** A system recording
 which named human reviewed which AI output and when is textbook §87(1)(6) BetrVG territory
 — objectively capable of monitoring employee performance, intent irrelevant, and
-**introduction without works-council agreement is legally ineffective**. AI Act Article
-26(7) independently requires informing workers' representatives. Mitigations, all cheap and
+and introduction without a works-council agreement triggers the *Wirksamkeitsvoraussetzung*
+doctrine. **State that precisely:** it bars the employer from relying on the measure to an
+employee's detriment in the individual relationship; it does not void the technology's
+introduction outright, and per BAG 2 AZR 296/22 it does not create an evidence bar. Two
+further limits: §87(1) applies only where no statutory or collective provision governs, and
+the right presupposes a works council exists, which in most small German firms it does not.
+AI Act Article 26(7) independently requires informing workers' representatives. Mitigations, all cheap and
 all product decisions: no per-reviewer throughput or accuracy metrics by default,
 aggregate-only reviewer views, and a ready-made Betriebsvereinbarung template shipped as a
 sales asset.
@@ -567,8 +595,13 @@ no trust page. In Germany ISO 27001 is the de-facto entry ticket and TISAX is co
 mandatory for anything automotive-adjacent.
 
 **8. Availability is a legal exposure, not a feature gap.** German SaaS is *Mietvertrag*,
-so with no SLA defining availability the implied standard is 100% and downtime reduces the
-fee by operation of law. Against one operator with no on-call and no error tracking, **an
+so Minderung under §536 BGB operates by law with no declaration required. **State this
+precisely — an earlier draft overstated it.** §536(1) sentence 3 disregards insignificant
+impairment, so there is no statutory route from "any downtime" to a fee reduction, and
+§536(4)'s non-derogability covers residential tenancy only, so a B2B contract may validly
+limit or exclude Minderung. Without an SLA the yardstick is fitness for contractual use,
+fixed by interpretation — uncertain rather than absolute, which is the actual reason to
+define it. Against one operator with no on-call and no error tracking, **an
 SLA is a revenue-protection instrument.**
 
 **9. Solo operations against 2–6 month German sales cycles**, a works-council gate and a

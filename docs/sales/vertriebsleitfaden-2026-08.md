@@ -57,8 +57,19 @@ blockiert werden; keine freigebbaren Daten.
 
 ## 3. Kanaldisziplin
 
-Kein Cold-Mail-Sequencing, keine LinkedIn-Massen-DMs. § 7 UWG. Zulässig und wirksam:
-persönlich vermittelte Einführungen, Fachveranstaltungen, eingehende Anfragen.
+Kein Cold-Mail-Sequencing, keine LinkedIn-Massen-DMs. § 7 Abs. 2 Nr. 2 UWG verlangt für
+E-Mail-Werbung die **vorherige ausdrückliche Einwilligung** — und zwar ohne B2B-Ausnahme.
+Die Lockerung, auf die gern verwiesen wird („mutmaßliche Einwilligung" bei sonstigen
+Marktteilnehmern), steht in Nr. 1 und gilt **nur für Telefonanrufe**.
+
+**[GEÄNDERT] Eine Ausnahme gibt es aber:** § 7 Abs. 3 UWG erlaubt E-Mail-Werbung an
+**Bestandskunden**, wenn die Adresse im Zusammenhang mit einem Verkauf erlangt wurde, für
+**eigene ähnliche** Waren oder Dienstleistungen geworben wird, der Kunde nicht widersprochen
+hat und bei Erhebung **und in jeder Mail** auf das Widerspruchsrecht hingewiesen wird. Für
+die Nachfassaktion nach einem Piloten ist das der zulässige Weg.
+
+Für Erstkontakte zulässig und wirksam: persönlich vermittelte Einführungen,
+Fachveranstaltungen, eingehende Anfragen.
 
 Realistische Erwartung: deutsche B2B-Zyklen laufen 2–6 Monate über mehrere
 Entscheidungsträger, plus Betriebsrat und AVV-Verhandlung.
@@ -183,8 +194,17 @@ Wenn der Pitch „wir protokollieren, wer was geprüft hat" lautet, gewinnt die 
 
 **„Was sagt der Betriebsrat?"** → Sehr ernst nehmen. Ein System, das festhält, welcher
 benannte Mensch welche KI-Ausgabe wann geprüft hat, ist § 87 Abs. 1 Nr. 6 BetrVG — objektiv
-zur Verhaltens- und Leistungskontrolle geeignet, Absicht unerheblich, und eine Einführung
-ohne Betriebsvereinbarung ist **rechtlich unwirksam**. AI Act Art. 26 Abs. 7 verlangt
+zur Verhaltens- und Leistungskontrolle geeignet, Absicht unerheblich (BAG 1 ABR 7/15).
+
+**[GEÄNDERT] Die Folge aber präzise benennen, nicht überziehen.** Eine Einführung ohne
+Betriebsvereinbarung löst die *Wirksamkeitsvoraussetzung* aus: der Arbeitgeber kann sich
+gegenüber der einzelnen beschäftigten Person nicht zu deren Nachteil darauf berufen. Sie
+macht die Einführung **nicht insgesamt nichtig** und begründet nach BAG 2 AZR 296/22 **kein
+Beweisverwertungsverbot**. Zwei weitere Grenzen: § 87 Abs. 1 greift nur, soweit keine
+gesetzliche oder tarifliche Regelung besteht, und setzt überhaupt einen bestehenden
+Betriebsrat voraus — den viele kleinere Unternehmen nicht haben.
+
+AI Act Art. 26 Abs. 7 verlangt
 zusätzlich die Information der Arbeitnehmervertretung. Vorbereitete Antwort: keine
 Durchsatz- oder Trefferquoten je Prüfer, aggregierte Sichten, und ein
 Betriebsvereinbarungs-Muster als Vertriebsmittel.
