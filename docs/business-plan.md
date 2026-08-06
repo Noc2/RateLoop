@@ -1,8 +1,7 @@
 # RateLoop tokenless — business plan
 
 Written 29–30 July 2026 against `d49862fa3`, from market, pricing, legal, procurement
-and evaluation-methodology research plus a capability audit. Companion to
-[product-opportunities.md](product-opportunities.md).
+and evaluation-methodology research plus a capability audit.
 
 **This is a relaunch plan.** The main site becomes a placeholder that promises nothing.
 The tokenless product is the next chapter and has never taken a payment.

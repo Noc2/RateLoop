@@ -2,7 +2,9 @@
 
 **Status:** Current architecture and product baseline for the `tokenless` branch. This document contains current
 decisions only. Superseded research, review notes, and implementation sequences remain available in Git history.
-Concrete release evidence and blockers live in the production-readiness register.
+Concrete release evidence and blockers are enforced by
+[`packages/nextjs/scripts/check-tokenless-production-readiness.mjs`](../packages/nextjs/scripts/check-tokenless-production-readiness.mjs);
+its frozen `DEFAULT_HOSTED_RELEASE_CAPABILITIES` map is the release gate.
 Legal and revenue obligations live in the [legal and revenue reference](tokenless-legal-revenue-reference-2026-07.md).
 
 If another document conflicts with this one, this document controls unless the decision is explicitly reopened here.
@@ -83,8 +85,8 @@ by default), the completion, human-agreement, latency, and drift gates pass, no 
 at least 30 comparable cases have completed. Fifty more stable cases may reduce review to 25%; 100 more may reduce it
 to the 10% monitoring floor. A completed window that fails a reset gate restores 100% calibration. Critical-risk rules,
 the maximum-unreviewed gap, incomplete metadata, and explicit owner requirements always override the adaptive baseline.
-Until drift and severe-disagreement gates are backed by persisted scope evidence, adaptive review reports
-`safety_gates_unavailable`, remains at 100%, and resets any previously reduced scope to calibration.
+The drift and severe-disagreement gates are derived from persisted, scope-specific observations; missing evidence fails
+the individual gate closed rather than disabling the ladder.
 
 The owner separately chooses question authority. An owner-fixed binary question uses `assurance` semantics and may
 produce comparable evidence. An agent-per-request binary question uses `feedback` semantics so a preference such as
@@ -158,8 +160,8 @@ assurance workflow uses `rateloop_evaluate_review_requirement -> skip or rateloo
 rateloop_wait_for_review -> rateloop_get_review_result -> rateloop_get_assurance_state`.
 Generic MCP is advisory; a host-enforced integration is required when the host must prove that output remained blocked.
 
-The authenticated API and SDK use `quote -> ask -> wait -> result`. The external quote endpoint accepts only explicitly
-safe-public requests. Private quote creation is a narrow internal paid-review step after the exact encrypted-artifact
+The SDK workflow is `quote -> ask -> wait -> result`. The external quote endpoint is unauthenticated and rate-limited
+and accepts only explicitly safe-public requests; `ask`, `wait`, and `result` require workspace credentials. Private quote creation is a narrow internal paid-review step after the exact encrypted-artifact
 commitments and audience policy are frozen. Its opaque random identifier is additionally bound to the creating workspace
 API-key subject, and ask preparation returns not found across that boundary. Scoped workspace credentials support prepaid
 automation. A self-funded agent may use short-lived x402/EIP-3009 USDC authorizations from a local encrypted signer;
@@ -458,5 +460,5 @@ Operational instructions are intentionally separate from product design:
 3. **Hardening at traction:** audit the small immutable core, run a public bounty and soak period, deploy the final
    adminless-funds mainnet bundle, and publish verified addresses plus recomputation and keeper instructions.
 
-The production-readiness register is the only current release checklist.
+`check-tokenless-production-readiness.mjs` is the only current release checklist, and its capability map is all-false.
 A successful build or push is never release approval.

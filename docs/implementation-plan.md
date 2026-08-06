@@ -13,7 +13,8 @@ draft picked a US vertical that a German company could not credibly sell into.
 
 This document is the product and engineering backlog, not release approval. The
 [immutable implementation plan](./tokenless-immutable-implementation-plan-2026-07.md)
-controls architecture, and the production-readiness register controls deployment.
+controls architecture, and `packages/nextjs/scripts/check-tokenless-production-readiness.mjs`
+controls deployment.
 
 The decisions after this second pass are explicit:
 
@@ -563,8 +564,10 @@ cancellation.
 
 ### P6. Distinct CI exit states — hours
 
-`wait --until-ready` already blocks. Every error path returns exit code 1, so a pipeline
-cannot distinguish a failed review from a timeout from a network error. Distinct codes
+**Shipped 3 August 2026 in `c339d8ca7`.** `wait --until-ready` returns distinct codes for
+not-publishable (3), timeout (4), transport error (5) and compensated-no-verdict (6), defined in
+`packages/agents/src/exitCodes.ts`. What remains is binding the wait to an immutable assurance
+run rather than an operation key. Retained for context: distinct codes
 are the difference between a gate someone trusts in CI and one they route around. This is
 the only item in this document that creates a switching cost through daily use rather
 than through contract.

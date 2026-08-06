@@ -80,9 +80,8 @@ Next.js:
 - `NEXT_PUBLIC_THIRDWEB_CLIENT_ID` for self-custodial funding and payout connections, independently of managed issuance;
   `TOKENLESS_THIRDWEB_WALLET_ENABLED=false` is mandatory until verifiable export and recovery are implemented
 - `DATABASE_URL`
-- `NEXT_PUBLIC_TARGET_NETWORKS=84532`
 - server-side `BASE_SEPOLIA_RPC_URL` plus one to three ordered, independent HTTPS URLs in
-  `BASE_SEPOLIA_RPC_FALLBACK_URLS`; the public browser RPC remains separate
+  `BASE_SEPOLIA_RPC_FALLBACK_URLS`; the public browser RPC is the separate `NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL`
 - distinct `TOKENLESS_CREDENTIAL_ISSUER_SIGNER_PRIVATE_KEY`, `_EXPECTED_ADDRESS`, and `_KEY_VERSION` values
 - `TOKENLESS_DEPLOYMENT_SCHEMA`, `TOKENLESS_CHAIN_ID`, `TOKENLESS_DEPLOYMENT_KEY`, `TOKENLESS_DEPLOYMENT_BLOCK`
 - `TOKENLESS_PANEL_ADDRESS`, `TOKENLESS_CREDENTIAL_ISSUER_ADDRESS`, `TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS`,

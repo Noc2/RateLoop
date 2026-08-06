@@ -1,9 +1,9 @@
 # RateLoop tokenless legal and revenue reference
 
 **Status:** Current internal issue-spotting reference, not legal advice. The
-[design of record](tokenless-immutable-implementation-plan-2026-07.md) controls architecture and the
-production-readiness register controls release approval. Counsel questions
-and regulatory operations remain real-money gates where the readiness register says they are required.
+[design of record](tokenless-immutable-implementation-plan-2026-07.md) controls architecture and
+`packages/nextjs/scripts/check-tokenless-production-readiness.mjs` controls release approval. Counsel questions
+and regulatory operations remain real-money gates where that script says they are required.
 
 ## Revenue model
 
