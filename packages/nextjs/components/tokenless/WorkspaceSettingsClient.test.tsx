@@ -65,7 +65,8 @@ test("workspace settings communicates entitlement and checkout lifecycle", () =>
   assert.match(source, /Workspace owners and billing members/);
   assert.match(source, /id="workspace-plan-comparison"/);
   assert.match(source, /TOKENLESS_BILLING_PLANS\.free/);
-  assert.match(source, /founding customers then receive 20% off/);
+  assert.match(source, /at least 60 days&apos; notice before a later price change/);
+  assert.doesNotMatch(source, /20% off|for 12 months/);
   assert.doesNotMatch(source, /href=\{`\/pricing\?workspace=/);
 });
 

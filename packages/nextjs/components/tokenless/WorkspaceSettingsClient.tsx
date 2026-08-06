@@ -1069,9 +1069,8 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                         ))}
                         <p className="text-xs leading-5 text-base-content/55 sm:col-span-2">
                           Early Access is {formatUsdPrice(TOKENLESS_BILLING_PLANS.early_access.monthlyPriceCents)} per
-                          workspace each month for 12 months. We give at least 60 days&apos; notice before a later price
-                          change; founding customers then receive 20% off the comparable monthly plan and may cancel
-                          before it applies.
+                          workspace each month. We give at least 60 days&apos; notice before a later price change, and
+                          you can cancel before it applies.
                         </p>
                       </div>
                     ) : null}

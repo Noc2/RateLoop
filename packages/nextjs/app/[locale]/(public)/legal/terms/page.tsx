@@ -107,10 +107,15 @@ export default function TermsPage({ params }: { params?: PublicLocaleParams } = 
           and historical evidence is not deleted merely because a plan ends.
         </p>
         <p>
-          The Early Access price applies for the first 12 months. RateLoop will give at least 60 days&apos; notice
-          before a later price change. After the first 12 months, founding customers receive 20% off the then-current
-          comparable monthly plan. There is no lifetime price guarantee, and a customer may cancel before a new price
-          takes effect.
+          Subscription prices, billing period, and plan limits are agreed in the applicable order or shown before
+          checkout; RateLoop publishes no recurring list price. RateLoop will give at least 60 days&apos; notice before
+          changing the price of an active subscription, and the customer may cancel before the change takes effect.
+          There is no lifetime price guarantee.
+        </p>
+        <p>
+          A fixed-scope pilot engagement is agreed in a separate written order. Pilot fees are quoted in euro net of
+          statutory VAT, invoiced by bank transfer, and are not a subscription; any credit against a later subscription
+          is stated in that order.
         </p>
         <h2>Separate subscription and panel costs</h2>
         <p>

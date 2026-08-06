@@ -161,7 +161,7 @@ test("plan comparison stays in the active workspace and exposes the material Ear
     assert.ok(within(comparison).getByText("5 invited reviewer groups"));
     assert.equal(within(comparison).queryByText(/completed decisions/iu), null);
     assert.equal(view.queryByRole("progressbar"), null);
-    assert.ok(within(comparison).getByText(/60 days.*20% off/s));
+    assert.ok(within(comparison).getByText(/60 days.*cancel before it applies/s));
     assert.equal(window.location.pathname, "/agents");
     assert.equal(window.location.search, "?tab=billing&workspace=workspace-1");
   } finally {

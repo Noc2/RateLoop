@@ -34,7 +34,6 @@ export default async function PricingPage({
 }) {
   const locale = await resolvePublicLocale(params);
   const workspaceId = first((await searchParams).workspace);
-  const subscriptionsEnabled = process.env.TOKENLESS_SUBSCRIPTIONS_ENABLED === "true";
   const demoBookingUrl = resolveDemoBookingUrl();
   return (
     <LocalizedPublicContent locale={locale} section="site">
@@ -50,12 +49,7 @@ export default async function PricingPage({
             <h2 id="plans-heading" className="sr-only">
               Workspace plans
             </h2>
-            <WorkspacePlanCards
-              locale={locale}
-              subscriptionsEnabled={subscriptionsEnabled}
-              workspaceId={workspaceId}
-              demoBookingUrl={demoBookingUrl}
-            />
+            <WorkspacePlanCards locale={locale} workspaceId={workspaceId} demoBookingUrl={demoBookingUrl} />
           </section>
         </div>
       </div>

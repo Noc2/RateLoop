@@ -276,7 +276,6 @@
     "Evidence scope": "Belegumfang",
     "Generated": "Erstellt",
     "Insufficient": "Nicht ausreichend",
-    "Limitations": "Einschränkungen",
     "Missing, invalid, or pending responses are excluded from the result.": "Fehlende, ungültige oder ausstehende Antworten sind vom Ergebnis ausgeschlossen.",
     "No onchain settlement was part of this review.": "Diese Prüfung umfasste keine Onchain-Abrechnung.",
     "One or more reviewer groups are too small to show separately.": "Eine oder mehrere Prüfgruppen sind zu klein, um sie getrennt anzuzeigen.",
@@ -391,7 +390,6 @@
     "from the selected workspace.": "aus dem ausgewählten Workspace.",
     "Team or project name": "Team- oder Projektname",
     "/ workspace / month": "/ Workspace / Monat",
-    "per workspace each month for 12 months. We give at least 60 days' notice before a later price change; founding customers then receive 20% off the comparable monthly plan and may cancel before it applies.": "pro Workspace und Monat für 12 Monate. Wir kündigen spätere Preisänderungen mindestens 60 Tage vorher an; Gründungskunden erhalten danach 20 % Rabatt auf den vergleichbaren Monatstarif und können vor Inkrafttreten kündigen.",
     "Self-declared details used for Checkout, invoices, and tax handling. This is not an external identity or company verification.": "Selbst angegebene Daten für Bezahlvorgang, Rechnungen und steuerliche Verarbeitung. Dies ist keine externe Identitäts- oder Unternehmensprüfung.",
     "Registered address": "Eingetragene Anschrift",
     "(optional)": "(optional)",
@@ -400,7 +398,8 @@
     "this API key": "diesen API-Schlüssel",
     "and removes its private data. Records that must be retained stay restricted.": "und entfernt seine privaten Daten. Aufbewahrungspflichtige Datensätze bleiben eingeschränkt.",
     ". New outputs stay blocked and no review-triggered release can occur.": ". Neue Ausgaben bleiben blockiert und keine prüfbedingte Freigabe kann erfolgen.",
-    "Yes": "Ja"
+    "Yes": "Ja",
+    "per workspace each month. We give at least 60 days' notice before a later price change, and you can cancel before it applies.": "pro Workspace und Monat. Wir kündigen spätere Preisänderungen mindestens 60 Tage vorher an, und Sie können vor Inkrafttreten kündigen."
   },
   "notifications": {
     "dismiss": "Benachrichtigung schließen"

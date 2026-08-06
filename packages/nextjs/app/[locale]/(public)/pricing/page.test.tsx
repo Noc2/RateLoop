@@ -2,13 +2,14 @@ import React from "react";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import test from "node:test";
+import { FOUNDING_PILOT, SANDBOX_PRICE_CENTS, formatEurPrice } from "~~/lib/marketing/foundingPilot";
 
 const require = createRequire(import.meta.url);
 const { renderToStaticMarkup } = require("react-dom/server") as {
   renderToStaticMarkup: (element: React.ReactElement) => string;
 };
 
-test("pricing page shows three tiers and discloses costs progressively", async () => {
+test("pricing page shows the sandbox and the founding pilot without a dollar anchor", async () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
   process.env.TOKENLESS_SUBSCRIPTIONS_ENABLED = "true";
   delete process.env.TOKENLESS_DEMO_BOOKING_URL;
@@ -19,45 +20,39 @@ test("pricing page shows three tiers and discloses costs progressively", async (
 
   assert.match(html, /Start free/);
   assert.doesNotMatch(html, /Workspace plans cover completed review decisions/);
-  assert.match(html, /Free/);
-  assert.match(html, /\$29/);
+  assert.match(html, /Sandbox/);
+  assert.match(html, /Founding Pilot/);
+  assert.ok(html.includes(formatEurPrice(SANDBOX_PRICE_CENTS).replace(/\s+/gu, " ")));
+  assert.ok(html.includes(formatEurPrice(FOUNDING_PILOT.priceCents).replace(/\s+/gu, " ")));
   assert.match(html, /1 active agent/);
-  assert.match(html, /3 active agents/);
   assert.match(html, /1 invited reviewer group/);
-  assert.match(html, /5 invited reviewer groups/);
+  assert.match(html, /6-week structured pilot/);
+  assert.match(html, /50% creditable against a later subscription/);
+  assert.match(html, /Invoiced in euro by bank transfer/);
+  assert.match(html, /Workspace limits agreed in the pilot order/);
+  assert.match(html, /All prices net of 19% VAT\./);
   assert.doesNotMatch(html, /completed review decisions|decision allowance/iu);
   assert.match(html, /href="\/agents\/billing\?workspace=ws\+second"/);
-  assert.match(html, /href="\/agents\/billing\?workspace=ws\+second&amp;billing=upgrade"/);
   assert.doesNotMatch(html, /subject=RateLoop%20Demo/);
   assert.doesNotMatch(html, /Available reviews|These reviews are unpaid/i);
-  assert.match(html, /Unlimited invited, unpaid reviewers/i);
-  assert.match(html, /Enterprise/);
-  assert.match(html, /Custom/);
-  assert.match(html, /Custom integrations/);
-  assert.match(html, /Evidence export support/);
   assert.match(
     html,
-    /class="rateloop-gradient-action min-h-12 w-full justify-center px-5" href="mailto:hawigxyz@proton\.me\?subject=RateLoop%20Enterprise">Request a demo<\/a>/,
+    /href="mailto:hawigxyz@proton\.me\?subject=RateLoop%20Founding%20Pilot" class="rateloop-gradient-action min-h-12 w-full justify-center px-5">Request pilot<\/a>/,
   );
   assert.doesNotMatch(html, /target="_blank"/);
-  assert.match(html, /<s[^>]*>\$99/);
-  assert.doesNotMatch(html, /Then \$99\/month after 12 months/);
-  assert.match(html, /First 12 months\. Then 20% off the comparable plan/);
-  assert.match(html, /60 days’ notice before changes\. Cancel before they apply/);
+  // The retired dollar anchor, the struck list price and the discount promise must not return.
+  assert.doesNotMatch(html, /\$0|\$29|\$99|<s[ >]|20% off|First 12 months|Choose Early Access/);
+  assert.doesNotMatch(html, /Enterprise|Custom integrations|Evidence export support|Book demo/);
   assert.doesNotMatch(html, /reviewer costs|bounty|execution fee|USDC|stablecoin/i);
   assert.doesNotMatch(html, /7\.5%/);
   assert.doesNotMatch(html, /\$149/);
   assert.doesNotMatch(html, /What counts as a decision|there are no overages/i);
-  assert.match(html, /First 12 months/i);
-  assert.match(html, /60 days/);
-  assert.match(html, /20% off/);
-  assert.match(html, /Cancel before they apply/);
   assert.doesNotMatch(html, /Early Access terms:/);
   assert.doesNotMatch(html, /<details/);
   assert.doesNotMatch(html, /Pricing questions|design-partner arrangement/);
 });
 
-test("a configured scheduler replaces the enterprise mailto with an external booking link", async () => {
+test("a configured scheduler replaces the pilot mailto with an external booking link", async () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
   process.env.TOKENLESS_SUBSCRIPTIONS_ENABLED = "true";
   process.env.TOKENLESS_DEMO_BOOKING_URL = "https://calendar.app.google/rateloopDemo";
@@ -66,7 +61,7 @@ test("a configured scheduler replaces the enterprise mailto with an external boo
 
   assert.match(
     html,
-    /href="https:\/\/calendar\.app\.google\/rateloopDemo" target="_blank" rel="noopener noreferrer"[^>]*>Book demo<\/a>/,
+    /href="https:\/\/calendar\.app\.google\/rateloopDemo" target="_blank" rel="noopener noreferrer"[^>]*>Request pilot<\/a>/,
   );
   assert.doesNotMatch(html, /mailto:/);
 
@@ -84,11 +79,12 @@ test("German pricing localizes plan details rendered through plan cards", async 
 
   assert.match(html, /Keine Karte erforderlich/);
   assert.match(html, /1 aktiver Agent/);
-  assert.match(html, /3 aktive Agenten/);
   assert.match(html, /1 eingeladene Prüfgruppe/);
-  assert.match(html, /5 eingeladene Prüfgruppen/);
-  assert.match(html, /Early Access wählen/);
-  assert.match(html, /Individuelle Integrationen/);
-  assert.match(html, /Demo anfragen/);
-  assert.doesNotMatch(html, /No card required|completed review decisions|Request a demo/);
+  assert.match(html, /Gründungsangebot/);
+  assert.match(html, /einmalig, netto/);
+  assert.match(html, /Strukturiertes Pilotprojekt über 6 Wochen/);
+  assert.match(html, /Alle Preise netto zzgl\. 19 % USt\./);
+  assert.match(html, /Pilotprojekt anfragen/);
+  assert.ok(html.includes(formatEurPrice(FOUNDING_PILOT.priceCents, "de").replace(/\s+/gu, " ")));
+  assert.doesNotMatch(html, /No card required|completed review decisions|Request a demo|Early Access wählen/);
 });

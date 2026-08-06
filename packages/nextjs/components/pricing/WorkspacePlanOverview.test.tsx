@@ -6,7 +6,8 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import test from "node:test";
 import { WorkspaceSettingsClient } from "~~/components/tokenless/WorkspaceSettingsClient";
-import { TOKENLESS_BILLING_PLANS, TOKENLESS_HOSTED_REVIEW_COPY, formatUsdPrice } from "~~/lib/billing/plans";
+import { TOKENLESS_BILLING_PLANS, TOKENLESS_HOSTED_REVIEW_COPY } from "~~/lib/billing/plans";
+import { FOUNDING_PILOT, SANDBOX_PRICE_CENTS, formatEurPrice } from "~~/lib/marketing/foundingPilot";
 
 const require = createRequire(import.meta.url);
 const { renderToStaticMarkup } = require("react-dom/server") as {
@@ -17,32 +18,30 @@ test("workspace plan overview binds public prices and enforced resource limits t
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
   const html = renderToStaticMarkup(<WorkspacePlanOverview />).replace(/\s+/g, " ");
 
-  assert.equal(html.match(/<article/g)?.length, 3);
-  assert.match(html, new RegExp(formatUsdPrice(TOKENLESS_BILLING_PLANS.free.monthlyPriceCents).replace("$", "\\$")));
+  assert.equal(html.match(/<article/g)?.length, 2);
+  assert.ok(html.includes(formatEurPrice(SANDBOX_PRICE_CENTS).replace(/\s+/gu, " ")));
   assert.match(html, new RegExp(`${TOKENLESS_BILLING_PLANS.free.activeAgents} active agent`));
   assert.match(html, new RegExp(`${TOKENLESS_BILLING_PLANS.free.activePrivateGroups} invited reviewer group`));
-  assert.match(
-    html,
-    new RegExp(formatUsdPrice(TOKENLESS_BILLING_PLANS.early_access.monthlyPriceCents).replace("$", "\\$")),
-  );
-  assert.match(html, new RegExp(`${TOKENLESS_BILLING_PLANS.early_access.activeAgents} active agents`));
-  assert.match(html, new RegExp(`${TOKENLESS_BILLING_PLANS.early_access.activePrivateGroups} invited reviewer groups`));
+  assert.ok(html.includes(formatEurPrice(FOUNDING_PILOT.priceCents).replace(/\s+/gu, " ")));
+  assert.match(html, /Sandbox/);
+  assert.match(html, /Founding Pilot/);
+  assert.match(html, /6-week structured pilot/);
+  assert.match(html, /All prices net of 19% VAT\./);
   assert.doesNotMatch(html, /completed review decisions|decision allowance/iu);
-  assert.match(html, /First 12 months/);
-  assert.match(html, /Enterprise/);
-  assert.match(html, /Custom volumes and terms/);
   assert.equal(html.match(/href="\/pricing"/g)?.length, 1);
   assert.match(html, /Compare plans/);
-  assert.doesNotMatch(html, /\$99|20% off|Choose Early Access|Book demo|Custom integrations/);
+  // The public surface must never carry the retired dollar anchor or the discount promise again.
+  assert.doesNotMatch(html, /\$0|\$29|\$99|20% off|Choose Early Access|Book demo|Custom integrations|First 12 months/);
 });
 
 test("workspace plan overview keeps its concise pricing path localized in German", () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
   const html = renderToStaticMarkup(<WorkspacePlanOverview locale="de" />).replace(/\s+/g, " ");
 
-  assert.match(html, /Erste 12 Monate/);
-  assert.match(html, /pro Workspace\/Monat/);
-  assert.match(html, /Individuelle Volumen und Bedingungen/);
+  assert.match(html, /Gründungsangebot/);
+  assert.match(html, /einmalig, netto/);
+  assert.match(html, /Alle Preise netto zzgl\. 19 % USt\./);
+  assert.ok(html.includes(formatEurPrice(FOUNDING_PILOT.priceCents, "de").replace(/\s+/gu, " ")));
   assert.match(html, /Tarife vergleichen/);
   assert.equal(html.match(/href="\/de\/pricing"/g)?.length, 1);
 });
@@ -50,7 +49,7 @@ test("workspace plan overview keeps its concise pricing path localized in German
 test("all workspace plan consumers share the hosted invited-unpaid availability rule", () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
   const overview = renderToStaticMarkup(<WorkspacePlanOverview />).replace(/\s+/g, " ");
-  const cards = renderToStaticMarkup(<WorkspacePlanCards subscriptionsEnabled={false} />).replace(/\s+/g, " ");
+  const cards = renderToStaticMarkup(<WorkspacePlanCards />).replace(/\s+/g, " ");
   const settingsSource = readFileSync(new URL("../tokenless/WorkspaceSettingsClient.tsx", import.meta.url), "utf8");
 
   assert.equal(typeof WorkspaceSettingsClient, "function");
@@ -67,13 +66,13 @@ test("all workspace plan consumers share the hosted invited-unpaid availability 
 test("disabled subscriptions route pilot interest through the configured scheduler", () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
   const html = renderToStaticMarkup(
-    <WorkspacePlanCards subscriptionsEnabled={false} demoBookingUrl="https://calendar.app.google/rateloopDemo" />,
+    <WorkspacePlanCards demoBookingUrl="https://calendar.app.google/rateloopDemo" />,
   ).replace(/\s+/g, " ");
 
   assert.match(
     html,
     /href="https:\/\/calendar\.app\.google\/rateloopDemo" target="_blank" rel="noopener noreferrer"[^>]*>Request pilot<\/a>/,
   );
-  assert.equal(html.match(/href="https:\/\/calendar\.app\.google\/rateloopDemo"/g)?.length, 2);
+  assert.equal(html.match(/href="https:\/\/calendar\.app\.google\/rateloopDemo"/g)?.length, 1);
   assert.doesNotMatch(html, /mailto:/);
 });

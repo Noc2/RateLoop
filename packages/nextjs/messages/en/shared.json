@@ -276,7 +276,6 @@
     "Evidence scope": "Evidence scope",
     "Generated": "Generated",
     "Insufficient": "Insufficient",
-    "Limitations": "Limitations",
     "Missing, invalid, or pending responses are excluded from the result.": "Missing, invalid, or pending responses are excluded from the result.",
     "No onchain settlement was part of this review.": "No onchain settlement was part of this review.",
     "One or more reviewer groups are too small to show separately.": "One or more reviewer groups are too small to show separately.",
@@ -391,7 +390,6 @@
     "from the selected workspace.": "from the selected workspace.",
     "Team or project name": "Team or project name",
     "/ workspace / month": "/ workspace / month",
-    "per workspace each month for 12 months. We give at least 60 days' notice before a later price change; founding customers then receive 20% off the comparable monthly plan and may cancel before it applies.": "per workspace each month for 12 months. We give at least 60 days' notice before a later price change; founding customers then receive 20% off the comparable monthly plan and may cancel before it applies.",
     "Self-declared details used for Checkout, invoices, and tax handling. This is not an external identity or company verification.": "Self-declared details used for Checkout, invoices, and tax handling. This is not an external identity or company verification.",
     "Registered address": "Registered address",
     "(optional)": "(optional)",
@@ -400,7 +398,8 @@
     "this API key": "this API key",
     "and removes its private data. Records that must be retained stay restricted.": "and removes its private data. Records that must be retained stay restricted.",
     ". New outputs stay blocked and no review-triggered release can occur.": ". New outputs stay blocked and no review-triggered release can occur.",
-    "Yes": "Yes"
+    "Yes": "Yes",
+    "per workspace each month. We give at least 60 days' notice before a later price change, and you can cancel before it applies.": "per workspace each month. We give at least 60 days' notice before a later price change, and you can cancel before it applies."
   },
   "notifications": {
     "dismiss": "Dismiss notification"

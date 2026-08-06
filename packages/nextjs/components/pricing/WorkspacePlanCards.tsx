@@ -7,12 +7,11 @@ import {
   TOKENLESS_BILLING_PLANS,
   TOKENLESS_HOSTED_REVIEW_COPY,
   activeAgentLimitLabel,
-  formatUsdPrice,
   privateGroupLimitLabel,
 } from "~~/lib/billing/plans";
+import { FOUNDING_PILOT, SANDBOX_PRICE_CENTS, formatEurPrice } from "~~/lib/marketing/foundingPilot";
 
 type WorkspacePlanCardsProps = {
-  subscriptionsEnabled: boolean;
   workspaceId?: string;
   /** Resolved by `resolveDemoBookingUrl`; null falls back to the enterprise mailto. */
   demoBookingUrl?: string | null;
@@ -20,39 +19,29 @@ type WorkspacePlanCardsProps = {
 };
 
 const freePlan = TOKENLESS_BILLING_PLANS.free;
-const earlyAccessPlan = TOKENLESS_BILLING_PLANS.early_access;
-const earlyAccessListPrice = formatUsdPrice(earlyAccessPlan.listPriceCents ?? earlyAccessPlan.monthlyPriceCents);
 
-function workspacePlanHref(workspaceId: string | undefined, billing?: "upgrade") {
+function workspacePlanHref(workspaceId: string | undefined) {
   const query = new URLSearchParams();
   if (workspaceId) query.set("workspace", workspaceId);
-  if (billing) query.set("billing", billing);
   const search = query.toString();
   return `/agents/billing${search ? `?${search}` : ""}`;
 }
 
-export function WorkspacePlanCards({
-  subscriptionsEnabled,
-  workspaceId,
-  demoBookingUrl = null,
-  locale = "en",
-}: WorkspacePlanCardsProps) {
+export function WorkspacePlanCards({ workspaceId, demoBookingUrl = null, locale = "en" }: WorkspacePlanCardsProps) {
   const copy = (source: string) => translatePublicString(source, locale, "site");
-  const earlyAccessHref = subscriptionsEnabled
-    ? workspacePlanHref(workspaceId, "upgrade")
-    : (demoBookingUrl ?? "mailto:hawigxyz@proton.me?subject=RateLoop%20Early%20Access");
-  const earlyAccessCta = copy(subscriptionsEnabled ? "Choose Early Access" : "Request pilot");
+  const pilotHref = demoBookingUrl ?? "mailto:hawigxyz@proton.me?subject=RateLoop%20Founding%20Pilot";
+  const pilotCta = copy("Request pilot");
 
   return (
     <LocalizedPublicContent locale={locale} section="site">
-      <div className="grid gap-5 lg:grid-cols-3">
+      <div className="mx-auto grid max-w-4xl gap-5 md:grid-cols-2">
         <PlanCard
-          name={copy(freePlan.displayName)}
+          name={copy("Sandbox")}
           accent="var(--rateloop-blue)"
           priceRow={
             <div className="mt-8 flex items-end gap-3">
               <span className="display-section text-6xl leading-none">
-                {formatUsdPrice(freePlan.monthlyPriceCents)}
+                {formatEurPrice(SANDBOX_PRICE_CENTS, locale)}
               </span>
               <span className="pb-1 text-sm text-base-content/50">{copy("No card required")}</span>
             </div>
@@ -72,87 +61,45 @@ export function WorkspacePlanCards({
           }
         />
         <PlanCard
-          name={copy(earlyAccessPlan.displayName)}
+          name={copy("Founding Pilot")}
           accent="var(--rateloop-green)"
-          badge={copy("Early Access price")}
+          badge={copy("Founding offer")}
           priceRow={
             <div className="mt-8 flex items-end gap-3">
               <span className="display-section text-6xl leading-none">
-                {formatUsdPrice(earlyAccessPlan.monthlyPriceCents)}
+                {formatEurPrice(FOUNDING_PILOT.priceCents, locale)}
               </span>
-              <span className="flex flex-col pb-1 text-sm text-base-content/50">
-                <s className="text-base-content/40">{earlyAccessListPrice}</s>
-                <span>{copy("per workspace/month")}</span>
-              </span>
+              <span className="pb-1 text-sm text-base-content/50">{copy("one-time, net")}</span>
             </div>
           }
           features={[
-            copy(activeAgentLimitLabel(earlyAccessPlan.activeAgents)),
-            copy(privateGroupLimitLabel(earlyAccessPlan.activePrivateGroups)),
-            copy("Unlimited invited, unpaid reviewers"),
-            copy(
-              "First 12 months. Then 20% off the comparable plan; 60 days’ notice before changes. Cancel before they apply.",
-            ),
+            copy("6-week structured pilot"),
+            copy("50% creditable against a later subscription"),
+            copy("Invoiced in euro by bank transfer"),
+            copy("Workspace limits agreed in the pilot order"),
           ]}
           footer={
-            earlyAccessHref.startsWith("mailto:") ? (
-              <a href={earlyAccessHref} className="rateloop-gradient-action min-h-12 w-full justify-center px-5">
-                {earlyAccessCta}
-              </a>
-            ) : !subscriptionsEnabled ? (
-              <a
-                href={earlyAccessHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rateloop-gradient-action min-h-12 w-full justify-center px-5"
-              >
-                {earlyAccessCta}
+            pilotHref.startsWith("mailto:") ? (
+              <a href={pilotHref} className="rateloop-gradient-action min-h-12 w-full justify-center px-5">
+                {pilotCta}
               </a>
             ) : (
-              <Link href={earlyAccessHref} className="rateloop-gradient-action min-h-12 w-full justify-center px-5">
-                {earlyAccessCta}
-              </Link>
-            )
-          }
-        />
-        <PlanCard
-          name={copy("Enterprise")}
-          accent="var(--rateloop-pink)"
-          priceRow={
-            <div className="mt-8 flex items-end gap-3">
-              <span className="display-section text-6xl leading-none">{copy("Custom")}</span>
-            </div>
-          }
-          features={[
-            copy("Everything in Early Access"),
-            copy("Custom volumes and terms"),
-            copy("Custom integrations"),
-            copy("Evidence export support"),
-          ]}
-          footer={
-            demoBookingUrl ? (
               // The scheduler is a third-party page, so it leaves the app in a new tab rather than
               // being embedded: an embed would need its origin in the CSP and would set third-party
               // storage on page view.
               <a
-                href={demoBookingUrl}
+                href={pilotHref}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="rateloop-gradient-action min-h-12 w-full justify-center px-5"
               >
-                {copy("Book demo")}
-              </a>
-            ) : (
-              <a
-                className="rateloop-gradient-action min-h-12 w-full justify-center px-5"
-                href="mailto:hawigxyz@proton.me?subject=RateLoop%20Enterprise"
-              >
-                {copy("Request a demo")}
+                {pilotCta}
               </a>
             )
           }
         />
       </div>
+      <p className="mx-auto mt-5 max-w-4xl text-sm text-base-content/50">{copy("All prices net of 19% VAT.")}</p>
     </LocalizedPublicContent>
   );
 }

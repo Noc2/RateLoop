@@ -70,7 +70,6 @@
       "Pricing, Kept": "Pricing, Kept",
       "Simple": "Simple",
       "Start free": "Start free",
-      "First 12 months": "First 12 months",
       "Compare plans": "Compare plans",
       "See pricing": "See pricing",
       "Common": "Common",
@@ -97,20 +96,8 @@
       "5 invited reviewer groups": "5 invited reviewer groups",
       "Unpaid reviews with workspace reviewers": "Unpaid reviews with workspace reviewers",
       "Invited unpaid reviews": "Invited unpaid reviews",
-      "Early Access price": "Early Access price",
-      "per workspace/month": "per workspace/month",
       "Unlimited invited, unpaid reviewers": "Unlimited invited, unpaid reviewers",
-      "First 12 months. Then 20% off the comparable plan; 60 days’ notice before changes. Cancel before they apply.": "First 12 months. Then 20% off the comparable plan; 60 days’ notice before changes. Cancel before they apply.",
-      "Choose Early Access": "Choose Early Access",
       "Request pilot": "Request pilot",
-      "Enterprise": "Enterprise",
-      "Custom": "Custom",
-      "Everything in Early Access": "Everything in Early Access",
-      "Custom volumes and terms": "Custom volumes and terms",
-      "Custom integrations": "Custom integrations",
-      "Evidence export support": "Evidence export support",
-      "Book demo": "Book demo",
-      "Request a demo": "Request a demo",
       "Search": "Search",
       "Search RateLoop tasks, pages, documentation, and review work.": "Search RateLoop tasks, pages, documentation, and review work.",
       "Results for": "Results for",
@@ -236,7 +223,17 @@
       "Decision Packets": "Decision Packets",
       "Join settlement records with reports, reasons, disagreement, payment state, and evidence hashes.": "Join settlement records with reports, reasons, disagreement, payment state, and evidence hashes.",
       "Smart Contracts": "Smart Contracts",
-      "Reference the separately gated immutable fund core, credential issuer, and funding adapter.": "Reference the separately gated immutable fund core, credential issuer, and funding adapter."
+      "Reference the separately gated immutable fund core, credential issuer, and funding adapter.": "Reference the separately gated immutable fund core, credential issuer, and funding adapter.",
+      "Sandbox": "Sandbox",
+      "Founding Pilot": "Founding Pilot",
+      "Founding offer": "Founding offer",
+      "one-time, net": "one-time, net",
+      "6-week structured pilot": "6-week structured pilot",
+      "50% creditable against a later subscription": "50% creditable against a later subscription",
+      "Invoiced in euro by bank transfer": "Invoiced in euro by bank transfer",
+      "Workspace limits agreed in the pilot order": "Workspace limits agreed in the pilot order",
+      "All prices net of 19% VAT.": "All prices net of 19% VAT.",
+      "6-week structured pilot · 50% creditable": "6-week structured pilot · 50% creditable"
     }
   },
   "docs": {
@@ -878,7 +875,6 @@
       "For that identified integration, the applicable order, service documentation, and this schedule form the written agreement between the parties. RateLoop will provide the documented service capabilities and limitations, relevant technical access and interfaces, reasonably necessary integration information and assistance, and information about the expertise supporting those services. The customer remains responsible for specifying what it needs to meet its obligations as provider. Both parties must cooperate in good faith within their respective technical control; this schedule is not an attestation and does not establish compliance.": "For that identified integration, the applicable order, service documentation, and this schedule form the written agreement between the parties. RateLoop will provide the documented service capabilities and limitations, relevant technical access and interfaces, reasonably necessary integration information and assistance, and information about the expertise supporting those services. The customer remains responsible for specifying what it needs to meet its obligations as provider. Both parties must cooperate in good faith within their respective technical control; this schedule is not an attestation and does not establish compliance.",
       "The protocol itemizes bounty, platform fee, and maximum attempt reserve before funding. Once the first paid commit is accepted, a funder cannot cancel the round. Accepted work must reach the disclosed paid or compensated terminal path even when quorum or infrastructure fails.": "The protocol itemizes bounty, platform fee, and maximum attempt reserve before funding. Once the first paid commit is accepted, a funder cannot cancel the round. Accepted work must reach the disclosed paid or compensated terminal path even when quorum or infrastructure fails.",
       "RateLoop may offer a recurring business-to-business workspace subscription. The displayed price, billing period, plan limits, and applicable tax are confirmed before checkout. Subscriptions renew automatically until cancelled. Cancellation takes effect at the end of the paid period; already-accepted review work may finish and historical evidence is not deleted merely because a plan ends.": "RateLoop may offer a recurring business-to-business workspace subscription. The displayed price, billing period, plan limits, and applicable tax are confirmed before checkout. Subscriptions renew automatically until cancelled. Cancellation takes effect at the end of the paid period; already-accepted review work may finish and historical evidence is not deleted merely because a plan ends.",
-      "The Early Access price applies for the first 12 months. RateLoop will give at least 60 days' notice before a later price change. After the first 12 months, founding customers receive 20% off the then-current comparable monthly plan. There is no lifetime price guarantee, and a customer may cancel before a new price takes effect.": "The Early Access price applies for the first 12 months. RateLoop will give at least 60 days' notice before a later price change. After the first 12 months, founding customers receive 20% off the then-current comparable monthly plan. There is no lifetime price guarantee, and a customer may cancel before a new price takes effect.",
       "A workspace subscription pays for access to the RateLoop software and its plan limits. It does not include participant bounty, attempt reserve, or the separately disclosed public-panel execution fee. Those panel costs are itemized before funding and do not change a workspace's subscription limits.": "A workspace subscription pays for access to the RateLoop software and its plan limits. It does not include participant bounty, attempt reserve, or the separately disclosed public-panel execution fee. Those panel costs are itemized before funding and do not change a workspace's subscription limits.",
       "Subscriptions are intended for approved business customers. Customers must provide accurate legal, invoice, trader, tax, and VAT details and remain responsible for taxes not collected at checkout. Stripe processes subscription payment details and provides invoices and receipts. Except where law requires otherwise or RateLoop agrees in writing, paid subscription periods are non-refundable.": "Subscriptions are intended for approved business customers. Customers must provide accurate legal, invoice, trader, tax, and VAT details and remain responsible for taxes not collected at checkout. Stripe processes subscription payment details and provides invoices and receipts. Except where law requires otherwise or RateLoop agrees in writing, paid subscription periods are non-refundable.",
       "The immutable panel core has no operator withdrawal path. A separate issuer controls new voucher admission. If its signer is compromised, an attacker can fill remaining seats in open rounds, influence their verdicts, and direct the bounties for those attacker-controlled reports until the signer is rotated. The issuer still cannot redirect escrow, redirect another report's claim, or change an accepted commit.": "The immutable panel core has no operator withdrawal path. A separate issuer controls new voucher admission. If its signer is compromised, an attacker can fill remaining seats in open rounds, influence their verdicts, and direct the bounties for those attacker-controlled reports until the signer is rotated. The issuer still cannot redirect escrow, redirect another report's claim, or change an accepted commit.",
@@ -988,7 +984,9 @@
       "Only when a timestamp authority and its trust policy are configured.": "Only when a timestamp authority and its trust policy are configured.",
       "Customer-designated S3-compatible storage provider": "Customer-designated S3-compatible storage provider",
       "Optional customer-directed export of evidence objects to the customer's selected storage account.": "Optional customer-directed export of evidence objects to the customer's selected storage account.",
-      "Only when the customer configures an export destination and requests delivery.": "Only when the customer configures an export destination and requests delivery."
+      "Only when the customer configures an export destination and requests delivery.": "Only when the customer configures an export destination and requests delivery.",
+      "Subscription prices, billing period, and plan limits are agreed in the applicable order or shown before checkout; RateLoop publishes no recurring list price. RateLoop will give at least 60 days' notice before changing the price of an active subscription, and the customer may cancel before the change takes effect. There is no lifetime price guarantee.": "Subscription prices, billing period, and plan limits are agreed in the applicable order or shown before checkout; RateLoop publishes no recurring list price. RateLoop will give at least 60 days' notice before changing the price of an active subscription, and the customer may cancel before the change takes effect. There is no lifetime price guarantee.",
+      "A fixed-scope pilot engagement is agreed in a separate written order. Pilot fees are quoted in euro net of statutory VAT, invoiced by bank transfer, and are not a subscription; any credit against a later subscription is stated in that order.": "A fixed-scope pilot engagement is agreed in a separate written order. Pilot fees are quoted in euro net of statutory VAT, invoiced by bank transfer, and are not a subscription; any credit against a later subscription is stated in that order."
     }
   }
 }
