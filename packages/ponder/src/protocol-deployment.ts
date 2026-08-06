@@ -1,4 +1,5 @@
 import { isAddress, zeroAddress } from "viem";
+import { releasedTokenlessBaseSepoliaDeployment } from "./released-tokenless-deployment";
 
 export const TOKENLESS_SCHEMA_VERSION = "tokenless-v4";
 const TOKENLESS_EU_RAILWAY_REGION = "europe-west4-drams3a";
@@ -191,6 +192,22 @@ export function resolveTokenlessDeployment(
   if (configuredKey && configuredKey !== deploymentKey) {
     throw new Error(
       "RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY does not match the tokenless deployment identity.",
+    );
+  }
+  if (
+    typedNetwork === "baseSepolia" &&
+    (deploymentKey !== releasedTokenlessBaseSepoliaDeployment.deploymentKey ||
+      startBlock !==
+        releasedTokenlessBaseSepoliaDeployment.deploymentBlockNumber ||
+      beaconVerifierAddress.toLowerCase() !==
+        releasedTokenlessBaseSepoliaDeployment.beaconVerifierAddress.toLowerCase() ||
+      !releasedTokenlessBaseSepoliaDeployment.runtimeCodeEvidenceComplete ||
+      !/^0x[0-9a-f]{64}$/u.test(
+        releasedTokenlessBaseSepoliaDeployment.codeEvidenceHash,
+      ))
+  ) {
+    throw new Error(
+      "Base Sepolia configuration does not match the checked-in released tokenless deployment.",
     );
   }
 

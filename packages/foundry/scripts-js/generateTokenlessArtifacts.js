@@ -21,6 +21,28 @@ import {
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const foundryRoot = join(scriptDirectory, "..");
 const workspaceRoot = join(foundryRoot, "..", "..");
+const tokenlessDeploymentPath = join(
+  foundryRoot,
+  "deployments",
+  "tokenless-v4",
+  `${TOKENLESS_BASE_SEPOLIA_CHAIN_ID}.json`,
+);
+const workerReleaseOutputPaths = [
+  join(
+    workspaceRoot,
+    "packages",
+    "ponder",
+    "src",
+    "released-tokenless-deployment.ts",
+  ),
+  join(
+    workspaceRoot,
+    "packages",
+    "keeper",
+    "src",
+    "released-tokenless-deployment.ts",
+  ),
+];
 
 const ABI_EXPORT_NAMES = {
   CredentialIssuer: "CredentialIssuerAbi",
@@ -164,13 +186,44 @@ export function buildTokenlessGeneratedSources(
   return files;
 }
 
+export function buildTokenlessWorkerReleaseSource(deploymentArtifact) {
+  const deployment = validateTokenlessDeploymentArtifact(deploymentArtifact, {
+    requireRuntimeCodeEvidence: true,
+  });
+  return `${generatedHeader()}export const releasedTokenlessBaseSepoliaDeployment = ${JSON.stringify(
+    {
+      schemaVersion: deployment.schemaVersion,
+      chainId: deployment.chainId,
+      deploymentBlockNumber: deployment.deploymentBlockNumber,
+      deploymentKey: deployment.deploymentKey,
+      beaconVerifierAddress: deployment.beaconVerifier,
+      runtimeCodeEvidenceComplete: deployment.runtimeCodeEvidenceComplete,
+      codeEvidenceHash: deployment.codeEvidenceHash,
+    },
+    null,
+    2,
+  )} as const;\n`;
+}
+
+export function generateTokenlessWorkerReleaseSources({
+  deploymentPath = tokenlessDeploymentPath,
+  outputPaths = workerReleaseOutputPaths,
+} = {}) {
+  if (!existsSync(deploymentPath)) {
+    throw new Error(`Missing tokenless deployment artifact ${deploymentPath}.`);
+  }
+  const source = buildTokenlessWorkerReleaseSource(
+    JSON.parse(readFileSync(deploymentPath, "utf8")),
+  );
+  for (const outputPath of outputPaths) {
+    mkdirSync(dirname(outputPath), { recursive: true });
+    writeFileSync(outputPath, source, "utf8");
+  }
+  return { outputPaths: [...outputPaths] };
+}
+
 export function generateTokenlessArtifacts({
-  deploymentPath = join(
-    foundryRoot,
-    "deployments",
-    "tokenless-v4",
-    `${TOKENLESS_BASE_SEPOLIA_CHAIN_ID}.json`,
-  ),
+  deploymentPath = tokenlessDeploymentPath,
   outputDirectory = join(
     workspaceRoot,
     "packages",
@@ -222,11 +275,21 @@ async function main() {
   const result = sourceOnly
     ? generateTokenlessSourceAbis()
     : generateTokenlessArtifacts();
+  const workerResult = sourceOnly
+    ? null
+    : generateTokenlessWorkerReleaseSources();
   console.log(
     `Generated ${result.files.length} tokenless ${
       sourceOnly ? "source ABIs" : "contract artifacts"
     } under ${result.outputDirectory}`,
   );
+  if (workerResult) {
+    console.log(
+      `Generated tokenless worker release identity under ${workerResult.outputPaths.join(
+        ", ",
+      )}`,
+    );
+  }
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

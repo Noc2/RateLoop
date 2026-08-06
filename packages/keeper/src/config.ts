@@ -1,6 +1,7 @@
 import { config as loadDotenv } from "dotenv";
 import { isAddress, zeroAddress, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+import { releasedTokenlessBaseSepoliaDeployment } from "./released-tokenless-deployment.js";
 
 loadDotenv({ path: ".env.local", override: false });
 loadDotenv();
@@ -396,6 +397,23 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
   );
   if (production && deploymentBlockNumber === 0) {
     errors.push("TOKENLESS_DEPLOYMENT_BLOCK must be positive in production");
+  }
+  if (
+    chainId === BASE_SEPOLIA_CHAIN_ID &&
+    (deploymentKey.toLowerCase() !==
+      releasedTokenlessBaseSepoliaDeployment.deploymentKey ||
+      deploymentBlockNumber !==
+        releasedTokenlessBaseSepoliaDeployment.deploymentBlockNumber ||
+      beaconVerifier.toLowerCase() !==
+        releasedTokenlessBaseSepoliaDeployment.beaconVerifierAddress.toLowerCase() ||
+      !releasedTokenlessBaseSepoliaDeployment.runtimeCodeEvidenceComplete ||
+      !/^0x[0-9a-f]{64}$/u.test(
+        releasedTokenlessBaseSepoliaDeployment.codeEvidenceHash,
+      ))
+  ) {
+    errors.push(
+      "Base Sepolia configuration does not match the checked-in released tokenless deployment",
+    );
   }
   const intervalMs = positiveInteger(env, "KEEPER_INTERVAL_MS", 15_000, errors);
   const maxRoundsPerTick = positiveInteger(

@@ -5,12 +5,28 @@ import {
   resolveTokenlessDeployment,
   tokenlessDeploymentHealth,
 } from "../src/protocol-deployment";
+import { releasedTokenlessBaseSepoliaDeployment } from "../src/released-tokenless-deployment";
 
 const panel = "0x1000000000000000000000000000000000000001";
 const issuer = "0x1000000000000000000000000000000000000002";
 const feedbackBonus = "0x1000000000000000000000000000000000000003";
 const beaconVerifier = "0x1000000000000000000000000000000000000004";
 const deploymentKey = `tokenless-v4:84532:${panel}:${issuer}:${zeroAddress}:${feedbackBonus}`;
+const [
+  ,
+  ,
+  releasedPanel,
+  releasedIssuer,
+  releasedAdapter,
+  releasedFeedbackBonus,
+] = releasedTokenlessBaseSepoliaDeployment.deploymentKey.split(":") as [
+  string,
+  string,
+  `0x${string}`,
+  `0x${string}`,
+  `0x${string}`,
+  `0x${string}`,
+];
 const hostedRuntime = {
   NODE_ENV: "production",
   TOKENLESS_HOME_REGION: "eu",
@@ -26,12 +42,17 @@ function baseSepoliaEnv() {
     ...hostedRuntime,
     PONDER_NETWORK: "baseSepolia",
     PONDER_CHAIN_ID: "84532",
-    PONDER_TOKENLESS_PANEL_ADDRESS: panel,
-    PONDER_CREDENTIAL_ISSUER_ADDRESS: issuer,
-    PONDER_FEEDBACK_BONUS_ADDRESS: feedbackBonus,
-    PONDER_BEACON_VERIFIER_ADDRESS: beaconVerifier,
-    PONDER_TOKENLESS_START_BLOCK: "44051709",
-    RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: deploymentKey,
+    PONDER_TOKENLESS_PANEL_ADDRESS: releasedPanel,
+    PONDER_CREDENTIAL_ISSUER_ADDRESS: releasedIssuer,
+    PONDER_X402_PANEL_SUBMITTER_ADDRESS: releasedAdapter,
+    PONDER_FEEDBACK_BONUS_ADDRESS: releasedFeedbackBonus,
+    PONDER_BEACON_VERIFIER_ADDRESS:
+      releasedTokenlessBaseSepoliaDeployment.beaconVerifierAddress,
+    PONDER_TOKENLESS_START_BLOCK: String(
+      releasedTokenlessBaseSepoliaDeployment.deploymentBlockNumber,
+    ),
+    RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY:
+      releasedTokenlessBaseSepoliaDeployment.deploymentKey,
   };
 }
 
@@ -51,17 +72,18 @@ describe("tokenless deployment identity", () => {
     const env = baseSepoliaEnv();
     expect(resolveTokenlessDeployment(env)).toMatchObject({
       chainId: 84_532,
-      panelAddress: panel,
-      issuerAddress: issuer,
-      adapterAddress: zeroAddress,
-      feedbackBonusAddress: feedbackBonus,
-      beaconVerifierAddress: beaconVerifier,
-      startBlock: 44_051_709,
+      panelAddress: releasedPanel,
+      issuerAddress: releasedIssuer,
+      adapterAddress: releasedAdapter,
+      feedbackBonusAddress: releasedFeedbackBonus,
+      beaconVerifierAddress:
+        releasedTokenlessBaseSepoliaDeployment.beaconVerifierAddress.toLowerCase(),
+      startBlock: releasedTokenlessBaseSepoliaDeployment.deploymentBlockNumber,
     });
     expect(() =>
       resolveTokenlessDeployment({
         ...env,
-        RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: `tokenless-v3:84532:${panel}:${issuer}:${zeroAddress}`,
+        RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: `tokenless-v3:84532:${releasedPanel}:${releasedIssuer}:${releasedAdapter}`,
       }),
     ).toThrow("does not match the tokenless deployment identity");
     expect(() =>
@@ -103,11 +125,27 @@ describe("tokenless deployment identity", () => {
       status: "ok",
       protocol: "tokenless-v4",
       chainId: 84_532,
-      deploymentKey,
-      feedbackBonusAddress: feedbackBonus,
-      beaconVerifierAddress: beaconVerifier,
-      startBlock: 44_051_709,
+      deploymentKey: releasedTokenlessBaseSepoliaDeployment.deploymentKey,
+      feedbackBonusAddress: releasedFeedbackBonus,
+      beaconVerifierAddress:
+        releasedTokenlessBaseSepoliaDeployment.beaconVerifierAddress.toLowerCase(),
+      startBlock: releasedTokenlessBaseSepoliaDeployment.deploymentBlockNumber,
     });
+  });
+
+  it("rejects a coherent Base Sepolia bundle that is not the released artifact", () => {
+    expect(() =>
+      resolveTokenlessDeployment({
+        ...baseSepoliaEnv(),
+        PONDER_TOKENLESS_PANEL_ADDRESS: panel,
+        PONDER_CREDENTIAL_ISSUER_ADDRESS: issuer,
+        PONDER_X402_PANEL_SUBMITTER_ADDRESS: zeroAddress,
+        PONDER_FEEDBACK_BONUS_ADDRESS: feedbackBonus,
+        PONDER_BEACON_VERIFIER_ADDRESS: beaconVerifier,
+        PONDER_TOKENLESS_START_BLOCK: "44051709",
+        RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: deploymentKey,
+      }),
+    ).toThrow("does not match the checked-in released tokenless deployment");
   });
 
   it("requires the exact EU Railway runtime identity", () => {

@@ -1,5 +1,6 @@
 import { privateKeyToAccount } from "viem/accounts";
 import { beforeAll, describe, expect, it } from "vitest";
+import { releasedTokenlessBaseSepoliaDeployment } from "../released-tokenless-deployment.js";
 
 const PANEL = "0x0000000000000000000000000000000000000011";
 const ISSUER = "0x0000000000000000000000000000000000000022";
@@ -8,11 +9,24 @@ const BEACON_VERIFIER = "0x0000000000000000000000000000000000000044";
 const ZERO = "0x0000000000000000000000000000000000000000";
 const KEEPER_PRIVATE_KEY = `0x${"11".repeat(32)}` as const;
 const KEEPER = privateKeyToAccount(KEEPER_PRIVATE_KEY).address;
+const [
+  ,
+  ,
+  RELEASED_PANEL,
+  RELEASED_ISSUER,
+  RELEASED_X402,
+  RELEASED_FEEDBACK_BONUS,
+] = releasedTokenlessBaseSepoliaDeployment.deploymentKey.split(":") as [
+  string,
+  string,
+  `0x${string}`,
+  `0x${string}`,
+  `0x${string}`,
+  `0x${string}`,
+];
 
 let loadConfig: typeof import("../config.js").loadConfig;
-let buildTokenlessDeploymentKey: typeof import(
-  "../config.js"
-).buildTokenlessDeploymentKey;
+let buildTokenlessDeploymentKey: typeof import("../config.js").buildTokenlessDeploymentKey;
 
 beforeAll(async () => {
   process.env.NODE_ENV = "test";
@@ -41,12 +55,17 @@ function productionEnv(): NodeJS.ProcessEnv {
     CHAIN_ID: "84532",
     RPC_URL: "https://sepolia.base.org",
     RPC_FALLBACK_URLS: "https://base-sepolia-fallback.example",
-    TOKENLESS_PANEL_ADDRESS: PANEL,
-    TOKENLESS_CREDENTIAL_ISSUER_ADDRESS: ISSUER,
-    TOKENLESS_FEEDBACK_BONUS_ADDRESS: FEEDBACK_BONUS,
-    TOKENLESS_BEACON_VERIFIER_ADDRESS: BEACON_VERIFIER,
-    TOKENLESS_DEPLOYMENT_KEY: `tokenless-v4:84532:${PANEL}:${ISSUER}:${ZERO}:${FEEDBACK_BONUS}`,
-    TOKENLESS_DEPLOYMENT_BLOCK: "123",
+    TOKENLESS_PANEL_ADDRESS: RELEASED_PANEL,
+    TOKENLESS_CREDENTIAL_ISSUER_ADDRESS: RELEASED_ISSUER,
+    TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS: RELEASED_X402,
+    TOKENLESS_FEEDBACK_BONUS_ADDRESS: RELEASED_FEEDBACK_BONUS,
+    TOKENLESS_BEACON_VERIFIER_ADDRESS:
+      releasedTokenlessBaseSepoliaDeployment.beaconVerifierAddress,
+    TOKENLESS_DEPLOYMENT_KEY:
+      releasedTokenlessBaseSepoliaDeployment.deploymentKey,
+    TOKENLESS_DEPLOYMENT_BLOCK: String(
+      releasedTokenlessBaseSepoliaDeployment.deploymentBlockNumber,
+    ),
     TOKENLESS_PONDER_URL: "https://tokenless-ponder.example",
     PONDER_KEEPER_WORK_TOKEN: "keeper-work-secret",
     DATABASE_URL:
@@ -72,8 +91,10 @@ describe("tokenless keeper config", () => {
   it("accepts the live Railway variable shape without new signer pins", () => {
     const config = loadConfig(productionEnv());
     expect(config.chainId).toBe(84532);
-    expect(config.deployment.blockNumber).toBe(123n);
-    expect(config.deployment.panel).toBe(PANEL);
+    expect(config.deployment.blockNumber).toBe(
+      BigInt(releasedTokenlessBaseSepoliaDeployment.deploymentBlockNumber),
+    );
+    expect(config.deployment.panel).toBe(RELEASED_PANEL);
     expect(config.signer).toEqual({
       kind: "platform-secret",
       expectedAddress: KEEPER,
@@ -162,6 +183,21 @@ describe("tokenless keeper config", () => {
         TOKENLESS_DEPLOYMENT_KEY: `tokenless-v2:84532:${PANEL}:${ISSUER}:${ZERO}`,
       }),
     ).toThrow(/does not match/);
+  });
+
+  it("rejects a coherent Base Sepolia bundle that is not the released artifact", () => {
+    expect(() =>
+      loadConfig({
+        ...productionEnv(),
+        TOKENLESS_PANEL_ADDRESS: PANEL,
+        TOKENLESS_CREDENTIAL_ISSUER_ADDRESS: ISSUER,
+        TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS: ZERO,
+        TOKENLESS_FEEDBACK_BONUS_ADDRESS: FEEDBACK_BONUS,
+        TOKENLESS_BEACON_VERIFIER_ADDRESS: BEACON_VERIFIER,
+        TOKENLESS_DEPLOYMENT_KEY: `tokenless-v4:84532:${PANEL}:${ISSUER}:${ZERO}:${FEEDBACK_BONUS}`,
+        TOKENLESS_DEPLOYMENT_BLOCK: "123",
+      }),
+    ).toThrow(/does not match the checked-in released tokenless deployment/);
   });
 
   it("requires HTTPS, an independent fallback, and authenticated metrics", () => {

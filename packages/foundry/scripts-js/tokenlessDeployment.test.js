@@ -15,6 +15,7 @@ import { exportTokenlessDeploymentFromBroadcast } from "./exportTokenlessDeploym
 import {
   buildTokenlessGeneratedSources,
   buildTokenlessSourceAbiFiles,
+  buildTokenlessWorkerReleaseSource,
 } from "./generateTokenlessArtifacts.js";
 import {
   reconstructTokenlessDeploymentFromBroadcast as reconstructRawTokenlessDeploymentFromBroadcast,
@@ -711,8 +712,14 @@ test("export writes tokenless-v4 with exact runtime hashes and leaves historical
     }
     assert.match(exported.beaconVerifierRuntimeCodeHash, /^0x[0-9a-f]{64}$/u);
     assert.match(exported.beaconVerifierCreationCodeHash, /^0x[0-9a-f]{64}$/u);
-    assert.match(exported.beaconVerifierDeploymentInputHash, /^0x[0-9a-f]{64}$/u);
-    assert.equal(exported.codeEvidenceHash, tokenlessCodeEvidenceHash(exported));
+    assert.match(
+      exported.beaconVerifierDeploymentInputHash,
+      /^0x[0-9a-f]{64}$/u,
+    );
+    assert.equal(
+      exported.codeEvidenceHash,
+      tokenlessCodeEvidenceHash(exported),
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -856,7 +863,32 @@ test("the checked-in released v4 artifact generates the active source registry",
     abiLoader: () => [],
   });
   assert.match(sources.get("deployedContracts.ts"), /"status": "released"/u);
-  assert.match(sources.get("deployedContracts.ts"), new RegExp(String(artifact.deploymentBlockNumber), "u"));
+  assert.match(
+    sources.get("deployedContracts.ts"),
+    new RegExp(String(artifact.deploymentBlockNumber), "u"),
+  );
+
+  const workerSource = buildTokenlessWorkerReleaseSource(artifact);
+  assert.match(workerSource, /releasedTokenlessBaseSepoliaDeployment/u);
+  assert.match(workerSource, new RegExp(artifact.deploymentKey, "u"));
+  assert.match(
+    workerSource,
+    new RegExp(String(artifact.deploymentBlockNumber), "u"),
+  );
+  assert.match(workerSource, new RegExp(artifact.beaconVerifier, "iu"));
+  assert.match(workerSource, new RegExp(artifact.codeEvidenceHash, "u"));
+  for (const workerPath of [
+    new URL(
+      "../../ponder/src/released-tokenless-deployment.ts",
+      import.meta.url,
+    ),
+    new URL(
+      "../../keeper/src/released-tokenless-deployment.ts",
+      import.meta.url,
+    ),
+  ]) {
+    assert.equal(readFileSync(workerPath, "utf8"), workerSource);
+  }
 });
 
 test("full artifact generation rejects historical v1 deployment metadata", () => {
