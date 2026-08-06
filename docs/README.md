@@ -14,6 +14,7 @@
 | [tokenless-commercial-product-expansion-research-2026-08.md](tokenless-commercial-product-expansion-research-2026-08.md)             | Pre-customer readiness: which scoped changes are implemented and locally verified, and what hosted release proof is still pending.            |
 | [tokenless-pre-outreach-operations-2026-08.md](tokenless-pre-outreach-operations-2026-08.md)                                         | The operator's answers before contacting anyone — what evidence exists, what a prospect can verify, and what is not claimed.                  |
 | [documentation-update-plan-2026-08.md](documentation-update-plan-2026-08.md)                                                         | What is still wrong in this directory, checked against the code: the contradictions first, then the drift, then the duplication.              |
+| [german-outreach-readiness-2026-08.md](german-outreach-readiness-2026-08.md)                                                         | What to fix before pitching German companies — the claims, the product gap, the payment gates, and the paper procurement will ask for.        |
 
 The first set was written on 29 July 2026 to replace twenty-five documents that had
 drifted from the code. Read them as a set: the first is descriptive and the rest are
