@@ -47,11 +47,6 @@ export function validateHostedMigrationEnvironment(env) {
       `Unexpected Vercel project ID ${env.VERCEL_PROJECT_ID ?? "missing"}; expected ${TOKENLESS_VERCEL_PROJECT.projectId}.`,
     );
   }
-  if (env.VERCEL_PROJECT_NAME !== TOKENLESS_VERCEL_PROJECT.projectName) {
-    errors.push(
-      `Unexpected Vercel project name ${env.VERCEL_PROJECT_NAME ?? "missing"}; expected ${TOKENLESS_VERCEL_PROJECT.projectName}.`,
-    );
-  }
   if (!env.DATABASE_URL?.trim()) errors.push("DATABASE_URL is required for hosted tokenless migrations.");
   else errors.push(...validateHostedDatabaseIdentity(env));
   return errors;

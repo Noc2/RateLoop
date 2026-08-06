@@ -592,9 +592,6 @@ function validateTokenlessTestDeployment(env, { activeRegistry, deploymentSchema
   if (env.VERCEL_PROJECT_ID !== TOKENLESS_VERCEL_PROJECT.projectId) {
     errors.push(`The tokenless test deployment requires Vercel project ${TOKENLESS_VERCEL_PROJECT.projectId}.`);
   }
-  if (env.VERCEL_PROJECT_NAME !== TOKENLESS_VERCEL_PROJECT.projectName) {
-    errors.push(`The tokenless test deployment requires Vercel project ${TOKENLESS_VERCEL_PROJECT.projectName}.`);
-  }
   validateHostedGitIdentity(env, "tokenless", errors);
   for (const name of ["APP_URL", "NEXT_PUBLIC_APP_URL"]) {
     if (value(env, name) !== TOKENLESS_REVIEW_ORIGIN) {

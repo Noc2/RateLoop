@@ -15,7 +15,6 @@ function hosted(overrides: Record<string, string | undefined> = {}) {
     VERCEL_GIT_COMMIT_REF: "tokenless",
     VERCEL_GIT_COMMIT_SHA: SHA,
     VERCEL_PROJECT_ID: TOKENLESS_RELEASE_PROJECT.projectId,
-    VERCEL_PROJECT_NAME: TOKENLESS_RELEASE_PROJECT.projectName,
     ...overrides,
   };
 }
@@ -43,7 +42,6 @@ test("release identity publishes only the pinned tokenless project and safe Git 
 test("release identity fails closed for unexpected hosted project metadata", () => {
   for (const environment of [
     hosted({ VERCEL_PROJECT_ID: "prj_legacy" }),
-    hosted({ VERCEL_PROJECT_NAME: "rate-loop-nextjs" }),
     hosted({ VERCEL_ENV: "development" }),
     hosted({ VERCEL_GIT_COMMIT_SHA: "short" }),
     hosted({ VERCEL_GIT_COMMIT_REF: "tokenless\ninjected" }),

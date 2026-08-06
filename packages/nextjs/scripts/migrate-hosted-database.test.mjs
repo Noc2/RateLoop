@@ -14,7 +14,6 @@ const databaseUrl = "postgresql://example.invalid/tokenless";
 const hostedEnv = {
   VERCEL_ENV: "production",
   VERCEL_PROJECT_ID: TOKENLESS_VERCEL_PROJECT.projectId,
-  VERCEL_PROJECT_NAME: TOKENLESS_VERCEL_PROJECT.projectName,
   DATABASE_URL: databaseUrl,
   TOKENLESS_DATABASE_IDENTITY: deriveHostedDatabaseIdentity(databaseUrl),
 };
@@ -46,10 +45,8 @@ test("hosted migrations reject a legacy project or missing database", () => {
   const errors = validateHostedMigrationEnvironment({
     VERCEL_ENV: "production",
     VERCEL_PROJECT_ID: "prj_legacy",
-    VERCEL_PROJECT_NAME: "rate-loop-nextjs",
   });
   assert.match(errors.join("\n"), /unexpected vercel project id/i);
-  assert.match(errors.join("\n"), /unexpected vercel project name/i);
   assert.match(errors.join("\n"), /database_url is required/i);
 });
 

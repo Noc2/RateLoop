@@ -12,7 +12,6 @@ test("public release identity is no-store and contains no environment secrets", 
     VERCEL_GIT_COMMIT_REF: "tokenless",
     VERCEL_GIT_COMMIT_SHA: SHA,
     VERCEL_PROJECT_ID: TOKENLESS_RELEASE_PROJECT.projectId,
-    VERCEL_PROJECT_NAME: TOKENLESS_RELEASE_PROJECT.projectName,
     DATABASE_URL: "postgresql://must-not-appear",
     BETTER_AUTH_SECRET: "must-not-appear",
   });
@@ -37,7 +36,6 @@ test("public release identity returns a generic unavailable response on project 
     VERCEL_GIT_COMMIT_REF: "tokenless",
     VERCEL_GIT_COMMIT_SHA: SHA,
     VERCEL_PROJECT_ID: "prj_legacy",
-    VERCEL_PROJECT_NAME: "rate-loop-nextjs",
   });
 
   assert.equal(response.status, 503);

@@ -41,10 +41,7 @@ export function tokenlessReleaseIdentity(env: ReleaseEnvironment = process.env):
   const ref = value(env, "VERCEL_GIT_COMMIT_REF");
 
   if (hosted) {
-    if (
-      value(env, "VERCEL_PROJECT_ID") !== TOKENLESS_RELEASE_PROJECT.projectId ||
-      value(env, "VERCEL_PROJECT_NAME") !== TOKENLESS_RELEASE_PROJECT.projectName
-    ) {
+    if (value(env, "VERCEL_PROJECT_ID") !== TOKENLESS_RELEASE_PROJECT.projectId) {
       throw new Error("Release identity is unavailable for an unexpected Vercel project.");
     }
     if (environment !== "production" && environment !== "preview") {
