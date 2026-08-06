@@ -61,23 +61,6 @@ const ImprintPage = ({ params }: { params?: PublicLocaleParams } = {}) => {
             human assurance and settlement evidence; it does not provide banking, brokerage, custody, investment, legal,
             or medical advice.
           </p>
-
-          <h2>Dispute Resolution</h2>
-          <p>
-            The former European Commission Online Dispute Resolution (ODR) platform was discontinued on July 20, 2025.
-            Further information is available from the European Commission:{" "}
-            <a
-              href="https://consumer-redress.ec.europa.eu/site-relocation_en"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              consumer-redress.ec.europa.eu/site-relocation_en
-            </a>
-          </p>
-          <p>
-            We are neither obligated nor willing to participate in dispute resolution proceedings before a consumer
-            arbitration board.
-          </p>
         </article>
       </div>
     </LocalizedPublicContent>
