@@ -63,6 +63,17 @@ export function rateRedirectHref(searchParams: NavigationSearchParams) {
   return `/human/review${search ? `?${search}` : ""}`;
 }
 
+/**
+ * `/rate` is a legacy alias. It only ever carried reviewers arriving from an
+ * invitation link, and nothing in the product links to it any more. Without that
+ * reviewer context it is a public entry point, so it must land on the marketing
+ * root rather than an empty reviewer work queue.
+ */
+export function rateDestinationHref(searchParams: NavigationSearchParams) {
+  const search = canonicalReviewSearchParams(searchParams).toString();
+  return search ? `/human/review?${search}` : "/";
+}
+
 export function humanSectionHref(
   navigation: HumanNavigation,
   currentSearch?: URLSearchParams | NavigationSearchParams,

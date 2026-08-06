@@ -1,4 +1,4 @@
-import { rateRedirectHref } from "~~/components/tokenless/human/humanNavigation";
+import { rateDestinationHref } from "~~/components/tokenless/human/humanNavigation";
 import type { Locale } from "~~/i18n/config";
 import { redirect } from "~~/i18n/navigation";
 
@@ -17,5 +17,5 @@ export default async function RatePage({
   params: Promise<{ locale: Locale }>;
 }) {
   const [{ locale }, requestedParams] = await Promise.all([params, searchParams]);
-  redirect({ href: rateRedirectHref(requestedParams), locale });
+  redirect({ href: rateDestinationHref(requestedParams), locale });
 }

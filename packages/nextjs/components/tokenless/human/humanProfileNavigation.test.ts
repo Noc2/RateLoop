@@ -3,6 +3,7 @@ import {
   canonicalReviewSearchParams,
   humanSectionHref,
   legacyHumanRouteHref,
+  rateDestinationHref,
   rateRedirectHref,
 } from "./humanNavigation";
 import { humanAccountReturnTo, resolveHumanProfileSection } from "./humanProfileNavigation";
@@ -108,4 +109,22 @@ test("human sections use normal route links and canonicalize legacy tab URLs", (
 test("profile deep links scroll the requested section into view", () => {
   assert.match(focusSource, /document\.getElementById\(section\)/);
   assert.match(focusSource, /target\.scrollIntoView\(\{ block: "start" \}\)/);
+});
+
+test("the legacy /rate alias sends visitors without reviewer context to the marketing root", () => {
+  const ratePageSource = readFileSync(new URL("../../../app/[locale]/(app)/rate/page.tsx", import.meta.url), "utf8");
+  assert.match(ratePageSource, /rateDestinationHref\(requestedParams\)/);
+  assert.doesNotMatch(ratePageSource, /rateRedirectHref/);
+
+  assert.equal(rateDestinationHref({}), "/");
+  assert.equal(rateDestinationHref({ q: "safety", scope: "private", source: "inbox" }), "/");
+});
+
+test("the legacy /rate alias still forwards an invited reviewer to their assignment", () => {
+  const termsHash = `sha256:${"a".repeat(64)}`;
+  assert.equal(
+    rateDestinationHref({ assignment: "haas_assignment_old", terms: termsHash, invite: "1" }),
+    `/human/review?assignment=haas_assignment_old&terms=${encodeURIComponent(termsHash)}&invite=1`,
+  );
+  assert.equal(rateDestinationHref({ invite: "1" }), "/human/review?invite=1");
 });
