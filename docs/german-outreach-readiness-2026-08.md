@@ -93,8 +93,33 @@ The Kundenpitch quotes **€ 2.500 netto**. The live page shows **$29** with a s
 and both message catalogues). Your own Preisempfehlung lists removing these as steps 1–3
 **"vor Outreach"**. They are still live in six places.
 
-A prospect who opens the pricing page during your pitch sees a different offer than the
-one you just made.
+A prospect who opens the pricing page during your pitch sees a different offer than the one
+you just made. Worse: the card always renders `$29`, but its button swaps to **"Request
+pilot"** whenever self-serve checkout is disabled — which the operating rules require. So
+the page shows **a $29 price tag whose only available action is to ask for a €2,500 pilot.**
+
+**Resolution: delete the public $29 anchor.** Research settled this against the earlier
+position that it could stay as a founding offer:
+
+- Its own condition was never met. It was to be kept "only if its displayed limits and
+  checkout state are true", and neither is.
+- **Every verified competitor publishes no price** — Vanta, Drata, Secureframe, OneTrust,
+  Credo AI, Holistic AI, and the closest comparable, Munich-based trail, which sells a
+  structured proof of concept instead.
+- A published $29 is not an anchor you discount from; it is a net price a buyer can quote
+  back at you, making €2,500 an 86× markup to justify.
+- The seller is a German UG. Quoting USD to German buyers is an unforced credibility loss.
+- There is a German legal wrinkle: the Preisangabenverordnung binds consumer-facing offers,
+  and a court has held a publicly accessible shop must be assumed to address consumers
+  unless access is technically restricted. Removing the public price removes the exposure.
+
+The pricing page should show **Sandbox €0** and the **Founding Pilot at €2,500 netto,
+6 weeks, 50% creditable**, with "Alle Preise netto zzgl. 19 % USt." **Publish no recurring
+price until three pilots have closed**, then €1,200/month — see the business plan for the
+derivation, and note it replaces the €249 tier, at which break-even needs 24–30 customers.
+
+None of this needs billing code. The pilot is invoiced by hand in EUR with 19% USt.,
+collected by SEPA transfer, entirely outside the product.
 
 ### 0.6 "sufficient AI literacy" is still shipped
 
@@ -202,21 +227,31 @@ answer** ([`privateReviewResponses.ts:621`](../packages/nextjs/lib/tokenless/pri
 Default panel size is 2, default window 3600 s. A tie is `inconclusive`; a deadline passing
 without full quorum is forced `inconclusive`.
 
-At the default, one slow or disagreeing reviewer produces "inconclusive" in front of the
-prospect. Pre-stage the demo or do not run it live.
+At the default, one slow reviewer produces "inconclusive" in front of the prospect — and so
+does the more likely case, **two reviewers who both answer and disagree**, which is exactly
+the situation most worth demonstrating.
 
-### 2.3 The API never returns the reasons
+Note that "set the panel to 1 for the demo" is not available: `MINIMUM_REVIEW_PANEL_SIZE = 2`
+([`reviewRequestProfiles.ts:40`](../packages/nextjs/lib/tokenless/reviewRequestProfiles.ts))
+is enforced server-side and mirrored in the editor. Changing it is a code change, not a
+setting. See B5.
+
+### 2.3 The agent envelope withholds the reasons — but the browser already shows them
 
 `rationale: { summaryAllowed: false, aggregateSummary: null }` is **hardcoded**
-([`privateReviewResponses.ts:742`](../packages/nextjs/lib/tokenless/privateReviewResponses.ts)).
-The customer's agent receives an outcome enum only.
+([`privateReviewResponses.ts:742`](../packages/nextjs/lib/tokenless/privateReviewResponses.ts)),
+so the customer's agent receives an outcome enum only.
 
-The landing page promises "Results keep the question, verdict, **reasons**, disagreement,
-and review context together"
-([`page.tsx:29-31`](../packages/nextjs/app/[locale]/(public)/page.tsx)). An enterprise
-buying auditable human oversight wants the rationale text. Either ship it or stop
-promising it — and note that showing the landing page and then the API response in the same
-meeting exposes the gap directly.
+**An earlier draft of this document concluded "either ship it or stop promising it". That
+was wrong, and the correction makes this much cheaper.** Reasons are collected by default
+(`rationaleMode` defaults to `required`), stored encrypted, decrypted for the invited lane
+because the workspace owns them, served over a session route, and **rendered on screen per
+reviewer with disagreement** at
+[`EvaluationDashboardPanel.tsx:546`](../packages/nextjs/components/tokenless/agents/EvaluationDashboardPanel.tsx).
+
+So the landing-page promise is honoured in the product UI and broken only in the API. The
+projection layer already knows how to carry an aggregate summary. This is a one-file change,
+not a feature build. See B2.
 
 ### 2.4 The setup chain before a first review is long and unguided
 
@@ -238,7 +273,16 @@ all** — no explanatory text — where paid work would be
 ([`HumanProfileContent.tsx:11-40`](../packages/nextjs/components/tokenless/human/HumanProfileContent.tsx)).
 Landing-page social proof is filtered out rather than shown as zero, so there is no
 traction claim at all. Selecting a paid or network review path throws "Dieser Prüfpfad ist
-noch nicht verfügbar."
+noch nicht verfügbar." — **at save time, after the prospect has watched you fill in the
+whole form.**
+
+**One correction to an earlier draft of this document.** It claimed Free and Early Access
+are "functionally identical" because the decision meter never counts. That is wrong. Active
+agent limits are enforced at three production call sites and private-group limits at one,
+so 1-vs-3 agents and 1-vs-5 groups are real. **Only the decision allowance is unenforced** —
+and the precise remaining problem is sharper than "no reason to upgrade": a paying workspace
+sees **"0 of 250" forever** in the billing UI, which is a live credibility defect rather
+than a dormant one.
 
 ### 2.6 Chain inspection leads somewhere you do not want to go
 
@@ -409,36 +453,172 @@ Verify each before saying it, but the code is real:
 - **A stated, dated security-questionnaire posture** that answers against deployed
   configuration rather than substituting a trust claim.
 
-## What to add to make the product more attractive
+## The build list — what to implement before outreach
 
-Ordered by commercial return, not by size.
+Ranked by commercial return **per hour of work**. Absolute impact differs and is noted.
+Every item was checked against the code; several existing estimates moved once the code was
+read properly.
 
-1. **A browser path to request a review** (2.1). Without it there is no self-serve
-   evaluation and every demo is a screen-share of your IDE. Roughly 1–2 weeks.
-2. **Return the reasons** (2.3). You already promise them. Enterprise buyers of auditable
-   oversight consider this the product.
-3. **A standalone evidence verifier** — two files, no repo checkout.
-   `scripts/assurance-evidence-core.mjs` is 547 lines with exactly one internal import
-   (`@rateloop/node-utils/jcs`) plus Node built-ins. Today verification requires cloning a
-   private repo and running yarn; no interne Revision or Wirtschaftsprüfer will do that.
-   **2–3 days for outsized credibility.**
-4. **EUR pricing and SEPA** (Tier 3). Blocks recurring revenue entirely.
-5. **An operator route to verify a business customer** (Tier 3, gate 3). Two to four days
-   of code plus a documented KYB procedure, and it unblocks every payment path at once.
-6. **A PDF export of the evidence record.** Exports are JSON/CSV only. German compliance
-   functions want a signed PDF for the Prüfer.
-7. **An in-app audit-log viewer.** Today the only surface is a JSON download link.
-8. **Teams and Slack notification.** Zero hits repo-wide; only generic HMAC webhooks. Teams
-   is near-mandatory for German enterprise.
-9. **Localise transactional email** — at minimum the reviewer invitation, which is the
-   first thing a German reviewer ever sees from you. All email is currently hardcoded
-   English with `<html lang="en">`.
-10. **A status page and a support channel with a stated response time.** Zero hits for SLA,
-    uptime or 99.9% anywhere in the repo.
-11. **Enforce plan limits** — the decision meter's only caller sits on an unreachable path,
-    so Free and Early Access are functionally identical and nobody has a reason to upgrade.
-12. **Guard against silent translation regressions.** `translateCatalogString` returns
-    English when a phrase is missing. Coverage is 100% today and nothing keeps it there.
+### B1. Make `/rate` a product page — 1–2 hours
+
+Branch in [`rate/page.tsx:19-20`](../packages/nextjs/app/[locale]/(app)/rate/page.tsx): if
+`assignment`, `terms` or `invite` is present, keep the reviewer forward; otherwise redirect
+to `/`. `canonicalReviewSearchParams` already tells you whether any reviewer parameter
+survived, so the conditional is one line.
+
+Safer than it looks: **nothing in the product links to `/rate` any more.** Reviewer
+invitations build `/human/review` directly. It is a pure legacy alias.
+
+*Unlocks:* the URL in every email and deck footer stops landing on an empty gig inbox.
+*Test risk:* low — the hosted smoke test only asserts a `<main>` renders and status < 500.
+
+### B2. Return the reasons in the agent envelope — 1 day
+
+Widen the select in `terminalEnvelopeForDelivery` to include the rationale columns, reuse
+`decryptWorkspaceOwnedRationale` (already proven in the evidence projection), and gate
+`summaryAllowed` on the frozen profile's `rationaleMode !== "off"`.
+
+**80% built.** `humanReviewResultProjection.ts` already trims and emits
+`{ mode: "aggregate_summary", summary }` when `summaryAllowed` is true, and the
+`summaryAllowed: true` path is already exercised in its tests.
+
+Decide one thing first, in about thirty minutes: the envelope is deliberately an
+**aggregate** surface that strips per-reviewer identity. Emit a synthesised aggregate, never
+a per-reviewer list, and keep small-cell suppression consistent with the export.
+
+*Unlocks:* you can show the landing-page claim and the API response in the same meeting.
+*Test risk:* medium, bounded — the withholding test only asserts behaviour when
+`summaryAllowed` is false; one integration test pins the literal null and needs updating.
+
+### B3. Empty states that explain instead of showing nothing — ½–1 day
+
+Four demo surfaces render nothing at all. The worst is
+[`HumanProfileContent.tsx:20,38`](../packages/nextjs/components/tokenless/human/HumanProfileContent.tsx),
+where five sections vanish with no text and their anchor links dead-end.
+
+**The copy is already written and unused:** `HUMAN_REVIEW_LANE_UNAVAILABLE_MESSAGES` in
+[`reviewCapabilities.ts:183-191`](../packages/nextjs/lib/tokenless/reviewCapabilities.ts) is
+ready-made explanatory text for exactly these lanes. Render it in the `: null` branch.
+
+While there: the server emits "in this **window**" while the UI says "in this **period**".
+A German compliance reader will notice the disagreement.
+
+*Test risk:* medium — several assertions match literal source text.
+
+### B4. A single-file offline verifier — ½ day
+
+**Correction to an earlier estimate.** This was listed at 2–3 days on the belief that no
+browser verifier existed. **One does, and it is public, unauthenticated, and verifies
+without uploading the packet:** `/docs/evidence/verify`. It is the single most credible
+thing you can put in front of a German compliance buyer today, and the earlier draft of this
+document did not know it was there.
+
+What remains is genuinely half a day: `assurance-evidence-core.mjs` has **one** import and
+uses WebCrypto rather than `node:crypto`, and the only function needed from it needs no
+hashing — so inline it, add a build check that the copy matches, and publish it as a
+download. Then fix `evidence.md` and the evidence page, which currently tell the reader to
+clone the monorepo and run `yarn workspace`.
+
+*Unlocks:* an interne Revision or Wirtschaftsprüfer will not verify a vendor's signature by
+visiting the vendor's own website. They want a file.
+
+### B5. Make the demo incapable of returning "inconclusive" — 1–2 days
+
+Resolve on a **decisive majority** rather than unanimous participation.
+[`directPrivateReviewEvidence.ts:212`](../packages/nextjs/lib/tokenless/directPrivateReviewEvidence.ts)
+already computes the right threshold — `Math.floor(panelSize / 2) + 1`. Reuse it, and pair it
+with a frozen tie-break policy on the request profile defaulting to today's behaviour so
+nothing existing changes.
+
+Do **not** take the alternative route of lowering `MINIMUM_REVIEW_PANEL_SIZE` to 1: it
+ripples into cohort bounds, quote minimums and the aggregation floor, and "one reviewer" is
+not a panel — a German buyer will say so.
+
+*Independent value:* waiting for a straggler after the majority has decided is a latency bug,
+not a safety feature.
+*Test risk:* **high** — this is the most test-dense area in the codebase, and changing
+outcome derivation changes result-commitment inputs.
+
+### B6. Operator business verification as a CLI script — ½ day
+
+Not a route and not a UI. `recordOperatorBusinessVerification` already validates everything;
+`migrate-hosted-database.mjs` is the pattern for a script that connects to the hosted
+database behind an identity guard. A script also **preserves the documented design intent** —
+the service deliberately has no customer-facing route — and needs no admin auth surface,
+which does not exist in this repo.
+
+*Honest caveat:* on its own it unblocks nothing. Stripe credentials, the subscriptions flag
+and the USD/EUR problem all remain. High return per hour, zero return in 60 days unless the
+others land.
+
+### B7. Localise transactional email — 1 day
+
+**The hard part is done:** `buildRateLoopEmailHtml` already takes every user-visible string
+as a parameter; there is no embedded copy except `lang="en"` and the wordmark. Add a locale,
+thread it to `lang`, move roughly eight strings per sender into the catalogues.
+
+*Unlocks:* the reviewer invitation is the first thing a German reviewer ever sees from you,
+and it is the artefact a prospect forwards to their own experts. English there undercuts the
+complete-German-UI lead in the same motion.
+
+### B8. A browser path to request a review — 4–8 days
+
+The largest **absolute** return here, ranked eighth purely on cost.
+
+**The cheap design:** do not build a parallel creation path. Resolve the workspace's existing
+active agent integration, construct the same principal object the MCP tool builds, then call
+`evaluateAdaptiveReviewRequirement` and `routeHumanReviewRequest` — the identical downstream
+path. Everything after that is reused untouched.
+
+Two bounded obstacles: the session principal carries no workspace ID (resolve from
+membership, as every other workspace route does), and recording provenance honestly needs a
+third `caller_credential_kind`, which means a **hand-authored** migration plus a journal
+entry because `db:generate` and `db:push` are deliberately disabled. Budget half a day for
+the migration alone.
+
+### B9–B12, in order
+
+- **Enforce the decision meter on the live lane** (1–2 days). Reserve at the delivery insert,
+  consume at terminal state, passing `requiresPaidPanels: false`. **Note the correction in
+  §2.5 — agent and group limits are already enforced**, so this makes the headline number
+  real rather than making the plans differ at all.
+- **PDF export of the evidence record** (2–3 days). The only item here that adds a
+  dependency — there is no PDF tooling anywhere in the repo. Generate server-side from the
+  existing case view, not HTML-to-PDF via a headless browser.
+- **A status page** (½ day static). Do not publish an availability figure you cannot
+  evidence — and note the German legal reason: with no *Beschaffenheitsvereinbarung* you owe
+  100% availability, so a conservative stated figure is protective, not weak.
+- **A translation-regression guard** (2 hours). Leaf counts are identical across `en` and
+  `de` today; a recursive key-set equality assertion locks in your strongest asset. Note the
+  failure mode is worse than assumed: `AgentsLocaleProvider` renders the **raw key string**
+  on a miss, not English.
+
+## Demo hardening — the smallest set
+
+About three developer-days. Optimised strictly for "nothing embarrassing happens in the
+meeting", which is a different and smaller list than the one above.
+
+1. **B5, majority resolution only** (1 day). Without it, the most compelling thing you can
+   demo — two named experts disagreeing — prints `inconclusive`.
+2. **Project evidence immediately on completion** (2–4 hours). **This is the demo risk the
+   first draft of this document missed entirely.** Evidence projection is only *enqueued* at
+   completion; the projection itself runs on the `*/5 * * * *` cron. So the last reviewer
+   answers, you click to the evidence tab, and for up to five minutes there is nothing there
+   — including the rationales. Attempt it inline, keeping the queue as the retry path.
+3. **Stop the paid-lane error firing at save time** (2 hours). The editor throws "Dieser
+   Prüfpfad ist noch nicht verfügbar" **after** the prospect watched you fill in the whole
+   form. The setup flow already does this correctly — the option is disabled with the reason
+   shown inline. Port that behaviour.
+4. **Give the reviewer profile something to say** (2 hours). B3's first item.
+5. **Fix `/rate`** (1 hour). B1 — because the prospect's first *solo* visit after the meeting
+   is the one that matters.
+
+**Rehearse from `e2e/hosted/core-journey.spec.ts`.** It is a complete, green, three-account
+two-reviewer private journey: connect, verify, invite, configure panel 2, request review,
+both reviewers respond, fetch result. That file is your demo script.
+
+Two things not to do: do not open the pricing page until Tier 0.5 is done, and do not invite
+chain questions.
 
 ## What to verify with additional research before pitching
 
@@ -455,9 +635,15 @@ Ordered by commercial return, not by size.
 4. **Draft the Art. 25(4) compliance-cooperation annex before a buyer drafts it for you.**
    Buyers are lifting clauses from the Commission's MCC-AI.
 5. **Confirm "Pseudonyme pro Run"** or drop it (1.2).
-6. **Settle the pricing hypothesis.** The commercial research document and the German
-   Preisempfehlung, written the same day, disagree on whether to keep the public $29
-   anchor. One owner, one document.
+6. **Verify two German sales levers before using them.** A BAFA consulting subsidy is
+   reported to cover 50–80% on a basis of up to €3,500, which would place a €2,500 pilot
+   fully inside a subsidised band — a strong Mittelstand lever if true, and unverified.
+   Separately, no reliable source exists for the department-head approval threshold that the
+   €2,500 price is often justified by; justify it from your own discovery instead.
+
+The pricing hypothesis is no longer open — see 0.5. The Preisempfehlung was right and the
+commercial research document has been removed, so `docs/sales/` and the business plan are
+now the single owners of price.
 
 ## Two corrections to make in code, not in a document
 
