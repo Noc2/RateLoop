@@ -1169,9 +1169,9 @@ or self-asserted digests are never evidence.
   short-lived exact-opportunity test-asset network exercise. Exercise deactivation,
   country-set denial, keeper outage, retry, reorg, beacon failure, expiry and old-key
   rejection. This is not a real-money or mainnet release.
-- The v4 registry retains the stale Base Sepolia test bundle beginning at block
-  `44915850` as evidence. A fresh complete Base Sepolia deployment and synchronized Vercel/Railway bundle remain hard prerequisites;
-  every service must fail closed on an older or mixed deployment identity.
+- The v4 registry records the current released Base Sepolia test bundle beginning at block
+  `45115708`. A synchronized Vercel/Railway bundle remains a hard prerequisite; every service must fail closed on an
+  older or mixed deployment identity.
 - Neither task enables the closed network automatically. Activation still requires the
   legal/privacy/payment gates in §7 and explicit evidence of demand beyond the named
   panel.

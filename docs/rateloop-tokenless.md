@@ -210,10 +210,9 @@ arithmetic cannot underflow.
 The credential issuer **signs nothing** — it verifies against a digest the panel
 builds, and it holds no token reference at all.
 
-**The disposable Base Sepolia artifact beginning at block `44915850` is stale.** Its
-former v4 deployment key remains in the generated registry as evidence, marked
-`fresh_deployment_required`. A fresh complete Base Sepolia deployment must update the
-web, keeper, and indexer together before hosted chain use.
+**The current disposable Base Sepolia artifact was released at block `45115708`.** Its
+complete v4 deployment key is the only supported identity for the web, keeper, and
+indexer; hosted components fail closed on an older or mixed bundle.
 The currency remains an unrestricted mock token; this is not a real-value deployment.
 
 ### Evidence packets
@@ -244,8 +243,8 @@ Tokenless and main are separate deployment lines. The tokenless readiness path p
 network-off hosted application only when the ordinary network capability remains disabled;
 it does not waive the active address-bundle invariant. Every hosted release requires one
 complete deployment key shared by the app, Ponder and keeper. The chain registry publishes
-the last v4 test bundle as stale evidence; every hosted component must fail closed until a
-fresh complete Base Sepolia deployment is installed, and on any older or mixed bundle.
+the released v4 test bundle beginning at block `45115708`; every hosted component must fail
+closed on an older or mixed bundle.
 
 The hosted release capability map is a frozen all-false set, and nothing in the
 repository ever passes a different one, so a `main` hosted release is currently
@@ -395,7 +394,7 @@ Recorded so the same drift is not reintroduced.
 | Monitoring floor is 10%                        | Shared runtime, UI, projection, and alert invariant                                                        |
 | Adaptive reports safety gates unavailable      | That branch is unreachable; gates are available                                                            |
 | Opportunity keyed on integration id            | Keyed on agent id                                                                                          |
-| Deployment is `tokenless-v3` at an older block | The last `tokenless-v4` bundle from block `44915850` is stale evidence; a fresh complete Base Sepolia deployment is required |
+| Deployment is `tokenless-v3` at an older block | The released `tokenless-v4` bundle begins at block `45115708`; every hosted consumer must match its complete key |
 | README advertises paid mechanisms plainly      | All of them are gated off                                                                                  |
 | Adaptive coverage pinned at 100%               | The ladder shipped                                                                                         |
 | An agents `handoff` CLI command exists         | It does not; the real path is a media upload followed by an MCP tool call                                  |

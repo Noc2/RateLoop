@@ -844,7 +844,7 @@ test("source-only ABI generation cannot emit or replace deployment metadata", ()
   }
 });
 
-test("the checked-in stale v4 artifact requires a fresh complete deployment", () => {
+test("the checked-in released v4 artifact generates the active source registry", () => {
   const artifact = JSON.parse(
     readFileSync(
       new URL("../deployments/tokenless-v4/84532.json", import.meta.url),
@@ -852,13 +852,11 @@ test("the checked-in stale v4 artifact requires a fresh complete deployment", ()
     ),
   );
 
-  assert.throws(
-    () =>
-      buildTokenlessGeneratedSources(artifact, {
-        abiLoader: () => [],
-      }),
-    /stale and requires a fresh complete deployment/u,
-  );
+  const sources = buildTokenlessGeneratedSources(artifact, {
+    abiLoader: () => [],
+  });
+  assert.match(sources.get("deployedContracts.ts"), /"status": "released"/u);
+  assert.match(sources.get("deployedContracts.ts"), new RegExp(String(artifact.deploymentBlockNumber), "u"));
 });
 
 test("full artifact generation rejects historical v1 deployment metadata", () => {

@@ -98,11 +98,11 @@ function claimSources(file: string) {
   return file.endsWith(".json") ? jsonMessageValues(JSON.parse(source) as unknown) : [source];
 }
 
-test("the stale deployment registry and every deployment claim require replacement", () => {
+test("the released deployment registry and every deployment claim share one identity", () => {
   const deployment = tokenlessDeployedContracts[84532];
   assert.deepEqual(tokenlessDeploymentStatus, {
     schemaVersion: "rateloop-tokenless-deployment-v4",
-    status: "fresh_deployment_required",
+    status: "released",
     chainId: 84532,
     deploymentKey: deployment.deploymentKey,
   });
@@ -111,7 +111,7 @@ test("the stale deployment registry and every deployment claim require replaceme
   for (const file of TOKENLESS_DEPLOYMENT_CLAIM_FILES) {
     const source = readFileSync(file, "utf8");
     assert.ok(source.includes(String(deployment.deploymentBlockNumber)), file);
-    assert.match(source, /fresh complete Base Sepolia deployment|fresh_deployment_required/iu, file);
+    assert.match(source, /released|current Base Sepolia|current v4/iu, file);
     assert.doesNotMatch(source, /44390557|0x377f8631030a06e997cee78bdf649106a90bba46/iu, file);
   }
 

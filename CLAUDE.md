@@ -40,9 +40,9 @@ On the `tokenless` branch, read
 [`docs/tokenless-immutable-implementation-plan-2026-07.md`](docs/tokenless-immutable-implementation-plan-2026-07.md)
 before changing contracts, deployment artifacts, Ponder, Keeper, the app, SDK,
 agents, MCP, E2E, or public docs. Base mainnet contracts are legacy and are not
-final. `packages/foundry/deployments/tokenless-v4/84532.json` records the stale
-deployment at block `44915850`; a fresh complete Base Sepolia deployment is
-required before live configuration. `tokenless-v1` through `tokenless-v3` are
+final. `packages/foundry/deployments/tokenless-v4/84532.json` records the current
+released test deployment at block `45115708`; every live component must match its
+complete deployment key. `tokenless-v1` through `tokenless-v3` are
 historical evidence only. Prefer removal of
 obsolete consumers over any
 compatibility work. Hosted tokenless work must stay in the isolated

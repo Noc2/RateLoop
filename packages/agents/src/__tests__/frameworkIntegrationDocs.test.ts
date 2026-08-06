@@ -30,9 +30,9 @@ describe("framework integration documentation", () => {
     ]);
     expect(claude).toContain("optional thirdweb-created app wallet");
     expect(claude).not.toContain("do not restore thirdweb");
-    expect(design).toContain("fresh complete Base Sepolia deployment is required");
-    expect(design).toContain("44915850");
-    expect(design).toContain("historical artifacts are evidence only");
+    expect(design).toContain("current released disposable test bundle");
+    expect(design).toContain("45115708");
+    expect(design).toContain("Historical artifacts are evidence only");
     expect(design).toContain("Wilson lower confidence bound");
     expect(parity).toContain("_journal.json");
     expect(parity).toContain("last entry in `_journal.json` is always the authoritative head");

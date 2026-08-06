@@ -10,10 +10,9 @@ The package exports exactly five ABIs:
 - `TokenlessFeedbackBonusAbi`
 - `TokenlessTestUSDCAbi`
 
-`tokenlessDeployedContracts` retains the stale v4 Base Sepolia test deployment beginning at block `44915850` as
-evidence, while `tokenlessDeploymentStatus` marks it `fresh_deployment_required`. It must not configure an app or
-service until a fresh complete Base Sepolia deployment replaces it. Older chain-`84532` metadata remains available
-only through `tokenlessHistoricalDeployments`.
+`tokenlessDeployedContracts` exposes the current released v4 Base Sepolia test deployment beginning at block
+`45115708`, and `tokenlessDeploymentStatus` marks it `released`. Apps and services must match its complete deployment
+key. Older chain-`84532` metadata remains available only through `tokenlessHistoricalDeployments`.
 
 ```ts
 import {
@@ -23,7 +22,7 @@ import {
   tokenlessHistoricalDeployments,
 } from "@rateloop/contracts";
 
-console.log(tokenlessDeploymentSchema, tokenlessDeployedContracts[84532]); // stale v4 deployment evidence
+console.log(tokenlessDeploymentSchema, tokenlessDeployedContracts[84532]); // released v4 test deployment
 console.log(tokenlessHistoricalDeployments[84532].deploymentStatus); // historical
 ```
 
