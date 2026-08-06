@@ -560,6 +560,27 @@ async function expireOutstandingDeliveryAssignments(client: PoolClient, delivery
   }
 }
 
+/**
+ * Decides whether a private review panel has reached a result.
+ *
+ * A panel resolves when every seat has answered, or earlier when one side already
+ * holds a majority that the outstanding seats cannot overturn. Resolving early is
+ * not a shortcut: the remaining answers cannot change the winner, so waiting for
+ * them only adds latency before the requester learns a decided outcome.
+ *
+ * At a panel of two the majority threshold is two, so a one-all split stays
+ * unresolved and becomes `inconclusive`. That is the honest result for two experts
+ * who disagree, and it is why a demo that wants a decisive verdict should use a
+ * panel of three.
+ */
+export function directPrivateReviewPanelResolution(input: { panelSize: number; positive: number; negative: number }) {
+  const responseCount = input.positive + input.negative;
+  const majorityThreshold = directPrivateReviewMinimumAggregationSize(input.panelSize);
+  const panelComplete = responseCount === input.panelSize;
+  const decisiveMajority = input.positive >= majorityThreshold || input.negative >= majorityThreshold;
+  return { panelComplete, decisiveMajority, resolved: panelComplete || decisiveMajority };
+}
+
 const AGGREGATE_RATIONALE_MAX_LENGTH = 2_000;
 const AGGREGATE_RATIONALE_SEPARATOR = " — ";
 
@@ -671,9 +692,15 @@ async function terminalEnvelopeForDelivery(
   const panelSize = integer(row, "panel_size", 1);
   const paid = text(row, "compensation_mode") === "usdc";
   const responseCount = responses.rowCount ?? responses.rows.length;
-  const panelComplete = responseCount === panelSize;
+  const positive = responses.rows.filter(value => text(value as Row, "choice") === "positive").length;
+  const negative = responseCount - positive;
+  const { panelComplete, resolved: panelResolved } = directPrivateReviewPanelResolution({
+    panelSize,
+    positive,
+    negative,
+  });
   const responseDeadline = date(row, "response_deadline");
-  if (trigger === "panel_complete" && !panelComplete) return null;
+  if (trigger === "panel_complete" && !panelResolved) return null;
   if (trigger === "response_deadline_elapsed" && responseDeadline > now) return null;
   const rationaleMode = text(row, "rationale_mode");
   // Decryption must never block finalisation. A missing or rotated vault key is an
@@ -698,10 +725,8 @@ async function terminalEnvelopeForDelivery(
     }
   }
 
-  const positive = responses.rows.filter(value => text(value as Row, "choice") === "positive").length;
-  const negative = responseCount - positive;
   const currentLifecycleState = text(row, "lifecycle_state");
-  const expiredWithoutQuorum = trigger === "response_deadline_elapsed" && !panelComplete;
+  const expiredWithoutQuorum = trigger === "response_deadline_elapsed" && !panelResolved;
   let outcome: HumanReviewResultEnvelope["outcome"] = expiredWithoutQuorum
     ? "inconclusive"
     : positive === negative
@@ -732,7 +757,7 @@ async function terminalEnvelopeForDelivery(
         responseCount === 0 ? "no_responses" : "private_panel_under_quorum",
         ...(responseCount === 0 ? [] : ["responses_recorded"]),
       ].sort()
-    : ["private_panel_complete", "responses_recorded"].sort();
+    : [panelComplete ? "private_panel_complete" : "private_panel_majority", "responses_recorded"].sort();
   let lifecycleRevision: number;
   let stateEnteredAt: string;
   let finalizedAt: string;

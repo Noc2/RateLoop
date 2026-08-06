@@ -55,7 +55,7 @@ export const assuranceComplianceMap = Object.freeze({
         "packages/nextjs/lib/tokenless/agentExecutionProvenance.ts",
       ],
     },
-      ],
+  ],
   frameworks: [
     {
       id: "iso-iec-42001",
