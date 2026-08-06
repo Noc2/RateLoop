@@ -4,8 +4,9 @@ Written 29 July 2026 against `d49862fa3`; re-verified 3 August 2026 against `8e9
 Companion to [business-plan.md](business-plan.md). This is the "make it more interesting"
 list: work that would change what a customer can do or decide to pay for.
 
-Defects and honesty fixes live in [remediation-plan.md](remediation-plan.md). This list
-assumes those are handled separately.
+Defects and honesty fixes were carried in a separate remediation plan whose items have
+all shipped on `tokenless`; the plan was removed once its last item landed. This list
+assumes those are handled.
 
 **Ordering principle:** the price levers first — the work that changes what a buyer is
 willing to pay, ranked in §6a of [implementation-plan.md](implementation-plan.md). Then
@@ -322,9 +323,8 @@ live routes — what is missing is a human-facing destination, not the transport
 
 No admin UI, no error tracking, no on-call path, no row-level security, roughly 200
 unbounded ordered queries, and single replicas on the keeper and indexer. These are
-engineering risks rather than product opportunities and live in
-[remediation-plan.md](remediation-plan.md); they are named here only so the build list
-is not read as the whole picture.
+engineering risks rather than product opportunities; they are named here only so the
+build list is not read as the whole picture.
 
 ## E. Deliberately not doing
 
@@ -368,5 +368,5 @@ blocks other people's work: without an operator entry point there is no artefact
 audit partner to accept, so the external validation gate cannot even start. Everything
 else in this table can proceed in parallel; that one cannot be started late.
 
-Engineering defects and honesty fixes are in [remediation-plan.md](remediation-plan.md)
-and deliberately not repeated here.
+Engineering defects and honesty fixes were handled under the completed remediation plan
+and are deliberately not repeated here.
