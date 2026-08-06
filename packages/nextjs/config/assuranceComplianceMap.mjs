@@ -55,15 +55,7 @@ export const assuranceComplianceMap = Object.freeze({
         "packages/nextjs/lib/tokenless/agentExecutionProvenance.ts",
       ],
     },
-    {
-      id: "s3-object-lock-delivery-receipt",
-      title: "S3 Object Lock delivery receipt",
-      schemaVersion: "rateloop.assurance-worm-provider-receipt.v1",
-      description:
-        "A provider receipt for an integrity-checked export delivered to a customer-controlled S3 Object Lock destination with the configured retention mode and deadline.",
-      sourceLocations: ["packages/nextjs/lib/tokenless/assuranceWormExports.ts"],
-    },
-  ],
+      ],
   frameworks: [
     {
       id: "iso-iec-42001",
@@ -99,7 +91,8 @@ export const assuranceComplianceMap = Object.freeze({
       id: "eu-ai-act",
       title: "Regulation (EU) 2024/1689 (EU AI Act)",
       namespace: "http://data.europa.eu/eli/reg/2024/1689/oj#",
-      citation: "Official Journal text of Regulation (EU) 2024/1689 on harmonised rules on artificial intelligence.",
+      citation:
+        "Official Journal text of Regulation (EU) 2024/1689 on harmonised rules on artificial intelligence, as amended by Regulation (EU) 2026/1744 (Digital Omnibus on AI, OJ L, 2026/1744, 24 July 2026, in force 27 July 2026). The amendment leaves the text of the mapped provisions unchanged and postpones Chapter III, Section 3 to 2 December 2027 for Annex III high-risk systems and to 2 August 2028 for Annex I high-risk systems.",
       sources: [
         {
           href: "https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng",
@@ -109,17 +102,21 @@ export const assuranceComplianceMap = Object.freeze({
     },
     {
       id: "finra",
-      title: "FINRA supervision guidance and Rule 3110",
+      title: "FINRA supervision rules and generative-AI guidance",
       namespace: "https://www.finra.org/rules-guidance/",
       citation:
-        "FINRA Regulatory Notice 24-09 and FINRA Rule 3110 official sources. The mapping does not constitute FINRA approval or legal advice.",
+        "FINRA Rule 3110 with Supplementary Material .07, Regulatory Notice 24-09 (27 June 2024), and the GenAI section of the 2026 FINRA Annual Regulatory Oversight Report (9 December 2025). Notice 24-09 states that it creates no new requirements, and the report presents practices a firm may want to consider. The mapping does not constitute FINRA approval or legal advice.",
       sources: [
+        {
+          href: "https://www.finra.org/rules-guidance/rulebooks/finra-rules/3110",
+          mediaType: "text/html",
+        },
         {
           href: "https://www.finra.org/rules-guidance/notices/24-09",
           mediaType: "text/html",
         },
         {
-          href: "https://www.finra.org/rules-guidance/rulebooks/finra-rules/3110",
+          href: "https://www.finra.org/rules-guidance/guidance/reports/2026-finra-annual-regulatory-oversight-report/gen-ai",
           mediaType: "text/html",
         },
       ],
@@ -127,18 +124,18 @@ export const assuranceComplianceMap = Object.freeze({
   ],
   mappings: [
     {
-      id: "iso-iec-42001-a-6",
+      id: "iso-iec-42001-a-6-2-6",
       frameworkId: "iso-iec-42001",
-      reference: "A.6",
+      reference: "A.6.2.6",
       evidencePurpose:
-        "documenting review-policy operation, frozen lifecycle context, sampled human review, and resulting evidence across an AI-system lifecycle",
+        "operation-and-monitoring records for a deployed AI system, including the frozen review policy in force, sampling decisions, human results, coverage rollups, and stage transitions for a bounded period",
       evidenceArtifactIds: [
         "signed-assurance-evidence-packet",
         "adaptive-coverage-export",
         "host-reported-execution-evidence",
       ],
       nonClaim:
-        "This mapping does not demonstrate that a customer has implemented the A.6 controls or that RateLoop is ISO/IEC 42001 certified.",
+        "This mapping does not demonstrate that a customer has implemented the A.6.2.6 control or that RateLoop is ISO/IEC 42001 certified.",
     },
     {
       id: "iso-iec-42001-a-6-2-8",
@@ -165,21 +162,41 @@ export const assuranceComplianceMap = Object.freeze({
         "This mapping does not assign customer responsibility, competence, training, authority, or approval obligations to RateLoop.",
     },
     {
-      id: "nist-ai-rmf-measure",
+      id: "nist-ai-rmf-measure-2-8",
       frameworkId: "nist-ai-rmf",
-      reference: "MEASURE",
+      reference: "MEASURE 2.8",
       evidencePurpose:
-        "measurement of review sampling, human agreement and disagreement, latency, escalation triggers, and policy adherence over time",
-      evidenceArtifactIds: ["adaptive-coverage-export", "signed-assurance-evidence-packet"],
+        "documented examination of transparency and accountability limits, including privacy-safe aggregation, the stated limitations of each packet, and execution metadata recorded as host-reported and not independently verified",
+      evidenceArtifactIds: ["signed-assurance-evidence-packet", "host-reported-execution-evidence"],
       nonClaim:
         "This mapping is an evidence cross-reference and does not represent a NIST assessment, endorsement, or determination of risk acceptability.",
     },
     {
-      id: "nist-ai-rmf-manage",
+      id: "nist-ai-rmf-measure-4-2",
       frameworkId: "nist-ai-rmf",
-      reference: "MANAGE",
+      reference: "MEASURE 4.2",
       evidencePurpose:
-        "documenting configured escalation, human-review gate outcomes, exceptions, and integrity-checkable follow-up records",
+        "documented measurement results informed by invited domain-expert reviewers, covering sampling, human agreement and disagreement, latency, and design-weighted population estimates or typed coverage gaps",
+      evidenceArtifactIds: ["adaptive-coverage-export", "signed-assurance-evidence-packet"],
+      nonClaim:
+        "This mapping is an evidence cross-reference and does not represent a NIST assessment or endorsement, and an invitation to review is not proof of a reviewer's expertise or independence.",
+    },
+    {
+      id: "nist-ai-rmf-manage-2-4",
+      frameworkId: "nist-ai-rmf",
+      reference: "MANAGE 2.4",
+      evidencePurpose:
+        "records binding a configured review requirement to the stop-gate state and the exact release decision for a single reviewed output",
+      evidenceArtifactIds: ["human-review-gate-evidence", "workspace-audit-export"],
+      nonClaim:
+        "RateLoop records a hold-or-release decision for a single reviewed output and does not supersede, disengage, or deactivate the customer's AI system; current integrations are advisory and do not physically withhold an output.",
+    },
+    {
+      id: "nist-ai-rmf-manage-4-1",
+      frameworkId: "nist-ai-rmf",
+      reference: "MANAGE 4.1",
+      evidencePurpose:
+        "post-deployment monitoring records covering human override of an AI result, re-baselining to full coverage after a model, prompt, tool, or workflow change, and integrity-checkable follow-up history",
       evidenceArtifactIds: ["human-review-gate-evidence", "workspace-audit-export", "signed-assurance-evidence-packet"],
       nonClaim:
         "This mapping does not make or replace the customer's risk treatment, acceptance, response, or governance decisions.",
@@ -209,14 +226,14 @@ export const assuranceComplianceMap = Object.freeze({
       frameworkId: "finra",
       reference: "Regulatory Notice 24-09",
       evidencePurpose:
-        "records of human review, configured escalation, model metadata reported by the host, and review outcomes for a member firm's supervision analysis",
+        "technology-governance records for a supervisory system that uses generative AI, including the review policy in force, host-reported model and version metadata, and integrity-checkable review history",
       evidenceArtifactIds: [
         "signed-assurance-evidence-packet",
-        "adaptive-coverage-export",
         "host-reported-execution-evidence",
+        "workspace-audit-export",
       ],
       nonClaim:
-        "This mapping does not determine which FINRA rules apply, approve a member firm's supervisory system, or constitute legal advice.",
+        "Regulatory Notice 24-09 states that it creates no new requirements and sets no human-review obligation; this mapping does not determine which FINRA rules apply, approve a member firm's supervisory system, or constitute legal advice.",
     },
     {
       id: "finra-rule-3110",
@@ -227,6 +244,30 @@ export const assuranceComplianceMap = Object.freeze({
       evidenceArtifactIds: ["adaptive-coverage-export", "human-review-gate-evidence", "workspace-audit-export"],
       nonClaim:
         "RateLoop does not establish, maintain, or certify the member firm's supervisory system or written supervisory procedures.",
+    },
+    {
+      id: "finra-rule-3110-07",
+      frameworkId: "finra",
+      reference: "Rule 3110.07",
+      evidencePurpose:
+        "review records that chronicle the reviewing account, the item reviewed, the date of review, and the action taken, in a form a member firm can retain alongside its supervisory records",
+      evidenceArtifactIds: ["workspace-audit-export", "human-review-gate-evidence", "signed-assurance-evidence-packet"],
+      nonClaim:
+        "Rule 3110.07 governs evidence of review of internal communications and correspondence rather than AI output, and this mapping does not establish, maintain, or certify the member firm's supervisory system or written supervisory procedures.",
+    },
+    {
+      id: "finra-oversight-report-2026-genai",
+      frameworkId: "finra",
+      reference: "2026 Annual Regulatory Oversight Report, GenAI: Continuing and Emerging Trends",
+      evidencePurpose:
+        "records of human-in-the-loop review of model output, the formal review and approval process in force, and tracking of which model version was used and when",
+      evidenceArtifactIds: [
+        "signed-assurance-evidence-packet",
+        "adaptive-coverage-export",
+        "host-reported-execution-evidence",
+      ],
+      nonClaim:
+        "The report presents these as practices a firm may want to consider rather than as FINRA requirements, and this mapping does not establish that a member firm has adopted them or that its supervisory system is adequate.",
     },
   ],
 });

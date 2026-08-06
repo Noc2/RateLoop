@@ -22,7 +22,7 @@
         {
           "name": "mapping-hash",
           "ns": "https://rateloop.ai/ns/oscal",
-          "value": "sha256:049b78c2105535366b4ebfe60f5f79b40405e006b20d40746ea1267dce7f1dca"
+          "value": "sha256:508fd204a83f99976e055cf145cbe44153ba2c678cb2ca9f7cebfd0598cc2c90"
         },
         {
           "name": "claim-boundary",
@@ -56,7 +56,7 @@
           {
             "name": "mapping-hash",
             "ns": "https://rateloop.ai/ns/oscal",
-            "value": "sha256:049b78c2105535366b4ebfe60f5f79b40405e006b20d40746ea1267dce7f1dca"
+            "value": "sha256:508fd204a83f99976e055cf145cbe44153ba2c678cb2ca9f7cebfd0598cc2c90"
           },
           {
             "name": "claim-boundary",
@@ -88,14 +88,14 @@
             ],
             "implemented-requirements": [
               {
-                "uuid": "c54c9751-f36e-5cb8-90be-ea7f5e37afb0",
-                "control-id": "iso-iec-42001-a-6",
-                "description": "The listed RateLoop artifacts support evidence for documenting review-policy operation, frozen lifecycle context, sampled human review, and resulting evidence across an AI-system lifecycle. This mapping does not demonstrate that a customer has implemented the A.6 controls or that RateLoop is ISO/IEC 42001 certified.",
+                "uuid": "e5aaccba-490d-57c5-9ae6-79b699ba931d",
+                "control-id": "iso-iec-42001-a-6-2-6",
+                "description": "The listed RateLoop artifacts support evidence for operation-and-monitoring records for a deployed AI system, including the frozen review policy in force, sampling decisions, human results, coverage rollups, and stage transitions for a bounded period. This mapping does not demonstrate that a customer has implemented the A.6.2.6 control or that RateLoop is ISO/IEC 42001 certified.",
                 "props": [
                   {
                     "name": "reference",
                     "ns": "https://www.iso.org/standard/81230.html#",
-                    "value": "A.6"
+                    "value": "A.6.2.6"
                   },
                   {
                     "name": "claim",
@@ -254,14 +254,53 @@
             ],
             "implemented-requirements": [
               {
-                "uuid": "9a0683aa-d48c-5d0b-9f25-d07649b0eeb2",
-                "control-id": "nist-ai-rmf-measure",
-                "description": "The listed RateLoop artifacts support evidence for measurement of review sampling, human agreement and disagreement, latency, escalation triggers, and policy adherence over time. This mapping is an evidence cross-reference and does not represent a NIST assessment, endorsement, or determination of risk acceptability.",
+                "uuid": "999b9788-ee87-5ba2-8570-9e2b8ea7458b",
+                "control-id": "nist-ai-rmf-measure-2-8",
+                "description": "The listed RateLoop artifacts support evidence for documented examination of transparency and accountability limits, including privacy-safe aggregation, the stated limitations of each packet, and execution metadata recorded as host-reported and not independently verified. This mapping is an evidence cross-reference and does not represent a NIST assessment, endorsement, or determination of risk acceptability.",
                 "props": [
                   {
                     "name": "reference",
                     "ns": "https://airc.nist.gov/airmf-resources/airmf/",
-                    "value": "MEASURE"
+                    "value": "MEASURE 2.8"
+                  },
+                  {
+                    "name": "claim",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "supports-evidence-for"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "signed-assurance-evidence-packet"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "host-reported-execution-evidence"
+                  }
+                ],
+                "links": [
+                  {
+                    "href": "#9ea956b1-7f3e-5c89-89e7-d809f18684c3",
+                    "rel": "evidence",
+                    "text": "Signed assurance evidence packet"
+                  },
+                  {
+                    "href": "#de8163fc-29a5-5adc-a1d7-ab627d5d605d",
+                    "rel": "evidence",
+                    "text": "Host-reported execution evidence"
+                  }
+                ]
+              },
+              {
+                "uuid": "4436e3cb-fe4b-54da-9ea4-39da0ae35a1c",
+                "control-id": "nist-ai-rmf-measure-4-2",
+                "description": "The listed RateLoop artifacts support evidence for documented measurement results informed by invited domain-expert reviewers, covering sampling, human agreement and disagreement, latency, and design-weighted population estimates or typed coverage gaps. This mapping is an evidence cross-reference and does not represent a NIST assessment or endorsement, and an invitation to review is not proof of a reviewer's expertise or independence.",
+                "props": [
+                  {
+                    "name": "reference",
+                    "ns": "https://airc.nist.gov/airmf-resources/airmf/",
+                    "value": "MEASURE 4.2"
                   },
                   {
                     "name": "claim",
@@ -293,14 +332,53 @@
                 ]
               },
               {
-                "uuid": "e8c569f9-49b1-5800-942b-a11268456272",
-                "control-id": "nist-ai-rmf-manage",
-                "description": "The listed RateLoop artifacts support evidence for documenting configured escalation, human-review gate outcomes, exceptions, and integrity-checkable follow-up records. This mapping does not make or replace the customer's risk treatment, acceptance, response, or governance decisions.",
+                "uuid": "811af0da-647c-5bf0-ba36-a371249988d8",
+                "control-id": "nist-ai-rmf-manage-2-4",
+                "description": "The listed RateLoop artifacts support evidence for records binding a configured review requirement to the stop-gate state and the exact release decision for a single reviewed output. RateLoop records a hold-or-release decision for a single reviewed output and does not supersede, disengage, or deactivate the customer's AI system; current integrations are advisory and do not physically withhold an output.",
                 "props": [
                   {
                     "name": "reference",
                     "ns": "https://airc.nist.gov/airmf-resources/airmf/",
-                    "value": "MANAGE"
+                    "value": "MANAGE 2.4"
+                  },
+                  {
+                    "name": "claim",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "supports-evidence-for"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "human-review-gate-evidence"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "workspace-audit-export"
+                  }
+                ],
+                "links": [
+                  {
+                    "href": "#10c884d0-a2b8-5562-9323-8e0db11729c3",
+                    "rel": "evidence",
+                    "text": "Human-review gate evidence"
+                  },
+                  {
+                    "href": "#bde8250a-b58f-5596-b715-23da54e2681d",
+                    "rel": "evidence",
+                    "text": "Workspace audit-chain export"
+                  }
+                ]
+              },
+              {
+                "uuid": "1e98ffb3-7a63-5a51-801f-54838e8eb7a3",
+                "control-id": "nist-ai-rmf-manage-4-1",
+                "description": "The listed RateLoop artifacts support evidence for post-deployment monitoring records covering human override of an AI result, re-baselining to full coverage after a model, prompt, tool, or workflow change, and integrity-checkable follow-up history. This mapping does not make or replace the customer's risk treatment, acceptance, response, or governance decisions.",
+                "props": [
+                  {
+                    "name": "reference",
+                    "ns": "https://airc.nist.gov/airmf-resources/airmf/",
+                    "value": "MANAGE 4.1"
                   },
                   {
                     "name": "claim",
@@ -463,7 +541,7 @@
           {
             "uuid": "15766a3c-9642-5530-97ca-a07f65bc960c",
             "source": "#81a5892e-b90c-5dd7-824d-9f7f23e545e1",
-            "description": "The listed RateLoop artifacts support evidence for selected FINRA supervision guidance and Rule 3110 expectations. This is a cross-reference, not an assertion that a control is implemented or effective.",
+            "description": "The listed RateLoop artifacts support evidence for selected FINRA supervision rules and generative-AI guidance expectations. This is a cross-reference, not an assertion that a control is implemented or effective.",
             "props": [
               {
                 "name": "framework-id",
@@ -480,7 +558,7 @@
               {
                 "uuid": "1aecbb30-9b2e-54b2-b8fc-7eae9c9399c8",
                 "control-id": "finra-regulatory-notice-24-09",
-                "description": "The listed RateLoop artifacts support evidence for records of human review, configured escalation, model metadata reported by the host, and review outcomes for a member firm's supervision analysis. This mapping does not determine which FINRA rules apply, approve a member firm's supervisory system, or constitute legal advice.",
+                "description": "The listed RateLoop artifacts support evidence for technology-governance records for a supervisory system that uses generative AI, including the review policy in force, host-reported model and version metadata, and integrity-checkable review history. Regulatory Notice 24-09 states that it creates no new requirements and sets no human-review obligation; this mapping does not determine which FINRA rules apply, approve a member firm's supervisory system, or constitute legal advice.",
                 "props": [
                   {
                     "name": "reference",
@@ -500,12 +578,12 @@
                   {
                     "name": "evidence-artifact",
                     "ns": "https://rateloop.ai/ns/oscal",
-                    "value": "adaptive-coverage-export"
+                    "value": "host-reported-execution-evidence"
                   },
                   {
                     "name": "evidence-artifact",
                     "ns": "https://rateloop.ai/ns/oscal",
-                    "value": "host-reported-execution-evidence"
+                    "value": "workspace-audit-export"
                   }
                 ],
                 "links": [
@@ -515,14 +593,14 @@
                     "text": "Signed assurance evidence packet"
                   },
                   {
-                    "href": "#d5d0b0ec-1ff3-5cf7-8725-1b6229e20e3c",
-                    "rel": "evidence",
-                    "text": "Adaptive assurance coverage export"
-                  },
-                  {
                     "href": "#de8163fc-29a5-5adc-a1d7-ab627d5d605d",
                     "rel": "evidence",
                     "text": "Host-reported execution evidence"
+                  },
+                  {
+                    "href": "#bde8250a-b58f-5596-b715-23da54e2681d",
+                    "rel": "evidence",
+                    "text": "Workspace audit-chain export"
                   }
                 ]
               },
@@ -572,6 +650,104 @@
                     "href": "#bde8250a-b58f-5596-b715-23da54e2681d",
                     "rel": "evidence",
                     "text": "Workspace audit-chain export"
+                  }
+                ]
+              },
+              {
+                "uuid": "c578786e-62f7-5999-a3e8-ed0965712e85",
+                "control-id": "finra-rule-3110-07",
+                "description": "The listed RateLoop artifacts support evidence for review records that chronicle the reviewing account, the item reviewed, the date of review, and the action taken, in a form a member firm can retain alongside its supervisory records. Rule 3110.07 governs evidence of review of internal communications and correspondence rather than AI output, and this mapping does not establish, maintain, or certify the member firm's supervisory system or written supervisory procedures.",
+                "props": [
+                  {
+                    "name": "reference",
+                    "ns": "https://www.finra.org/rules-guidance/",
+                    "value": "Rule 3110.07"
+                  },
+                  {
+                    "name": "claim",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "supports-evidence-for"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "workspace-audit-export"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "human-review-gate-evidence"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "signed-assurance-evidence-packet"
+                  }
+                ],
+                "links": [
+                  {
+                    "href": "#bde8250a-b58f-5596-b715-23da54e2681d",
+                    "rel": "evidence",
+                    "text": "Workspace audit-chain export"
+                  },
+                  {
+                    "href": "#10c884d0-a2b8-5562-9323-8e0db11729c3",
+                    "rel": "evidence",
+                    "text": "Human-review gate evidence"
+                  },
+                  {
+                    "href": "#9ea956b1-7f3e-5c89-89e7-d809f18684c3",
+                    "rel": "evidence",
+                    "text": "Signed assurance evidence packet"
+                  }
+                ]
+              },
+              {
+                "uuid": "f9c1770f-e8ae-506d-8a79-785821a753ad",
+                "control-id": "finra-oversight-report-2026-genai",
+                "description": "The listed RateLoop artifacts support evidence for records of human-in-the-loop review of model output, the formal review and approval process in force, and tracking of which model version was used and when. The report presents these as practices a firm may want to consider rather than as FINRA requirements, and this mapping does not establish that a member firm has adopted them or that its supervisory system is adequate.",
+                "props": [
+                  {
+                    "name": "reference",
+                    "ns": "https://www.finra.org/rules-guidance/",
+                    "value": "2026 Annual Regulatory Oversight Report, GenAI: Continuing and Emerging Trends"
+                  },
+                  {
+                    "name": "claim",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "supports-evidence-for"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "signed-assurance-evidence-packet"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "adaptive-coverage-export"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "host-reported-execution-evidence"
+                  }
+                ],
+                "links": [
+                  {
+                    "href": "#9ea956b1-7f3e-5c89-89e7-d809f18684c3",
+                    "rel": "evidence",
+                    "text": "Signed assurance evidence packet"
+                  },
+                  {
+                    "href": "#d5d0b0ec-1ff3-5cf7-8725-1b6229e20e3c",
+                    "rel": "evidence",
+                    "text": "Adaptive assurance coverage export"
+                  },
+                  {
+                    "href": "#de8163fc-29a5-5adc-a1d7-ab627d5d605d",
+                    "rel": "evidence",
+                    "text": "Host-reported execution evidence"
                   }
                 ]
               }
@@ -640,7 +816,7 @@
             }
           ],
           "citation": {
-            "text": "Official Journal text of Regulation (EU) 2024/1689 on harmonised rules on artificial intelligence."
+            "text": "Official Journal text of Regulation (EU) 2024/1689 on harmonised rules on artificial intelligence, as amended by Regulation (EU) 2026/1744 (Digital Omnibus on AI, OJ L, 2026/1744, 24 July 2026, in force 27 July 2026). The amendment leaves the text of the mapped provisions unchanged and postpones Chapter III, Section 3 to 2 December 2027 for Annex III high-risk systems and to 2 August 2028 for Annex I high-risk systems."
           },
           "rlinks": [
             {
@@ -651,7 +827,7 @@
         },
         {
           "uuid": "81a5892e-b90c-5dd7-824d-9f7f23e545e1",
-          "title": "FINRA supervision guidance and Rule 3110",
+          "title": "FINRA supervision rules and generative-AI guidance",
           "description": "Authoritative framework or regulatory source used only as a cross-reference for this mapping.",
           "props": [
             {
@@ -661,15 +837,19 @@
             }
           ],
           "citation": {
-            "text": "FINRA Regulatory Notice 24-09 and FINRA Rule 3110 official sources. The mapping does not constitute FINRA approval or legal advice."
+            "text": "FINRA Rule 3110 with Supplementary Material .07, Regulatory Notice 24-09 (27 June 2024), and the GenAI section of the 2026 FINRA Annual Regulatory Oversight Report (9 December 2025). Notice 24-09 states that it creates no new requirements, and the report presents practices a firm may want to consider. The mapping does not constitute FINRA approval or legal advice."
           },
           "rlinks": [
+            {
+              "href": "https://www.finra.org/rules-guidance/rulebooks/finra-rules/3110",
+              "media-type": "text/html"
+            },
             {
               "href": "https://www.finra.org/rules-guidance/notices/24-09",
               "media-type": "text/html"
             },
             {
-              "href": "https://www.finra.org/rules-guidance/rulebooks/finra-rules/3110",
+              "href": "https://www.finra.org/rules-guidance/guidance/reports/2026-finra-annual-regulatory-oversight-report/gen-ai",
               "media-type": "text/html"
             }
           ]
@@ -756,23 +936,6 @@
               "name": "schema-version",
               "ns": "https://rateloop.ai/ns/oscal",
               "value": "rateloop.execution-evidence.v1"
-            }
-          ]
-        },
-        {
-          "uuid": "81852052-5b2e-516a-9578-b9f8f534a378",
-          "title": "S3 Object Lock delivery receipt",
-          "description": "A provider receipt for an integrity-checked export delivered to a customer-controlled S3 Object Lock destination with the configured retention mode and deadline.",
-          "props": [
-            {
-              "name": "artifact-id",
-              "ns": "https://rateloop.ai/ns/oscal",
-              "value": "s3-object-lock-delivery-receipt"
-            },
-            {
-              "name": "schema-version",
-              "ns": "https://rateloop.ai/ns/oscal",
-              "value": "rateloop.assurance-worm-provider-receipt.v1"
             }
           ]
         }
