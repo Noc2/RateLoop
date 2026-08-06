@@ -2,11 +2,12 @@ import { PaidEligibilityClient } from "~~/components/tokenless/PaidEligibilityCl
 import { ProfileClient } from "~~/components/tokenless/account/ProfileClient";
 import { FeedbackBonusClaimsClient } from "~~/components/tokenless/human/FeedbackBonusClaimsClient";
 import { ForecastIntegrityClient } from "~~/components/tokenless/human/ForecastIntegrityClient";
+import { PaidWorkUnavailableNotice } from "~~/components/tokenless/human/PaidWorkUnavailableNotice";
 import { RaterSettlementRecoveryClient } from "~~/components/tokenless/human/RaterSettlementRecoveryClient";
 import { ReviewerAccessPanel } from "~~/components/tokenless/human/ReviewerAccessPanel";
 import { ReviewerEarningsClient } from "~~/components/tokenless/human/ReviewerEarningsClient";
 import { WorldIdProfilePanel } from "~~/components/tokenless/human/WorldIdProfilePanel";
-import { configuredHumanReviewLanes } from "~~/lib/tokenless/reviewCapabilities";
+import { configuredHumanReviewLaneMessage, configuredHumanReviewLanes } from "~~/lib/tokenless/reviewCapabilities";
 
 export function HumanProfileContent({ worldIdEnabled }: { worldIdEnabled: boolean }) {
   const lanes = configuredHumanReviewLanes();
@@ -35,7 +36,9 @@ export function HumanProfileContent({ worldIdEnabled }: { worldIdEnabled: boolea
             <FeedbackBonusClaimsClient />
           </section>
         </>
-      ) : null}
+      ) : (
+        <PaidWorkUnavailableNotice reason={configuredHumanReviewLaneMessage("privateInvitedPaid")} />
+      )}
     </>
   );
 }

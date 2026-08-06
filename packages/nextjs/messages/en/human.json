@@ -354,5 +354,10 @@
     "noBlockedEarnings": "No blocked earnings later",
     "timing": "Every paid-work gate is complete before the first voucher. Browsing and advisory calibration remain available without this step.",
     "claimPrivacy": "Normal claims publicly link a one-time vote key to its per-round payout destination. Recovery stays client-controlled."
+  },
+  "paidWorkUnavailable": {
+    "eyebrow": "Reviewer profile",
+    "title": "Paid review work is not available here",
+    "body": "Review on this deployment is invited and unpaid, so there are no earnings, settlement or bonus-claim sections to show. If a paid lane is enabled for your workspace later, those sections appear here."
   }
 }

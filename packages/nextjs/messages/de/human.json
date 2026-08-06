@@ -354,5 +354,10 @@
     "noBlockedEarnings": "Später keine blockierten Verdienste",
     "timing": "Alle Voraussetzungen für bezahlte Arbeit sind vor dem ersten Voucher erfüllt. Suche und Beratungskalibrierung bleiben ohne diesen Schritt verfügbar.",
     "claimPrivacy": "Normale Ansprüche verknüpfen einen einmaligen Abstimmungsschlüssel öffentlich mit seinem Auszahlungsziel pro Runde. Die Wiederherstellung bleibt unter der Kontrolle des Clients."
+  },
+  "paidWorkUnavailable": {
+    "eyebrow": "Prüferprofil",
+    "title": "Bezahlte Prüfarbeit ist hier nicht verfügbar",
+    "body": "Prüfungen laufen in diesem Deployment über Einladung und unbezahlt. Es gibt daher keine Abschnitte zu Vergütung, Abrechnung oder Bonusansprüchen. Sobald für Ihren Workspace eine bezahlte Lane aktiviert wird, erscheinen sie hier."
   }
 }
