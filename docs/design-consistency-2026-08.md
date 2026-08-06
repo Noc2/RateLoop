@@ -87,12 +87,15 @@ This is the reported symptom, and it has one cause.
 [`ThirdwebSessionButton.tsx:18-19`](../packages/nextjs/components/thirdweb/ThirdwebSessionButton.tsx)
 defines the sign-in control as a hand-rolled `<Link>` carrying
 `rateloop-gradient-action rateloop-sign-in-action px-[0.9rem] text-base font-bold` — **with
-no `btn` class**. `.rateloop-sign-in-action` forces `min-height: 2.5rem` (`globals.css:345-347`)
-against `.rateloop-gradient-action`'s `3rem` (`:320-323`), and without `btn` it inherits
-`1rem` text where DaisyUI would give `0.875rem`.
+no `btn` class**. `.rateloop-sign-in-action` forces `min-height: 2.5rem`
+(`globals.css:345-347`) against `.rateloop-gradient-action`'s `3rem` (`:320-323`).
 
-So the primary sign-in control is **0.5rem shorter and one type step larger than every
-other primary button in the product**.
+**Measured on the deployed site:** sign-in renders **40px**; every other gradient primary —
+"Connect Agent", "Request pilot", "Verify packet" — renders **48px**.
+
+*Correcting an earlier draft of this document:* it also claimed the sign-in button is one
+type step larger. It is not. Every gradient primary renders 16px/700, sign-in included; the
+14px/600 text belongs to **secondary** buttons. The 8px height gap is the whole difference.
 
 [`AgentsSignInPrompt.tsx:23`](../packages/nextjs/components/tokenless/agents/AgentsSignInPrompt.tsx)
 then copies those exact overrides onto a `size="sm"` `Button` — `h-10 min-h-10 px-[0.9rem]
@@ -236,3 +239,111 @@ Confirmed gaps, in order:
 | 13 | `SectionHeading` primitive; sr-only h1 on the human hub; hoist `AgentTabs` | M | The shells converge structurally |
 
 Items 1–6 are a morning's work between them and fix everything a prospect can see.
+
+## 8. Rendered-site findings
+
+Measured on the deployed site at 1280×720 and 375×812, both themes, both languages. These
+are visible without reading any source, and the first three outrank most of what is above.
+
+### 8.1 Every German page ships an English meta description, and `/de` has an English title
+
+All ten German pages return `<meta name="description" content="Get blind human feedback
+before you ship AI work.">`. `/de` returns `<title>RateLoop — Human assurance for AI</title>`
+while declaring `<html lang="de">`. Every other German page titles correctly.
+
+**This is the first thing a buyer sees** — the browser tab, a Teams or Slack link unfurl, a
+search result — and it is in the wrong language. Cheapest high-value fix on either list.
+
+### 8.2 Informal *du* on two German pages, formal *Sie* everywhere else
+
+`/de/agents/overview`: *"Melde dich an, um Agenten und Prüfungen zu verwalten."*
+`/de/docs/evidence/verify`: *"Dein Paket bleibt in diesem Browser."*
+
+Against 30 occurrences of *Sie/Ihre* on `/de/docs/human-oversight` and 7 on `/de`. One of the
+two is the agents landing surface — where a buyer arrives.
+
+### 8.3 Untranslated labels on German docs pages
+
+`/de/docs/evidence` renders `<h2>At a glance</h2>` and the eyebrow `SHARED RESPONSIBILITY`;
+`/de/docs/human-oversight` shows `Shared responsibility`. Demonstrably an oversight, not a
+choice — the identical component renders **"Auf einen Blick"** on `/de/legal/terms`. At
+375px "At a glance" is a 24px English headline sitting inside German body copy.
+
+### 8.4 The zero-gap defect is worse in German
+
+`/human/review`: heading bottom 132.00px, button top 132.00px — **gap 0.00px**.
+`/agents/overview`: 60px, from the description the human prompt omits. On `/de/human/review`
+the heading wraps to two lines and the button, itself labelled *"Anmelden"*, sits flush
+beneath it and reads as a run-on. Same on `/human/history`.
+
+### 8.5 The five classless buttons are worse than "no background"
+
+Measured against a `btn`-bearing control: background `rgba(0,0,0,0)` against
+`rgba(245,245,245,0.18)`; height **36px against 44px**; font-weight **400 against 600**; and
+**two of the five have `cursor: default`**. On a dark card they render as unstyled body text
+— not merely flat, but not identifiable as controls.
+
+### 8.6 Primary and secondary are inverted in visual weight
+
+On `/agents/overview` in light theme the card is `rgb(247,247,245)` and the **primary** fill
+is `#fff` — *lighter than the card it sits on*, about 1.03:1, carried only by a 1px gradient
+border. The **secondary** fill is `rgba(23,23,23,0.1)`, visibly heavier. Dark theme inverts
+the same way. **The secondary action out-weighs the primary on the sign-in screen.**
+
+### 8.7 Eight distinct button treatments across ten pages
+
+By `(height / font-size / weight)`: `48/16/700` · `40/16/700` · `44/16/600` · `44/14/600` ·
+`48/14/600` · `40/16/700` secondary · `32/12/600` · `36/14/400`. Secondary style alone has
+**five** renderings.
+
+Most visible: the two `/pricing` plan CTAs sit side by side in one card grid at the same
+48px height, but **"Start free" is 14px/600 and "Request pilot" is 16px/700**.
+
+### 8.8 Heading scale is incoherent, including within a single page
+
+**H1**: `/` 90.4px/700 · `/docs/evidence` 64px/**400** · `/pricing` 52px/700 ·
+`/docs/evidence/verify` **48px/700**. Two sibling docs pages differ by 16px *and* 300 weight
+units. **H2**: `/` 86.4px/700 · docs and legal 24px · `/pricing` **16px/400**, styled as body
+text. Within `/docs/evidence`, `At a glance` is 24px/600 while its siblings are 24px/400.
+
+### 8.9 `/legal/imprint` uses a different shell from its siblings
+
+Imprint: `max-width: none`, 1057px wide at a 1280px viewport, flush left, 32px top padding.
+Terms and privacy: `max-w-4xl`, 896px, centered, 48px top padding. **The Impressum is the
+page a German buyer opens first to check the legal entity**, and it is the one page whose
+measure runs unconstrained — roughly 2,350px of line length on a 2560px monitor. Its
+back-link is also worded differently ("← Back to Legal" against "← Legal").
+
+### 8.10 Three behaviours that surprise a visitor
+
+- **Signed-out human tabs show a data skeleton for 3–10 seconds** before the sign-in card
+  appears. Nothing is loading that requires it. `/human/history` also shows the *review*
+  tab's prompt copy.
+- **Locale is sticky and overrides the URL.** After any `/de/*` page, requesting `/pricing`
+  serves German and rewrites the location to `/de/pricing`. A colleague following a shared
+  link gets the wrong language.
+- **`prefers-color-scheme` is ignored.** A visitor whose OS is in light mode gets the dark
+  site until they find the toggle.
+
+### 8.11 What measured clean
+
+- **The shell is identical on all ten pages** in both locales — same fixed 208px sidebar,
+  same footer. The only divergence is 8.9.
+- **No horizontal overflow anywhere**, at 375px or 1280px, in either language:
+  `documentElement.scrollWidth === innerWidth` on every page. Wide docs tables and every
+  `<pre>` scroll inside their own container. **German's longer strings caused no breakage** —
+  worth saying, because it is the failure everyone expects.
+- **Light-theme sidebar contrast is fine** — nav items 8.52:1 and 10.4:1, section labels
+  6.63:1, active pill 17.93:1.
+- **German body copy reads naturally** where it exists. The problems above are metadata,
+  register and a few missed keys, not translation quality.
+
+### 8.12 The five cheapest fixes
+
+All text-only, and together they clear 8.1 through 8.5:
+
+1. German `title` and `description` metadata
+2. *Melde dich an* → *Melden Sie sich an*; *Dein Paket* → *Ihr Paket*
+3. Translate "At a glance" and "Shared responsibility" in the docs namespace
+4. Move the spacing onto the action row in the sign-in prompt
+5. Add `btn` to the five human-surface class strings
