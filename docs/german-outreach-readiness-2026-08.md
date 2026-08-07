@@ -3,7 +3,19 @@
 Written 6 August 2026, last revised against `9a0bbdec1`. Sources: four audits of the
 product and its collateral, then a second round covering internal consistency, German
 enterprise procurement, the first-run journey, architecture health, and 2026 regulatory
-change.
+change, then a **sourcing round on 7 August 2026** that re-verified the sales collateral
+against the code and graded every regulatory claim against a primary source.
+
+**Read [docs/sales/quellen-und-belege.md](sales/quellen-und-belege.md) before quoting any
+number or legal proposition from this document.** It grades each claim as primary source,
+retrieved, secondary or unverified, and lists what is still unverified — including several
+propositions in Tier 5 that this document states with more confidence than the evidence
+behind them supports.
+
+**Two findings in that round changed decisions rather than adding items.** Article 50(4) is
+far narrower than § 6.1 claimed, so the re-point is a segmentation and not a slide reorder;
+and the BAFA subsidy in the research list does not apply to the pilot at all. Both are
+corrected in place below.
 
 **Completed items have been removed rather than ticked.** Eleven readiness items and four
 build items landed between `2853daf74` and `90b7b2d91` — the pitch URL, the ODR notice, the
@@ -12,7 +24,10 @@ reasons in the agent envelope, majority panel resolution, and the FINRA/ISO/NIST
 A further round through `9a0bbdec1` closed the dependency audit, four security gaps, the
 `no_decision` and panel-size contract mismatches, the missing SIEM terminal events,
 deployment-drift detection, inline evidence projection and the up-front paid-lane notice.
-Each is a separate commit with tests. What remains is below.
+A third round closed the World ID content-security-policy gap, CSP violation reporting, the
+tie and cancellation subscriptions, the `requestedPanelSize` contradiction inside the SDK,
+the blinding claim in the tagline, and the twenty-six untranslated German errors in the
+setup wizard. Each is a separate commit with tests. What remains is below.
 
 This list is long because the gap is not in one place. The German *story* is ready and the
 German *surface* is unusually good. The German *paper* is not, the *product* has one
@@ -117,31 +132,22 @@ Vanta, Drata and your SIEM" · "Kundengehaltene Schlüssel" · "Anonyme Prüfend
 population point estimate or confidence interval · any present-tense USDC, network,
 hybrid or proof-of-human claim.
 
-### 1.4 The site's own tagline claims blinding the live lane does not do
+### 1.4 The claim gate is phrase-shaped, so weaker wordings pass
 
-**Found while verifying the deploy, and it is the most-served string in the product.** The
-meta description on every page reads *"Get blind human feedback before you ship AI work."*
-and, since the German localisation landed, *"Holen Sie verblindetes menschliches Feedback
-ein…"*.
+The site-wide meta description used to read *"Get blind human feedback before you ship AI
+work."* — and, once the German localisation landed, *"verblindetes menschliches Feedback"*,
+the clinical-trial term. It now says *independent*, which is true and is what the sales
+collateral already said: reviewers submit without seeing each other's answers.
 
-The only lane that ships hardcodes `blinding = { swap: false }`
-([`directPrivateReviewEvidence.ts:310`](../packages/nextjs/lib/tokenless/directPrivateReviewEvidence.ts)),
-and `swap: true` appears nowhere in production code. Reviewers submit **independently** —
-they do not see each other's responses — which is a real and defensible property, but it is
-not blinding.
+**The general lesson is the one to keep.** The gate's rule forbids the exact phrase
+*"independent blinded panels"*. A weaker wording of the same claim passed it silently for as
+long as the tagline existed, on the single most-served string in the product. Rules matched
+on phrases catch the sentence you thought of, not the claim.
 
-The claim gate does not catch it: rule `independent_blinded_panel` forbids the phrase
-*"independent blinded panels"*, and this is neither. **The gate is phrase-shaped, so a
-weaker wording of a forbidden claim passes** — worth knowing generally, not just here.
-
-German makes it worse rather than better. *Verblindet* is the clinical-trial term, so the
-German reads as a stronger and more specific methodological claim than the English does, to
-exactly the audience most likely to test it.
-
-**This is a positioning decision, not a bug, so it is recorded rather than changed.** The
-same substitution already made in the sales collateral — *independent* for *blinded* — costs
-nothing and is true. If blinding is wanted as a real capability, that is a product item, and
-it should not be sold before it exists.
+Still unreviewed, and counsel's rather than a cleanup's: `public.json` and the Terms,
+Privacy and DPA pages describe blinded panels and a commit–reveal round. Those describe the
+paid network lane, which is frozen off — the same Tier 1 problem as the rest of this
+section, but inside signed documents.
 
 ## Tier 2 — the product gap
 
@@ -467,9 +473,19 @@ chain questions.
 4. **Draft the Art. 25(4) compliance-cooperation annex before a buyer drafts it for you.**
    Buyers are lifting clauses from the Commission's MCC-AI.
 5. **Confirm "Pseudonyme pro Run"** or drop it (1.2).
-6. **Verify two German sales levers before using them.** A BAFA consulting subsidy is
-   reported to cover 50–80% on a basis of up to €3,500, which would place a €2,500 pilot
-   fully inside a subsidised band — a strong Mittelstand lever if true, and unverified.
+6. **The BAFA lever is checked, and it does not apply. Stop planning around it.** The
+   programme is real — basis €3,570 capped at **€3,500**, **50%** in the western Länder and
+   **up to 80%** in the eastern Länder and Berlin, max five engagements and no more than two
+   a year, **and the directive expires 31 December 2026**. But it funds **consulting by a
+   BAFA-registered advisor**, not a software licence or a SaaS pilot. A €2,500 Founding Pilot
+   as currently structured is **not eligible**. Do not offer or imply it: a prospect who
+   builds a budget request on it and loses the subsidy loses trust at the worst moment. If the
+   lever is wanted, it needs a partnership with a registered consultancy that delivers the
+   policy mapping as fundable advice — a separate decision.
+   *Retrieved 7 August 2026:*
+   [BAFA — Unternehmensberatung](https://www.bafa.de/DE/Wirtschaft/Beratung_Finanzierung/Unternehmensberatung/unternehmensberatung_node.html) ·
+   [Handelskammer Hamburg](https://www.handelskammer-hamburg.de/gruendung-sicherung-nachfolge/finanzierung-foerderung/foerderung-unternehmerisches-know-how-6720506).
+
    Separately, no reliable source exists for the department-head approval threshold that the
    €2,500 price is often justified by; justify it from your own discovery instead.
 
@@ -527,17 +543,32 @@ with jurisdictions including any LLM, and a change-notification commitment.
 
 ### 5.2 EU Data Act Chapter VI already applies, and Germany already enforces it
 
-Regulation (EU) 2023/2854 has applied since 12 September 2025, and the German
-implementing act (DADG) has been in force since 30 May 2026 with the Bundesnetzagentur as
-competent authority. Assume you are in scope: the test is whether a customer can
+[Regulation (EU) 2023/2854](https://eur-lex.europa.eu/eli/reg/2023/2854/oj) has applied
+since 12 September 2025. Assume you are in scope: the test is whether a customer can
 self-provision, not company size.
 
-Article 25 requires specific contract terms — **2 months maximum notice to switch, 30 days
-maximum transition, 30 days minimum data retrieval afterwards, certified erasure, an
-exhaustive exportable-data inventory**. Article 26 requires publishing the switching
-procedure and formats. Article 28 requires disclosing infrastructure jurisdiction and
+> **Correction, 7 August 2026.** This section previously asserted that a German
+> implementing act (DADG) "has been in force since 30 May 2026 with the Bundesnetzagentur as
+> competent authority." A German practitioner source read in this round says the **opposite** —
+> that no national implementing act is required, because the Data Act is a directly
+> applicable Regulation. Both cannot be true and neither is confirmed here. **Until it is
+> resolved, cite only the Regulation to customers.** It applies regardless, and the Article 25
+> contract duties do not depend on national law. Do not name the DADG or a competent
+> authority in collateral.
+
+Article 25 requires specific contract terms — **2 months maximum notice to switch, a 30-day
+transition, a data-retrieval period afterwards, certified erasure, an exhaustive
+exportable-data inventory**. Article 26 requires publishing the switching procedure and
+formats. Article 28 requires disclosing infrastructure jurisdiction and
 anti-unlawful-access measures. From **12 January 2027 switching charges are prohibited
-outright**, egress included.
+outright**, egress included; until then only cost-covering charges are permitted.
+
+**One detail worth having before the AGB work, because it is the negotiating room:** the
+30-day transition period may be **extended to a maximum of 7 months** in an individual case.
+Draft to that, not to a flat 30 days.
+*Retrieved 7 August 2026:*
+[Deloitte Legal on cloud switching](https://www.deloittelegal.de/dl/de/services/legal/perspectives/cloud-switching-eu-data-act.html) ·
+[Helbing on the practical edge cases](https://www.thomashelbing.com/de/blog/cloud-switching-unter-data-act-einzelprobleme-praxissicht).
 
 This folds into Tier 4 rather than replacing it: the same order form and terms work covers
 it, and the Article 28 disclosure is the subprocessor table from 4.4.
@@ -600,6 +631,13 @@ divergence** between the languages. Three problems sit on top of that:
 A catalogue test in the shape of the existing parity test would pin both register and
 terminology permanently.
 
+**Measured while fixing the wizard errors:** across `de/agents.json` informal forms
+outnumber formal roughly 58 to 22, and the `setupFlow` namespace is predominantly *du*. The
+twenty-six error strings added there use *Sie*, matching the marketing and legal register
+and the direction this item recommends — so they are currently the outliers inside their own
+namespace. That is the right direction and the wrong order: the namespace should move, not
+the new strings.
+
 ### 5.6 The German DPA drops qualifiers the English carries
 
 Three instances, same key paths, so the German AVV is materially a different contract:
@@ -621,17 +659,25 @@ flag it now.
 ### 5.7 Contract-level inconsistencies a technical reviewer finds in an afternoon
 
 The `no_decision` schema mismatch, the six-layer panel-size disagreement, the missing SIEM
-events for a tie and a cancellation, and the `$29` billing page are all closed. What the fix
-left open:
+events for a tie and a cancellation, the `$29` billing page, the unsubscribable terminal
+events and the `requestedPanelSize` 3–500 family are all closed. What remains:
 
-- **Customers cannot yet subscribe to the two new terminal event types.** `review.tied` and
-  `review.cancelled` are emitted and delivered, but `SiemEvidenceDelivery` keeps its own
-  event-type list for the subscription UI, so an existing endpoint has no way to ask for
-  them. Half a day, and it is the half that makes the fix visible to a buyer.
-- **A second panel-size family still disagrees.** `requestedPanelSize` is bounded 3–500
-  across six files including a published request schema, against the profile bound of 2–100
-  now enforced everywhere else. Narrowing it is a product call — 3 is a deliberate quality
-  floor for requested panels — but the published schema should not contradict the server.
+- **The quote floor of 3 rejects a legal private panel of 2.** `requestedPanelSize` is now
+  bounded 3–100, matching the profile maximum, but a `private_invited` profile is legal at
+  `panelSize` 2 and `createInternalPrivateReviewQuote` parses the same request. A
+  two-reviewer private *paid* group therefore produces a quote that cannot validate. The
+  floor is older than the narrowing, and the unpaid lane that ships today does not reach it,
+  so this bites only when private paid reviews are switched on.
+- **A stored quote from 101 to 500 can no longer be replayed.** `createTokenlessAsk`
+  re-parses stored quote JSON, so an idempotent replay against a historical quote now
+  returns 400. The 15-minute quote TTL bounds this to replays of expired quotes.
+- **Seven stored-row readers still accept a panel of 1**, below the profile minimum of 2,
+  and the guard in `reviewPanelPolicy.test.ts` covers six `lib/tokenless` modules and cannot
+  match a bare `3`, so it caught none of them.
+- **Ties and cancellations reach the SIEM but not the alert or incident paths.**
+  `oversightAlerts.ts` routes only `gate.blocked`, `review.failed` and `review.expired`, and
+  `INCIDENT_EVENT_TYPES` excludes both new types, so a tied panel raises no workspace alert
+  and is absent from an incident export.
 - **Five vocabularies for one outcome**: `positive/negative`, `agree/disagree`,
   `endorsed/rejected`, and two different German label pairs on two panels fed by the same
   source. No mapping table exists anywhere.
@@ -712,6 +758,98 @@ answer. That column records which credential the integration is bound to, not ho
 request arrived, and it feeds evidence hashes and the idempotency namespace. Recording
 browser provenance in the audit trail is cheaper and more honest.
 
+## Tier 7 — the objections, and what removes them
+
+Added 7 August 2026. Everything above is organised by what a *buyer's paperwork* needs. This
+section is organised by what a *human in the room says out loud*, because those are different
+lists and the second one is what loses deals.
+
+The objection handling itself lives in
+[docs/sales/vertriebsleitfaden-2026-08.md § 9](sales/vertriebsleitfaden-2026-08.md). What
+follows is only the build side: which objections a product change can retire, and which are
+answered with words.
+
+### 7.1 „That is extra work for my team" — and the answer is already built and unsold
+
+**This is the most common objection and the most under-sold capability in the product.**
+
+RateLoop does not review every output. The review rate decays automatically as the system
+calibrates ([`adaptiveReviewPolicy.ts`](../packages/nextjs/lib/tokenless/adaptiveReviewPolicy.ts)):
+`calibrating` 100% → `high_coverage` 50% → `medium_coverage` 25% → `monitoring` **10%**
+floor. Three safety nets sit on top: `maximumUnreviewedGap` forces a review after a
+configured run of unreviewed outputs, a confidence drop below minimum escalates with reason
+code `low_confidence`, and `productionFloorBps` lets the customer set a floor the decay
+cannot go under. Policy modes are `manual | always | rules | adaptive | fixed`, and
+`rationaleMode: "off"` reduces the reviewer's action to a single click.
+
+**This is on the live lane** — `evaluateAdaptiveReviewRequirement` is called at
+[`workspaceProtocol.ts:629`](../packages/nextjs/lib/mcp/workspaceProtocol.ts), before routing —
+and it is configurable in the UI (`AgentHumanReviewEditor.tsx`, `AgentSetupFlow.tsx`).
+
+**Nothing needs building. The gap is that no sales document mentions it**, so every
+conversation implicitly promises review of every output, which is both wrong and
+unaffordable. Fixed in the Vertriebsleitfaden at § 9.0. **Ranked first in this whole
+document by return per hour, because the hours are zero.**
+
+Two small builds would make it demonstrable rather than merely true:
+
+- **Show the current stage and rate in the agent view** (½ day). A prospect who sees
+  „monitoring — 10% of outputs sampled, next forced review in 14" stops asking the question.
+- **A workload estimator in the setup wizard** (½ day). Outputs per month × rate × panel
+  size → reviews per month. It turns the objection into a number the customer chose.
+
+### 7.2 The works-council hazard — build the mode, do not write the promise
+
+Unchanged from § 6.5 and still the right call: surface `employmentDataGovernance` as a
+workspace mode defaulting to `aggregate_only`. § 5.1 explains why a contractual promise will
+not close a works council;
+[§ 80 Abs. 3 Satz 2 BetrVG](https://www.gesetze-im-internet.de/betrvg/__80.html) explains why
+an external expert will read whatever you write.
+
+**One addition from this round.** The presumption that the expert is necessary is described
+in the practitioner literature as **irrebuttable** once the works council must assess the
+introduction or application of AI, and it requires a *concrete and relevant* AI connection
+rather than a remote one. So the audience for the works-council pack is a paid external
+assessor, not the buyer's HR department. Write it for that reader: field-level data
+catalogue, roles and permissions matrix, exactly what the audit trail records and who can
+query it, and the aggregation switch demonstrated rather than described.
+
+### 7.3 „What if you are gone?" — the cheapest credibility build in the document
+
+The Data Act gives this a mechanical answer that costs almost nothing to make true, because
+the substance already ships: an exportable packet plus a browser and CLI verifier. What is
+missing is the **statement** — Article 26 requires the switching procedure and formats to be
+**published**.
+
+**Build: a switching-and-exit page** (½ day static, and it satisfies three things at once).
+Article 26 publication, the Article 28 jurisdiction disclosure that is really the
+subprocessor table from § 4.4, and the single best answer to the one-person-UG objection.
+Ranked above a trust page because it is a legal obligation the buyer can check rather than
+marketing.
+
+### 7.4 What is answered with words, not code
+
+Do not build for these. They are handled in the Vertriebsleitfaden and building for them
+would be building for the wrong customer.
+
+| Objection | Why no build |
+| --------- | ------------ |
+| „Does this make us compliant?" | The answer is „no" and that answer is the asset |
+| „No ISO/SOC?" | A certificate is procurement, not product. CSA STAR Level 1 and the EU Cloud Code of Conduct are the cheap moves — § 6.6 |
+| „Why not a spreadsheet?" | Already answered on the two things a spreadsheet structurally cannot do. If the answer does not land, § 11's stop rule applies |
+| „A tie returned inconclusive" | Correct behaviour. Configure panel 3 for a decisive demo |
+
+### 7.5 Revised ranking, counting only this section
+
+1. **Say the sampling out loud** — zero hours, already true, retires the most common
+   objection. Done in the collateral; nothing to build.
+2. **Switching-and-exit page** — ½ day, satisfies Data Act Articles 26 and 28 and the
+   continuity objection together.
+3. **`employmentDataGovernance` as a workspace mode** — the only present hazard on the list,
+   and § 6.5's argument for it is unchanged.
+4. **Stage-and-rate display plus workload estimator** — 1 day combined, turns 7.1 from a
+   claim into something visible in the demo.
+
 ## Tier 6 — the security and positioning round
 
 A final audit went after the security posture a German questionnaire actually probes, and
@@ -728,11 +866,35 @@ deferral; this document did not.
 **Article 50(4) is live now and was written for this product.** The AI-generated-text
 disclosure duty falls away where the content *"has undergone a process of human review or
 editorial control and where a natural or legal person holds editorial responsibility."*
-That is enforceable today, at up to €15m or 3%, and RateLoop is precisely the evidence that
-the exemption was earned.
+That is enforceable today, and RateLoop is precisely the evidence that the exemption was
+earned. The Commission's own FAQ requires the review to be a *"deliberate examination of the
+substance of the content by one or more natural persons possessing relevant knowledge and
+professional judgement"*, **substantive and not a cursory approval**, plus a person holding
+ultimate legal responsibility. That is a description of this product's data model.
 
-**Re-point the deck.** It is a slide reorder, and every hour spent on Tier 4 paper before
-this is an hour spent selling a 2027 problem.
+**But the scope is narrow, and this document previously overstated it.** Article 50(4)
+covers AI-generated text **published to inform the public on matters of public interest** —
+the Commission lists politics, public administration, justice, fundamental rights, public
+security, health, environment, consumer safety, and economic, scientific and cultural
+developments. **Internal documentation, proposals, customer-service replies and marketing
+copy are not in scope.** Pitching Article 50(4) to a Mittelstand manufacturer as *their*
+obligation will be corrected by their legal department in the meeting.
+
+So the re-point is a **segmentation**, not a slide reorder:
+
+| Segment | Anchor |
+| ------- | ------ |
+| Publishers, media, health and environmental communication, consumer information, public bodies and their suppliers, financial and scientific communication | **Article 50(4).** Live today, narrow, and unanswerable without an artifact like ours |
+| Everyone else | **The customer's own ISO/IEC 42001 programme.** Has a date, an auditor and a budget line today |
+
+Note also a grace period to **2 December 2026** for the marking and detection requirements.
+
+Sources, retrieved 7 August 2026:
+[Commission FAQ on Article 50 transparency obligations](https://digital-strategy.ec.europa.eu/en/faqs/transparency-obligations-under-article-50-ai-act) ·
+[Article 50 full text](https://artificialintelligenceact.eu/article/50/) ·
+[Code of Practice on Transparency of AI-generated Content](https://digital-strategy.ec.europa.eu/en/policies/code-practice-ai-generated-content) ·
+[Goodwin: transparency obligations now in force](https://www.goodwinlaw.com/en/insights/publications/2026/08/alerts-technology-dpc-eu-ai-act-transparency-obligations-now-in-force).
+Full apparatus in [docs/sales/quellen-und-belege.md](sales/quellen-und-belege.md).
 
 Also note Article 4 was softened to *taking measures to support the development of* AI
 literacy — selling literacy evidence is weaker than it was in 2025.
@@ -783,8 +945,11 @@ web3 origins in the CSP are closed. Three remain:
   default is in-memory — per-lambda on Vercel, which is not a limit. Nothing throttles
   *requesting* email codes. Email-bombing an arbitrary address is a standard finding, and the
   limiter already exists. **This is now the highest-value security item on the list.**
-- **The CSP has no `report-to`.** The dead origins are gone, but violations — the cheapest
-  intrusion signal available — still go nowhere.
+- **CSP reporting exists now but has no rate limit.** `report-to` and `report-uri` both
+  ship to a same-origin endpoint. It is unauthenticated by necessity and bounded only by a
+  content-type check and a 16 KiB cap, so a determined caller can still fill the log. The
+  right control is a platform firewall rule on the path, not application code — the repo's
+  own limiter would turn a log flood into a database-write flood.
 - **No error tracking, APM, alerting or log drain anywhere.** The single hit is an OTLP
   *ingest* endpoint: RateLoop receives its customers' traces and emits none of its own. Note
   this is also what makes the AVV's "monitored operational failures" claim (6.3) unevidenced,

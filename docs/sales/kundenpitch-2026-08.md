@@ -17,14 +17,23 @@ Neun Folien, schwarzer Grund, Space Grotesk, Vierfarb-Spektrum, wie gehabt.
 > Ein Workflow. Sechs Wochen.
 
 *Notiz:* Nicht mit einem pauschalen AI-Act-Countdown eröffnen. Die Hochrisiko-Pflichten
-wurden durch die Verordnung (EU) 2026/1744 auf den **2. Dezember 2027** verschoben. Wer
+wurden durch die [Verordnung (EU) 2026/1744](https://eur-lex.europa.eu/eli/reg/2026/1744/oj)
+auf den **2. Dezember 2027** verschoben (Annex I: 2. August 2028). Die Verordnung wurde am
+24. Juli 2026 im Amtsblatt veröffentlicht und ist am 27. Juli 2026 in Kraft getreten. Wer
 im August 2026 mit einer Hochrisiko-Frist verkauft, wirkt bei jedem Gegenüber mit
-kompetenter Rechtsabteilung uninformiert. Was gilt: Art. 50 Transparenz seit dem
-2. August 2026, und das deutsche KI-Marktüberwachungsgesetz ist am 29. Juli 2026 in Kraft
-getreten; die Bundesnetzagentur nimmt ihre Rolle als koordinierende
-Marktüberwachungsbehörde mit Beschwerdestelle und KI-Servicedesk **mit voller Wirkung ab
-dem 2. August 2026** wahr. Wer die beiden Daten verwechselt, verliert genau bei dem
-Gegenüber, das diese Folie überzeugen soll.
+kompetenter Rechtsabteilung uninformiert.
+
+Was gilt: **Art. 50 Transparenz seit dem 2. August 2026**, ebenso verbotene Praktiken,
+Art. 4 KI-Kompetenz und die GPAI-Pflichten. Die **Bundesnetzagentur** ist zentrale
+Marktüberwachungsbehörde mit KI-Servicedesk; die Marktüberwachungsvorschriften gelten **ab
+dem 2. August 2026**.
+
+**[KORRIGIERT am 7.8.2026]** Hier stand „das deutsche KI-Marktüberwachungsgesetz ist am
+29. Juli 2026 in Kraft getreten". Belegt ist der **Bundestagsbeschluss zum KI-MIG vom
+11. Juni 2026**; das Inkrafttretensdatum ist nicht verifiziert. **Vom Beschluss sprechen
+und vom 2. August 2026 als Geltungsbeginn der Marktüberwachung** — nicht von einem
+Inkrafttretensdatum, das man am Bundesgesetzblatt nachprüfen könnte.
+Belege: [quellen-und-belege.md § 2](quellen-und-belege.md#2-deutsche-ki-aufsicht).
 
 ## 02 — Ausgangslage
 
@@ -34,14 +43,27 @@ Gegenüber, das diese Folie überzeugen soll.
 > Entscheidungsevidenz.
 
 Kennzahlen (Bitkom 2026, 604 Unternehmen ab 20 Beschäftigten): KI-Einsatz **41 %**
-(Vorjahr 17 %), **48 %** planen den Einsatz.
+(Vorjahr 17 %), **48 %** planen den Einsatz. *Am 7.8.2026 bestätigt.*
 
-*Notiz — ehrlich bleiben:* In derselben Erhebung nennt **niemand** „fehlende
-Nachweisbarkeit der menschlichen Prüfung" als Hemmnis. Genannt werden Datenschutz (77 %),
-Fachkräftemangel (70 %), Kosten (58 %), unklare Anwendungsfälle (51 %). Diese Folie
+**[GEÄNDERT am 7.8.2026 — zwei Zahlen ersetzt, zwei entfernt.]** Bestätigt und ab jetzt zu
+verwenden: nur **21 %** haben eine formale KI-Strategie, und **53 %** nennen **fehlende
+KI-Kompetenz im Team** als größte Hürde. Beide sind stärker als das, was hier stand, weil
+sie eine Lücke beschreiben, die der Kunde selbst benennt.
+
+Die früher hier stehenden Hemmniszahlen — Datenschutz 77 %, Fachkräftemangel 70 %, Kosten
+58 %, unklare Anwendungsfälle 51 % — ließen sich in der Erhebung 2026 **nicht**
+wiederfinden. Bis die Fundstelle geklärt ist: **nicht nennen.**
+Belege und offene Punkte: [quellen-und-belege.md § 3](quellen-und-belege.md#3-bitkom-zahlen).
+
+*Notiz — ehrlich bleiben:* Auch mit den korrigierten Zahlen nennt in dieser Erhebung
+**niemand** „fehlende Nachweisbarkeit der menschlichen Prüfung" als Hemmnis. Diese Folie
 beschreibt eine Lücke, die der Kunde noch nicht als Problem formuliert hat. Wenn im
 Gespräch klar wird, dass er sie auch nach Nachfrage nicht als Problem sieht, ist er nicht
 der richtige Kunde — weitergehen, nicht überreden.
+
+*Brücke, die mit den belegten Zahlen funktioniert:* 41 % setzen KI ein, 21 % haben eine
+Strategie. Die Differenz ist produktive KI ohne festgelegten Entscheidungsweg — und das ist
+genau die Lücke, die Folie 03 beschreibt.
 
 ## 03 — Vorher / Nachher
 
@@ -125,10 +147,18 @@ Live-Betrieb; Evidenz-Übergabe; Abschlussreview mit dokumentierter Go-/No-Go-En
 
 Zahlung per Rechnung, SEPA-Überweisung, netto 14 Tage.
 
-**[GEÄNDERT]** Der öffentliche $-29-Anker auf der Preisseite wird gestrichen; bis das
-umgesetzt ist, die Preisseite im Termin nicht öffnen. Grenzen der Agent- und Gruppenzahl
-sind im Produkt tatsächlich durchgesetzt und dürfen zugesagt werden; die
-Entscheidungs-Allowance ist es nicht und wird nicht zugesagt.
+**[GEÄNDERT am 7.8.2026 — der Anker ist weg.]** Die Preisseite zeigt inzwischen **€ 0 und
+€ 2.500 netto** mit „All prices net of 19% VAT" und „Invoiced in euro by bank transfer".
+**Sie darf im Termin gezeigt werden.** Nur nicht durchklicken: „Start free" führt auf den
+In-Produkt-Billing-Tab, der weiterhin $0 und $29 zeigt.
+
+Grenzen der Agent- und Gruppenzahl sind im Produkt tatsächlich durchgesetzt
+([`entitlements.ts:180-206`](../../packages/nextjs/lib/billing/entitlements.ts)) und dürfen
+zugesagt werden. Die **Entscheidungs-Allowance ist es auf dieser Bahn nicht** — der
+Zähler wird nur in der Assurance-Run-Orchestrierung reserviert, nicht im laufenden
+privaten Prüfpfad — und wird nicht zugesagt. Ebenso **nicht die Aufbewahrungsdauer**: der
+Planrecord hat kein Retention-Feld
+([`plans.ts:11-21`](../../packages/nextjs/lib/billing/plans.ts)).
 
 *Notiz:* Der Preis liegt zwischen dem deutschen AI-Act-Readiness-Scan (ab € 1.950 netto) und
 dem Festpreispaket (€ 4.500 netto) vergleichbarer Anbieter, und eine Größenordnung unter

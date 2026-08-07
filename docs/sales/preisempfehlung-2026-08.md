@@ -34,7 +34,21 @@ dürfen zugesagt werden. **Die Aufbewahrungsdauer ist es nicht** — der Plan-Da
 kein Retention-Feld. Vor dem Verkauf der Staffel verdrahten, sonst wird derselbe Fehler
 wiederholt, wegen dem die Entscheidungs-Allowance nicht verkauft wird.
 
-## 2. Warum der öffentliche $-29-Anker weg muss
+## 2. Warum der öffentliche $-29-Anker weg musste — **erledigt**
+
+**[GEÄNDERT am 7.8.2026.]** Umgesetzt in `4f5599e7b`. Die Preisseite rendert jetzt
+Sandbox € 0 und Founding Pilot € 2.500 netto aus
+[`foundingPilot.ts`](../../packages/nextjs/lib/marketing/foundingPilot.ts), mit dem
+Hinweis „All prices net of 19% VAT". Die sechs Gründe unten stehen als Begründung der
+Entscheidung, nicht als offene Aufgabe.
+
+**Offen bleibt genau eine Stelle:** der In-Produkt-Billing-Tab rendert weiter `$0` und
+`$29` aus den Planrecords
+([`WorkspaceSettingsClient.tsx:1040-1071`](../../packages/nextjs/components/tokenless/WorkspaceSettingsClient.tsx)),
+und die Preisseite verlinkt mit „Start free" genau dorthin. Grund 2 unten — „die Karte
+widerspricht sich selbst" — gilt damit unverändert, nur eine Ebene tiefer. **Das ist der
+letzte Rest des Dollar-Ankers und die einzige Preisinkonsistenz, die ein Interessent
+erreichen kann.**
 
 1. **Seine eigene Bedingung ist nicht erfüllt.** Er sollte bleiben, „solange die
    angezeigten Grenzen und der Checkout-Zustand stimmen". Beides stimmt nicht.
@@ -134,15 +148,25 @@ Zeile Billing-Code nötig.
 
 Vorher zu erledigen:
 
-- **USt-IdNr. ins Impressum** — Pflicht nach § 5 Abs. 1 Nr. 6 DDG und Voraussetzung für
-  jede EU-B2B-Rechnung.
-- **Rechnungsvorlage nach § 14 UStG** mit allen zehn Pflichtangaben.
-- Bei EU-Kunden außerhalb Deutschlands: **§ 14a** — Rechnung bis zum 15. des Folgemonats,
-  **beide USt-IdNr.** und der Hinweis **„Steuerschuldnerschaft des Leistungsempfängers"**;
-  dazu die quartalsweise Zusammenfassende Meldung bis zum 25.
-- **USt-IdNr. des Kunden über die qualifizierte Bestätigungsabfrage des BZSt prüfen** und
+- **USt-IdNr. ins Impressum** — Pflicht nach
+  [§ 5 Abs. 1 Nr. 6 DDG](https://www.gesetze-im-internet.de/ddg/__5.html) und Voraussetzung
+  für jede EU-B2B-Rechnung.
+- **Rechnungsvorlage nach [§ 14 UStG](https://www.gesetze-im-internet.de/ustg_1980/__14.html)**
+  mit allen zehn Pflichtangaben.
+- Bei EU-Kunden außerhalb Deutschlands:
+  **[§ 14a](https://www.gesetze-im-internet.de/ustg_1980/__14a.html)** — Rechnung bis zum
+  15. des Folgemonats, **beide USt-IdNr.** und der Hinweis **„Steuerschuldnerschaft des
+  Leistungsempfängers"**; dazu die quartalsweise Zusammenfassende Meldung bis zum 25.
+  ([§ 18a](https://www.gesetze-im-internet.de/ustg_1980/__18a.html)).
+- **USt-IdNr. des Kunden über die
+  [qualifizierte Bestätigungsabfrage des BZSt](https://www.bzst.de/DE/Unternehmen/Identifikationsnummern/Umsatzsteuer-Identifikationsnummer/Bestaetigungsverfahren/bestaetigungsverfahren_node.html)
+  prüfen** ([§ 18e UStG](https://www.gesetze-im-internet.de/ustg_1980/__18e.html)) und
   die Antwort ablegen. Fällt sie später aus, kann das Finanzamt die Leistung als
-  steuerpflichtig behandeln und 19 % aus bereits vereinnahmtem Entgelt festsetzen.
+  steuerpflichtig behandeln, 19 % aus bereits vereinnahmtem Entgelt festsetzen und
+  [§ 233a AO](https://www.gesetze-im-internet.de/ao_1977/__233a.html)-Zinsen erheben. Im
+  Produkt ist das heute eine reine Formatprüfung
+  ([`fieldFormats.ts:50-55`](../../packages/nextjs/lib/validation/fieldFormats.ts)) — kein
+  Ländercode, keine Prüfsumme, keine VIES- oder BZSt-Anbindung.
 - **Bei einer USD-Rechnung mit deutscher USt. den Steuerberater fragen.** Die Umrechnung
   des Steuerbetrags ist ungeklärt — ein weiteres Argument für EUR.
 
@@ -165,9 +189,23 @@ jedes Nein nach Grund kodiert: Preis / fehlender Sicherheitsnachweis / fehlende 
 
 ## 9. Ungeprüft — vor Verwendung bestätigen
 
-- **BAFA-Förderung „unternehmerisches Know-how"**: berichtet werden 50–80 % Zuschuss auf
-  eine Bemessungsgrundlage bis € 3.500. Träfe das zu, läge ein € 2.500-Pilot vollständig in
-  der geförderten Spanne — ein starker Mittelstandshebel. **Nicht verifiziert.**
+- **BAFA-Förderung „unternehmerisches Know-how" — [GEPRÜFT am 7.8.2026, und das Ergebnis
+  ist negativ.]** Das Programm existiert und die Konditionen sind bestätigt:
+  Bemessungsgrundlage 3.570 €, gedeckelt auf **3.500 €**; **50 %** in den alten, **bis
+  80 %** in den neuen Bundesländern und Berlin (Lüneburg 60 %); maximal förderfähige
+  Beratungskosten 3.500 € für Jungunternehmen, 3.000 € für Bestandsunternehmen; höchstens
+  fünf Beratungen, nicht mehr als zwei pro Jahr; **Richtlinie läuft am 31.12.2026 aus**.
+
+  **Aber gefördert wird eine Unternehmensberatung durch einen bei der BAFA registrierten
+  Berater — keine Softwarelizenz und kein SaaS-Pilot.** Ein Founding Pilot zu € 2.500 fällt
+  in dieser Form nicht darunter. **Den Hebel nicht anbieten und nicht andeuten.** Wer ihn
+  in Aussicht stellt und er fällt aus, hat dem Kunden einen Budgetantrag verdorben und das
+  Vertrauen im teuersten Moment beschädigt.
+
+  Falls der Hebel gewollt ist, ist der Weg eine Partnerschaft mit einer registrierten
+  Beratung, die das Policy-Mapping als förderfähige Beratung erbringt — eine eigene
+  strategische Entscheidung mit eigenem Aufwand, kein Nebenprodukt des Pilotverkaufs.
+  Belege: [quellen-und-belege.md § 6.3](quellen-und-belege.md#63-bafa--verifiziert-und-so-wie-unser-pilot-gebaut-ist-nicht-nutzbar).
 - **Freigabeschwellen von Abteilungsleitern** im Mittelstand. Die kursierenden Zahlen
   (€ 5.000 / € 25.000) haben keine belastbare Quelle. Den € 2.500-Preis nicht damit
   begründen, sondern aus der eigenen Kundenentwicklung.

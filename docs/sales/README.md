@@ -1,5 +1,10 @@
 # Sales collateral — source of truth
 
+**Every factual claim in this folder is sourced in
+[quellen-und-belege.md](quellen-und-belege.md).** Read it before a customer conversation.
+It marks each claim as primary source, retrieved, secondary or unverified, and it lists
+what is still unverified so nobody mistakes an open item for a checked one.
+
 The `.docx` and `.pptx` files in this folder are **build outputs**. The markdown files
 beside them are the source. Edit the markdown, then rebuild the Office files from it.
 
@@ -38,7 +43,7 @@ collateral was making, in German, claims the product refuses to print in English
 | Leitfaden claim table | „Erzeugt signierte, integritätsprüfbare Nachweispakete" listed as *belastbar* | Moved to the caveat column with the mechanism wording |
 | Leitfaden success gates | „offline prüfen" as a contractual gate | Restated as the CLI/browser procedure, not a guaranteed capability |
 | Leitfaden | „Pseudonyme pro Run" | Removed pending confirmation |
-| Pricing, all three | €2.500 pilot against a live public $29 page | Pilot is the entry price. The public $29 anchor is **decided for deletion, not yet deleted** — it is still live on the site |
+| Pricing, all three | €2.500 pilot against a live public $29 page | Pilot is the entry price. **Update 7.8.2026: the public anchor has since been deleted and replaced with €0 / €2.500 netto. Only the in-product billing tab still shows $29.** |
 
 ## The three rules
 
@@ -92,13 +97,27 @@ USt-IdNr. through the BZSt qualified confirmation.
 
 ## Before you send anything
 
-The Office files here are ahead of the product in two places that will be checked:
+**Re-verified against the code on 7 August 2026. Both blockers that stood here are gone,
+and this folder is now 33 commits behind the product.** That is the wrong direction for a
+document whose job is to stop us over-claiming: it now *under*-claims, which costs deals
+instead of credibility.
 
-- The public pricing page still shows $29 against a struck-through $99. Until that is fixed,
-  **do not open the pricing page in a pitch.**
-- „sufficient AI literacy" is still shipped in five places, and it is pinned by a test
-  assertion, so fixing it means touching the test too. Tracked in the readiness list at 0.6.
+| Was blocking | State on 7 August 2026 |
+| ------------ | ---------------------- |
+| Public pricing page shows $29 against a struck-through $99 | **Fixed.** [`WorkspacePlanCards.tsx`](../../packages/nextjs/components/pricing/WorkspacePlanCards.tsx) now renders Sandbox **€0** and Founding Pilot **€2,500** from [`foundingPilot.ts`](../../packages/nextjs/lib/marketing/foundingPilot.ts), with „All prices net of 19% VAT" and „Invoiced in euro by bank transfer". **Open the pricing page in a pitch — it is now an asset.** |
+| „sufficient AI literacy" shipped in five places | **Fixed** in `376591ef1`. The wording is now „Taking measures to support the development of AI literacy… No specific level must be guaranteed for any individual", which is exactly how Regulation (EU) 2026/1744 amended Article 4. |
+| `/rate` lands in the empty reviewer queue | **Fixed** in `47ab6ac67`. A bare `/rate` now redirects to the product page. |
 
-Both are Tier 0 items in
-[german-outreach-readiness-2026-08.md](../german-outreach-readiness-2026-08.md), which is the
+**One place still shows dollars, and it is one click from the fixed page.** The in-product
+billing tab renders `$0` and `$29` from the `free` and `early_access` plan records
+([`WorkspaceSettingsClient.tsx:1040-1071`](../../packages/nextjs/components/tokenless/WorkspaceSettingsClient.tsx)),
+and the pricing page's own „Start free" button sends the visitor to `/agents/billing`. So a
+prospect reads €0 / €2,500 netto, clicks once, and lands on a USD $29 subscription card
+that contradicts both the price and the currency. **Until that is fixed, do not click
+through from the pricing page in a meeting.** It is the last surviving piece of the dollar
+anchor and it is now the only pricing inconsistency a prospect can reach.
+
+Cross-references to readiness items `0.5` and `0.6` have been removed from this folder:
+those items shipped and were deleted from the readiness list, so the pointers were dangling.
+[german-outreach-readiness-2026-08.md](../german-outreach-readiness-2026-08.md) remains the
 companion to this folder and should be read first.
