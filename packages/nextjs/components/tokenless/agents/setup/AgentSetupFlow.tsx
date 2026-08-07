@@ -206,6 +206,9 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   const errors = useAgentTranslations("errors");
   const statusCopy = useAgentTranslations("status");
   const confirmationCopy = useAgentTranslations("reviewConfirmation");
+  // Shared with AgentHumanReviewEditor so the same field reports the same
+  // sentence in both surfaces rather than growing a second wording.
+  const fieldValidationCopy = useAgentTranslations("reviewEditor");
   const policyCopy = useLocalizedReviewPolicyCopy();
   const router = useRouter();
   const reviewAudienceOptions = (
@@ -1091,7 +1094,10 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
         reviewExpertise,
         reviewTiming.panelSize,
       );
-      const timingProfile = buildReviewTimingRequestProfile(expertiseProfile, reviewTiming);
+      const timingProfile = buildReviewTimingRequestProfile(expertiseProfile, reviewTiming, {
+        labels: policyCopy.timing,
+        t: fieldValidationCopy,
+      });
       const compensationConfiguration = buildReviewCompensationConfiguration(timingProfile, reviewCompensation);
       const requestProfile = compensationConfiguration.requestProfile;
       const authority = selection.mode === "manual" ? "check_only" : compensationConfiguration.authority;

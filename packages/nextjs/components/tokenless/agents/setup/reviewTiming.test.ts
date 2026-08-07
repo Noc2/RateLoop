@@ -7,6 +7,7 @@ import {
   reviewTimingFormValues,
 } from "./reviewTiming";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { MAXIMUM_REVIEW_PANEL_SIZE, MINIMUM_REVIEW_PANEL_SIZE } from "~~/lib/tokenless/reviewPanelPolicy";
 import type { AgentSetupReviewDraft } from "~~/lib/tokenless/workspaceAgentSetup";
@@ -107,4 +108,61 @@ test("response window accepts only the protocol range", () => {
     () => buildReviewTimingRequestProfile(profile, { responseWindowSeconds: "3600.5", panelSize: "2" }),
     /whole number/,
   );
+});
+
+test("a German wizard reports the range failure in German, label and sentence both", () => {
+  // The label was already localised while the sentence around it was a template
+  // literal, so a German user met "Prüfende pro Anfrage must be between 2 and
+  // 100." Read the real catalogue rather than restating it, so a key that is
+  // renamed or dropped fails here instead of silently falling back to English.
+  const catalogue = JSON.parse(
+    readFileSync(new URL("../../../../messages/de/agents.json", import.meta.url), "utf8"),
+  ) as { reviewEditor: Record<string, string>; reviewPolicy: Record<string, string> };
+  const labels = {
+    panelSize: catalogue.reviewPolicy.timingPanelSize,
+    responseWindow: catalogue.reviewPolicy.timingResponseWindow,
+  };
+  const t = (key: string, values: Record<string, number | string> = {}) =>
+    Object.entries(values).reduce<string>(
+      (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
+      catalogue.reviewEditor[key] ?? key,
+    );
+
+  assert.throws(
+    () => buildReviewTimingRequestProfile(profile, { responseWindowSeconds: "7200", panelSize: "1" }, { labels, t }),
+    (error: Error) => {
+      assert.equal(error.message, "Prüfende pro Anfrage muss zwischen 2 und 100 liegen.");
+      return true;
+    },
+  );
+  assert.throws(
+    () => buildReviewTimingRequestProfile(profile, { responseWindowSeconds: "3600.5", panelSize: "2" }, { labels, t }),
+    (error: Error) => {
+      assert.equal(error.message, "Antwortfenster muss eine ganze Zahl sein.");
+      return true;
+    },
+  );
+});
+
+test("the localised path leaves no English behind in either message", () => {
+  // A partial thread-through is the failure worth catching: the label localised
+  // while the sentence stayed English is exactly the bug this replaced.
+  const labels = { panelSize: "Prüfende pro Anfrage", responseWindow: "Antwortfenster" };
+  const t = (key: string, values: Record<string, number | string> = {}) =>
+    key === "numberRange"
+      ? `${values.label} muss zwischen ${values.minimum} und ${values.maximum} liegen.`
+      : `${values.label} muss eine ganze Zahl sein.`;
+  for (const values of [
+    { responseWindowSeconds: "7200", panelSize: "1" },
+    { responseWindowSeconds: "1199", panelSize: "2" },
+    { responseWindowSeconds: "3600.5", panelSize: "2" },
+  ]) {
+    assert.throws(
+      () => buildReviewTimingRequestProfile(profile, values, { labels, t }),
+      (error: Error) => {
+        assert.doesNotMatch(error.message, /must be|between|whole number/u);
+        return true;
+      },
+    );
+  }
 });

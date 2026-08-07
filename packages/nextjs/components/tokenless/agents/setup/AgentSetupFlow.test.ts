@@ -174,7 +174,11 @@ test("review setup uses one duration control for the frozen response deadline", 
   assert.match(flowSource, /valueSeconds=\{reviewTiming\.responseWindowSeconds\}/);
   assert.match(flowSource, /summarySuffix=\{t\("frozenWhenOpen"\)\}/);
   assert.match(flowSource, /reviewAudience\.audience === "private_invited" \? MIN_REVIEW_PANEL_SIZE : 3/);
-  assert.match(flowSource, /buildReviewTimingRequestProfile\(expertiseProfile, reviewTiming\)/);
+  // The localised labels and translator must reach the validator, or the field
+  // renders a German label above an English range error.
+  assert.match(flowSource, /buildReviewTimingRequestProfile\(expertiseProfile, reviewTiming, \{/);
+  assert.match(flowSource, /labels: policyCopy\.timing,/);
+  assert.match(flowSource, /t: fieldValidationCopy,/);
   assert.doesNotMatch(flowSource, /Expected active review time|Effective-hourly guidance/);
   assert.doesNotMatch(flowSource, /slo\.estimatedSeconds/);
 });
