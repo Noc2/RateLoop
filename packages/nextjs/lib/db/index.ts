@@ -18,6 +18,23 @@ type DatabaseResources = {
 
 export const POSTGRES_CONNECTION_TIMEOUT_MS = 10_000;
 
+/**
+ * Server-side ceilings on how long a single statement, and a transaction left
+ * idle, may hold a connection.
+ *
+ * `connectionTimeoutMillis` only bounds *acquiring* a connection; once acquired,
+ * a statement could previously run unbounded. Individual modules set
+ * per-transaction timeouts, but every path that did not was one slow query away
+ * from parking a pooled connection — and a slow statement inside a transaction
+ * that holds an advisory lock parks the lock with it.
+ *
+ * Thirty seconds is well above every legitimate query here (the slowest are the
+ * evidence projections) and well below the platform request ceiling, so a
+ * statement that trips this was never going to return usefully.
+ */
+export const POSTGRES_STATEMENT_TIMEOUT_MS = 30_000;
+export const POSTGRES_IDLE_IN_TRANSACTION_TIMEOUT_MS = 60_000;
+
 function normalizeQuery(input: QueryInput) {
   const text = typeof input === "string" ? input : input.sql;
   const values = typeof input === "string" ? [] : (input.args ?? []);
@@ -35,6 +52,8 @@ function createPool(config: { url: string }): Pool {
   const poolConfig: PoolConfig = {
     connectionTimeoutMillis: POSTGRES_CONNECTION_TIMEOUT_MS,
     connectionString: config.url,
+    idle_in_transaction_session_timeout: POSTGRES_IDLE_IN_TRANSACTION_TIMEOUT_MS,
+    statement_timeout: POSTGRES_STATEMENT_TIMEOUT_MS,
   };
 
   return new Pool(poolConfig);
