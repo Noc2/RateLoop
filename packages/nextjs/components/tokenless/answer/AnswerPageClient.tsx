@@ -251,7 +251,9 @@ export function AnswerPageClient({
         {!loading && !signedOut && !error && tasks.length === 0 && assignments.length === 0 ? (
           <Card
             as="div"
-            className="flex min-h-36 flex-col items-center justify-center gap-3 rounded-lg p-6 text-center"
+            // Matches AsyncSection, the shared empty-state card, so signing in
+            // does not change the shape of the box in this slot.
+            className="flex min-h-36 flex-col items-center justify-center gap-3 rounded-2xl p-6 text-center"
           >
             <p className="text-base text-base-content/60">{view === "history" ? t("noHistory") : t("noneAvailable")}</p>
             {view === "active" && !invitationOpen ? (
