@@ -1,0 +1,36 @@
+name: Deployed commit
+
+# Auto-deploy is deliberately disabled for `tokenless`, so a push never reaches the
+# site. Nothing observed the gap that created: the deployment once sat twenty-three
+# commits behind for a full working session and only surfaced when somebody asked.
+# This reports the drift instead. It only reads, and only from the isolated
+# tokenless alias.
+
+on:
+  push:
+    branches: [tokenless]
+  schedule:
+    - cron: "17 8 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deployed-commit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compare:
+    name: Compare the deployed commit with the branch head
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: tokenless
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+      - name: Compare
+        run: node packages/nextjs/scripts/check-deployed-commit.mjs "$(git rev-parse HEAD)"
