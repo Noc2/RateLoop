@@ -22,6 +22,24 @@ import { reviewPolicyCopy } from "~~/components/tokenless/agents/reviewPolicyCop
  */
 export type SetupTranslate = (key: string, values?: Record<string, number | string>) => string;
 
+/**
+ * Marks an error whose message is safe and useful to show the person filling in
+ * the form: it is one of the strings below, already localized, and describes
+ * something they can correct.
+ *
+ * The wizard's save handler catches everything, so without a way to tell these
+ * apart from a failed fetch it had to show one generic sentence for both — which
+ * is exactly what it did, making every message in this module unreachable. The
+ * distinction matters in the other direction too: a server or transport error
+ * must keep the generic fallback rather than put a raw driver message on screen.
+ */
+export class SetupValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SetupValidationError";
+  }
+}
+
 type Stringy<T> = { [K in keyof T]: T[K] extends string ? string : Stringy<T[K]> };
 
 /** `reviewPolicyCopy` widened so the localized hook's return value also satisfies it. */
@@ -58,7 +76,7 @@ export function setupMessages(localization?: SetupLocalization) {
     percentRange: (label: string, minimum: number) =>
       editor ? editor("percentRange", { label, minimum }) : `${label} must be between ${minimum}% and 100%.`,
     decimalPlaces: (label: string) =>
-      editor ? editor("decimalPlaces", { label }) : `${label} must be a decimal with up to 6 places.`,
+      editor ? editor("decimalPlaces", { label }) : `${label} must have at most six decimal places.`,
     greaterThanZero: (label: string) =>
       editor ? editor("greaterThanZero", { label }) : `${label} must be greater than zero.`,
     amountRange: (label: string) =>
@@ -75,15 +93,18 @@ export function setupMessages(localization?: SetupLocalization) {
     hybridSpecialistSeats: () =>
       flow ? flow("hybridSpecialistSeats") : "Hybrid specialist seats are not available yet.",
     chooseSpecialist: () => (flow ? flow("chooseSpecialist") : "Choose at least one specialist area."),
+    savedSpecialistArea: () => (flow ? flow("savedSpecialistArea") : "Saved specialist area"),
     savedBountyInvalid: () => (flow ? flow("savedBountyInvalid") : "Saved USDC bounty is invalid."),
     savedBountyRange: () => (flow ? flow("savedBountyRange") : "Saved USDC bounty is outside the supported range."),
     invalidAuthority: () => (flow ? flow("invalidAuthority") : "Choose a valid agent authority."),
     invalidCompensation: () => (flow ? flow("invalidCompensation") : "Choose a valid reviewer payment."),
     invalidBonusAwarder: () => (flow ? flow("invalidBonusAwarder") : "Choose a valid Feedback Bonus awarder."),
+    // Reuses reviewEditor.awarderRequired, which AgentHumanReviewEditor already
+    // raises for this same field. A second key held the identical English and a
+    // divergent German that renamed the field, which is the drift this module
+    // was written to prevent.
     bonusAwarderAccountRequired: () =>
-      flow
-        ? flow("bonusAwarderAccountRequired")
-        : "Enter the authenticated account for the designated Feedback Bonus awarder.",
+      editor ? editor("awarderRequired") : "Enter the authenticated account for the designated Feedback Bonus awarder.",
     riskTierFormat: () =>
       flow
         ? flow("riskTierFormat")

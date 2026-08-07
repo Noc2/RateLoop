@@ -59,7 +59,7 @@ import {
   buildReviewTimingRequestProfile,
   reviewTimingFormValues,
 } from "./reviewTiming";
-import type { SetupLocalization } from "./setupMessages";
+import { type SetupLocalization, SetupValidationError } from "./setupMessages";
 import { InfoPopover } from "~~/components/tokenless/InfoPopover";
 import { useRateLoopNotifications } from "~~/components/tokenless/RateLoopNotificationProvider";
 import { humanReviewConfirmationMessage } from "~~/components/tokenless/agents/humanReviewConfirmation";
@@ -1281,8 +1281,12 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
         },
       });
       await loadStep("people");
-    } catch {
-      captureFormError(completion("saveReviews"), completion("saveReviews"));
+    } catch (cause) {
+      // A validation error carries a localized sentence naming the field the
+      // reader can fix; anything else is a transport or server failure whose
+      // message must not reach the screen. Without this split every step
+      // builder's message was replaced by one generic sentence.
+      captureFormError(cause instanceof SetupValidationError ? cause : null, completion("saveReviews"));
     } finally {
       setBusy(false);
     }
@@ -1821,7 +1825,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                                 <div className="min-w-0">
                                   <p className="font-medium">
-                                    {definition?.label ?? expertiseRequirementLabel(requirement, expertiseDefinitions)}
+                                    {definition?.label ??
+                                      expertiseRequirementLabel(requirement, expertiseDefinitions, setupLocalization)}
                                   </p>
                                   {definition?.description ? (
                                     <p className="mt-1 text-sm leading-6 text-base-content/55">
@@ -2283,7 +2288,10 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                           key={`${requirement.definitionId}:${requirement.definitionVersion}:${requirement.definitionHash}`}
                           className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-base-content/10 px-3 py-2 text-sm"
                         >
-                          <span>{coverage?.label ?? expertiseRequirementLabel(requirement, expertiseDefinitions)}</span>
+                          <span>
+                            {coverage?.label ??
+                              expertiseRequirementLabel(requirement, expertiseDefinitions, setupLocalization)}
+                          </span>
                           <span className="text-base-content/55">
                             {coverage
                               ? `${completion("coverageConfirmed", {
@@ -2459,7 +2467,13 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                                           )
                                         }
                                       />
-                                      <span>{expertiseRequirementLabel(requirement, expertiseDefinitions)}</span>
+                                      <span>
+                                        {expertiseRequirementLabel(
+                                          requirement,
+                                          expertiseDefinitions,
+                                          setupLocalization,
+                                        )}
+                                      </span>
                                     </label>
                                   ))}
                                 </div>

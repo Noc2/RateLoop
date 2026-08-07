@@ -1,4 +1,4 @@
-import { type SetupLocalization, setupMessages } from "./setupMessages";
+import { type SetupLocalization, SetupValidationError, setupMessages } from "./setupMessages";
 import type { AgentSetupReviewDraft } from "~~/lib/tokenless/workspaceAgentSetup";
 
 type ReviewRequestProfile = AgentSetupReviewDraft["requestProfile"];
@@ -26,7 +26,7 @@ export function privateClassificationsThrough(
   localization?: SetupLocalization,
 ): ReviewAudienceFormValues["privateSensitivity"][] {
   const maximum = PRIVATE_SENSITIVITY_ORDER.indexOf(sensitivity);
-  if (maximum < 0) throw new Error(setupMessages(localization).invalidSensitivity());
+  if (maximum < 0) throw new SetupValidationError(setupMessages(localization).invalidSensitivity());
   return PRIVATE_SENSITIVITY_ORDER.slice(0, maximum + 1);
 }
 

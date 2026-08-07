@@ -1,4 +1,5 @@
 import type { ReviewRequestProfileInput } from "./reviewCriterion";
+import { SetupValidationError } from "./setupMessages";
 import { reviewPolicyCopy } from "~~/components/tokenless/agents/reviewPolicyCopy";
 import {
   MAXIMUM_REVIEW_PANEL_SIZE,
@@ -56,11 +57,11 @@ function requiredInteger(
   t: ReviewTimingTranslate | undefined,
 ) {
   if (!/^\d+$/u.test(value.trim())) {
-    throw new Error(t ? t("wholeNumber", { label }) : `${label} must be a whole number.`);
+    throw new SetupValidationError(t ? t("wholeNumber", { label }) : `${label} must be a whole number.`);
   }
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || parsed < minimum || parsed > maximum) {
-    throw new Error(
+    throw new SetupValidationError(
       t ? t("numberRange", { label, minimum, maximum }) : `${label} must be between ${minimum} and ${maximum}.`,
     );
   }

@@ -3,7 +3,7 @@ import { buildReviewCompensationConfiguration, reviewCompensationFormValues } fr
 import { buildReviewCriterionRequestProfile } from "./reviewCriterion";
 import { buildReviewExpertiseRequestProfile, requirementForDefinition } from "./reviewExpertise";
 import { buildReviewFrequencySelection } from "./reviewFrequency";
-import { type SetupLocalization, setupMessages } from "./setupMessages";
+import { type SetupLocalization, SetupValidationError, setupMessages } from "./setupMessages";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -104,6 +104,15 @@ const profile = {
 /** Any of these surviving means an English fragment leaked into a German message. */
 const ENGLISH = /\b(must|Choose|Enter|is required|between|whole number|outside|supported|valid|at least|differ)\b/u;
 
+function germanError(run: () => unknown) {
+  try {
+    run();
+  } catch (error) {
+    return error;
+  }
+  return assert.fail("expected the builder to reject this input");
+}
+
 function germanMessage(run: () => unknown) {
   try {
     run();
@@ -113,128 +122,128 @@ function germanMessage(run: () => unknown) {
   return assert.fail("expected the builder to reject this input");
 }
 
-test("every wizard step raises its validation errors in German", () => {
-  const cases: Array<[string, () => unknown]> = [
-    ["audience sensitivity", () => privateClassificationsThrough("nonsense" as never, german)],
-    [
-      "rationale mode",
-      () =>
-        buildReviewCriterionRequestProfile(
-          profile,
-          { ...profile, rationaleMode: "nonsense" as never, criterion: "x", positiveLabel: "a", negativeLabel: "b" },
-          german,
-        ),
-    ],
-    [
-      "empty criterion",
-      () =>
-        buildReviewCriterionRequestProfile(
-          profile,
-          { ...profile, criterion: "   ", positiveLabel: "a", negativeLabel: "b" },
-          german,
-        ),
-    ],
-    [
-      "identical answer labels",
-      () =>
-        buildReviewCriterionRequestProfile(
-          profile,
-          { ...profile, criterion: "x", positiveLabel: "Ja", negativeLabel: "ja" },
-          german,
-        ),
-    ],
-    [
-      "hybrid specialist seats",
-      () =>
-        requirementForDefinition({
-          audience: "hybrid",
-          definition: { definitionId: "d", version: 1, hash: "h" } as never,
-          localization: german,
-          panelSize: 3,
-        }),
-    ],
-    [
-      "no specialist area chosen",
-      () =>
-        buildReviewExpertiseRequestProfile(
-          profile,
-          { needsSpecialists: true, requirements: [], legacyRequiredExpertiseKeys: [] } as never,
-          2,
-          german,
-        ),
-    ],
-    [
-      "invalid authority",
-      () =>
-        buildReviewCompensationConfiguration(
-          profile,
-          { compensationMode: "unpaid", usdcPerReviewer: "1", authority: "nonsense" as never },
-          german,
-        ),
-    ],
-    [
-      "bonus awarder account missing",
-      () =>
-        buildReviewCompensationConfiguration(
-          profile,
-          {
-            authority: "check_only",
-            compensationMode: "unpaid",
-            feedbackBonusAwarderAccount: "",
-            feedbackBonusAwarderKind: "designated",
-            usdcPerReviewer: "1",
-          },
-          german,
-        ),
-    ],
-    [
-      "corrupt saved bounty",
-      () =>
-        reviewCompensationFormValues(
-          { ...profile, bountyPerSeatAtomic: "0x", configurationStatus: "ready" },
-          null,
-          german,
-        ),
-    ],
-    [
-      "maximum gap not a whole number",
-      () =>
-        buildReviewFrequencySelection(
-          { mode: "adaptive" } as never,
-          { mode: "adaptive", maximumUnreviewedGap: "1.5" } as never,
-          german,
-        ),
-    ],
-    [
-      "fixed rate out of range",
-      () =>
-        buildReviewFrequencySelection(
-          { mode: "fixed" } as never,
-          { mode: "fixed", fixedPercent: "0", maximumUnreviewedGap: "10" } as never,
-          german,
-        ),
-    ],
-    [
-      "risk tier format",
-      () =>
-        buildReviewFrequencySelection(
-          { mode: "rules" } as never,
-          { mode: "rules", requiredRiskTiers: "!!bad!!", minimumConfidencePercent: "" } as never,
-          german,
-        ),
-    ],
-    [
-      "no rule condition",
-      () =>
-        buildReviewFrequencySelection(
-          { mode: "rules" } as never,
-          { mode: "rules", requiredRiskTiers: "", minimumConfidencePercent: "" } as never,
-          german,
-        ),
-    ],
-  ];
+const validationCases: Array<[string, () => unknown]> = [
+  ["audience sensitivity", () => privateClassificationsThrough("nonsense" as never, german)],
+  [
+    "rationale mode",
+    () =>
+      buildReviewCriterionRequestProfile(
+        profile,
+        { ...profile, rationaleMode: "nonsense" as never, criterion: "x", positiveLabel: "a", negativeLabel: "b" },
+        german,
+      ),
+  ],
+  [
+    "empty criterion",
+    () =>
+      buildReviewCriterionRequestProfile(
+        profile,
+        { ...profile, criterion: "   ", positiveLabel: "a", negativeLabel: "b" },
+        german,
+      ),
+  ],
+  [
+    "identical answer labels",
+    () =>
+      buildReviewCriterionRequestProfile(
+        profile,
+        { ...profile, criterion: "x", positiveLabel: "Ja", negativeLabel: "ja" },
+        german,
+      ),
+  ],
+  [
+    "hybrid specialist seats",
+    () =>
+      requirementForDefinition({
+        audience: "hybrid",
+        definition: { definitionId: "d", version: 1, hash: "h" } as never,
+        localization: german,
+        panelSize: 3,
+      }),
+  ],
+  [
+    "no specialist area chosen",
+    () =>
+      buildReviewExpertiseRequestProfile(
+        profile,
+        { needsSpecialists: true, requirements: [], legacyRequiredExpertiseKeys: [] } as never,
+        2,
+        german,
+      ),
+  ],
+  [
+    "invalid authority",
+    () =>
+      buildReviewCompensationConfiguration(
+        profile,
+        { compensationMode: "unpaid", usdcPerReviewer: "1", authority: "nonsense" as never },
+        german,
+      ),
+  ],
+  [
+    "bonus awarder account missing",
+    () =>
+      buildReviewCompensationConfiguration(
+        profile,
+        {
+          authority: "check_only",
+          compensationMode: "unpaid",
+          feedbackBonusAwarderAccount: "",
+          feedbackBonusAwarderKind: "designated",
+          usdcPerReviewer: "1",
+        },
+        german,
+      ),
+  ],
+  [
+    "corrupt saved bounty",
+    () =>
+      reviewCompensationFormValues(
+        { ...profile, bountyPerSeatAtomic: "0x", configurationStatus: "ready" },
+        null,
+        german,
+      ),
+  ],
+  [
+    "maximum gap not a whole number",
+    () =>
+      buildReviewFrequencySelection(
+        { mode: "adaptive" } as never,
+        { mode: "adaptive", maximumUnreviewedGap: "1.5" } as never,
+        german,
+      ),
+  ],
+  [
+    "fixed rate out of range",
+    () =>
+      buildReviewFrequencySelection(
+        { mode: "fixed" } as never,
+        { mode: "fixed", fixedPercent: "0", maximumUnreviewedGap: "10" } as never,
+        german,
+      ),
+  ],
+  [
+    "risk tier format",
+    () =>
+      buildReviewFrequencySelection(
+        { mode: "rules" } as never,
+        { mode: "rules", requiredRiskTiers: "!!bad!!", minimumConfidencePercent: "" } as never,
+        german,
+      ),
+  ],
+  [
+    "no rule condition",
+    () =>
+      buildReviewFrequencySelection(
+        { mode: "rules" } as never,
+        { mode: "rules", requiredRiskTiers: "", minimumConfidencePercent: "" } as never,
+        german,
+      ),
+  ],
+];
 
-  for (const [name, run] of cases) {
+test("every wizard step raises its validation errors in German", () => {
+  for (const [name, run] of validationCases) {
     const message = germanMessage(run);
     assert.doesNotMatch(message, ENGLISH, `${name} still leaks English: ${message}`);
     assert.ok(message.length > 0, `${name} produced an empty message`);
@@ -260,4 +269,33 @@ test("the audience builder still accepts a valid sensitivity", () => {
     buildReviewAudienceRequestProfile({ ...profile, configurationStatus: "ready" }, profile).audience,
     "private_invited",
   );
+});
+
+test("validation errors are distinguishable from transport failures", () => {
+  // The wizard's save handler catches everything. Without this marker it had to
+  // show one generic sentence for a fixable field error and for a failed fetch
+  // alike, which made every message in this module unreachable.
+  const validation = germanError(() =>
+    buildReviewCompensationConfiguration(
+      profile,
+      { authority: "nonsense" as never, compensationMode: "unpaid", usdcPerReviewer: "1" },
+      german,
+    ),
+  );
+  assert.ok(validation instanceof SetupValidationError);
+  assert.ok(!(new TypeError("fetch failed") instanceof SetupValidationError));
+});
+
+test("every builder marks its rejections so the wizard can surface them", () => {
+  // A builder that throws a plain Error would be silently swallowed into the
+  // generic message, which is the failure this whole module exists to remove.
+  for (const [name, run] of validationCases) {
+    let thrown: unknown;
+    try {
+      run();
+    } catch (error) {
+      thrown = error;
+    }
+    assert.ok(thrown instanceof SetupValidationError, `${name} must throw SetupValidationError`);
+  }
 });

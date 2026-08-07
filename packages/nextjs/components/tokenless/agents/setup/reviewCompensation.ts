@@ -1,5 +1,5 @@
 import type { ReviewRequestProfileInput } from "./reviewCriterion";
-import { type SetupLocalization, type SetupMessages, setupMessages } from "./setupMessages";
+import { type SetupLocalization, type SetupMessages, SetupValidationError, setupMessages } from "./setupMessages";
 import type { AgentSetupReviewDraft } from "~~/lib/tokenless/workspaceAgentSetup";
 
 type ReviewRequestProfile = AgentSetupReviewDraft["requestProfile"];
@@ -23,9 +23,9 @@ const USDC_DECIMAL_PATTERN = /^([0-9]+)(?:\.([0-9]{1,6}))?$/u;
 
 export function usdcAtomicToDecimal(value: string, localization?: SetupLocalization) {
   const messages = setupMessages(localization);
-  if (!POSITIVE_ATOMIC_PATTERN.test(value)) throw new Error(messages.savedBountyInvalid());
+  if (!POSITIVE_ATOMIC_PATTERN.test(value)) throw new SetupValidationError(messages.savedBountyInvalid());
   const atomic = BigInt(value);
-  if (atomic > MAX_USDC_ATOMIC) throw new Error(messages.savedBountyRange());
+  if (atomic > MAX_USDC_ATOMIC) throw new SetupValidationError(messages.savedBountyRange());
   const whole = atomic / USDC_SCALE;
   const fraction = (atomic % USDC_SCALE).toString().padStart(6, "0").replace(/0+$/u, "");
   return fraction ? `${whole}.${fraction}` : whole.toString();
@@ -35,14 +35,14 @@ function usdcDecimalToAtomic(value: string, panelSize: number, messages: SetupMe
   const label = messages.policy.payment.bountyPerReviewer;
   const normalized = value.trim();
   if (normalized.length > REVIEW_USDC_DECIMAL_MAX_LENGTH) {
-    throw new Error(messages.amountRange(label));
+    throw new SetupValidationError(messages.amountRange(label));
   }
   const match = USDC_DECIMAL_PATTERN.exec(normalized);
-  if (!match) throw new Error(messages.decimalPlaces(label));
+  if (!match) throw new SetupValidationError(messages.decimalPlaces(label));
   const atomic = BigInt(match[1]!) * USDC_SCALE + BigInt((match[2] ?? "").padEnd(6, "0") || "0");
-  if (atomic <= 0n) throw new Error(messages.greaterThanZero(label));
+  if (atomic <= 0n) throw new SetupValidationError(messages.greaterThanZero(label));
   if (atomic > MAX_USDC_ATOMIC || atomic * BigInt(panelSize) > MAX_USDC_ATOMIC) {
-    throw new Error(messages.amountRangeForPanel(label));
+    throw new SetupValidationError(messages.amountRangeForPanel(label));
   }
   return atomic.toString();
 }
@@ -80,11 +80,11 @@ export function buildReviewCompensationConfiguration(
       values.authority === "ask_automatically"
     )
   ) {
-    throw new Error(messages.invalidAuthority());
+    throw new SetupValidationError(messages.invalidAuthority());
   }
   const compensationMode = profile.audience === "private_invited" ? values.compensationMode : "usdc";
   if (!(compensationMode === "unpaid" || compensationMode === "usdc")) {
-    throw new Error(messages.invalidCompensation());
+    throw new SetupValidationError(messages.invalidCompensation());
   }
   const bountyPerSeatAtomic =
     compensationMode === "unpaid"
@@ -94,10 +94,10 @@ export function buildReviewCompensationConfiguration(
   const feedbackBonusAwarderKind = values.feedbackBonusAwarderKind ?? "requester";
   const feedbackBonusAwarderAccount = (values.feedbackBonusAwarderAccount ?? "").trim();
   if (!(feedbackBonusAwarderKind === "requester" || feedbackBonusAwarderKind === "designated")) {
-    throw new Error(messages.invalidBonusAwarder());
+    throw new SetupValidationError(messages.invalidBonusAwarder());
   }
   if (feedbackBonusAwarderKind === "designated" && !feedbackBonusAwarderAccount) {
-    throw new Error(messages.bonusAwarderAccountRequired());
+    throw new SetupValidationError(messages.bonusAwarderAccountRequired());
   }
   const feedbackBonusPoolAtomic = feedbackBonusEnabled
     ? usdcDecimalToAtomic(values.feedbackBonusUsdc ?? "", 1, messages)

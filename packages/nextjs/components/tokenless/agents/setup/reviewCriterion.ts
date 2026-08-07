@@ -1,4 +1,4 @@
-import { type SetupLocalization, type SetupMessages, setupMessages } from "./setupMessages";
+import { type SetupLocalization, type SetupMessages, SetupValidationError, setupMessages } from "./setupMessages";
 import type { AgentSetupReviewDraft } from "~~/lib/tokenless/workspaceAgentSetup";
 
 type ReviewRequestProfile = AgentSetupReviewDraft["requestProfile"];
@@ -22,8 +22,8 @@ export const REVIEW_ANSWER_LABEL_MAX_LENGTH = 40;
 
 function requiredText(value: string, label: string, maximum: number, messages: SetupMessages) {
   const normalized = value.trim();
-  if (!normalized) throw new Error(messages.required(label));
-  if (normalized.length > maximum) throw new Error(messages.maxLength(label, maximum));
+  if (!normalized) throw new SetupValidationError(messages.required(label));
+  if (normalized.length > maximum) throw new SetupValidationError(messages.maxLength(label, maximum));
   return normalized;
 }
 
@@ -44,7 +44,7 @@ export function buildReviewCriterionRequestProfile(
 ): ReviewRequestProfileInput {
   const messages = setupMessages(localization);
   if (!(values.rationaleMode === "off" || values.rationaleMode === "optional" || values.rationaleMode === "required")) {
-    throw new Error(messages.invalidRationale());
+    throw new SetupValidationError(messages.invalidRationale());
   }
   const { resultSemantics: _resultSemantics, ...input } = profile;
   void _resultSemantics;
@@ -55,7 +55,7 @@ export function buildReviewCriterionRequestProfile(
     void _negativeLabel;
     return { ...dynamic, questionAuthority: "agent_per_request", rationaleMode: values.rationaleMode };
   }
-  if (values.questionAuthority !== "owner_fixed") throw new Error(messages.invalidQuestionAuthority());
+  if (values.questionAuthority !== "owner_fixed") throw new SetupValidationError(messages.invalidQuestionAuthority());
   const criterion = requiredText(
     values.criterion,
     messages.policy.question.criterion,
@@ -75,7 +75,7 @@ export function buildReviewCriterionRequestProfile(
     messages,
   );
   if (positiveLabel.toLocaleLowerCase("en-US") === negativeLabel.toLocaleLowerCase("en-US")) {
-    throw new Error(messages.answerLabelsMustDiffer());
+    throw new SetupValidationError(messages.answerLabelsMustDiffer());
   }
   return {
     ...input,

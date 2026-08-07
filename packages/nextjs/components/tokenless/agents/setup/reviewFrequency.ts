@@ -1,4 +1,4 @@
-import { type SetupLocalization, type SetupMessages, setupMessages } from "./setupMessages";
+import { type SetupLocalization, type SetupMessages, SetupValidationError, setupMessages } from "./setupMessages";
 import { ADAPTIVE_MONITORING_FLOOR_BPS } from "~~/lib/tokenless/adaptiveReviewPolicy";
 import type { AgentSetupReviewDraft, AgentSetupReviewMode } from "~~/lib/tokenless/workspaceAgentSetup";
 
@@ -43,11 +43,11 @@ export function reviewFrequencySummary(selection: ReviewSelection | null | undef
 function percentageBps(value: string, field: string, minimumBps: number, messages: SetupMessages) {
   const normalized = value.trim();
   if (!/^\d{1,3}(?:\.\d{1,2})?$/u.test(normalized)) {
-    throw new Error(messages.percentDecimals(field));
+    throw new SetupValidationError(messages.percentDecimals(field));
   }
   const bps = Math.round(Number(normalized) * 100);
   if (!Number.isSafeInteger(bps) || bps < minimumBps || bps > 10_000) {
-    throw new Error(messages.percentRange(field, minimumBps / 100));
+    throw new SetupValidationError(messages.percentRange(field, minimumBps / 100));
   }
   return bps;
 }
@@ -60,10 +60,10 @@ function maximumGap(value: string, messages: SetupMessages) {
   // The label is the one rendered above the field, so the error names what the
   // reader is looking at rather than restating it in English prose.
   const label = messages.policy.limits.maximumGap;
-  if (!/^\d+$/u.test(value.trim())) throw new Error(messages.wholeNumber(label));
+  if (!/^\d+$/u.test(value.trim())) throw new SetupValidationError(messages.wholeNumber(label));
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > 10_000) {
-    throw new Error(messages.numberRange(label, 1, 10_000));
+    throw new SetupValidationError(messages.numberRange(label, 1, 10_000));
   }
   return parsed;
 }
@@ -78,7 +78,7 @@ function riskTiers(value: string, messages: SetupMessages) {
     ),
   ];
   if (tiers.length > 20 || tiers.some(tier => !/^[a-z][a-z0-9_-]{0,63}$/u.test(tier))) {
-    throw new Error(messages.riskTierFormat());
+    throw new SetupValidationError(messages.riskTierFormat());
   }
   return tiers.sort();
 }
@@ -118,7 +118,7 @@ export function buildReviewFrequencySelection(
       messages,
     );
     if (requiredRiskTiers.length === 0 && minimumConfidenceBps === null) {
-      throw new Error(messages.ruleConditionRequired());
+      throw new SetupValidationError(messages.ruleConditionRequired());
     }
     return { ...next, requiredRiskTiers, minimumConfidenceBps };
   }

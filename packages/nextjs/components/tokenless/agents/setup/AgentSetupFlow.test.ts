@@ -340,7 +340,15 @@ test("setup applies shared fields and preserves server field errors across edita
   assert.ok((flowSource.match(/<Field/g)?.length ?? 0) >= 12);
   assert.match(flowSource, /const \{ capture: captureFormError, clear: clearFormErrors, fieldErrors, formError \}/);
   assert.match(flowSource, /typeof body\.field === "string" \? body\.field : null/);
-  assert.match(flowSource, /captureFormError\(completion\("saveReviews"\), completion\("saveReviews"\)\)/);
+  // The review step used to pass the generic sentence as both the value and the
+  // fallback, so a builder's localized field error was replaced by "Unable to
+  // save review behavior" and never reached the reader. It now forwards the
+  // validation error and keeps the generic sentence for transport failures only.
+  assert.match(
+    flowCalls,
+    /captureFormError\( ?cause instanceof SetupValidationError \? cause : null, completion\("saveReviews"\),? ?\)/,
+  );
+  assert.doesNotMatch(flowCalls, /captureFormError\( ?completion\("saveReviews"\), completion\("saveReviews"\)/);
   // Only these five field names are ever returned as `field` by the agent-setup API, so a binding
   // for any other name is a control that can never show an error. Keep the wiring honest: the
   // rendered behaviour of these bindings is covered by AgentSetupFlow.interaction.test.tsx.

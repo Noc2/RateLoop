@@ -1,5 +1,5 @@
 import type { ReviewRequestProfileInput } from "./reviewCriterion";
-import { type SetupLocalization, setupMessages } from "./setupMessages";
+import { type SetupLocalization, SetupValidationError, setupMessages } from "./setupMessages";
 import {
   REVIEWER_EXPERTISE,
   type ReviewerExpertiseDefinition,
@@ -42,7 +42,7 @@ export function requirementForDefinition(input: {
   panelSize: number | string;
 }): ReviewerExpertiseRequirement {
   if (input.audience === "hybrid") {
-    throw new Error(setupMessages(input.localization).hybridSpecialistSeats());
+    throw new SetupValidationError(setupMessages(input.localization).hybridSpecialistSeats());
   }
   const reviewers = panelSize(input.panelSize);
   const network = input.audience === "public_network";
@@ -129,7 +129,7 @@ export function buildReviewExpertiseRequestProfile(
     ? normalizeReviewerExpertiseRequirementsSelection(values.requirements, panelSize(selectedPanelSize))
     : [];
   if (values.needsSpecialists && requirements.length === 0) {
-    throw new Error(setupMessages(localization).chooseSpecialist());
+    throw new SetupValidationError(setupMessages(localization).chooseSpecialist());
   }
   const reviewers = panelSize(selectedPanelSize);
   const legacyDefinitionIds = new Set<string>(
@@ -162,11 +162,14 @@ export function buildReviewExpertiseRequestProfile(
 export function expertiseRequirementLabel(
   requirement: ReviewerExpertiseRequirement,
   definitions: readonly ReviewerExpertiseDefinition[],
+  localization?: SetupLocalization,
 ) {
   return (
     definitions.find(definition => definition.definitionId === requirement.definitionId)?.label ??
     REVIEWER_EXPERTISE.find(option => option.definitionId === requirement.definitionId)?.label ??
-    "Saved specialist area"
+    // Reached when a saved requirement names a definition this workspace can no
+    // longer resolve, so the reader sees it in place of a real area name.
+    setupMessages(localization).savedSpecialistArea()
   );
 }
 
