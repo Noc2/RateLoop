@@ -22,6 +22,7 @@ import {
 } from "./tokenlessMedia";
 import {
   MAX_REVIEW_PANEL_SIZE,
+  MIN_PUBLIC_REVIEW_PANEL_SIZE,
   MIN_REVIEW_PANEL_SIZE,
   TOKENLESS_QUOTE_REQUEST_JSON_SCHEMA,
   TOKENLESS_RESULT_JSON_SCHEMA,
@@ -122,6 +123,7 @@ test("package root exposes only the tokenless client, schema, types, and generic
       "TOKENLESS_X402_DOMAIN",
       "TOKENLESS_X402_ROUND_AUTHORIZATION_DOMAIN",
       "MAX_REVIEW_PANEL_SIZE",
+      "MIN_PUBLIC_REVIEW_PANEL_SIZE",
       "MIN_REVIEW_PANEL_SIZE",
       "buildTokenlessEip3009TypedData",
       "buildTokenlessPrivateReviewCommitmentQuestion",
@@ -1457,4 +1459,20 @@ test("panel-size bounds match what the service enforces on a profile", () => {
     },
   });
   assert.equal(largest.reviewEconomics?.panelSize, MAX_REVIEW_PANEL_SIZE);
+});
+
+test("the published quote bound cannot exceed what a profile can hold", () => {
+  // A quote is only ever fulfilled from a review request profile, and a profile
+  // caps at MAX_REVIEW_PANEL_SIZE. Publishing 500 promised integrators a panel
+  // no profile could carry: the quote validated, and then nothing could redeem
+  // it. The floor stays at three because a quote only ever describes a network
+  // panel, which needs a third reviewer to break a tie.
+  const requestedPanelSize =
+    TOKENLESS_QUOTE_REQUEST_JSON_SCHEMA.properties.requestedPanelSize;
+  assert.equal(requestedPanelSize.maximum, MAX_REVIEW_PANEL_SIZE);
+  assert.equal(requestedPanelSize.minimum, MIN_PUBLIC_REVIEW_PANEL_SIZE);
+  assert.ok(
+    requestedPanelSize.minimum > MIN_REVIEW_PANEL_SIZE,
+    "a network quote must not offer the private two-reviewer floor",
+  );
 });

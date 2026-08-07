@@ -12,6 +12,7 @@ import {
   type HumanReviewAudienceSource,
   configuredHumanReviewAudienceSources,
 } from "~~/lib/tokenless/reviewCapabilities";
+import { MAXIMUM_REVIEW_PANEL_SIZE, MINIMUM_PUBLIC_REVIEW_PANEL_SIZE } from "~~/lib/tokenless/reviewPanelPolicy";
 import { getTokenlessAskByIdempotencyKey } from "~~/lib/tokenless/server";
 
 export const TOKENLESS_HANDOFF_VERSION = "rateloop.handoff.v1" as const;
@@ -99,10 +100,13 @@ export function parseMcpQuoteRequest(
   }
   if (
     !Number.isSafeInteger(input.requestedPanelSize) ||
-    Number(input.requestedPanelSize) < 3 ||
-    Number(input.requestedPanelSize) > 500
+    Number(input.requestedPanelSize) < MINIMUM_PUBLIC_REVIEW_PANEL_SIZE ||
+    Number(input.requestedPanelSize) > MAXIMUM_REVIEW_PANEL_SIZE
   ) {
-    toolError("request.requestedPanelSize must be an integer from 3 to 500.", "invalid_quote");
+    toolError(
+      `request.requestedPanelSize must be an integer from ${MINIMUM_PUBLIC_REVIEW_PANEL_SIZE} to ${MAXIMUM_REVIEW_PANEL_SIZE}.`,
+      "invalid_quote",
+    );
   }
   const requestedPanelSize = Number(input.requestedPanelSize);
   if (BigInt(attemptReserveAtomic) < BigInt(requestedPanelSize)) {

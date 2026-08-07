@@ -45,6 +45,12 @@ const MAX_RESPONSE_WINDOW_SECONDS = 86_400;
  */
 export const MIN_REVIEW_PANEL_SIZE = 2;
 export const MAX_REVIEW_PANEL_SIZE = 100;
+/**
+ * Public-network and hybrid panels need a third reviewer to break a tie, so a
+ * quote — which only ever describes a network panel — starts at three rather
+ * than at the private minimum of two.
+ */
+export const MIN_PUBLIC_REVIEW_PANEL_SIZE = 3;
 
 function invalid(path: string, expectation: string): never {
   throw new RateLoopSdkError(
@@ -954,7 +960,7 @@ export const TOKENLESS_QUOTE_REQUEST_JSON_SCHEMA = {
       type: "object",
     },
     question: { type: "object" },
-    requestedPanelSize: { maximum: 500, minimum: 3, type: "integer" },
+    requestedPanelSize: { maximum: MAX_REVIEW_PANEL_SIZE, minimum: MIN_PUBLIC_REVIEW_PANEL_SIZE, type: "integer" },
     responseWindowSeconds: {
       maximum: MAX_RESPONSE_WINDOW_SECONDS,
       minimum: MIN_RESPONSE_WINDOW_SECONDS,

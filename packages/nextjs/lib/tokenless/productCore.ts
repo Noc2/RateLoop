@@ -30,6 +30,7 @@ import {
   evaluateProductAudienceCreation,
 } from "~~/lib/tokenless/productAudienceCreationBoundary";
 import { bindPublicQuestionMediaToQuestion } from "~~/lib/tokenless/publicQuestionMedia";
+import { MAXIMUM_REVIEW_PANEL_SIZE, MINIMUM_PUBLIC_REVIEW_PANEL_SIZE } from "~~/lib/tokenless/reviewPanelPolicy";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const API_KEY_PATTERN = /^rlk_([a-f0-9]{16})_([A-Za-z0-9_-]{32,128})$/;
@@ -624,8 +625,16 @@ function normalizePolicyInput(input: AgentPublishingPolicyInput) {
   ) {
     throw new TokenlessServiceError("Policy spending caps must be greater than zero.", 400, "invalid_policy");
   }
-  if (!Number.isSafeInteger(input.maxPanelSize) || input.maxPanelSize < 3 || input.maxPanelSize > 500) {
-    throw new TokenlessServiceError("maxPanelSize must be between 3 and 500.", 400, "invalid_policy");
+  if (
+    !Number.isSafeInteger(input.maxPanelSize) ||
+    input.maxPanelSize < MINIMUM_PUBLIC_REVIEW_PANEL_SIZE ||
+    input.maxPanelSize > MAXIMUM_REVIEW_PANEL_SIZE
+  ) {
+    throw new TokenlessServiceError(
+      `maxPanelSize must be between ${MINIMUM_PUBLIC_REVIEW_PANEL_SIZE} and ${MAXIMUM_REVIEW_PANEL_SIZE}.`,
+      400,
+      "invalid_policy",
+    );
   }
   if (!Number.isSafeInteger(input.maxFeeBps) || input.maxFeeBps < 0 || input.maxFeeBps > 2_000) {
     throw new TokenlessServiceError("maxFeeBps must be between 0 and 2000.", 400, "invalid_policy");

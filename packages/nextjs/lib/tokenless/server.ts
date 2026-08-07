@@ -26,6 +26,7 @@ import {
   type ProductAudienceCreationBoundary,
   evaluateProductAudienceCreation,
 } from "~~/lib/tokenless/productAudienceCreationBoundary";
+import { MAXIMUM_REVIEW_PANEL_SIZE, MINIMUM_PUBLIC_REVIEW_PANEL_SIZE } from "~~/lib/tokenless/reviewPanelPolicy";
 
 const QUOTE_TTL_MS = 15 * 60_000;
 const DEFAULT_WAIT_TIMEOUT_MS = 30_000;
@@ -148,10 +149,14 @@ export function parseTokenlessQuoteRequest(value: unknown): TokenlessQuoteReques
   }
   if (
     !Number.isSafeInteger(request.requestedPanelSize) ||
-    (request.requestedPanelSize ?? 0) < 3 ||
-    (request.requestedPanelSize ?? 0) > 500
+    (request.requestedPanelSize ?? 0) < MINIMUM_PUBLIC_REVIEW_PANEL_SIZE ||
+    (request.requestedPanelSize ?? 0) > MAXIMUM_REVIEW_PANEL_SIZE
   ) {
-    throw new TokenlessServiceError("requestedPanelSize must be an integer from 3 to 500.", 400, "invalid_quote");
+    throw new TokenlessServiceError(
+      `requestedPanelSize must be an integer from ${MINIMUM_PUBLIC_REVIEW_PANEL_SIZE} to ${MAXIMUM_REVIEW_PANEL_SIZE}.`,
+      400,
+      "invalid_quote",
+    );
   }
   if (
     !Number.isSafeInteger(request.responseWindowSeconds) ||

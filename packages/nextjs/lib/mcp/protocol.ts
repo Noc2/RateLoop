@@ -9,6 +9,7 @@ import {
 } from "~~/lib/mcp/handoff";
 import { workspaceToolErrorPayload } from "~~/lib/mcp/workspaceConnectionError";
 import { configuredHumanReviewAudienceSources } from "~~/lib/tokenless/reviewCapabilities";
+import { MAXIMUM_REVIEW_PANEL_SIZE, MINIMUM_PUBLIC_REVIEW_PANEL_SIZE } from "~~/lib/tokenless/reviewPanelPolicy";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 export const TOKENLESS_MCP_PROTOCOL_VERSION = "2025-11-25" as const;
@@ -223,7 +224,11 @@ export const tokenlessMcpTools = [
               type: "object",
             },
             question: questionSchema,
-            requestedPanelSize: { maximum: 500, minimum: 3, type: "integer" },
+            requestedPanelSize: {
+              maximum: MAXIMUM_REVIEW_PANEL_SIZE,
+              minimum: MINIMUM_PUBLIC_REVIEW_PANEL_SIZE,
+              type: "integer",
+            },
           },
           required: ["audience", "audiencePolicy", "budget", "question", "requestedPanelSize"],
           type: "object",
