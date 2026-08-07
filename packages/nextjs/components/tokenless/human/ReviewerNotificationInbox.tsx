@@ -68,13 +68,9 @@ function NotificationList({
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
                 {href ? (
-                  <Link
-                    href={href}
-                    className="btn btn-sm rateloop-secondary-action px-3"
-                    aria-label={t("openLabel", { title })}
-                  >
+                  <Button as={Link} variant="secondary" size="sm" href={href} aria-label={t("openLabel", { title })}>
                     {t("open")}
-                  </Link>
+                  </Button>
                 ) : null}
                 {!notification.readAt ? (
                   <Button

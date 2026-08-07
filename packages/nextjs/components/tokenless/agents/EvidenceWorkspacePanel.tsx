@@ -22,6 +22,7 @@ import { Field, SelectField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { WorkspacePublicContentLink } from "~~/components/tokenless/navigation/WorkspacePublicContentLink";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { useConfirmDialog } from "~~/components/tokenless/ui/useConfirmDialog";
 import { stripLocalePrefix } from "~~/i18n/config";
@@ -352,9 +353,9 @@ function ProjectAuditorAccess({ workspaceId }: { workspaceId: string }) {
           onChange={event => setExpiresAt(event.target.value)}
           min={new Date().toISOString().slice(0, 16)}
         />
-        <button type="submit" className="btn btn-sm rateloop-gradient-action w-fit" disabled={busy || !projectId}>
+        <Button variant="primary" size="none" className="btn-sm w-fit" type="submit" disabled={busy || !projectId}>
           <AgentText id="translated131" />
-        </button>
+        </Button>
       </form>
       {error ? (
         <p className="mt-4 text-sm text-error" role="alert">
@@ -666,9 +667,9 @@ function RetentionEditor({
         }}
         required
       />
-      <button type="submit" className="btn btn-sm rateloop-gradient-action" disabled={busy}>
+      <Button variant="primary" size="sm" type="submit" disabled={busy}>
         {busy ? <AgentText id="dynamic033" /> : <AgentText id="dynamic032" />}
-      </button>
+      </Button>
       {message ? (
         <p className="text-xs text-base-content/60 sm:col-span-3" role="status">
           {message}
@@ -934,13 +935,15 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
           <p className="mt-2 text-sm text-base-content/55">
             <AgentText id="translated144" />
           </p>
-          <button
+          <Button
+            variant="secondary"
+            size="none"
+            className="btn-sm mt-4"
             type="button"
-            className="btn btn-sm rateloop-secondary-action mt-4"
             onClick={() => updateUrlState({ runId: null, packetId: null })}
           >
             <AgentText id="translated145" />
-          </button>
+          </Button>
         </Card>
       ) : null}
 
@@ -1052,20 +1055,24 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Link
+                    <Button
+                      as={Link}
+                      variant="secondary"
+                      size="sm"
                       href={resultHrefForRun(workspaceId, packet.payload.runId, urlSnapshot.search)}
-                      className="btn btn-sm rateloop-secondary-action"
                     >
                       <AgentText id="translated149" />
-                    </Link>
-                    <Link
+                    </Button>
+                    <Button
+                      as={Link}
+                      variant="secondary"
+                      size="sm"
                       href={evidenceLinkHref(urlSnapshot, {
                         runId: packet.payload.runId,
                         packetId: packet.payload.packetId,
                       })}
                       scroll={false}
                       aria-current={selected ? "page" : undefined}
-                      className="btn btn-sm rateloop-secondary-action"
                       onClick={event => {
                         if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
                           return;
@@ -1077,10 +1084,11 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                       }}
                     >
                       {selected ? copy("linkToPacket") : <AgentText id="dynamic027" />}
-                    </Link>
-                    <button
+                    </Button>
+                    <Button
+                      variant="primary"
+                      size="sm"
                       type="button"
-                      className="btn btn-sm rateloop-gradient-action"
                       disabled={busyPacket === packet.payload.packetId}
                       onClick={() => {
                         setBusyPacket(packet.payload.packetId);
@@ -1101,10 +1109,11 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                       ) : (
                         <AgentText id="dynamic022" />
                       )}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       type="button"
-                      className="btn btn-sm rateloop-secondary-action"
                       disabled={busyShare === packet.payload.packetId}
                       onClick={async () => {
                         if (
@@ -1147,7 +1156,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                       ) : (
                         <AgentText id="dynamic034" />
                       )}
-                    </button>
+                    </Button>
                   </div>
                 </div>
                 {shares.some(share => share.status === "active") ? (
@@ -1179,8 +1188,9 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                                 value={shareUrls[share.grantId]}
                                 onFocus={event => event.currentTarget.select()}
                               />
-                              <button
-                                className="btn btn-sm rateloop-secondary-action"
+                              <Button
+                                variant="secondary"
+                                size="sm"
                                 type="button"
                                 onClick={() => {
                                   if (!navigator.clipboard) {
@@ -1198,7 +1208,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                                 ) : (
                                   <AgentText id="dynamic020" />
                                 )}
-                              </button>
+                              </Button>
                             </div>
                           ) : (
                             <p className="text-xs text-base-content/60">

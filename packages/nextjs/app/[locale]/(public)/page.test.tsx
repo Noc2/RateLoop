@@ -39,8 +39,15 @@ test("landing page presents the tokenless human-assurance story", async () => {
     html.indexOf('href="/agents/connections"') < html.indexOf('href="/human/review"'),
     "the buyer connection CTA should appear before the reviewer CTA",
   );
-  assert.match(html, /class="group rateloop-gradient-action[^"]*" href="\/agents\/connections"/);
-  assert.match(html, /class="group btn[^"]*" href="\/human\/review"/);
+  // Class order is no longer meaningful: Button composes "btn variant size
+  // className", so a call site's own classes land last. Assert the classes are
+  // present on the right link rather than the order they happen to compose in.
+  const linkClasses = (href: string) =>
+    html.match(new RegExp(`class="([^"]*)" href="${href.replace(/\//gu, "\\/")}"`, "u"))?.[1] ?? "";
+  const connectClasses = linkClasses("/agents/connections");
+  assert.match(connectClasses, /\bgroup\b/u);
+  assert.match(connectClasses, /\brateloop-gradient-action\b/u);
+  assert.match(linkClasses("/human/review"), /\bbtn\b/u);
   assert.ok(
     html.indexOf("The Human") < html.indexOf('class="orb-animation-shell'),
     "the value proposition should precede the orb on small screens",

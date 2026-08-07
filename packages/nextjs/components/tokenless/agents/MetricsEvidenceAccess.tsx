@@ -7,6 +7,7 @@ import { OneTimeSecretNotice } from "./OneTimeSecretNotice";
 import { readEvidenceDeliveryJson } from "./evidenceDeliveryClient";
 import { Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 
 type MetricsCredential = {
@@ -194,9 +195,9 @@ export function MetricsEvidenceAccess({ workspaceId }: { workspaceId: string }) 
             maxLength={100}
           />
         </div>
-        <button type="submit" className="btn btn-sm rateloop-gradient-action" disabled={busy || oneTimeToken !== null}>
+        <Button variant="primary" size="sm" type="submit" disabled={busy || oneTimeToken !== null}>
           {busy ? <AgentText id="dynamic045" /> : <AgentText id="dynamic044" />}
-        </button>
+        </Button>
       </form>
       {message ? (
         <p className="mt-4 text-xs text-base-content/60" role="status">

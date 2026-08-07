@@ -5,6 +5,7 @@ import { UseCaseIcon } from "~~/components/docs/UseCaseVisuals";
 import { SupportedAgentsSection } from "~~/components/home/SupportedAgentsSection";
 import { TokenlessOrb } from "~~/components/home/TokenlessOrb";
 import { WorkspacePlanOverview } from "~~/components/pricing/WorkspacePlanOverview";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { getMessagesForLocale } from "~~/i18n/messages";
 import { type LandingSocialProofItem, formatLandingSocialProofItem } from "~~/lib/home/socialProof";
@@ -124,9 +125,12 @@ export function TokenlessLandingPage({
                 Scale AI autonomy without scaling blind trust.
               </p>
               <div className="mt-6 flex w-full flex-col items-stretch gap-3 sm:w-auto sm:flex-row">
-                <Link
+                <Button
+                  as={Link}
+                  variant="primary"
+                  size="none"
+                  className="group min-h-11 gap-2 px-5 text-base"
                   href="/agents/connections"
-                  className="group rateloop-gradient-action min-h-11 gap-2 px-5 text-base"
                 >
                   <span>Connect Agent</span>
                   <span
@@ -135,7 +139,7 @@ export function TokenlessLandingPage({
                   >
                     &gt;
                   </span>
-                </Link>
+                </Button>
                 <Link
                   href="/human/review"
                   className="group btn min-h-11 gap-2 rounded-lg border-0 bg-base-content/[0.11] px-5 text-base hover:bg-base-content/[0.18]"

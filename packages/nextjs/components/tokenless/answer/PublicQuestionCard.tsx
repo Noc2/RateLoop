@@ -14,6 +14,7 @@ import { ChoiceInput, Field, SelectField, TextareaField } from "~~/components/to
 import { CrowdForecastField, isCrowdForecastPercent } from "~~/components/tokenless/review/CrowdForecastField";
 import { DeadlineChip } from "~~/components/tokenless/review/DeadlineChip";
 import { ReviewerShell } from "~~/components/tokenless/review/ReviewerShell";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { Link } from "~~/i18n/navigation";
 import { readBrowserSession } from "~~/lib/auth/client";
@@ -978,9 +979,9 @@ export function PublicQuestionCard({
                   <p className="text-sm text-error" role="alert">
                     {currentMediaReview.message}
                   </p>
-                  <button type="button" className="btn btn-xs rateloop-secondary-action" onClick={retryMedia}>
+                  <Button variant="secondary" size="none" className="btn-xs" type="button" onClick={retryMedia}>
                     {t("retryMedia")}
-                  </button>
+                  </Button>
                 </div>
               ) : null}
             </>
@@ -1205,16 +1206,20 @@ export function PublicQuestionCard({
               <p className="mt-3 text-xs leading-5 text-base-content/55">
                 {paidAccess.state === "payout_wallet_required" ? t("walletDescription") : t("eligibilityDescription")}
               </p>
-              <Link
+              <Button
+                as={Link}
+                variant="primary"
+                size="none"
+                block
+                className="mt-5 px-4 text-center text-sm"
                 href={
                   paidAccess.state === "payout_wallet_required"
                     ? "/settings/wallets?use=payout"
                     : "/human/profile?section=paid-work"
                 }
-                className="rateloop-gradient-action mt-5 w-full px-4 text-center text-sm"
               >
                 {paidAccess.state === "payout_wallet_required" ? t("addWallet") : t("reviewAccess")}
-              </Link>
+              </Button>
             </div>
           )}
         </Card>

@@ -1474,13 +1474,15 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   readOnly
                   onFocus={event => event.currentTarget.select()}
                 />
-                <button
-                  className="btn rateloop-secondary-action mt-3 px-5"
+                <Button
+                  variant="secondary"
+                  size="none"
+                  className="mt-3 px-5"
                   type="button"
                   onClick={() => void copyVisibleConnectionMessage()}
                 >
                   {t("copyMessage")}
-                </button>
+                </Button>
                 <AgentConnectionTroubleshooting />
               </div>
             ) : null}
@@ -1834,13 +1836,15 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                                     </p>
                                   ) : null}
                                 </div>
-                                <button
-                                  className="btn btn-sm rateloop-secondary-action shrink-0"
+                                <Button
+                                  variant="secondary"
+                                  size="none"
+                                  className="btn-sm shrink-0"
                                   type="button"
                                   onClick={() => removeExpertiseRequirement(requirement.definitionId)}
                                 >
                                   <AgentText id="translated232" />
-                                </button>
+                                </Button>
                               </div>
                               {reviewAudience.audience === "private_invited" ? (
                                 <Field
@@ -1887,14 +1891,15 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                         </p>
                         <div className="mt-2 flex flex-wrap gap-2">
                           {exampleExpertiseDefinitions.map(definition => (
-                            <button
+                            <Button
+                              variant="secondary"
+                              size="sm"
                               key={definition.definitionId}
-                              className="btn btn-sm rateloop-secondary-action"
                               type="button"
                               onClick={() => addExpertiseDefinition(definition)}
                             >
                               + {definition.label}
-                            </button>
+                            </Button>
                           ))}
                         </div>
                       </div>
@@ -1937,14 +1942,15 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     {reviewAudience.audience === "private_invited" ? (
                       <div className="mt-4">
                         {!showCustomExpertise ? (
-                          <button
-                            className="btn btn-sm rateloop-secondary-action"
+                          <Button
+                            variant="secondary"
+                            size="sm"
                             type="button"
                             onClick={() => setShowCustomExpertise(true)}
                             disabled={reviewExpertise.requirements.length >= 8}
                           >
                             <AgentText id="translated245" />
-                          </button>
+                          </Button>
                         ) : (
                           <Card as="div" variant="nested" className="rounded-xl p-4">
                             <p className="font-medium">{t("newSpecialist")}</p>
@@ -1970,14 +1976,15 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                               />
                             </div>
                             <div className="mt-3 flex flex-wrap gap-2">
-                              <button
-                                className="btn btn-sm rateloop-secondary-action"
+                              <Button
+                                variant="secondary"
+                                size="sm"
                                 type="button"
                                 disabled={creatingCustomExpertise}
                                 onClick={() => void createCustomExpertiseDefinition()}
                               >
                                 {creatingCustomExpertise ? t("adding") : t("addArea")}
-                              </button>
+                              </Button>
                               <button
                                 className="btn btn-sm border-transparent bg-transparent"
                                 type="button"
@@ -2215,13 +2222,15 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                       <p className="mt-1 text-sm text-error" role="alert">
                         {confirmedReviewerCountError}
                       </p>
-                      <button
-                        className="btn btn-sm rateloop-secondary-action mt-3"
+                      <Button
+                        variant="secondary"
+                        size="none"
+                        className="btn-sm mt-3"
                         type="button"
                         onClick={() => retryConfirmedReviewerCount()}
                       >
                         <AgentText id="translated248" />
-                      </button>
+                      </Button>
                     </>
                   ) : (
                     <p className="mt-1 text-sm text-base-content/60">
@@ -2521,13 +2530,15 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                       {issuedInvitationCapacity > 1 ? t("multiUse", { count: issuedInvitationCapacity }) : t("oneUse")}
                     </p>
                     <code className="mt-2 block break-all text-sm">{inviteToken}</code>
-                    <button
-                      className="btn btn-sm rateloop-secondary-action mt-3"
+                    <Button
+                      variant="secondary"
+                      size="none"
+                      className="btn-sm mt-3"
                       type="button"
                       onClick={() => void copyInvitationLink()}
                     >
                       {t("copyLink")}
-                    </button>
+                    </Button>
                   </div>
                 ) : null}
                 <Card as="div" variant="nested" className="p-4 text-sm">

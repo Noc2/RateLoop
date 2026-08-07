@@ -5,6 +5,7 @@ import { BETTER_AUTH_SIGN_IN_TEST_IDS } from "./browserSelectors";
 import { normalizeSignInReturnPath } from "./signInReturnPath";
 import { useTranslations } from "next-intl";
 import { Field } from "~~/components/tokenless/forms/Field";
+import { Button } from "~~/components/tokenless/ui/Button";
 import {
   type BrowserSessionResponse,
   betterAuthClient,
@@ -261,14 +262,17 @@ export function BetterAuthSignIn() {
         <h2 id="active-account-heading" className="text-lg font-semibold text-base-content">
           {t("alreadySignedIn")}
         </h2>
-        <button
-          className="rateloop-gradient-action min-h-11 w-full px-4"
+        <Button
+          variant="primary"
+          size="none"
+          block
+          className="min-h-11 px-4"
           disabled={busy}
           onClick={() => window.location.assign(safeReturnPath())}
           type="button"
         >
           {t("continueAs", { account: accountLabel })}
-        </button>
+        </Button>
         <button
           className="btn btn-outline min-h-11 w-full"
           disabled={busy}
@@ -317,13 +321,17 @@ export function BetterAuthSignIn() {
       {verified ? (
         <div className="space-y-3">
           <p className="text-sm leading-6 text-base-content/70">{t("verified")}</p>
-          <button
-            className="rateloop-gradient-action min-h-11 w-full px-4"
+          <Button
+            variant="primary"
+            size="none"
+            block
+            className="min-h-11 px-4"
+            type="button"
             disabled={busy}
             onClick={() => void finishSignIn()}
           >
             {t("finish")}
-          </button>
+          </Button>
           <button className="btn btn-outline min-h-11 w-full" disabled={busy} onClick={() => void addPasskey()}>
             {t("addPasskey")}
           </button>
@@ -348,9 +356,16 @@ export function BetterAuthSignIn() {
                 setOtp(event.target.value.replace(/\D/g, ""));
               }}
             />
-            <button className="rateloop-gradient-action min-h-11 w-full px-4" disabled={busy || otp.length !== 6}>
+            <Button
+              variant="primary"
+              size="none"
+              block
+              className="min-h-11 px-4"
+              type="submit"
+              disabled={busy || otp.length !== 6}
+            >
               {t("verifyCode")}
-            </button>
+            </Button>
           </form>
           <div className="grid gap-3 sm:grid-cols-2">
             <button
@@ -392,9 +407,9 @@ export function BetterAuthSignIn() {
             }}
           />
           {visibleMethods.emailCode ? (
-            <button className="rateloop-gradient-action min-h-11 w-full px-4" disabled={busy}>
+            <Button variant="primary" size="none" block className="min-h-11 px-4" type="submit" disabled={busy}>
               {t("emailCode")}
-            </button>
+            </Button>
           ) : null}
           {visibleMethods.sso ? (
             <button
@@ -430,24 +445,30 @@ export function BetterAuthSignIn() {
           {visibleMethods.google || visibleMethods.apple ? (
             <div className="grid gap-3 sm:grid-cols-2">
               {visibleMethods.google ? (
-                <button
-                  className="btn rateloop-secondary-action gap-3"
+                <Button
+                  variant="secondary"
+                  size="none"
+                  className="gap-3"
+                  type="button"
                   disabled={busy}
                   onClick={() => void social("google")}
                 >
                   <GoogleIcon />
                   {t("google")}
-                </button>
+                </Button>
               ) : null}
               {visibleMethods.apple ? (
-                <button
-                  className="btn rateloop-secondary-action gap-3"
+                <Button
+                  variant="secondary"
+                  size="none"
+                  className="gap-3"
+                  type="button"
                   disabled={busy}
                   onClick={() => void social("apple")}
                 >
                   <AppleIcon />
                   {t("apple")}
-                </button>
+                </Button>
               ) : null}
             </div>
           ) : null}

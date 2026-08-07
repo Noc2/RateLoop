@@ -7,6 +7,7 @@ import { OneTimeSecretNotice } from "~~/components/tokenless/agents/OneTimeSecre
 import { Field, SelectField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { ConfirmDialog } from "~~/components/tokenless/ui/ConfirmDialog";
 import { readJson } from "~~/lib/tokenless/http";
 import { WorkspaceRequestScope } from "~~/lib/tokenless/workspaceRequestScope";
@@ -263,9 +264,15 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
             <option value="admin">Admin</option>
             <option value="billing">Billing</option>
           </SelectField>
-          <button className="rateloop-gradient-action min-h-12 px-5" disabled={busyTarget === "invite"}>
+          <Button
+            variant="primary"
+            size="none"
+            className="min-h-12 px-5"
+            type="submit"
+            disabled={busyTarget === "invite"}
+          >
             {busyTarget === "invite" ? "Creating…" : "Create invitation"}
-          </button>
+          </Button>
         </form>
 
         {issuedToken ? (

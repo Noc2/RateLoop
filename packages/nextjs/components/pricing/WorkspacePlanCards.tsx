@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { LocalizedPublicContent, translatePublicString } from "~~/components/docs/LocalizedPublicContent";
 import { PublicLink as Link } from "~~/components/docs/PublicLink";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import type { Locale } from "~~/i18n/config";
 import {
@@ -52,12 +53,16 @@ export function WorkspacePlanCards({ workspaceId, demoBookingUrl = null, locale 
             copy(TOKENLESS_HOSTED_REVIEW_COPY.planBenefit),
           ]}
           footer={
-            <Link
+            <Button
+              as={Link}
+              variant="secondary"
+              size="none"
+              block
+              className="min-h-12 justify-center px-5"
               href={workspacePlanHref(workspaceId)}
-              className="btn rateloop-secondary-action min-h-12 w-full justify-center px-5"
             >
               {copy("Start free")}
-            </Link>
+            </Button>
           }
         />
         <PlanCard
@@ -80,21 +85,32 @@ export function WorkspacePlanCards({ workspaceId, demoBookingUrl = null, locale 
           ]}
           footer={
             pilotHref.startsWith("mailto:") ? (
-              <a href={pilotHref} className="rateloop-gradient-action min-h-12 w-full justify-center px-5">
+              <Button
+                as="a"
+                variant="primary"
+                size="none"
+                block
+                className="min-h-12 justify-center px-5"
+                href={pilotHref}
+              >
                 {pilotCta}
-              </a>
+              </Button>
             ) : (
               // The scheduler is a third-party page, so it leaves the app in a new tab rather than
               // being embedded: an embed would need its origin in the CSP and would set third-party
               // storage on page view.
-              <a
+              <Button
+                as="a"
+                variant="primary"
+                size="none"
+                block
+                className="min-h-12 justify-center px-5"
                 href={pilotHref}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="rateloop-gradient-action min-h-12 w-full justify-center px-5"
               >
                 {pilotCta}
-              </a>
+              </Button>
             )
           }
         />

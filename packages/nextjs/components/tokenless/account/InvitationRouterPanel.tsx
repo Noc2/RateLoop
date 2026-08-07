@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useFormatter, useTranslations } from "next-intl";
 import { Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { HttpJsonError, readJson } from "~~/lib/tokenless/http";
 
@@ -236,9 +237,9 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
             required
           />
         </div>
-        <button type="submit" className="rateloop-gradient-action px-5" disabled={busy || !token.trim()}>
+        <Button variant="primary" type="submit" disabled={busy || !token.trim()}>
           {busy ? t("checking") : t("continue")}
-        </button>
+        </Button>
       </form>
 
       {preview ? (
@@ -320,12 +321,12 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
             </dl>
           )}
           <div className="mt-5 flex flex-wrap gap-3">
-            <button type="button" className="rateloop-gradient-action px-5" disabled={busy} onClick={acceptInvitation}>
+            <Button variant="primary" type="button" disabled={busy} onClick={acceptInvitation}>
               {busy ? t("accepting") : t("accept")}
-            </button>
-            <button type="button" className="btn rateloop-secondary-action" onClick={() => setPreview(null)}>
+            </Button>
+            <Button variant="secondary" size="none" type="button" onClick={() => setPreview(null)}>
               {t("cancel")}
-            </button>
+            </Button>
           </div>
         </Card>
       ) : null}

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { baseSepolia } from "thirdweb/chains";
 import { ConnectButton, ThirdwebProvider, useActiveAccount, useConnect } from "thirdweb/react";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { readBrowserSession, subscribeToBrowserAuthSessionChanges } from "~~/lib/auth/client";
 import type { WalletBindingPurpose } from "~~/lib/auth/walletBindings";
 import { rateLoopThirdwebManagedWallet, rateLoopThirdwebWallets, thirdwebBrowserClient } from "~~/lib/thirdweb/client";
@@ -317,13 +318,16 @@ function WalletBindingControls({
       {account ? (
         <section className="rounded-xl border border-[var(--rateloop-blue)]/30 bg-[var(--rateloop-blue)]/5 p-5">
           <p className="text-sm text-base-content/65">{t("connected", { address: shortAddress(account.address) })}</p>
-          <button
-            className="rateloop-gradient-action mt-4 min-h-11 px-5"
+          <Button
+            variant="primary"
+            size="none"
+            className="mt-4 min-h-11 px-5"
+            type="button"
             disabled={busy}
             onClick={() => void bindActiveWallet()}
           >
             {t(`purpose.${purpose}.confirmation`)}
-          </button>
+          </Button>
         </section>
       ) : null}
 

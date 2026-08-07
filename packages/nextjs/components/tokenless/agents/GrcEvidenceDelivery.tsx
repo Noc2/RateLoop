@@ -6,6 +6,7 @@ import { useAgentFormatter, useAgentTranslations } from "./AgentsLocaleProvider"
 import { readEvidenceDeliveryJson } from "./evidenceDeliveryClient";
 import { ChoiceInput, Field, SelectField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 
 type Provider = "drata" | "vanta";
@@ -190,16 +191,18 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
         </p>
       )}
 
-      <button
+      <Button
+        variant="secondary"
+        size="none"
+        className="btn-sm mt-4"
         type="button"
-        className="btn btn-sm rateloop-secondary-action mt-4"
         aria-expanded={showForm}
         aria-controls="grc-connector-form"
         disabled={busy}
         onClick={() => setShowForm(true)}
       >
         <AgentText id="translated180" />
-      </button>
+      </Button>
       {showForm ? (
         <form
           id="grc-connector-form"
@@ -374,9 +377,9 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
             <AgentText id="translated182" />
           </label>
           <div className="flex flex-wrap gap-2 sm:col-span-2">
-            <button type="submit" className="btn btn-sm rateloop-gradient-action" disabled={busy}>
+            <Button variant="primary" size="sm" type="submit" disabled={busy}>
               {busy ? <AgentText id="dynamic040" /> : <AgentText id="dynamic039" />}
-            </button>
+            </Button>
             <button
               type="button"
               className="btn btn-sm btn-ghost"

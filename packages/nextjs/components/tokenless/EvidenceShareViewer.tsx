@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LocalizedSharedContent, UntranslatedContent } from "~~/components/tokenless/LocalizedSharedContent";
 import { PublicEvidenceVerifier } from "~~/components/tokenless/PublicEvidenceVerifier";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { readJson } from "~~/lib/tokenless/http";
 import { type PublicEvidenceLimitation, publicEvidenceSummary } from "~~/lib/tokenless/publicEvidencePresentation";
 import {
@@ -129,13 +130,15 @@ export function EvidenceShareViewer({ grantId }: { grantId: string }) {
           <p className="mt-2 text-sm leading-6 text-base-content/65">
             The packet opened, but its public signing key could not be checked.
           </p>
-          <button
-            className="btn rateloop-secondary-action mt-4 min-h-10 px-4"
+          <Button
+            variant="secondary"
+            size="none"
+            className="mt-4 min-h-10 px-4"
             type="button"
             onClick={() => void verifyPacket(packet)}
           >
             Retry verification
-          </button>
+          </Button>
         </section>
         {technicalDetails}
       </LocalizedSharedContent>

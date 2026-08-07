@@ -3,6 +3,7 @@
 import { type ChangeEvent, type FormEvent, useEffect, useState } from "react";
 import { LocalizedSharedContent, UntranslatedContent } from "~~/components/tokenless/LocalizedSharedContent";
 import { Field, TextareaField } from "~~/components/tokenless/forms/Field";
+import { Button } from "~~/components/tokenless/ui/Button";
 import {
   MAX_PUBLIC_EVIDENCE_PACKET_BYTES,
   type PublicEvidenceVerificationResult,
@@ -152,13 +153,15 @@ export function PublicEvidenceVerifier({
                 </span>
               ) : null}
             </div>
-            <button
-              className="rateloop-gradient-action min-h-11 px-5 disabled:cursor-not-allowed disabled:opacity-50"
+            <Button
+              variant="primary"
+              size="none"
+              className="min-h-11 px-5 disabled:cursor-not-allowed disabled:opacity-50"
               disabled={busy || !packetJson.trim()}
               type="submit"
             >
               {busy ? "Checking…" : "Verify packet"}
-            </button>
+            </Button>
           </div>
           <p className="mt-4 text-sm leading-6 text-base-content/60">
             {initialPacketJson

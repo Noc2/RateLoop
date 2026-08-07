@@ -1,5 +1,6 @@
 import { LocalizedPublicContent, translatePublicString } from "~~/components/docs/LocalizedPublicContent";
 import { PublicLink as Link } from "~~/components/docs/PublicLink";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import type { Locale } from "~~/i18n/config";
 import {
@@ -55,9 +56,9 @@ export function WorkspacePlanOverview({ locale = "en" }: { locale?: Locale }) {
 
         <p className="mt-5 text-sm leading-6 text-base-content/60">{TOKENLESS_HOSTED_REVIEW_COPY.planSummary}</p>
         <div className="mt-6">
-          <Link href="/pricing" className="btn rateloop-secondary-action min-h-11 px-5">
+          <Button as={Link} variant="secondary" size="none" className="min-h-11 px-5" href="/pricing">
             Compare plans
-          </Link>
+          </Button>
         </div>
       </div>
     </LocalizedPublicContent>

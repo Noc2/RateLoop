@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { useAgentTranslations } from "./AgentsLocaleProvider";
 import { Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
+import { Button } from "~~/components/tokenless/ui/Button";
 import type { AgentEnvironment, AgentVersionInput, AgentVersionSnapshot } from "~~/lib/tokenless/agentRegistry";
 
 type AgentVersionFormProps = {
@@ -87,9 +88,9 @@ export function AgentVersionForm({
         placeholder={t("descriptionPlaceholder")}
         maxLength={1_000}
       />
-      <button className="rateloop-gradient-action px-5" disabled={busy}>
+      <Button variant="primary" type="submit" disabled={busy}>
         {busy ? t("saving") : submitLabel}
-      </button>
+      </Button>
     </form>
   );
 }

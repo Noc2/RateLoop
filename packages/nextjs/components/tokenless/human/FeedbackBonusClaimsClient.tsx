@@ -6,6 +6,7 @@ import { eth_getTransactionByHash, getRpcClient, prepareTransaction, sendTransac
 import { baseSepolia } from "thirdweb/chains";
 import { ConnectButton, ThirdwebProvider, useActiveAccount } from "thirdweb/react";
 import { Field, SelectField } from "~~/components/tokenless/forms/Field";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { readBrowserSession } from "~~/lib/auth/client";
 import { rateLoopThirdwebWallets, thirdwebBrowserClient } from "~~/lib/thirdweb/client";
@@ -289,14 +290,16 @@ function FeedbackBonusClaimsControls() {
           accept="application/json,.json"
           onChange={event => void loadFile(event.target.files?.[0])}
         />
-        <button
+        <Button
+          variant="primary"
+          size="none"
+          className="px-4 text-sm"
           type="button"
-          className="rateloop-gradient-action px-4 text-sm"
           disabled={busy || !selectedSource || (needsRecoverySecret && recoverySecret.length < 12)}
           onClick={() => void checkEntitlements()}
         >
           {busy ? t("checking") : t("check")}
-        </button>
+        </Button>
       </div>
       {items.length ? (
         <div className="mt-5 space-y-3">
@@ -312,14 +315,16 @@ function FeedbackBonusClaimsControls() {
                 {item.claimed ? (
                   <span className="rounded-md bg-success/10 px-3 py-1 text-xs text-success">{t("claimed")}</span>
                 ) : item.awarded ? (
-                  <button
+                  <Button
+                    variant="primary"
+                    size="none"
+                    className="px-4 text-sm"
                     type="button"
-                    className="rateloop-gradient-action px-4 text-sm"
                     disabled={!account || claimingPoolId === item.poolId}
                     onClick={() => void claim(item)}
                   >
                     {claimingPoolId === item.poolId ? t("claiming") : t("claim")}
-                  </button>
+                  </Button>
                 ) : null}
               </div>
             </Card>

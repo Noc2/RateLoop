@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useFormatter, useTranslations } from "next-intl";
 import { SelectField } from "~~/components/tokenless/forms/Field";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 
 type Finding = {
@@ -188,14 +189,16 @@ export function ForecastIntegrityClient() {
                       {finding.appealOpen && finding.openAppealId ? (
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                           <p className="text-xs text-warning">{t("appealOpen")}</p>
-                          <button
+                          <Button
+                            variant="secondary"
+                            size="none"
+                            className="min-h-9 rounded-lg px-3 py-2 text-sm"
                             type="button"
-                            className="btn rateloop-secondary-action min-h-9 rounded-lg px-3 py-2 text-sm"
                             disabled={busyFinding === finding.findingId}
                             onClick={() => void withdraw(finding.openAppealId!, finding.findingId)}
                           >
                             {busyFinding === finding.findingId ? t("withdrawing") : t("withdraw")}
-                          </button>
+                          </Button>
                         </div>
                       ) : finding.severity === "hard" ? (
                         <div className="mt-3 flex flex-wrap items-end gap-2">
@@ -214,14 +217,16 @@ export function ForecastIntegrityClient() {
                             <option value="measurement_error">{t("measurementError")}</option>
                             <option value="other">{t("other")}</option>
                           </SelectField>
-                          <button
+                          <Button
+                            variant="secondary"
+                            size="none"
+                            className="min-h-9 rounded-lg px-3 py-2 text-sm"
                             type="button"
-                            className="btn rateloop-secondary-action min-h-9 rounded-lg px-3 py-2 text-sm"
                             disabled={busyFinding === finding.findingId}
                             onClick={() => void appeal(finding.findingId)}
                           >
                             {busyFinding === finding.findingId ? t("opening") : t("open")}
-                          </button>
+                          </Button>
                         </div>
                       ) : null}
                     </div>

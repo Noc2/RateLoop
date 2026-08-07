@@ -6,6 +6,7 @@ import { InfoPopover } from "~~/components/tokenless/InfoPopover";
 import { ChoiceInput, Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { HttpJsonError, readJson } from "~~/lib/tokenless/http";
 
@@ -319,13 +320,15 @@ export function NotificationSettingsPanel() {
             ))}
           </div>
           {browserPermission === "default" ? (
-            <button
+            <Button
+              variant="secondary"
+              size="none"
+              className="mt-4"
               type="button"
-              className="btn rateloop-secondary-action mt-4"
               onClick={() => void requestBrowserPermission()}
             >
               {t("enableBrowser")}
-            </button>
+            </Button>
           ) : null}
         </AsyncSection>
       </Card>
@@ -364,14 +367,16 @@ export function NotificationSettingsPanel() {
                 error={fieldErrors.email}
               />
             </div>
-            <button
+            <Button
+              variant="primary"
+              size="none"
+              className="mt-4 px-5"
               type="button"
-              className="rateloop-gradient-action mt-4 px-5"
               disabled={savingEmail || !emailDirty}
               onClick={() => void saveEmailSettings()}
             >
               {savingEmail ? t("saving") : emailSettings.email && !emailDirty ? t("saved") : t("save")}
-            </button>
+            </Button>
           </>
         ) : (
           <p className="mt-5 text-sm text-base-content/60">{t("unavailableDescription")}</p>

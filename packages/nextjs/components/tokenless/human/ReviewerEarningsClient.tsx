@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useFormatter, useTranslations } from "next-intl";
 import { InfoPopover } from "~~/components/tokenless/InfoPopover";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import type { ReviewerEarning } from "~~/lib/tokenless/raterSettlementService";
 
@@ -62,14 +63,16 @@ export function ReviewerEarningsClient() {
           </h2>
           <InfoPopover label={t("about")}>{t("description")}</InfoPopover>
         </div>
-        <button
+        <Button
+          variant="secondary"
+          size="none"
+          className="min-h-9 rounded-lg px-3 py-2 text-sm"
           type="button"
-          className="btn rateloop-secondary-action min-h-9 rounded-lg px-3 py-2 text-sm"
           onClick={() => void refresh()}
           disabled={loading}
         >
           {loading ? t("refreshing") : t("refresh")}
-        </button>
+        </Button>
       </div>
       {ledger ? (
         <dl className="mt-5 grid gap-3 sm:grid-cols-3">

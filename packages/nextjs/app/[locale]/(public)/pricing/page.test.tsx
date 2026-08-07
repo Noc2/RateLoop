@@ -35,10 +35,15 @@ test("pricing page shows the sandbox and the founding pilot without a dollar anc
   assert.match(html, /href="\/agents\/billing\?workspace=ws\+second"/);
   assert.doesNotMatch(html, /subject=RateLoop%20Demo/);
   assert.doesNotMatch(html, /Available reviews|These reviews are unpaid/i);
-  assert.match(
-    html,
-    /href="mailto:hawigxyz@proton\.me\?subject=RateLoop%20Founding%20Pilot" class="rateloop-gradient-action min-h-12 w-full justify-center px-5">Request pilot<\/a>/,
-  );
+  // Attribute order is not meaningful: Button emits its className before
+  // spreading the call site's props, so class now precedes href.
+  const pilot = html.match(/<a\b([^>]*)>Request pilot<\/a>/u);
+  assert.ok(pilot, "the founding-pilot action should render as an anchor");
+  assert.match(pilot[1]!, /href="mailto:hawigxyz@proton\.me\?subject=RateLoop%20Founding%20Pilot"/u);
+  pilot[1] = pilot[1]!.match(/class="([^"]*)"/u)?.[1] ?? "";
+  for (const expected of ["rateloop-gradient-action", "min-h-12", "px-5", "w-full", "justify-center"]) {
+    assert.ok(pilot[1]!.split(" ").includes(expected), `pilot action keeps ${expected}`);
+  }
   assert.doesNotMatch(html, /target="_blank"/);
   // The retired dollar anchor, the struck list price and the discount promise must not return.
   assert.doesNotMatch(html, /\$0|\$29|\$99|<s[ >]|20% off|First 12 months|Choose Early Access/);

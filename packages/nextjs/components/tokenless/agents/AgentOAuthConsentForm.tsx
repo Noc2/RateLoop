@@ -3,6 +3,7 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useAgentTranslations } from "./AgentsLocaleProvider";
 import { RateLoopLogo } from "~~/components/RateLoopLogo";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { Link, useRouter } from "~~/i18n/navigation";
 
 type Props = {
@@ -123,9 +124,9 @@ export function AgentOAuthConsentForm({ autoAuthorize, values }: Props) {
               ? t("returning")
               : t("finishing")}
         </p>
-        <Link href={OAUTH_WORKSPACE_RETURN} className="rateloop-gradient-action mt-6 min-h-11 px-5">
+        <Button as={Link} variant="primary" size="none" className="mt-6 min-h-11 px-5" href={OAUTH_WORKSPACE_RETURN}>
           {t("back")}
-        </Link>
+        </Button>
         <iframe
           aria-hidden="true"
           className="pointer-events-none fixed left-0 top-0 h-px w-px opacity-0"
@@ -157,21 +158,23 @@ export function AgentOAuthConsentForm({ autoAuthorize, values }: Props) {
           <p className="text-sm text-base-content/65" role="status">
             {t("completing")}
           </p>
-          <button className="rateloop-gradient-action min-h-11 w-full px-4" type="submit">
+          <Button variant="primary" size="none" block className="min-h-11 px-4" type="submit">
             {submitting ? t("connecting") : t("continue")}
-          </button>
+          </Button>
         </>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
-          <button
-            className="rateloop-gradient-action min-h-11 px-4"
+          <Button
+            variant="primary"
+            size="none"
+            className="min-h-11 px-4"
             type="submit"
             name="decision"
             value="approve"
             disabled={submitting}
           >
             {submitting ? t("connecting") : t("allow")}
-          </button>
+          </Button>
           <button className="btn btn-outline min-h-11" type="submit" name="decision" value="deny" disabled={submitting}>
             {t("cancel")}
           </button>

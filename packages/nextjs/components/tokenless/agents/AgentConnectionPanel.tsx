@@ -672,9 +672,9 @@ function PairingApprovalCard({
         </p>
       ) : null}
       <div className="mt-5 flex flex-wrap gap-3">
-        <button type="submit" className="rateloop-gradient-action px-5" disabled={busy || !publishingPolicyId}>
+        <Button variant="primary" type="submit" disabled={busy || !publishingPolicyId}>
           {busy ? t("approving") : t("approveActivate")}
-        </button>
+        </Button>
         <button
           type="button"
           className="btn border border-error/20 bg-error/[0.06] text-error"
@@ -1345,9 +1345,9 @@ export function AgentConnectionPanel({
                 <AgentText id="translated011" />
               </p>
             </div>
-            <button type="button" className="btn btn-sm rateloop-secondary-action" onClick={() => void copyReveal()}>
+            <Button variant="secondary" size="sm" type="button" onClick={() => void copyReveal()}>
               <AgentText id="translated012" />
-            </button>
+            </Button>
           </div>
           <dl className="mt-4 space-y-3 rounded-lg bg-base-content/[0.055] p-4 font-mono text-xs">
             <div>
@@ -1467,22 +1467,24 @@ export function AgentConnectionPanel({
                                 : t("approveReconnect")}
                             </Button>
                           ) : null}
-                          <button
+                          <Button
+                            variant="secondary"
+                            size="sm"
                             type="button"
-                            className="btn btn-sm rateloop-secondary-action"
                             disabled={Boolean(busyAction)}
                             onClick={() => void retryConnectionStatus()}
                           >
                             {busyAction === "refresh-intents" ? t("checking") : t("checkStatus")}
-                          </button>
-                          <button
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
                             type="button"
-                            className="btn btn-sm rateloop-secondary-action"
                             disabled={Boolean(busyAction)}
                             onClick={() => setPendingConfirmation({ kind: "cancel-intent", intentId: intent.intentId })}
                           >
                             {busyAction === `cancel-intent:${intent.intentId}` ? t("cancelling") : t("cancelAttempt")}
-                          </button>
+                          </Button>
                         </div>
                       </div>
                     </div>
@@ -1571,14 +1573,15 @@ export function AgentConnectionPanel({
                         <AgentText id="legacyCancel" />
                       </p>
                     </div>
-                    <button
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       type="button"
-                      className="btn btn-sm rateloop-secondary-action"
                       disabled={busyAction === `reject:${pairing.pairingId}`}
                       onClick={() => setPendingConfirmation({ kind: "reject-pairing", pairingId: pairing.pairingId })}
                     >
                       <AgentText id="translated023" />
-                    </button>
+                    </Button>
                   </div>
                 </Card>
               ),
@@ -1690,26 +1693,28 @@ export function AgentConnectionPanel({
                       {active ? (
                         <div className="flex flex-wrap gap-2">
                           {legacyCredential ? (
-                            <button
+                            <Button
+                              variant="secondary"
+                              size="sm"
                               type="button"
-                              className="btn btn-sm rateloop-secondary-action"
                               disabled={Boolean(busyAction)}
                               onClick={() => setPendingConfirmation({ kind: "rotate-integration", integration })}
                             >
                               <AgentText id="translated027" />
-                            </button>
+                            </Button>
                           ) : null}
                           {!legacyCredential && activeIntegrations.length > 1 ? (
-                            <button
+                            <Button
+                              variant="secondary"
+                              size="sm"
                               type="button"
-                              className="btn btn-sm rateloop-secondary-action"
                               disabled={Boolean(busyAction) || activeConnectionIntents.length > 0}
                               onClick={() => void copyConnectionMessage(integration.integrationId)}
                             >
                               {t("reconnectNamed", {
                                 name: integration.agentDisplayName || t("agentFallback"),
                               })}
-                            </button>
+                            </Button>
                           ) : null}
                           <button
                             type="button"

@@ -22,6 +22,7 @@ import {
   type QuestionMediaReviewState,
 } from "~~/components/tokenless/answer/QuestionMedia";
 import { ChoiceInput, Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { Link } from "~~/i18n/navigation";
 import { readBrowserSession, subscribeToBrowserAuthSessionChanges } from "~~/lib/auth/client";
@@ -919,14 +920,15 @@ export function TokenlessHandoffClient() {
                       ? "Result not ready. Check again when you are ready."
                       : "Result not ready."}
                 </p>
-                <button
+                <Button
+                  variant="secondary"
+                  size="sm"
                   type="button"
-                  className="btn rateloop-secondary-action btn-sm"
                   disabled={busy !== null}
                   onClick={() => void waitForResult(handoff.operationKey)}
                 >
                   Check again
-                </button>
+                </Button>
               </div>
             )}
           </Card>
@@ -1125,14 +1127,16 @@ export function TokenlessHandoffClient() {
                 No funds are reserved until you submit the ask.
               </p>
             </div>
-            <button
+            <Button
+              variant="primary"
+              size="none"
+              className="min-h-11 shrink-0 px-5 disabled:cursor-not-allowed disabled:opacity-40"
               type="button"
-              className="rateloop-gradient-action min-h-11 shrink-0 px-5 disabled:cursor-not-allowed disabled:opacity-40"
               disabled={busy !== null || submitted || handoff.status !== "ready" || !mediaReady || !privacyConfirmed}
               onClick={() => void createQuote()}
             >
               {busy === "quote" ? "Getting price…" : quote ? "Refresh price" : "Get price"}
-            </button>
+            </Button>
           </div>
 
           {quote ? (
@@ -1280,9 +1284,11 @@ export function TokenlessHandoffClient() {
             ) : null}
 
             <div className="mt-6 flex justify-end border-t border-base-content/10 pt-6">
-              <button
+              <Button
+                variant="primary"
+                size="none"
+                className="min-h-11 shrink-0 px-5 disabled:cursor-not-allowed disabled:opacity-40"
                 type="button"
-                className="rateloop-gradient-action min-h-11 shrink-0 px-5 disabled:cursor-not-allowed disabled:opacity-40"
                 disabled={
                   busy !== null ||
                   submitted ||
@@ -1298,7 +1304,7 @@ export function TokenlessHandoffClient() {
                 {busy === "submit"
                   ? "Submitting…"
                   : `Submit and reserve ${formatUsdcAtomic(quote.economics.totalFundedAtomic, locale)}`}
-              </button>
+              </Button>
             </div>
           </Card>
         ) : null}
@@ -1319,14 +1325,16 @@ export function TokenlessHandoffClient() {
                 <p className="mt-2 font-mono text-xs text-base-content/55">Request {activeOperationKey}</p>
               </div>
               {!result ? (
-                <button
+                <Button
+                  variant="secondary"
+                  size="none"
+                  className="min-h-10 px-4"
                   type="button"
-                  className="btn rateloop-secondary-action min-h-10 px-4"
                   disabled={busy !== null}
                   onClick={() => void waitForResult(activeOperationKey)}
                 >
                   {busy === "result" ? "Waiting…" : "Check authenticated result"}
-                </button>
+                </Button>
               ) : null}
             </div>
 

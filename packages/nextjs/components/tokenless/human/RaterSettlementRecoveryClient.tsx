@@ -7,6 +7,7 @@ import { baseSepolia } from "thirdweb/chains";
 import { ConnectButton, ThirdwebProvider, useActiveAccount } from "thirdweb/react";
 import { Field, SelectField } from "~~/components/tokenless/forms/Field";
 import { settlementRoundStatusLabel } from "~~/components/tokenless/human/humanStatePresentation";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { readBrowserSession } from "~~/lib/auth/client";
 import { rateLoopThirdwebWallets, thirdwebBrowserClient } from "~~/lib/thirdweb/client";
@@ -298,14 +299,16 @@ function SettlementRecoveryControls() {
           }}
         />
       ) : null}
-      <button
+      <Button
+        variant="primary"
+        size="none"
+        className="mt-3 px-4 text-sm"
         type="button"
-        className="rateloop-gradient-action mt-3 px-4 text-sm"
         disabled={busy || !selectedSource || (needsRecoverySecret && recoverySecret.length < 12)}
         onClick={() => void checkSettlement()}
       >
         {busy && !snapshot ? t("checking") : t("check")}
-      </button>
+      </Button>
 
       {snapshot ? (
         <Card as="div" variant="nested" className="mt-5 rounded-xl p-4">
@@ -338,9 +341,11 @@ function SettlementRecoveryControls() {
             </div>
           </dl>
           {actionAvailable && account ? (
-            <button
+            <Button
+              variant="primary"
+              size="none"
+              className="mt-4 px-4 text-sm"
               type="button"
-              className="rateloop-gradient-action mt-4 px-4 text-sm"
               disabled={busy}
               onClick={() => void execute(snapshot.canReveal ? "reveal" : "claim")}
             >
@@ -349,7 +354,7 @@ function SettlementRecoveryControls() {
                 : snapshot.canReveal
                   ? t("revealReview")
                   : t("claimAmount", { amount: usdc(earnedAtomic) })}
-            </button>
+            </Button>
           ) : null}
           {actionAvailable && !account && thirdwebBrowserClient ? (
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3">

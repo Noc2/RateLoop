@@ -5,6 +5,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import { Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { betterAuthClient, readBrowserAuthConfiguration } from "~~/lib/auth/client";
 import { readJson } from "~~/lib/tokenless/http";
@@ -173,14 +174,9 @@ export function PasskeyManagementPanel() {
         <h2 id="passkeys-heading" className="text-lg font-semibold">
           {t("title")}
         </h2>
-        <button
-          className="btn rateloop-secondary-action btn-sm"
-          disabled={busy}
-          type="button"
-          onClick={() => void start({ kind: "add" })}
-        >
+        <Button variant="secondary" size="sm" disabled={busy} type="button" onClick={() => void start({ kind: "add" })}>
           {t("add")}
-        </button>
+        </Button>
       </div>
 
       <AsyncSection

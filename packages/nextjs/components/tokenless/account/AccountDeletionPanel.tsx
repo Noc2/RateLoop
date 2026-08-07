@@ -4,6 +4,7 @@ import { type FormEvent, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { betterAuthClient, issueAccountDeletionProof, readBrowserAuthConfiguration } from "~~/lib/auth/client";
 import type {
@@ -195,13 +196,15 @@ export function AccountDeletionPanel() {
           {t("title")}
         </h2>
         {!reviewing ? (
-          <button
+          <Button
+            variant="secondary"
+            size="none"
+            className="btn-sm text-error"
             type="button"
-            className="btn rateloop-secondary-action btn-sm text-error"
             onClick={startDeletionReview}
           >
             {t("review")}
-          </button>
+          </Button>
         ) : null}
       </div>
 
@@ -282,14 +285,15 @@ export function AccountDeletionPanel() {
                     {t("verifyDelete")}
                   </button>
                 ) : null}
-                <button
+                <Button
+                  variant="secondary"
+                  size="sm"
                   type="button"
-                  className="btn rateloop-secondary-action btn-sm"
                   disabled={submitting || reauthenticating}
                   onClick={cancelDeletionReview}
                 >
                   {t("cancel")}
-                </button>
+                </Button>
               </div>
 
               {reauthVisible ? (
@@ -349,14 +353,17 @@ export function AccountDeletionPanel() {
                         </button>
                       </form>
                       {reauthConfiguration.methods.passkey ? (
-                        <button
+                        <Button
+                          variant="secondary"
+                          size="none"
+                          block
+                          className="mt-3 min-h-11"
                           type="button"
-                          className="btn rateloop-secondary-action mt-3 min-h-11 w-full"
                           disabled={reauthenticating}
                           onClick={() => void verifyWithPasskey()}
                         >
                           {t("verifyPasskey")}
-                        </button>
+                        </Button>
                       ) : null}
                     </>
                   )}

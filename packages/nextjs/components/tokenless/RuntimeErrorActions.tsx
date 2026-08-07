@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "~~/components/tokenless/ui/Button";
+
 export function RuntimeErrorActions({
   goBackLabel = "Go back",
   reset,
@@ -11,16 +13,18 @@ export function RuntimeErrorActions({
 }) {
   return (
     <>
-      <button type="button" onClick={reset} className="rateloop-gradient-action min-h-11 px-4">
+      <Button variant="primary" size="none" className="min-h-11 px-4" type="button" onClick={reset}>
         {tryAgainLabel}
-      </button>
-      <button
+      </Button>
+      <Button
+        variant="secondary"
+        size="none"
+        className="min-h-11 px-4"
         type="button"
         onClick={() => window.history.back()}
-        className="btn rateloop-secondary-action min-h-11 px-4"
       >
         {goBackLabel}
-      </button>
+      </Button>
     </>
   );
 }

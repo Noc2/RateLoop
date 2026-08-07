@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 
 type PreviewValue =
@@ -228,17 +229,18 @@ export function PrivateArtifactPreview({
               <h2 id={`${titleId}-dialog`} className="text-xl font-semibold">
                 {label}
               </h2>
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 ref={closeButtonRef}
                 type="button"
-                className="btn btn-sm rateloop-secondary-action px-3"
                 onClick={() => {
                   setExpanded(false);
                   openerRef.current?.focus();
                 }}
               >
                 {t("close")}
-              </button>
+              </Button>
             </div>
             <div className="mt-4 min-h-0 overflow-auto">
               {preview.kind === "text" ? (

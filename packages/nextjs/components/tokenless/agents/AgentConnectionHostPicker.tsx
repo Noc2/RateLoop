@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAgentLocale, useAgentTranslations } from "./AgentsLocaleProvider";
 import { Badge, type BadgeVariant } from "~~/components/tokenless/ui/Badge";
+import { Button } from "~~/components/tokenless/ui/Button";
 import {
   TOKENLESS_HOST_CAPABILITIES,
   type TokenlessHostCapability,
@@ -116,13 +117,15 @@ function InstallAffordanceRow({
         <pre className="grow overflow-x-auto rounded-lg bg-base-content/[0.055] p-3 font-mono text-xs leading-5">
           <code>{affordance.value}</code>
         </pre>
-        <button
+        <Button
+          variant="secondary"
+          size="none"
+          className="btn-sm shrink-0"
           type="button"
-          className="btn btn-sm rateloop-secondary-action shrink-0"
           onClick={() => onCopy(affordance.value)}
         >
           {copied ? t("copied") : t("copy")}
-        </button>
+        </Button>
       </div>
     </div>
   );

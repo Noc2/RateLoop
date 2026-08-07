@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { Link } from "~~/i18n/navigation";
 import { notifyBrowserAuthSessionChanged } from "~~/lib/auth/client";
@@ -90,9 +91,9 @@ export function ProfileClient() {
               {t("title")}
             </h2>
           </div>
-          <Link href="/settings/wallets" className="btn btn-sm rateloop-secondary-action px-3">
+          <Button as={Link} variant="secondary" size="sm" href="/settings/wallets">
             {t("wallets")}
-          </Link>
+          </Button>
         </div>
         <form className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end" aria-busy={loading} onSubmit={save}>
           <div className="grow">
@@ -111,9 +112,9 @@ export function ProfileClient() {
               error={fieldErrors.displayName}
             />
           </div>
-          <button type="submit" className="rateloop-gradient-action px-5" disabled={loading || !profile || busy}>
+          <Button variant="primary" type="submit" disabled={loading || !profile || busy}>
             {loading ? t("loading") : busy ? t("saving") : t("save")}
-          </button>
+          </Button>
         </form>
         {saved ? <p className="mt-3 text-sm text-success">{t("saved")}</p> : null}
         {formError ? (

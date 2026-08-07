@@ -154,13 +154,15 @@ export function SubjectDataExportPanel() {
                   </p>
                 </div>
                 {request.exportReady ? (
-                  <a
-                    className="btn btn-sm rateloop-secondary-action"
+                  <Button
+                    as="a"
+                    variant="secondary"
+                    size="sm"
                     href={`/api/account/privacy/subject-requests/${encodeURIComponent(request.requestId)}/export`}
                     download
                   >
                     {t("download")}
-                  </a>
+                  </Button>
                 ) : null}
               </div>
             </li>

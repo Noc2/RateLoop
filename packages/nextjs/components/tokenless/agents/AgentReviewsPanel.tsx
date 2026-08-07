@@ -7,6 +7,7 @@ import { WorkspaceReviewersPanel } from "./WorkspaceReviewersPanel";
 import { agentTabHref } from "./agentWorkspaceState";
 import { SelectField } from "~~/components/tokenless/forms/Field";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { Link } from "~~/i18n/navigation";
 import type { AgentRegistry, WorkspaceAgent } from "~~/lib/tokenless/agentRegistry";
@@ -116,12 +117,15 @@ export function AgentReviewsPanel({ canManage, workspaceId }: { canManage: boole
             {t("connectTitle")}
           </h2>
           <p className="mt-2 max-w-2xl text-sm text-base-content/60">{t("connectDescription")}</p>
-          <Link
-            className="rateloop-gradient-action mt-5 inline-flex min-h-11 items-center px-5"
+          <Button
+            as={Link}
+            variant="primary"
+            size="none"
+            className="mt-5 inline-flex min-h-11 items-center px-5"
             href={agentTabHref("connect", workspaceId)}
           >
             {t("goConnection")}
-          </Link>
+          </Button>
         </Card>
       ) : null}
     </AsyncSection>

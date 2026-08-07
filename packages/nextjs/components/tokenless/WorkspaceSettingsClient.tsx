@@ -10,6 +10,7 @@ import { WorkspaceMembersPanel } from "~~/components/tokenless/WorkspaceMembersP
 import { ChoiceInput, Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { WorkspacePublicContentLink } from "~~/components/tokenless/navigation/WorkspacePublicContentLink";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { ConfirmDialog } from "~~/components/tokenless/ui/ConfirmDialog";
 import {
@@ -818,9 +819,9 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
         maxLength={120}
         required
       />
-      <button className="rateloop-gradient-action min-h-12 px-5" disabled={busy} type="submit">
+      <Button variant="primary" size="none" className="min-h-12 px-5" disabled={busy} type="submit">
         {busy ? "Creating…" : "Create workspace"}
-      </button>
+      </Button>
       {error ? (
         <p className="rounded-lg bg-error/10 p-3 text-sm text-error sm:col-span-2" role="alert">
           {error}
@@ -869,15 +870,17 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                         </h2>
                         <p className="mt-1 text-sm text-base-content/55">Keys for direct workspace integrations.</p>
                       </div>
-                      <button
+                      <Button
+                        variant="secondary"
+                        size="none"
+                        className="min-h-10 px-4"
                         type="button"
-                        className="btn rateloop-secondary-action min-h-10 px-4"
                         aria-controls="workspace-api-key-settings"
                         aria-expanded={showApiAccess}
                         onClick={() => setShowApiAccess(current => !current)}
                       >
                         {showApiAccess ? "Done" : "Create or revoke API key"}
-                      </button>
+                      </Button>
                     </div>
                     {showApiAccess ? (
                       <div id="workspace-api-key-settings" className="mt-5 border-t border-base-content/10 pt-5">
@@ -950,27 +953,31 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                     ) : null}
                     <div className="mt-5 flex flex-wrap items-center gap-3">
                       {billing.canManageBilling && billing.plan === "free" && billing.checkoutAvailable ? (
-                        <button
+                        <Button
+                          variant="primary"
+                          size="none"
+                          className="min-h-10 px-4"
                           ref={upgradeActionRef}
                           type="button"
-                          className="rateloop-gradient-action min-h-10 px-4"
                           disabled={billingBusy}
                           onClick={() => void openBillingDestination("checkout")}
                         >
                           Upgrade to Early Access
-                        </button>
+                        </Button>
                       ) : null}
                       {billing.canManageBilling && billing.portalAvailable && !billing.checkoutAvailable ? (
-                        <button
+                        <Button
+                          variant="secondary"
+                          size="none"
+                          className="min-h-10 px-4"
                           type="button"
-                          className="btn rateloop-secondary-action min-h-10 px-4"
                           disabled={billingBusy}
                           onClick={() => void openBillingDestination("portal")}
                         >
                           {billing.checkoutBlockedReason === "subscription_requires_attention"
                             ? "Update payment method"
                             : "Manage billing"}
-                        </button>
+                        </Button>
                       ) : null}
                       {billing.canManageBilling &&
                       billing.plan === "free" &&
@@ -1258,13 +1265,15 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                             {billingProfileFormError}
                           </p>
                         ) : null}
-                        <button
+                        <Button
+                          variant="primary"
+                          size="none"
+                          className="mt-4 min-h-10 px-4"
                           type="submit"
-                          className="rateloop-gradient-action mt-4 min-h-10 px-4"
                           disabled={billingProfileBusy}
                         >
                           {billingProfileBusy ? "Saving…" : "Save billing details"}
-                        </button>
+                        </Button>
                       </form>
                     ) : null}
                     {!billing.canManageBilling ? (
@@ -1360,9 +1369,15 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                         placeholder="500.00"
                         required
                       />
-                      <button className="rateloop-gradient-action min-h-10 self-end px-4" disabled={topupBusy}>
+                      <Button
+                        variant="primary"
+                        size="none"
+                        className="min-h-10 self-end px-4"
+                        type="submit"
+                        disabled={topupBusy}
+                      >
                         {topupBusy ? "Creating invoice…" : "Create invoice"}
-                      </button>
+                      </Button>
                     </form>
                   ) : canManageTopups && !topups && !topupError ? (
                     <p className="mt-4 text-xs leading-5 text-base-content/55" role="status">
@@ -1439,14 +1454,16 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                         Enterprise identity
                       </h2>
                     </div>
-                    <button
-                      className="btn rateloop-secondary-action min-h-10 px-4"
+                    <Button
+                      variant="secondary"
+                      size="none"
+                      className="min-h-10 px-4"
                       type="button"
                       aria-expanded={showIdentity}
                       onClick={() => void toggleIdentitySettings()}
                     >
                       {showIdentity ? "Close" : "Configure SSO and SCIM"}
-                    </button>
+                    </Button>
                   </div>
                   {showIdentity ? (
                     <div className="mt-5 space-y-5 border-t border-base-content/10 pt-5">
@@ -1668,15 +1685,20 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                               )}
                             </div>
                             <div className="mt-4 flex flex-wrap gap-3">
-                              <button
-                                className="rateloop-gradient-action min-h-10 px-4"
+                              <Button
+                                variant="primary"
+                                size="none"
+                                className="min-h-10 px-4"
+                                type="submit"
                                 disabled={identityBusy || !identityFormDirty}
                               >
                                 {identityForm.providerId ? "Save provider" : "Add provider"}
-                              </button>
+                              </Button>
                               {identityForm.providerId ? (
-                                <button
-                                  className="btn rateloop-secondary-action min-h-10 px-4"
+                                <Button
+                                  variant="secondary"
+                                  size="none"
+                                  className="min-h-10 px-4"
                                   type="button"
                                   onClick={() =>
                                     setIdentityForm(current => ({
@@ -1692,7 +1714,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                                   }
                                 >
                                   Cancel
-                                </button>
+                                </Button>
                               ) : null}
                             </div>
                           </form>
@@ -1705,14 +1727,16 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                                 </p>
                               </div>
                               {identity?.scim.length ? null : (
-                                <button
-                                  className="btn rateloop-secondary-action min-h-9 px-3"
+                                <Button
+                                  variant="secondary"
+                                  size="none"
+                                  className="min-h-9 px-3"
                                   disabled={identityBusy}
                                   onClick={() => void scimAction()}
                                   type="button"
                                 >
                                   Create SCIM token
-                                </button>
+                                </Button>
                               )}
                             </div>
                             {identity?.scim.map(connection => (
@@ -1774,15 +1798,17 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
             <h2 id="create-another-workspace-heading" className="text-lg font-semibold">
               Workspaces
             </h2>
-            <button
+            <Button
+              variant="secondary"
+              size="none"
+              className="min-h-10 px-4"
               type="button"
-              className="btn rateloop-secondary-action min-h-10 px-4"
               aria-controls="create-workspace-form"
               aria-expanded={showWorkspaceCreation}
               onClick={() => setShowWorkspaceCreation(current => !current)}
             >
               {showWorkspaceCreation ? "Cancel" : "Create another workspace"}
-            </button>
+            </Button>
           </div>
           {showWorkspaceCreation ? <div id="create-workspace-form">{workspaceForm}</div> : null}
         </Card>

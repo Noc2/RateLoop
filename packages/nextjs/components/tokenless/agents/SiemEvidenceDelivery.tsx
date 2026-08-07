@@ -7,6 +7,7 @@ import { OneTimeSecretNotice } from "./OneTimeSecretNotice";
 import { readEvidenceDeliveryJson } from "./evidenceDeliveryClient";
 import { ChoiceInput, Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 
 // Delivery filters on the endpoint's stored event_types_json, so a type absent
@@ -149,16 +150,18 @@ export function SiemEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
         />
       ) : null}
 
-      <button
+      <Button
+        variant="secondary"
+        size="none"
+        className="btn-sm mt-4"
         type="button"
-        className="btn btn-sm rateloop-secondary-action mt-4"
         aria-expanded={showForm}
         aria-controls="siem-event-stream-form"
         disabled={busy || oneTimeSecret !== null}
         onClick={() => setShowForm(true)}
       >
         <AgentText id="translated223" />
-      </button>
+      </Button>
       {showForm ? (
         <form
           id="siem-event-stream-form"
@@ -224,13 +227,14 @@ export function SiemEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
             </div>
           </fieldset>
           <div className="flex flex-wrap gap-2">
-            <button
+            <Button
+              variant="primary"
+              size="sm"
               type="submit"
-              className="btn btn-sm rateloop-gradient-action"
               disabled={busy || selectedTypes.length === 0 || oneTimeSecret !== null}
             >
               {busy ? <AgentText id="dynamic040" /> : <AgentText id="dynamic059" />}
-            </button>
+            </Button>
             <button
               type="button"
               className="btn btn-sm btn-ghost"

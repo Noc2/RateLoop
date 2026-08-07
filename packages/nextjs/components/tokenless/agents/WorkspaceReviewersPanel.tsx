@@ -7,6 +7,7 @@ import { OneTimeSecretNotice } from "~~/components/tokenless/agents/OneTimeSecre
 import { ChoiceInput, Field, SelectField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { ConfirmDialog } from "~~/components/tokenless/ui/ConfirmDialog";
 import { readJson } from "~~/lib/tokenless/http";
 import { WorkspaceRequestScope } from "~~/lib/tokenless/workspaceRequestScope";
@@ -409,9 +410,15 @@ export function WorkspaceReviewersPanel({
             <AgentText id="translated228" />
           </option>
         </SelectField>
-        <button className="rateloop-gradient-action min-h-12 px-5" disabled={busyTarget === "invite"}>
+        <Button
+          variant="primary"
+          size="none"
+          className="min-h-12 px-5"
+          type="submit"
+          disabled={busyTarget === "invite"}
+        >
           {busyTarget === "invite" ? copy("inviting") : copy("invite")}
-        </button>
+        </Button>
         <label
           className="flex items-start gap-2 text-xs leading-5 text-base-content/65 sm:col-span-3"
           htmlFor="workspace-reviewer-paid-adulthood"

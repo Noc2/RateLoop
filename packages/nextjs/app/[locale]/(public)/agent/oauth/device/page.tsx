@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { PageHeading } from "~~/components/tokenless/ui/PageHeading";
 import type { Locale } from "~~/i18n/config";
@@ -165,9 +166,9 @@ export default async function AgentOAuthDevicePage({
               <button type="submit" name="decision" value="approve" className="btn btn-primary flex-1">
                 {t("allow")}
               </button>
-              <button type="submit" name="decision" value="deny" className="btn rateloop-secondary-action flex-1">
+              <Button variant="secondary" size="none" className="flex-1" type="submit" name="decision" value="deny">
                 {t("deny")}
-              </button>
+              </Button>
             </form>
           </>
         ) : null}

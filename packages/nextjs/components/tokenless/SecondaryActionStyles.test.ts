@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import test from "node:test";
 
 const styles = readFileSync(new URL("../../styles/globals.css", import.meta.url), "utf8");
@@ -57,5 +57,45 @@ test("landing page calls to action keep their dedicated styling", () => {
     landingPage.indexOf("<SupportedAgentsSection"),
   );
   assert.doesNotMatch(heroActions, /rateloop-secondary-action/);
-  assert.match(workspacePlanOverview, /href="\/pricing" className="btn rateloop-secondary-action/);
+  // The variant now comes from Button rather than a hand-written class string.
+  assert.match(workspacePlanOverview, /<Button as=\{Link\} variant="secondary"[^>]*href="\/pricing"/u);
+});
+
+/**
+ * A file input cannot be a `<button>`, so its label keeps the variant classes by
+ * hand. It is the only element in the tree that legitimately does.
+ */
+const HAND_STYLED_EXCEPTIONS = new Set(["components/tokenless/PublicEvidenceVerifier.tsx"]);
+
+function sourceFiles(root: URL, prefix: string): { path: string; source: string }[] {
+  return readdirSync(root, { withFileTypes: true }).flatMap(entry => {
+    const child = new URL(`${entry.name}${entry.isDirectory() ? "/" : ""}`, root);
+    if (entry.isDirectory()) return sourceFiles(child, `${prefix}${entry.name}/`);
+    if (!entry.name.endsWith(".tsx") || entry.name.includes(".test.")) return [];
+    return [{ path: `${prefix}${entry.name}`, source: readFileSync(child, "utf8") }];
+  });
+}
+
+test("no call site re-applies a button variant by hand", () => {
+  // 104 call sites used to hand-write these classes, which is how six primary
+  // heights and six secondary heights grew. They now come from Button, and this
+  // keeps it that way: a new `className="… rateloop-gradient-action …"` is the
+  // start of the next divergence, not a shortcut.
+  const offenders: string[] = [];
+  for (const root of ["components/", "app/"]) {
+    for (const file of sourceFiles(new URL(`../../${root}`, import.meta.url), root)) {
+      if (file.path.endsWith("tokenless/ui/Button.tsx")) continue;
+      if (HAND_STYLED_EXCEPTIONS.has(file.path)) continue;
+      if (/rateloop-(?:gradient|secondary)-action/u.test(file.source)) offenders.push(file.path);
+    }
+  }
+  assert.deepEqual(offenders, [], `these must ask Button for the variant instead: ${offenders.join(", ")}`);
+});
+
+test("the exception is exactly one file input, and it still carries btn", () => {
+  const verifier = readFileSync(new URL("./PublicEvidenceVerifier.tsx", import.meta.url), "utf8");
+  const containers = [...verifier.matchAll(/containerClassName="([^"]*rateloop-secondary-action[^"]*)"/gu)];
+  assert.equal(containers.length, 1, "the hand-styled exception should be a single control");
+  // Compound selector: without `btn` the label renders with no background at all.
+  assert.match(containers[0]?.[1] ?? "", /\bbtn\b/u);
 });

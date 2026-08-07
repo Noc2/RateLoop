@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getLocale, getTranslations } from "next-intl/server";
 import { RootRecoverySurface } from "~~/components/tokenless/RootRecoverySurface";
 import { TokenlessShell } from "~~/components/tokenless/TokenlessShell";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { DEFAULT_LOCALE, isLocale } from "~~/i18n/config";
 import { Link } from "~~/i18n/navigation";
 
@@ -29,9 +30,9 @@ export default async function LocalizedNotFound() {
           readDocs: t("readDocs"),
         }}
         actions={
-          <Link href="/" className="btn rateloop-secondary-action min-h-11 px-4">
+          <Button as={Link} variant="secondary" size="none" className="min-h-11 px-4" href="/">
             {t("notFound.home")}
-          </Link>
+          </Button>
         }
       />
     </TokenlessShell>

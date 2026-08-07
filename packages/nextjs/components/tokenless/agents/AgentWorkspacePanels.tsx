@@ -93,13 +93,16 @@ export function AgentWorkspacePanels({
         <p className="mt-3 max-w-2xl text-sm leading-6 text-base-content/65">{t("chooseDescription")}</p>
         <div className="mt-6 flex flex-wrap gap-3">
           {workspaces.map(option => (
-            <Link
+            <Button
+              as={Link}
+              variant="secondary"
+              size="none"
+              className="min-h-11"
               key={option.workspaceId}
               href={agentTabHref(activeTab, option.workspaceId)}
-              className="btn rateloop-secondary-action min-h-11"
             >
               {option.name}
-            </Link>
+            </Button>
           ))}
         </div>
       </Card>

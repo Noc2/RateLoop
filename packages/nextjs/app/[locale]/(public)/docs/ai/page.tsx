@@ -7,6 +7,7 @@ import {
   usePublicLocale,
 } from "~~/components/docs/LocalizedPublicContent";
 import { PublicLink as Link } from "~~/components/docs/PublicLink";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import type { Locale } from "~~/i18n/config";
 import { CODEX_WORKSPACE_PLUGIN_SETUP_COMMAND } from "~~/lib/tokenless/hostCapabilities";
@@ -49,9 +50,15 @@ export function TokenlessAgentDocsContent({ locale }: { locale: Locale }) {
             Use the protected workspace MCP to evaluate eligible outputs, request review when required, wait for the
             same operation, and read its result.
           </p>
-          <Link href="/agents/connections" className="btn btn-sm rateloop-secondary-action mt-4 px-3 no-underline">
+          <Button
+            as={Link}
+            variant="secondary"
+            size="none"
+            className="btn-sm mt-4 px-3 no-underline"
+            href="/agents/connections"
+          >
             Connect an agent
-          </Link>
+          </Button>
         </div>
 
         <h2 id="workspace-review-flow">Connected workspace review</h2>

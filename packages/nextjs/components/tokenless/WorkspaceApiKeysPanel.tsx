@@ -7,6 +7,7 @@ import { OneTimeSecretNotice } from "~~/components/tokenless/agents/OneTimeSecre
 import { ChoiceInput, Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { ConfirmDialog } from "~~/components/tokenless/ui/ConfirmDialog";
 import {
   WORKSPACE_API_KEY_SCOPES,
@@ -211,9 +212,9 @@ export function WorkspaceApiKeysPanel({ workspaceId }: { workspaceId: string }) 
               </p>
             ) : null}
           </fieldset>
-          <button className="btn rateloop-secondary-action" type="submit" disabled={busy || scopes.length === 0}>
+          <Button variant="secondary" size="none" type="submit" disabled={busy || scopes.length === 0}>
             {busy ? "Creating…" : "Create API key"}
-          </button>
+          </Button>
           {formError ? (
             <p className="rounded-lg bg-error/10 p-3 text-sm text-error" role="alert">
               {formError}

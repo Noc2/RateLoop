@@ -6,6 +6,7 @@ import { useAgentFormatter, useAgentTranslations } from "./AgentsLocaleProvider"
 import { readEvidenceDeliveryJson } from "./evidenceDeliveryClient";
 import { Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 
 type WormDestination = {
@@ -161,9 +162,10 @@ export function WormEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
             >
               <AgentText id="translated237" />
             </a>
-            <button
+            <Button
+              variant="primary"
+              size="sm"
               type="button"
-              className="btn btn-sm rateloop-gradient-action"
               disabled={busy}
               onClick={() =>
                 void mutate(async () => {
@@ -180,7 +182,7 @@ export function WormEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
               }
             >
               <AgentText id="translated238" />
-            </button>
+            </Button>
             <button
               type="button"
               className="btn btn-sm border-error/20 bg-error/[0.04] text-error"
@@ -207,16 +209,18 @@ export function WormEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
         </p>
       )}
 
-      <button
+      <Button
+        variant="secondary"
+        size="none"
+        className="btn-sm mt-4"
         type="button"
-        className="btn btn-sm rateloop-secondary-action mt-4"
         aria-expanded={showForm}
         aria-controls="immutable-archive-form"
         disabled={busy}
         onClick={() => setShowForm(true)}
       >
         {destination ? <AgentText id="dynamic069" /> : <AgentText id="dynamic067" />}
-      </button>
+      </Button>
       {showForm ? (
         <form
           id="immutable-archive-form"
@@ -321,9 +325,9 @@ export function WormEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
             />
           </div>
           <div className="flex flex-wrap gap-2 sm:col-span-2">
-            <button type="submit" className="btn btn-sm rateloop-gradient-action" disabled={busy}>
+            <Button variant="primary" size="sm" type="submit" disabled={busy}>
               {busy ? <AgentText id="dynamic066" /> : <AgentText id="dynamic071" />}
-            </button>
+            </Button>
             <button
               type="button"
               className="btn btn-sm btn-ghost"

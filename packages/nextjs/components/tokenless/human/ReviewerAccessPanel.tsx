@@ -7,6 +7,7 @@ import {
   reviewerAccessSensitivityMessageKey,
 } from "~~/components/tokenless/human/reviewerAccessSensitivity";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { ConfirmDialog } from "~~/components/tokenless/ui/ConfirmDialog";
 import { Link } from "~~/i18n/navigation";
@@ -146,9 +147,9 @@ export function ReviewerAccessPanel() {
           </ul>
         </AsyncSection>
         {!loading && !loadError && activeAccess.length === 0 ? (
-          <Link className="btn btn-sm rateloop-secondary-action mt-3" href="/human/review?invite=1">
+          <Button as={Link} variant="secondary" size="none" className="btn-sm mt-3" href="/human/review?invite=1">
             {t("useInvitation")}
-          </Link>
+          </Button>
         ) : null}
       </div>
       {status ? (

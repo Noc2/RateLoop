@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { ChoiceInput, Field, SelectField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { assuranceCapabilityLabel, eligibilityStatusLabel } from "~~/components/tokenless/human/humanStatePresentation";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { Link } from "~~/i18n/navigation";
 import { readBrowserSession } from "~~/lib/auth/client";
@@ -413,9 +414,16 @@ export function PaidEligibilityClient() {
                 {fieldErrors.sanctionsConsent}
               </p>
             ) : null}
-            <button className="rateloop-gradient-action w-full px-6" disabled={busy || !residenceComplete}>
+            <Button
+              variant="primary"
+              size="none"
+              block
+              className="px-6"
+              type="submit"
+              disabled={busy || !residenceComplete}
+            >
               {busy ? t("completing") : t("unlock")}
-            </button>
+            </Button>
             <button
               type="button"
               className="w-full rounded-lg border border-base-content/15 px-6 py-3 text-sm"
@@ -455,9 +463,15 @@ export function PaidEligibilityClient() {
             </div>
             {state && !accountAddress ? (
               <div className="mt-5 flex flex-wrap gap-3">
-                <Link href="/settings/wallets?use=payout" className="rateloop-gradient-action inline-flex px-6">
+                <Button
+                  as={Link}
+                  variant="primary"
+                  size="none"
+                  className="inline-flex px-6"
+                  href="/settings/wallets?use=payout"
+                >
                   {t("addWallet")}
-                </Link>
+                </Button>
                 {reviewerSource === "rateloop_network" ? (
                   <button
                     type="button"
@@ -471,14 +485,16 @@ export function PaidEligibilityClient() {
               </div>
             ) : reviewerSource === "rateloop_network" ? (
               <div className="mt-5 flex flex-wrap gap-3">
-                <button
+                <Button
+                  variant="primary"
+                  size="none"
+                  className="px-6"
                   type="button"
-                  className="rateloop-gradient-action px-6"
                   disabled={busy || !accountAddress}
                   onClick={() => void startProvider()}
                 >
                   {busy ? t("opening") : accountAddress ? t("verifyIdentity") : t("checkingAccount")}
-                </button>
+                </Button>
                 <button
                   type="button"
                   className="rounded-lg border border-base-content/15 px-6 py-3 text-sm"

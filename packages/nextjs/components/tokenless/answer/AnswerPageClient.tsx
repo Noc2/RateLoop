@@ -17,6 +17,7 @@ import {
 } from "~~/components/tokenless/answer/PublicQuestionCard";
 import { HumanTabs } from "~~/components/tokenless/human/HumanTabs";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { usePathname } from "~~/i18n/navigation";
 import { readBrowserSession, subscribeToBrowserAuthSessionChanges } from "~~/lib/auth/client";
@@ -154,15 +155,17 @@ export function AnswerPageClient({
         active={view === "history" ? "history" : "discover"}
         endAction={
           principalId && view === "active" && (hasPublicTasks || hasPrivateAssignments) ? (
-            <button
+            <Button
+              variant="secondary"
+              size="none"
+              className="btn-sm ml-auto"
               type="button"
-              className="btn btn-sm rateloop-secondary-action ml-auto"
               aria-controls="discover-invitation-panel"
               aria-expanded={invitationOpen}
               onClick={() => setInvitationOpen(current => !current)}
             >
               {invitationOpen ? t("hideInvitation") : t("haveInvitation")}
-            </button>
+            </Button>
           ) : null
         }
       />
@@ -257,14 +260,15 @@ export function AnswerPageClient({
           >
             <p className="text-base text-base-content/60">{view === "history" ? t("noHistory") : t("noneAvailable")}</p>
             {view === "active" && !invitationOpen ? (
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 type="button"
-                className="btn btn-sm rateloop-secondary-action"
                 aria-controls="discover-invitation-panel"
                 onClick={() => setInvitationOpen(true)}
               >
                 {t("useInvitation")}
-              </button>
+              </Button>
             ) : null}
           </Card>
         ) : null}
