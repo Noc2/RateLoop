@@ -6,6 +6,7 @@ import {
   localizeCatalogNode,
   translateCatalogString,
 } from "~~/components/localization/recursiveCatalogLocalization";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { type Locale, isLocale } from "~~/i18n/config";
 import { getMessagesForLocale } from "~~/i18n/messages";
@@ -82,7 +83,14 @@ export function LocalizedPublicContent({
     phrases,
     elementProps(element, translate) {
       const props: Record<string, unknown> = {};
-      if (element.type === PublicLink || (element.type === Card && element.props.as === PublicLink)) {
+      // A PublicLink needs the locale injected to prefix its href. It can arrive
+      // directly, or wrapped by a polymorphic component that renders it through
+      // `as` — Card already did this, and Button now does too, so a link that
+      // looks like a button still resolves to /de/… rather than /….
+      const rendersPublicLink =
+        element.type === PublicLink ||
+        ((element.type === Card || element.type === Button) && element.props.as === PublicLink);
+      if (rendersPublicLink) {
         props.locale = locale;
       }
       const example = element.props.example;
