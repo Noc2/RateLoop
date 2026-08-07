@@ -20,13 +20,7 @@ export function AgentsSignInPrompt({ returnTo }: { returnTo: string }) {
       description={t("description")}
       returnTo={browserReturnTo}
       secondaryAction={
-        <Button
-          as={Link}
-          href="/docs/ai"
-          size="sm"
-          variant="secondary"
-          className="h-10 min-h-10 px-[0.9rem] text-base font-bold leading-none"
-        >
+        <Button as={Link} href="/docs/ai" size="lg" variant="secondary">
           {t("docs")}
         </Button>
       }

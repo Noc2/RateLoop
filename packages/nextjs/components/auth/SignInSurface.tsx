@@ -44,9 +44,15 @@ export function SignInSurface({
           {title}
         </Heading>
         {description ? (
-          <p className="mx-auto mb-6 mt-3 max-w-sm text-base leading-6 text-base-content/70">{description}</p>
+          <p className="mx-auto mt-3 max-w-sm text-base leading-6 text-base-content/70">{description}</p>
         ) : null}
-        {children}
+        {/*
+          The gap below the heading belongs to the action row, not to the description.
+          While it lived on the optional paragraph, any prompt without a description -
+          which is every human account tab - rendered its heading flush against the
+          button, and German made it worse by wrapping the heading to two lines.
+        */}
+        <div className="mt-6">{children}</div>
       </Card>
     </div>
   );

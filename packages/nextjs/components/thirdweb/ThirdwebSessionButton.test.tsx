@@ -137,11 +137,16 @@ test("sign-in is never its own return destination or repeated shell action", () 
   }
 });
 
-test("the compatibility entry point keeps the original compact RateLoop sign-in treatment", () => {
+test("the sign-in action is an ordinary primary button with no bespoke geometry", () => {
   assert.equal(RATELOOP_SIGN_IN_LABEL, "Sign In");
-  assert.match(RATELOOP_SIGN_IN_ACTION_CLASS, /rateloop-sign-in-action/);
-  assert.match(RATELOOP_SIGN_IN_ACTION_CLASS, /text-base font-bold/);
-  assert.doesNotMatch(RATELOOP_SIGN_IN_ACTION_CLASS, /text-sm|min-h-11|h-12|min-h-12/);
+  // It used to carry `.rateloop-sign-in-action`, forcing 2.5rem where every other
+  // primary is 3rem, and neighbouring call sites hand-copied its overrides to match.
+  assert.doesNotMatch(RATELOOP_SIGN_IN_ACTION_CLASS, /rateloop-sign-in-action|min-h-|h-1[02]|px-\[/u);
+
+  const rendered = renderToStaticMarkup(withIntl(<RateLoopSignInAction />)).replace(/\s+/g, " ");
+  assert.match(rendered, /rateloop-gradient-action/);
+  assert.match(rendered, /min-h-12/);
+  assert.match(rendered, /text-base font-bold/);
 
   const compact = renderToStaticMarkup(withIntl(<RateLoopSignInAction />)).replace(/\s+/g, " ");
   const filled = renderToStaticMarkup(withIntl(<RateLoopSignInAction fill />)).replace(/\s+/g, " ");

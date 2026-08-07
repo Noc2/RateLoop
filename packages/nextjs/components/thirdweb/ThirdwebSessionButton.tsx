@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { isSignInPath } from "~~/components/auth/signInReturnPath";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { DEFAULT_LOCALE, isLocale } from "~~/i18n/config";
 import { Link } from "~~/i18n/navigation";
 import {
@@ -15,8 +16,12 @@ import { workspaceReviewerInvitationFromHash } from "~~/lib/tokenless/reviewerIn
 
 export const RATELOOP_SIGN_IN_LABEL = "Sign In";
 export const RATELOOP_THIRDWEB_AUTO_CONNECT = false;
-export const RATELOOP_SIGN_IN_ACTION_CLASS =
-  "rateloop-gradient-action rateloop-sign-in-action px-[0.9rem] text-base font-bold leading-none whitespace-nowrap";
+/**
+ * The sign-in action is an ordinary primary button. It previously carried
+ * `.rateloop-sign-in-action`, which forced 2.5rem against every other primary's
+ * 3rem, and neighbouring call sites hand-copied those overrides to line up with it.
+ */
+export const RATELOOP_SIGN_IN_ACTION_CLASS = "whitespace-nowrap";
 
 export function localizedSignInReturnTo(returnTo: string | undefined, requestedLocale: string) {
   if (isSignInPath(returnTo)) return undefined;
@@ -47,13 +52,15 @@ export function RateLoopSignInAction({
   const localizedReturnTo = preserveCurrentTab ? undefined : localizedSignInReturnTo(returnTo, locale);
   const href = localizedReturnTo ? `/sign-in?returnTo=${encodeURIComponent(localizedReturnTo)}` : "/sign-in";
   return (
-    <Link
+    <Button
+      as={Link}
+      size="lg"
       href={href}
       className={`${RATELOOP_SIGN_IN_ACTION_CLASS} ${fill ? "w-full" : "w-auto min-w-max"}`}
       {...(preserveCurrentTab ? { target: "_blank", rel: "noopener noreferrer" } : {})}
     >
       {t(preserveCurrentTab ? "signInNewTab" : "signIn")}
-    </Link>
+    </Button>
   );
 }
 
