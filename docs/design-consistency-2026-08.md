@@ -11,14 +11,14 @@ of what follows.
 
 ## The short version
 
-There is a `Button` component. **109 of 173 branded buttons — 63% — do not use it**, and
-instead re-apply its variant classes by hand. So there is no single place that decides what
-a button looks like, and six different primary heights and six secondary heights have grown
-in the gap. `Card` has the same shape of problem: used 183 times, but it carries no
-geometry, so call sites invented three radii and seven paddings.
+There was a `Button` component that **105 of 174 branded buttons did not use**, re-applying
+its variant classes by hand instead. That is now one. `Card` still has the same shape of
+problem: used 183 times, but it carries no geometry, so call sites invented three radii and
+seven paddings.
 
-That is the systemic finding, and it is what remains. The visible bugs the audit found
-alongside it are fixed.
+The button divergence is contained rather than finished. Every call site now goes through
+one component and a guard test keeps it that way, but 71 of them still carry their own
+geometry through `size="none"` — see 2.1.
 
 ## 1. What landed
 
@@ -77,10 +77,19 @@ sizing, padding, typography or colour. `AgentSetupFlow.tsx:1341` even re-declare
 `min-h-11 w-full sm:w-auto` is repeated verbatim at nine sites — an unnamed "form submit"
 size that should be a prop.
 
-*Fix:* `Button` now has real `sm/md/lg` steps with explicit heights and paddings — that part
-is done, and `lg` is the 48px primary. What remains is the `block` prop, the codemod over the
-109 bypass sites, and a lint rule banning the variant classes outside `ui/Button.tsx`. The
-step ladder without the codemod fixes nothing on its own; it only makes the codemod possible.
+**Done, with one deliberate remainder.** 104 sites moved onto `Button`; the bypass count is
+105 → 1, and a guard test fails the suite on any new hand-written variant class. The one
+exception is a file input's label, which cannot be a `<button>`. `block` shipped, and `ref`
+forwarding with it.
+
+*The remainder:* 71 of the converted sites pass `size="none"` and keep their own heights and
+paddings. The tree had five button heights in use against three named sizes, and which one
+survives depends on cascade order between DaisyUI's `--btn-p`/`--size`, the 3rem
+`min-height` on `.rateloop-gradient-action`, and Tailwind's utility layer — which no test
+here can settle. Adoption was therefore made provably style-preserving (all 104 class sets
+verified identical) and convergence deferred. Collapsing those 71 onto the named steps is
+now a change to `ui/Button.tsx` plus deleting `size="none"`, not another hundred-site edit,
+and it needs eyes on a deploy rather than a green suite.
 
 ### 2.2 Card has no geometry
 
@@ -190,21 +199,21 @@ residue the second audit surfaced, and none of it is a single-sitting fix.
 
 | # | Fix | Size | Why now |
 | - | --- | ---- | ------- |
-| 1 | Codemod the 109 bypass sites onto `Button`; lint-ban the variant classes outside it | L | Removes the whole class of divergence |
-| 2 | Add `Button`'s `block` prop; remove the 19 call-site overrides | M | The size ladder exists; the overrides still defeat it |
-| 3 | Give `Card` density variants; strip per-site radius and padding | M | Three radii + seven paddings → three |
-| 4 | `SectionHeading` primitive; sr-only h1 on `/human/inbox\|profile\|settings` | M | Three routes still start at h2, at three different sizes |
-| 5 | Fix input border contrast; add the search placeholder to the contrast test | M | The only two confirmed WCAG AA colour failures |
-| 6 | `aria-describedby` on radio descriptions; assert axe `incomplete` as well as `violations` | M | The a11y suite cannot fail on four of its own checks |
-| 7 | Three text-opacity and three surface tokens; codemod the remaining ad-hoc values | M | ~980 call sites onto a scale |
-| 8 | Localise `TokenlessHandoffClient`'s four hard-coded English sign-in strings | S | A German visitor on the handoff flow meets untranslated copy |
-| 9 | Equalise the two `/pricing` CTAs; unify the primary fill weight (7.1, 7.2) | S | Two adjacent buttons in one card still disagree |
-| 10 | Give `/legal/imprint` the shell its siblings use (7.4) | S | The page a German buyer opens first |
-| 11 | Reconcile the four agents routes whose URL does not name the tab clicked | S | `connections` for *Connect*, `results` for *Evaluations* |
+| 1 | Collapse the 71 `size="none"` sites onto named steps; delete `none` | M | One file now, but it changes geometry, so it wants a visual check |
+| 2 | Give `Card` density variants; strip per-site radius and padding | M | Three radii + seven paddings → three |
+| 3 | `SectionHeading` primitive; sr-only h1 on `/human/inbox\|profile\|settings` | M | Three routes still start at h2, at three different sizes |
+| 4 | Fix input border contrast; add the search placeholder to the contrast test | M | The only two confirmed WCAG AA colour failures |
+| 5 | `aria-describedby` on radio descriptions; assert axe `incomplete` as well as `violations` | M | The a11y suite cannot fail on four of its own checks |
+| 6 | Three text-opacity and three surface tokens; codemod the remaining ad-hoc values | M | ~980 call sites onto a scale |
+| 7 | Localise `TokenlessHandoffClient`'s four hard-coded English sign-in strings | S | A German visitor on the handoff flow meets untranslated copy |
+| 8 | Equalise the two `/pricing` CTAs; unify the primary fill weight (7.1, 7.2) | S | Two adjacent buttons in one card still disagree |
+| 9 | Give `/legal/imprint` the shell its siblings use (7.4) | S | The page a German buyer opens first |
+| 10 | Reconcile the four agents routes whose URL does not name the tab clicked | S | `connections` for *Connect*, `results` for *Evaluations* |
 
-Row 1 is the one that matters. Rows 2, 3, 4 and 7 are each a precondition for it or a
-smaller instance of the same problem, and doing them without it leaves the divergence free
-to regrow.
+Row 1 is what finishes the button work. Rows 2 and 6 are the same problem in `Card` and in
+the colour scale, and both are now easier: the button codemod is a worked example of
+verifying a mechanical sweep by comparing computed class sets rather than trusting the
+diff.
 
 Two items found in the second audit and deliberately left out of this table, because they
 are corrections rather than design work: `EvaluationDashboardPanel` emits an `h3` with no
