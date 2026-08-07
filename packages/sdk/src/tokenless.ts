@@ -14,6 +14,8 @@ import type {
   HumanAssuranceProjectCreateRequest,
 } from "./humanAssuranceApiTypes";
 import {
+  MAX_REVIEW_PANEL_SIZE,
+  MIN_PUBLIC_REVIEW_PANEL_SIZE,
   parseTokenlessAskResponse,
   parseTokenlessPaymentInstructions,
   parseTokenlessQuoteResponse,
@@ -276,11 +278,11 @@ export function normalizeTokenlessQuoteRequest(
   }
   if (
     !Number.isSafeInteger(request.requestedPanelSize) ||
-    request.requestedPanelSize < 3 ||
-    request.requestedPanelSize > 500
+    request.requestedPanelSize < MIN_PUBLIC_REVIEW_PANEL_SIZE ||
+    request.requestedPanelSize > MAX_REVIEW_PANEL_SIZE
   ) {
     throw new RateLoopSdkError(
-      "requestedPanelSize must be a safe integer between 3 and 500.",
+      `requestedPanelSize must be a safe integer between ${MIN_PUBLIC_REVIEW_PANEL_SIZE} and ${MAX_REVIEW_PANEL_SIZE}.`,
     );
   }
   if (

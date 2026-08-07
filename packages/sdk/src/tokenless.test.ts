@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { sha256, stringToHex } from "viem";
-import { RateLoopApiError } from "./errors";
+import { RateLoopApiError, RateLoopSdkError } from "./errors";
 import {
   buildTokenlessPrivateReviewCommitmentQuestion,
   buildTokenlessQuoteIntent,
@@ -1475,4 +1475,42 @@ test("the published quote bound cannot exceed what a profile can hold", () => {
     requestedPanelSize.minimum > MIN_REVIEW_PANEL_SIZE,
     "a network quote must not offer the private two-reviewer floor",
   );
+});
+
+function panelQuoteRequest(requestedPanelSize: number) {
+  return {
+    audience: { admissionPolicyHash: TEST_ADMISSION_POLICY_HASH, source: "rateloop_network" as const },
+    audiencePolicy: TEST_AUDIENCE_POLICY,
+    budget: { attemptReserveAtomic: "636", bountyAtomic: "800", feeBps: 1_250 },
+    confirmedNoSensitiveData: true,
+    dataClassification: "public" as const,
+    question: { kind: "binary" as const, prompt: "Is this safe?", rationale: { mode: "off" as const } },
+    requestedPanelSize,
+    responseWindowSeconds: 3_600,
+    visibility: "public" as const,
+  };
+}
+
+test("the SDK's own validator agrees with the schema it publishes", () => {
+  // These two lived apart: the published schema said 3–100 while
+  // normalizeTokenlessQuoteRequest still accepted up to 500, so an integrator
+  // could normalize and hash a request the service then rejected with a 400 —
+  // the exact class of contradiction the schema narrowing set out to remove.
+  const schema = TOKENLESS_QUOTE_REQUEST_JSON_SCHEMA.properties.requestedPanelSize;
+  for (const panelSize of [schema.minimum - 1, schema.maximum + 1]) {
+    assert.throws(
+      () => normalizeTokenlessQuoteRequest(panelQuoteRequest(panelSize)),
+      (error: unknown) =>
+        error instanceof RateLoopSdkError &&
+        error.message === `requestedPanelSize must be a safe integer between ${schema.minimum} and ${schema.maximum}.`,
+      `panel size ${panelSize} must be refused`,
+    );
+  }
+  for (const panelSize of [schema.minimum, schema.maximum]) {
+    assert.equal(
+      normalizeTokenlessQuoteRequest(panelQuoteRequest(panelSize))
+        .requestedPanelSize,
+      panelSize,
+    );
+  }
 });
