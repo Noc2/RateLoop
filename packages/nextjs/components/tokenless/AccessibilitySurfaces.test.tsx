@@ -75,26 +75,21 @@ test("five primary tokenless surfaces pass rendered DOM axe checks", async () =>
   };
 
   await assertNoSemanticViolations("Landing", <TokenlessLandingPage socialProofItems={[]} />);
+  // These mirror what the two gates actually render. They previously asserted a
+  // variant the app never produced - descriptions on both, an embedded layout,
+  // an h2, and an "Agents hub" sentence that exists in no catalogue - so the
+  // surfaces a prospect meets were not the ones being checked.
   await assertNoSemanticViolations(
     "Human hub",
-    <SignInSurface
-      description="Review work is available to eligible, signed-in RateLoop humans."
-      headingLevel={2}
-      layout="embedded"
-      title="Sign in to view assigned work"
-      titleId="human-discover-sign-in-title"
-    >
+    <SignInSurface title="Sign in to view assigned work" titleId="human-account-sign-in-title">
       <button type="button">Sign in</button>
     </SignInSurface>,
   );
   await assertNoSemanticViolations(
     "Agents hub",
-    <SignInSurface
-      description="Sign in to connect an agent, configure human review, manage reviewers, and evaluate performance."
-      title="Agents"
-      titleId="agents-sign-in-title"
-    >
+    <SignInSurface title="Sign in to manage agents and reviews" titleId="agents-sign-in-title">
       <button type="button">Sign in</button>
+      <button type="button">Agent docs</button>
     </SignInSurface>,
   );
   await assertNoSemanticViolations("Private reviewer", <HumanAssuranceRaterClient />);
