@@ -108,7 +108,7 @@ test("review routing renders German labels and guidance through the agent locale
     );
 
     assert.ok(view.getByRole("combobox", { name: "Wann soll RateLoop eine menschliche Prüfung verlangen?" }));
-    assert.ok(view.getByText("Verlangt nie automatisch eine Prüfung. Du startest jede Übergabe."));
+    assert.ok(view.getByText("Verlangt nie automatisch eine Prüfung. Sie starten jede Übergabe."));
     assert.ok(view.getByRole("option", { name: "Nur manuelle Übergabe" }));
   } finally {
     cleanup();

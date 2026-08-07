@@ -96,7 +96,7 @@ test("the reviewer inbox localizes persisted notification copy from its source t
       </AgentTestProviders>,
     );
     assert.ok(await view.findByText("Antwort erfasst"));
-    assert.ok(view.getByText("Deine Antwort zur menschlichen Prüfung wurde erfasst."));
+    assert.ok(view.getByText("Ihre Antwort zur menschlichen Prüfung wurde erfasst."));
     assert.equal(view.queryByText("stale stored title"), null);
     assert.equal(view.queryByText("stale stored body"), null);
     assert.equal(view.getByRole("link", { name: "Öffnen: Antwort erfasst" }).getAttribute("href"), "/de/human/history");

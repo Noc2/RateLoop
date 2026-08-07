@@ -32,7 +32,7 @@ test("localizes server-defined overview periods, reasons, and quality buckets", 
       "More than 10,000 decisions fall in the last 30 days; use the evidence export for exact metrics.",
       germanUi,
     ),
-    "Mehr als 10.000 Entscheidungen entsprechen dieser Ansicht. Nutze den Nachweisexport für genaue Kennzahlen.",
+    "Mehr als 10.000 Entscheidungen entsprechen dieser Ansicht. Nutzen Sie den Nachweisexport für genaue Kennzahlen.",
   );
 });
 

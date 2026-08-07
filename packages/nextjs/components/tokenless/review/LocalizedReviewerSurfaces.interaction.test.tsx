@@ -33,7 +33,7 @@ test("reviewer controls render from the active German message provider", () => {
   );
 
   assert.match(html, /Crowd-Prognose/u);
-  assert.match(html, /Gib eine ganze Zahl von 1 bis 99 ein/u);
+  assert.match(html, /Geben Sie eine ganze Zahl von 1 bis 99 ein/u);
   assert.doesNotMatch(html, /keine Prognose vorausgewählt/u);
   assert.match(html, /bleibt off-chain/u);
 });

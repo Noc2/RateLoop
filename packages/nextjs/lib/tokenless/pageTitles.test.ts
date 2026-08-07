@@ -84,7 +84,14 @@ test("signed-in routes derive metadata from the current tab and the root app app
   assert.match(humanSection, /generateMetadata[\s\S]*return \{ title: t\(key\) \}/);
   assert.doesNotMatch(agentContent, /PageHeading|agentPageTitle/);
   assert.doesNotMatch(humanContent, /PageHeading/);
+  // What must not appear is a *hardcoded* page title duplicating the destination
+  // the tab and the metadata already name. A tab-derived sr-only h1 is the
+  // opposite: it gives assistive technology the page heading the visual tab strip
+  // provides sighted readers, and the agents shell has always rendered one. This
+  // banned every sr-only h1 on the human side and none on the agents side, which
+  // is why three human routes started at h2.
   assert.doesNotMatch(agentContent, /<h1 className="sr-only">Agent workspace/);
-  assert.doesNotMatch(humanContent, /<h1 className="sr-only">/);
+  assert.doesNotMatch(humanContent, /<h1 className="sr-only">[A-Z]/);
+  assert.match(humanContent, /<h1 className="sr-only">\{humanTabLabel\}<\/h1>/);
   assert.match(metadata, /const titleTemplate = "%s \| RateLoop"/);
 });

@@ -3,13 +3,13 @@
     "title": "Anzeigename",
     "wallets": "Wallet-Einstellungen",
     "label": "Anzeigename",
-    "placeholder": "Dein privater Name",
+    "placeholder": "Ihr privater Name",
     "loading": "Profil wird geladen…",
     "saving": "Wird gespeichert…",
     "save": "Profil speichern",
     "saved": "Profil gespeichert.",
-    "loadFailed": "Dein Konto konnte nicht geladen werden.",
-    "saveFailed": "Dein Profil konnte nicht gespeichert werden."
+    "loadFailed": "Ihr Konto konnte nicht geladen werden.",
+    "saveFailed": "Ihr Profil konnte nicht gespeichert werden."
   },
   "notifications": {
     "groups": {
@@ -44,7 +44,7 @@
     "loadFailed": "Benachrichtigungseinstellungen konnten nicht geladen werden.",
     "updated": "Benachrichtigungseinstellungen aktualisiert.",
     "updateFailed": "Benachrichtigungseinstellungen konnten nicht aktualisiert werden.",
-    "verificationSent": "Prüfe deinen Posteingang, um diese Benachrichtigungsadresse zu bestätigen.",
+    "verificationSent": "Prüfen Sie Ihren Posteingang, um diese Benachrichtigungsadresse zu bestätigen.",
     "emailUpdated": "E-Mail-Einstellungen aktualisiert.",
     "emailUnavailable": "E-Mail-Benachrichtigungen sind derzeit nicht verfügbar.",
     "emailUpdateFailed": "E-Mail-Benachrichtigungseinstellungen konnten nicht aktualisiert werden.",
@@ -63,7 +63,7 @@
     "enableBrowser": "Browser-Benachrichtigungen aktivieren",
     "emailTitle": "Benachrichtigungs-E-Mail",
     "aboutEmail": "Über Benachrichtigungs-E-Mails",
-    "emailDescription": "Füge eine E-Mail-Adresse für verifizierte RateLoop-Benachrichtigungen hinzu. Wenn du sie leerst, wird die E-Mail-Zustellung deaktiviert.",
+    "emailDescription": "Fügen Sie eine E-Mail-Adresse für verifizierte RateLoop-Benachrichtigungen hinzu. Wenn Sie sie leeren, wird die E-Mail-Zustellung deaktiviert.",
     "emailStatus": {
       "unavailable": "E-Mail-Benachrichtigungen nicht verfügbar",
       "missing": "Keine E-Mail hinzugefügt",
@@ -94,16 +94,16 @@
     "add": "Passkey hinzufügen",
     "loading": "Passkeys werden geladen",
     "empty": "Noch kein Passkey hinzugefügt.",
-    "listLabel": "Deine Passkeys",
+    "listLabel": "Ihre Passkeys",
     "synced": "Synchronisiert",
-    "lastBlocked": "Füge einen weiteren Passkey hinzu, bevor du diesen entfernst.",
+    "lastBlocked": "Fügen Sie einen weiteren Passkey hinzu, bevor Sie diesen entfernen.",
     "remove": "{name} entfernen",
     "verifyBefore": "Vor dem {action} bestätigen",
     "adding": "Hinzufügen",
     "removing": "Entfernen",
     "name": "Passkey-Name",
     "devicePlaceholder": "Dieses Gerät",
-    "onlyDescription": "Deine bestätigte E-Mail-Adresse oder eine andere verknüpfte Anmeldung bleibt verfügbar.",
+    "onlyDescription": "Ihre bestätigte E-Mail-Adresse oder eine andere verknüpfte Anmeldung bleibt verfügbar.",
     "verifyPasskey": "Mit Passkey bestätigen",
     "cancel": "Abbrechen",
     "code": "Anmeldecode",
@@ -133,17 +133,17 @@
       "completedPaidWork": "Abgeschlossene bezahlte Arbeit und Abrechnungsbelege für die geltende gesetzliche Aufbewahrungsfrist",
       "referencedPrivateQuotes": "Referenzierte private Angebotszusagen ohne Klartext und mit anonymisierter Verknüpfung zum Eigentümer",
       "paidAssignmentCommitments": "Abrechnungszusagen für bezahlte Aufgaben ohne direkte Identität der prüfenden Person",
-      "securityAndDeletionReceipts": "Sicherheits- und Löschbelege ohne deine E-Mail-Adresse oder wiederverwendbare Zugangsdaten"
+      "securityAndDeletionReceipts": "Sicherheits- und Löschbelege ohne Ihre E-Mail-Adresse oder wiederverwendbare Zugangsdaten"
     },
     "warningMessages": {
       "freshAccount": "Eine erneute Anmeldung erstellt ein neues Konto und stellt weder dieses Konto noch seine Zugriffe oder seinen Verlauf wieder her.",
       "publicBlockchainRecords": "Einträge in öffentlichen Blockchains können nicht gelöscht werden. RateLoop entfernt jedoch die off-chain gespeicherte Verknüpfung zur Anmeldung."
     },
-    "blockers": "Behebe diese Punkte, bevor du das Konto löschst:",
+    "blockers": "Beheben Sie diese Punkte, bevor Sie das Konto löschen:",
     "blockerMessages": {
-      "ownedWorkspaces": "Lösche oder übertrage zuerst jeden Workspace, dessen Eigentümer du bist.",
-      "acceptedAssignments": "Schließe angenommene Prüfaufgaben ab, bevor du das Konto löschst, damit verdiente Zahlungen nicht unterbrochen werden.",
-      "managedWallets": "Stelle jede verwaltete Wallet wieder her oder trenne sie, bevor du das Konto löschst."
+      "ownedWorkspaces": "Löschen oder übertragen Sie zuerst jeden Workspace, dessen Eigentümer Sie sind.",
+      "acceptedAssignments": "Schließen Sie angenommene Prüfaufgaben ab, bevor Sie das Konto löschen, damit verdiente Zahlungen nicht unterbrochen werden.",
+      "managedWallets": "Stellen Sie jede verwaltete Wallet wieder her oder trennen Sie sie, bevor Sie das Konto löschen."
     },
     "confirmation": "Zur Bestätigung DELETE eingeben",
     "verifyDelete": "Bestätigen und löschen",
@@ -163,13 +163,13 @@
     "workspaceAccepted": "Workspace-Einladung angenommen.",
     "accepted": "Einladung angenommen.",
     "reviewerAccepted": "Einladung für Prüfende angenommen.",
-    "invalid": "Gib einen gültigen RateLoop-Einladungscode ein.",
+    "invalid": "Geben Sie einen gültigen RateLoop-Einladungscode ein.",
     "errors": {
       "notFound": "Dieser Einladungscode wurde nicht gefunden.",
       "unavailable": "Diese Einladung ist abgelaufen, widerrufen oder bereits verwendet.",
       "accountMismatch": "Diese Einladung gehört zu einem anderen angemeldeten Konto.",
       "emailMismatch": "Diese Einladung gehört zu einer anderen bestätigten E-Mail-Adresse.",
-      "roleConflict": "Deine bestehende Workspace-Verantwortung steht im Konflikt mit dieser Einladung."
+      "roleConflict": "Ihre bestehende Workspace-Verantwortung steht im Konflikt mit dieser Einladung."
     },
     "checkFailed": "Die Einladung konnte nicht geprüft werden.",
     "acceptFailed": "Die Einladung konnte nicht angenommen werden.",
@@ -179,12 +179,12 @@
     "checking": "Wird geprüft…",
     "continue": "Weiter",
     "workspaceTitle": "Workspace-Einladung",
-    "workspaceDescription": "Prüfe vor dem Beitritt, welche Zugriffsrechte diese Einladung hinzufügt.",
+    "workspaceDescription": "Prüfen Sie vor dem Beitritt, welche Zugriffsrechte diese Einladung hinzufügt.",
     "workspaceRole": "Workspace-Zugriff",
     "workspaceClient": "Kundenzuordnung",
     "workspaceGovernanceRole": "Verantwortung",
     "workspaceExistingRole": "Bestehender Zugriff",
-    "workspaceUpgrade": "Dein Zugriff ändert sich von {current} zu {next}.",
+    "workspaceUpgrade": "Ihr Zugriff ändert sich von {current} zu {next}.",
     "accessRoles": {
       "owner": "Eigentümer",
       "admin": "Admin",
@@ -198,7 +198,7 @@
       "billing": "Abrechnung"
     },
     "reviewerTitle": "Einladung für Prüfende",
-    "description": "Prüfe zugewiesene private Arbeit, ohne dem Workspace beizutreten.",
+    "description": "Prüfen Sie zugewiesene private Arbeit, ohne dem Workspace beizutreten.",
     "materialLimit": "Limit für privates Material",
     "sensitivities": {
       "internal": "Intern",
@@ -213,13 +213,13 @@
     "cancel": "Abbrechen"
   },
   "dataExport": {
-    "title": "Deine Daten herunterladen",
+    "title": "Ihre Daten herunterladen",
     "about": "Über Datenexporte",
-    "description": "Fordere eine authentifizierte JSON-Kopie der personenbezogenen Daten an, die mit deinem RateLoop-Konto verknüpft sind. Fertige Downloads bleiben sieben Tage verfügbar.",
+    "description": "Fordern Sie eine authentifizierte JSON-Kopie der personenbezogenen Daten an, die mit Ihrem RateLoop-Konto verknüpft sind. Fertige Downloads bleiben sieben Tage verfügbar.",
     "notAvailable": "Nicht verfügbar",
-    "loadFailed": "Deine Datenanfragen konnten nicht geladen werden.",
-    "requestFailed": "Dein Datenexport konnte nicht angefordert werden.",
-    "requested": "Dein Datenexport wurde angefordert. Aktualisiere den Status, sobald die Verarbeitung abgeschlossen ist.",
+    "loadFailed": "Ihre Datenanfragen konnten nicht geladen werden.",
+    "requestFailed": "Ihr Datenexport konnte nicht angefordert werden.",
+    "requested": "Ihr Datenexport wurde angefordert. Aktualisieren Sie den Status, sobald die Verarbeitung abgeschlossen ist.",
     "requesting": "Wird angefordert…",
     "processing": "Export wird verarbeitet",
     "request": "Datenexport anfordern",
@@ -243,16 +243,16 @@
   },
   "wallets": {
     "metadataTitle": "Wallets",
-    "metadataDescription": "Richte eine Wallet für Finanzierung oder Auszahlungen ein.",
+    "metadataDescription": "Richten Sie eine Wallet für Finanzierung oder Auszahlungen ein.",
     "back": "Zurück zum Profil",
     "title": "Wallets",
-    "description": "Füge nur dann eine Wallet hinzu, wenn du einen Auftrag bezahlen oder Verdienste aus Prüfungen erhalten möchtest. Eine Wallet ersetzt niemals deine RateLoop-Anmeldung."
+    "description": "Fügen Sie nur dann eine Wallet hinzu, wenn Sie einen Auftrag bezahlen oder Verdienste aus Prüfungen erhalten möchten. Eine Wallet ersetzt niemals Ihre RateLoop-Anmeldung."
   },
   "walletBinding": {
     "purpose": {
       "funding": {
         "title": "Öffentliche Aufträge bezahlen",
-        "description": "Verwende USDC aus dieser Wallet nur, wenn du einen öffentlichen Auftrag freigibst.",
+        "description": "Verwenden Sie USDC aus dieser Wallet nur, wenn Sie einen öffentlichen Auftrag freigeben.",
         "action": "Finanzierung einrichten",
         "confirmation": "Für öffentliche Aufträge verwenden",
         "saved": "Wallet für öffentliche Aufträge gespeichert."
@@ -266,8 +266,8 @@
       },
       "connection": "Wallet-Verbindung"
     },
-    "chooserTitle": "Wofür benötigst du diese Wallet?",
-    "chooserDescription": "Eine Wallet gewährt niemals Zugriff auf dein RateLoop-Konto. Jede Verbindung ist auf die ausgewählte Aktion beschränkt.",
+    "chooserTitle": "Wofür benötigen Sie diese Wallet?",
+    "chooserDescription": "Eine Wallet gewährt niemals Zugriff auf Ihr RateLoop-Konto. Jede Verbindung ist auf die ausgewählte Aktion beschränkt.",
     "requestFailed": "Wallet-Anfrage fehlgeschlagen.",
     "loadFailed": "Wallet-Verbindungen konnten nicht geladen werden.",
     "createFailed": "Die optionale thirdweb-Wallet konnte nicht erstellt werden.",
@@ -275,33 +275,33 @@
     "removed": "Wallet-Verbindung entfernt.",
     "revokeFailed": "Diese Wallet-Verknüpfung konnte nicht widerrufen werden.",
     "existingTitle": "Vorhandene Wallet verwenden",
-    "existingDescription": "Verbinde MetaMask, Coinbase Wallet oder Base Account. RateLoop erhält niemals deinen privaten Schlüssel.",
+    "existingDescription": "Verbinden Sie MetaMask, Coinbase Wallet oder Base Account. RateLoop erhält niemals Ihren privaten Schlüssel.",
     "connect": "Vorhandene Wallet verbinden",
     "connectModal": "Vorhandene Wallet verbinden",
     "createTitle": "App-Wallet erstellen",
-    "createDescription": "thirdweb erstellt die Wallet erst, nachdem du fortfährst. Sichere sie über das Wallet-Menü, bevor du dich darauf verlässt; eine Trennung ist keine Sicherung.",
+    "createDescription": "thirdweb erstellt die Wallet erst, nachdem Sie fortfahren. Sichern Sie sie über das Wallet-Menü, bevor Sie sich darauf verlassen; eine Trennung ist keine Sicherung.",
     "create": "Wallet mit thirdweb erstellen",
     "connected": "Verbundene Wallet: {address}",
-    "yourWallets": "Deine Wallets",
+    "yourWallets": "Ihre Wallets",
     "loading": "Wallets werden geladen…",
     "appWallet": "App-Wallet",
-    "yourWallet": "deine Wallet",
+    "yourWallet": "Ihre Wallet",
     "remove": "Entfernen",
     "removeWallet": "Wallet {address} für {purpose} entfernen",
     "empty": "Mit diesem Konto ist keine Wallet verknüpft.",
     "privacy": "Finanzierungs- und Auszahlungsadressen sind auf Base öffentlich. Die Wiederverwendung einer Adresse kann bezahlte Aktivitäten über mehrere Runden hinweg verknüpfen.",
-    "unavailable": "Wallet-Verbindungen sind für diese Bereitstellung nicht konfiguriert. Dein RateLoop-Konto funktioniert weiterhin ohne Wallet."
+    "unavailable": "Wallet-Verbindungen sind für diese Bereitstellung nicht konfiguriert. Ihr RateLoop-Konto funktioniert weiterhin ohne Wallet."
   },
   "welcome": {
     "metadataTitle": "Willkommen",
-    "metadataDescription": "Wähle deinen Einstieg in RateLoop.",
-    "heading": "Womit möchtest du beginnen?",
+    "metadataDescription": "Wählen Sie Ihren Einstieg in RateLoop.",
+    "heading": "Womit möchten Sie beginnen?",
     "reviewTitle": "KI-Arbeit prüfen",
-    "reviewDescription": "Finde verfügbare Prüfungen oder verwende die Einladung eines Workspaces.",
+    "reviewDescription": "Finden Sie verfügbare Prüfungen oder verwenden Sie die Einladung eines Workspaces.",
     "reviewAction": "Mit dem Prüfen beginnen",
     "invitationAction": "Ich habe eine Einladung",
     "agentTitle": "Agent verbinden",
-    "agentDescription": "Erstelle einen Workspace und lege fest, wann dein Agent eine menschliche Prüfung anfordert.",
+    "agentDescription": "Erstellen Sie einen Workspace und legen Sie fest, wann Ihr Agent eine menschliche Prüfung anfordert.",
     "agentAction": "Agent einrichten"
   }
 }

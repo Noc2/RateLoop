@@ -55,7 +55,7 @@ test("account deletion starts from a visible action and loads its review on dema
 
     await waitFor(() => assert.ok(view.getByText("Abgeschlossene bezahlte Arbeit", { exact: false })));
     assert.deepEqual(calls, ["/api/account/deletion"]);
-    assert.ok(view.getByText("Lösche oder übertrage zuerst jeden Workspace", { exact: false }));
+    assert.ok(view.getByText("Löschen oder übertragen Sie zuerst jeden Workspace", { exact: false }));
     assert.ok(view.getByText("Eine erneute Anmeldung erstellt ein neues Konto", { exact: false }));
     assert.equal(view.queryByText("Delete or transfer every workspace you own first."), null);
     assert.equal(
