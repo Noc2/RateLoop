@@ -393,6 +393,22 @@ zusätzlich die Information der Arbeitnehmervertretung. Vorbereitete Antwort: ke
 Durchsatz- oder Trefferquoten je Prüfer, aggregierte Sichten, und ein
 Betriebsvereinbarungs-Muster als Vertriebsmittel.
 
+### 9.9 Noch ohne belastbare Antwort — vor dem ersten Termin zu klären
+
+**[NEU am 7.8.2026.]** Diese Einwände kommen erwartbar, und wir haben **heute keine
+vorbereitete Antwort**. Sie stehen hier, damit niemand im Termin improvisiert. Solange
+nichts ausgeliefert ist, sind es Produktfragen, keine Vertriebsfragen.
+
+| Einwand | Woran es fehlt |
+| ------- | -------------- |
+| **„Welches LLM sieht unsere Inhalte, in welcher Jurisdiktion?"** | Für ein Produkt, dessen Gegenstand KI-Aufsicht ist, die schärfste Frage überhaupt. Readiness § 5.3 verlangt eine schriftliche Antwort; es gibt keine. **Vor dem ersten Termin schriftlich festlegen.** |
+| **„Unsere Daten dürfen das Haus nicht verlassen."** | Kein Self-Hosting, kein On-Premise, keine kundengehaltenen Schlüssel. Das ist eine Disqualifikation nach § 11 — aber sie muss beim ersten Kontakt fallen, nicht in Woche vier. |
+| **„Haften meine Prüfenden persönlich für ihr Urteil?"** | Kommt von der Fachabteilung, sobald klar wird, dass Namen und Begründungen aufgezeichnet werden. Wir zeichnen die Begründung auf und schließen Identitäten aus dem Export aus — was intern sichtbar bleibt, ist eine Frage, die der Kunde beantworten muss. **Antwort mit Counsel abstimmen, nicht improvisieren.** |
+| **„Wir haben Vier-Augen-Prinzip schon im DMS/ERP."** | Näher am Kunden als jeder GRC-Vergleich und noch nicht beantwortet. Die belastbare Trennlinie ist dieselbe wie bei der Tabelle in § 9.7: festgeschriebene Prüffrage und Unabhängigkeit der Urteile. |
+| **„Warum ist da eine Blockchain drin?"** | § 5 sagt „nicht zu Chain-Fragen einladen". Das ist Vermeidung, keine Antwort. Wird gefragt, wenn jemand die CSP oder die Subprozessorenliste liest. **Zwei Sätze vorbereiten.** |
+| **„€ 2.500 für sechs Wochen, und danach kennen wir den Preis nicht."** | Die bewusste Entscheidung aus der Preisempfehlung — aber der Einkauf hört „unkalkulierbar". Vorbereiten: die 50-%-Anrechnung und ein Preiskorridor, der später nicht gebrochen wird. |
+| **„Wie lange dauert eine Prüfung im Betrieb?"** | Kein Messwert, keine Zusage. Im Kick-off messen und an das Erfolgstor „Tempo" hängen — dann ist es beim zweiten Kunden belegt. |
+
 ## 10. Proof Pack
 
 Vor dem ersten Termin bereitlegen: DPA, Subprozessorenliste **mit Sitz, Verarbeitungsland

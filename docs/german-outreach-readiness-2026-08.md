@@ -798,6 +798,80 @@ Two small builds would make it demonstrable rather than merely true:
 - **A workload estimator in the setup wizard** (½ day). Outputs per month × rate × panel
   size → reviews per month. It turns the objection into a number the customer chose.
 
+### 7.1.1 The sampling rate is the answer to *volume*. It is not the answer to *effort*.
+
+**Added 7 August 2026 after tracing the reviewer's actual path through the code.** Sampling
+answers „how many reviews". It says nothing about what one review costs a human, and that is
+where the objection really lives. Ranked by effort saved per hour of work.
+
+**A. Nothing reminds a reviewer. This is the biggest single defect on the live lane.**
+The reviewer lifecycle has exactly four notification types
+([`reviewerInbox.ts:1-7`](../packages/nextjs/lib/notifications/reviewerInbox.ts)):
+`assignment.available`, `assignment.completed`, `settlement.reveal_required`,
+`settlement.claim_expiring`. **The only deadline warning that exists is about money on the
+paid lane.** On the live unpaid lane a reviewer is told once that work exists and then never
+hears about it again until the deadline has passed and the review is dead.
+
+*Build: an `assignment.deadline_approaching` source type* (½ day). The delivery worker,
+the dedupe key derivation and the fairness interleave already exist in
+[`delivery.ts`](../packages/nextjs/lib/notifications/delivery.ts) and the cron already runs
+every five minutes. This is one new query and one new href against machinery that is built.
+**It is the cheapest reliability improvement available anywhere in this document.**
+
+**B. An unanswered seat kills the review instead of moving.** On
+`response_deadline_elapsed` without quorum the outcome is forced `inconclusive`
+([`privateReviewResponses.ts:747-772`](../packages/nextjs/lib/tokenless/privateReviewResponses.ts)).
+There is **no reassignment, substitution or backfill** — the seat expires and the work is
+wasted, including the effort of the reviewer who *did* answer.
+
+*Build: substitute a reviewer from the cohort on seat expiry* (2–3 days). The cohort
+already carries capacity headroom, so the selection input exists. This is the highest
+*absolute* return in this section: it converts the most common operational failure from
+„the review failed and two people's time was wasted" into „the review took longer". It also
+retires demo risk § 9.2 and it is what makes an SLA-shaped statement possible later.
+
+**C. The reviewer's one-time cost is far larger than the per-review cost, and it is
+front-loaded onto the least motivated moment.** Reconstructed from the routes: receive
+invitation → create or sign in to a Better Auth account → redeem the invitation
+(`/api/account/reviewer-invitations/redeem`) → hold an access grant covering the project and
+data classification → wait up to five minutes for the cron → sign in again → **accept** the
+assignment (`/assignments/[id]/accept`) → open the artifact → submit. **Eight steps before a
+first verdict, and the drop-off is in the first four.**
+
+*Builds, in order of return:*
+
+- **Drop the accept step for private invited panels** (½ day). Accept-then-respond is
+  meaningful for an open marketplace where a seat is claimed against competition. For a
+  named internal reviewer invited by their own employer it is a click that carries no
+  information. Treat opening the artifact as acceptance.
+- **Land the invitation email directly on the artifact with the verdict controls** (1–2
+  days). One click from email to a decidable screen. This is an authentication surface and
+  must be scoped to a single assignment, single use and short expiry — cost it as such,
+  and note that no rate limiting is configured on the auth paths yet (§ 6.4).
+- **Digest instead of one email per assignment** (1 day). One message listing everything
+  pending with its deadline. The interleave in `delivery.ts` already groups per principal;
+  this is a grouping and template change, not new infrastructure.
+
+**D. Reviewing one item at a time wastes the context load.** The expensive part of a review
+is loading the policy, the question and the surrounding context — not the verdict. Reviewing
+five items in one sitting costs far less than five times one item, and `ReviewerShell.tsx`
+already has the progress affordance for it.
+
+*Build: a batch review flow* (2–3 days). Independence is preserved — the reviewer still
+cannot see other reviewers' answers, which is the property that matters; only their own
+items are grouped.
+
+**E. Admin effort is a separate objection wearing the same clothes.** § 2.3 documents a
+setup chain of seven prerequisites before a first review, with no guided wizard past the
+connect step. A prospect who hits that concludes „extra work" about *operations*, not about
+reviewing. Completing the wizard is already on the list; it belongs to this objection too.
+
+**Ordering for a pre-launch product**, where nothing is deployed and there is no customer to
+disturb: **A, then B, then C-1.** A and C-1 are a day together and remove a failure mode and
+a pointless click. B is the one that changes what the product *is* — a panel that survives an
+unresponsive human is a materially different proposition from one that does not, and it is
+the difference between „we record reviews" and „we deliver decisions".
+
 ### 7.2 The works-council hazard — build the mode, do not write the promise
 
 Unchanged from § 6.5 and still the right call: surface `employmentDataGovernance` as a

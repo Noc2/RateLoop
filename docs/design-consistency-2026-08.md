@@ -42,6 +42,17 @@ source. Recorded here because each carries a decision worth not re-litigating.
   on `/de` are both gone.
 - **The heading→action gap** moved off the optional description (`dd51e4642`), and the four
   typo opacities are collapsed onto the scale (`0d05e26d9`).
+- **The sign-in *card*, not just its button.** Unifying the control left the card around it
+  in three shapes. `/human/review` gated client-side, so it rendered the tab strip and a
+  loading skeleton before dropping an embedded h2 card beneath them, while the other five
+  gates showed a centered h1 card with no navigation. The review and history routes are now
+  gated on the server like the account tabs, which removes the special case, the skeleton,
+  and `/human/history` claiming *"Sign in to view assigned work"*. The agents card dropped
+  the title `Agents` — the sidebar label verbatim — and its description, which repeated the
+  title; one instruction title now serves all six gates. The signed-in empty card on the
+  review slot moved to the shared `rounded-2xl` so signing in no longer reshapes the box.
+  *Showing navigation everywhere was the alternative and is not available:* `AgentTabs`
+  requires a workspace list, so the agents shell cannot render tabs without a session.
 
 ## 2. The systemic finding
 
@@ -107,23 +118,42 @@ about 30 of the 44 arbitrary values.
 
 ## 3. The two shells diverge structurally
 
-- **No `<h1>` on the human account tabs.** Agents renders an sr-only h1
-  (`AgentWorkspacePanels.tsx:128`); human discover/history does too
-  (`AnswerPageClient.tsx:152`); human inbox/profile/settings renders none, so the first
-  heading is an `<h2>`. Accessibility regression and a structural inconsistency.
-- **Navigation overflows oppositely.** `AgentTabs` scrolls horizontally; `HumanTabs` wraps.
-  Same pill tokens, opposite narrow-viewport behaviour.
-- **Tab ownership differs.** Human renders tabs at page level; agents renders them inside
-  the panel component, so the "no workspace selected" branch produces a bare card with a
-  visible `text-3xl` h1 and no navigation — a screen shape with no human counterpart.
-- **21 distinct `<h2 className>` strings and 18 distinct `<h3>`** repo-wide. Sibling panels
-  on one human page use `text-2xl` and `text-lg` for the same level.
+Re-measured after the sign-in work. The signed-out asymmetry is fixed; the rest stands, and
+two counts moved the wrong way.
 
-## 4. Four competing "selected item" treatments
+- **No `<h1>` on the human account tabs.** `/human/inbox` starts at `h2 text-2xl`,
+  `/human/profile` at `h2 text-xl`, `/human/settings` at `h2 text-lg` — three routes, three
+  different first headings, none of them a level one. The agents shell guards this correctly
+  (`AgentWorkspacePanels` renders an sr-only h1 only when the setup header is absent).
+- **Navigation overflows oppositely.** `HumanTabs` wraps (`flex flex-wrap gap-2`);
+  `AgentTabs` scrolls (`overflow-x-auto` + `min-w-max`). Same pill tokens, opposite
+  narrow-viewport behaviour. Agents' tab set is also conditional, so the item count changes
+  under the visitor; human always shows five.
+- **Tab ownership is split three ways, not two.** Three human routes render tabs at page
+  level, two render them from inside `AnswerPageClient`, and agents renders them inside the
+  panel component. The earlier claim that human is uniformly page-level was wrong.
+- **Heading strings have multiplied, not converged.** Repo-wide there are now **32 distinct
+  `<h2 className>` strings across 217 elements and 26 distinct `<h3>` across 89** — up from
+  the 21 and 18 recorded here before. The specific `text-2xl`/`text-lg` sibling pair cited
+  earlier is gone, but `/human/settings` mixes `text-lg` with `text-xl`, `/human/review`
+  mixes three h2 sizes, and `/agents/approvals` mixes `text-2xl` with `text-xl`.
+  `/human/profile` is uniform and is the cleanest surface in either shell.
+- **`/human/review?assignment=…` double-wraps its container**, landing at `max-w-4xl` with
+  32px padding inside a shell that is `max-w-5xl` at 16px — the only app route whose measure
+  disagrees with its siblings.
+- **Route vocabulary diverges from tab labels on agents only.** Four of six agents URLs name
+  something other than the tab that was clicked (`connections` for *Connect*, `approvals`
+  for *Inbox*, `review-setup` for *Registry*, `results` for *Evaluations*). Every human
+  route matches its label.
+
+## 4. Six competing "selected item" treatments
 
 `.pill-active`/`.pill-inactive` (globals.css), `SegmentedChoice.tsx:28-32`,
-`AnswerPageClient.tsx:193-197`, and `Chip.tsx:26` all style the same concept differently.
-`Chip` has exactly one use in the whole codebase.
+`AnswerPageClient.tsx:193-197`, and `Chip.tsx:26` — plus two this document missed:
+`PublicQuestionCard.tsx:1007-1013`, the only place that pairs a bespoke active state with
+the tokenised idle one, and the docs sub-nav in `TokenlessShell.tsx`, which duplicates the
+`AnswerPageClient` treatment as a separately maintained string and sits in the sidebar
+directly beside both shells. `Chip` still has exactly one use in the whole codebase.
 
 ## 5. Accessibility
 
@@ -155,26 +185,31 @@ Confirmed gaps, in order:
 
 ## 6. Ranked plan
 
-Rows 1–6 of the original plan are done and removed; the German metadata and register items
-from 7.1–7.3 went with them. What is left is the systemic work, and none of it is visible to
-a prospect in a single sitting — which is why it was ranked below the bugs, and why it should
-now be scheduled rather than squeezed in.
+The visible sign-in and shell items are done. What is left is the systemic work plus the
+residue the second audit surfaced, and none of it is a single-sitting fix.
 
 | # | Fix | Size | Why now |
 | - | --- | ---- | ------- |
-| 1 | Add `Button`'s `block` prop; remove the 19 call-site overrides | M | The size ladder exists; the overrides still defeat it |
-| 2 | Give `Card` density variants; strip per-site radius and padding | M | Three radii + seven paddings → three |
-| 3 | Fix input border contrast; add the search placeholder to the contrast test | M | The only two confirmed WCAG AA colour failures |
-| 4 | `aria-describedby` on radio descriptions; assert axe `incomplete` as well as `violations`; extend coverage to the wizard and dashboard | M | The a11y suite currently cannot fail on four of its own checks |
-| 5 | Three text-opacity and three surface tokens; codemod the remaining ad-hoc values | M | ~980 call sites onto a scale |
-| 6 | Codemod the 109 bypass sites onto `Button`; lint-ban the variant classes outside it | L | Removes the whole class of divergence |
-| 7 | `SectionHeading` primitive; sr-only h1 on the human hub; hoist `AgentTabs` | M | The shells converge structurally |
-| 8 | Equalise the two `/pricing` CTAs; unify the primary fill weight (7.1, 7.2) | S | Two adjacent buttons in one card still disagree |
-| 9 | Give `/legal/imprint` the shell its siblings use (7.4) | S | The page a German buyer opens first |
+| 1 | Codemod the 109 bypass sites onto `Button`; lint-ban the variant classes outside it | L | Removes the whole class of divergence |
+| 2 | Add `Button`'s `block` prop; remove the 19 call-site overrides | M | The size ladder exists; the overrides still defeat it |
+| 3 | Give `Card` density variants; strip per-site radius and padding | M | Three radii + seven paddings → three |
+| 4 | `SectionHeading` primitive; sr-only h1 on `/human/inbox\|profile\|settings` | M | Three routes still start at h2, at three different sizes |
+| 5 | Fix input border contrast; add the search placeholder to the contrast test | M | The only two confirmed WCAG AA colour failures |
+| 6 | `aria-describedby` on radio descriptions; assert axe `incomplete` as well as `violations` | M | The a11y suite cannot fail on four of its own checks |
+| 7 | Three text-opacity and three surface tokens; codemod the remaining ad-hoc values | M | ~980 call sites onto a scale |
+| 8 | Localise `TokenlessHandoffClient`'s four hard-coded English sign-in strings | S | A German visitor on the handoff flow meets untranslated copy |
+| 9 | Equalise the two `/pricing` CTAs; unify the primary fill weight (7.1, 7.2) | S | Two adjacent buttons in one card still disagree |
+| 10 | Give `/legal/imprint` the shell its siblings use (7.4) | S | The page a German buyer opens first |
+| 11 | Reconcile the four agents routes whose URL does not name the tab clicked | S | `connections` for *Connect*, `results` for *Evaluations* |
 
-Row 6 is the one that matters. Rows 1, 2, 5 and 7 are each a precondition for it or a
-smaller instance of the same problem, and doing them without it leaves the divergence free to
-regrow.
+Row 1 is the one that matters. Rows 2, 3, 4 and 7 are each a precondition for it or a
+smaller instance of the same problem, and doing them without it leaves the divergence free
+to regrow.
+
+Two items found in the second audit and deliberately left out of this table, because they
+are corrections rather than design work: `EvaluationDashboardPanel` emits an `h3` with no
+`h2` above it, and `/evidence/share` renders `h1 "Evidence packet"` while its own metadata
+title says *"Shared evidence"*.
 
 ## 7. Rendered-site findings
 
