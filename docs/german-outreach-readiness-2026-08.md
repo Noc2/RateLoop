@@ -117,6 +117,32 @@ Vanta, Drata and your SIEM" · "Kundengehaltene Schlüssel" · "Anonyme Prüfend
 population point estimate or confidence interval · any present-tense USDC, network,
 hybrid or proof-of-human claim.
 
+### 1.4 The site's own tagline claims blinding the live lane does not do
+
+**Found while verifying the deploy, and it is the most-served string in the product.** The
+meta description on every page reads *"Get blind human feedback before you ship AI work."*
+and, since the German localisation landed, *"Holen Sie verblindetes menschliches Feedback
+ein…"*.
+
+The only lane that ships hardcodes `blinding = { swap: false }`
+([`directPrivateReviewEvidence.ts:310`](../packages/nextjs/lib/tokenless/directPrivateReviewEvidence.ts)),
+and `swap: true` appears nowhere in production code. Reviewers submit **independently** —
+they do not see each other's responses — which is a real and defensible property, but it is
+not blinding.
+
+The claim gate does not catch it: rule `independent_blinded_panel` forbids the phrase
+*"independent blinded panels"*, and this is neither. **The gate is phrase-shaped, so a
+weaker wording of a forbidden claim passes** — worth knowing generally, not just here.
+
+German makes it worse rather than better. *Verblindet* is the clinical-trial term, so the
+German reads as a stronger and more specific methodological claim than the English does, to
+exactly the audience most likely to test it.
+
+**This is a positioning decision, not a bug, so it is recorded rather than changed.** The
+same substitution already made in the sales collateral — *independent* for *blinded* — costs
+nothing and is true. If blinding is wanted as a real capability, that is a product item, and
+it should not be sold before it exists.
+
 ## Tier 2 — the product gap
 
 ### 2.1 There is no way for a human to request a review
