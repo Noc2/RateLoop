@@ -674,6 +674,51 @@ export async function enqueueDirectPrivateReviewEvidenceProjectionInTransaction(
   });
 }
 
+/**
+ * Runs the projection the moment a review finalises instead of waiting for the
+ * next maintenance cycle, so the decision evidence is on screen as soon as the
+ * last reviewer answers.
+ *
+ * The queued work item stays the retry path and is deliberately left untouched:
+ * this attempt is best effort, every failure is swallowed after being logged,
+ * and nothing here can fail or roll back the finalisation that produced it. The
+ * projection opens its own connection and its own transaction, so this must be
+ * called only after the finalising transaction has committed.
+ *
+ * A repeat run is a no-op by construction. The projection locks the delivery and
+ * its opportunity row, returns the recorded run when one is already linked, and
+ * the packet generator returns the stored packet when one already exists.
+ *
+ * Awaited on purpose. A serverless invocation can be frozen the instant its
+ * response is written, so a floating promise may never reach the database and an
+ * abandoned pool connection would hold the very row locks the retry needs.
+ */
+export async function attemptDirectPrivateReviewEvidenceProjectionAfterCommit(input: {
+  deliveryId: string;
+  now?: Date;
+  packetGenerator?: PacketGenerator;
+  signal?: AbortSignal;
+}) {
+  try {
+    const result = await projectDirectPrivateReviewDecisionEvidence(input);
+    if (result.packet !== "ready") {
+      console.error("private_review_evidence_inline_projection_deferred", {
+        deliveryId: input.deliveryId,
+        projected: result.projected,
+        reason: result.error,
+        runId: result.runId,
+      });
+    }
+    return result;
+  } catch (error) {
+    console.error("private_review_evidence_inline_projection_failed", {
+      deliveryId: input.deliveryId,
+      reason: error instanceof Error ? error.message.slice(0, 500) : "unknown",
+    });
+    return null;
+  }
+}
+
 export const __directPrivateReviewEvidenceTestUtils = {
   DEADLINE_TERMINAL_REQUIREMENT,
   projectedId,

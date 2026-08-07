@@ -37,7 +37,13 @@ export function compareDeployedCommit(input) {
     return { ok: false, reason: `expected SHA is not a full lowercase commit SHA: ${expectedSha}` };
   }
   if (sha !== expectedSha) {
-    return { ok: false, drift: true, deployedSha: sha, expectedSha, reason: "the deployment is behind the branch head" };
+    return {
+      ok: false,
+      drift: true,
+      deployedSha: sha,
+      expectedSha,
+      reason: "the deployment is behind the branch head",
+    };
   }
   return { ok: true, deployedSha: sha };
 }

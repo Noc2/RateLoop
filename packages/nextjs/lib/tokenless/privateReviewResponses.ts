@@ -13,6 +13,7 @@ import {
 } from "~~/lib/tokenless/assuranceResponses";
 import { aggregatePrivateForecastDeliveryInTransaction } from "~~/lib/tokenless/crowdForecastPersistence";
 import {
+  attemptDirectPrivateReviewEvidenceProjectionAfterCommit,
   directPrivateReviewMinimumAggregationSize,
   enqueueDirectPrivateReviewEvidenceProjectionInTransaction,
 } from "~~/lib/tokenless/directPrivateReviewEvidence";
@@ -628,11 +629,28 @@ function aggregateReviewerRationale(input: {
   };
 }
 
+/**
+ * Records that this delivery reached a terminal state and had its evidence
+ * projection queued, so the caller can attempt that projection inline once the
+ * finalising transaction has committed. The projection opens its own connection
+ * and transaction and so can never run from inside this one.
+ */
+async function queueEvidenceProjection(
+  client: PoolClient,
+  deliveryId: string,
+  now: Date,
+  pendingProjections: Set<string> | undefined,
+) {
+  await enqueueDirectPrivateReviewEvidenceProjectionInTransaction(client, { deliveryId, now });
+  pendingProjections?.add(deliveryId);
+}
+
 async function terminalEnvelopeForDelivery(
   client: PoolClient,
   deliveryId: string,
   now: Date,
   trigger: PrivateReviewTerminalTrigger = "panel_complete",
+  pendingProjections?: Set<string>,
 ) {
   const result = await client.query(
     `SELECT d.*,f.external_source_evidence_hash,f.external_suggestion_commitment,
@@ -678,7 +696,7 @@ async function terminalEnvelopeForDelivery(
       now,
     });
     if (["completed", "inconclusive"].includes(envelope.lifecycle.state)) {
-      await enqueueDirectPrivateReviewEvidenceProjectionInTransaction(client, { deliveryId, now });
+      await queueEvidenceProjection(client, deliveryId, now, pendingProjections);
     }
     return envelope;
   }
@@ -898,9 +916,20 @@ async function terminalEnvelopeForDelivery(
     [now, text(row, "integration_id"), text(row, "workspace_id")],
   );
   if (["completed", "inconclusive"].includes(envelope.lifecycle.state)) {
-    await enqueueDirectPrivateReviewEvidenceProjectionInTransaction(client, { deliveryId, now });
+    await queueEvidenceProjection(client, deliveryId, now, pendingProjections);
   }
   return envelope;
+}
+
+/**
+ * Best-effort inline projection for every delivery this call finalised. It runs
+ * strictly after COMMIT, swallows every failure, and leaves the queued work item
+ * as the retry path, so it can only ever make the evidence appear sooner.
+ */
+async function projectFinalizedEvidence(deliveryIds: Set<string>, now: Date) {
+  for (const deliveryId of deliveryIds) {
+    await attemptDirectPrivateReviewEvidenceProjectionAfterCommit({ deliveryId, now });
+  }
 }
 
 export async function reconcileDirectPrivateReviewDeadline(input: {
@@ -910,6 +939,7 @@ export async function reconcileDirectPrivateReviewDeadline(input: {
 }) {
   const now = input.now ?? new Date();
   const client = await dbPool.connect();
+  const pendingProjections = new Set<string>();
   let envelope: HumanReviewResultEnvelope | null = null;
   try {
     await client.query("BEGIN");
@@ -920,7 +950,13 @@ export async function reconcileDirectPrivateReviewDeadline(input: {
     );
     const deliveryId = text(delivery.rows[0] as Row | undefined, "delivery_id");
     if (deliveryId) {
-      envelope = await terminalEnvelopeForDelivery(client, deliveryId, now, "response_deadline_elapsed");
+      envelope = await terminalEnvelopeForDelivery(
+        client,
+        deliveryId,
+        now,
+        "response_deadline_elapsed",
+        pendingProjections,
+      );
     }
     await client.query("COMMIT");
   } catch (error) {
@@ -930,6 +966,7 @@ export async function reconcileDirectPrivateReviewDeadline(input: {
     client.release();
   }
   if (envelope) await observeHumanReviewResult({ envelope });
+  await projectFinalizedEvidence(pendingProjections, now);
   return envelope;
 }
 
@@ -996,6 +1033,7 @@ export async function submitDirectPrivateReviewResponse(input: {
   const predictedPositiveBps = responseInput.predictedPositiveBps;
   const rationale = responseInput.rationale.trim();
   const client = await dbPool.connect();
+  const pendingProjections = new Set<string>();
   let terminalEnvelope: HumanReviewResultEnvelope | null = null;
   let responseCount = 0;
   let replay = false;
@@ -1300,7 +1338,13 @@ export async function submitDirectPrivateReviewResponse(input: {
     );
     responseCount = Number(countResult.rows[0]?.response_count ?? 0);
     if (text(row, "delivery_status") === "pending") {
-      terminalEnvelope = await terminalEnvelopeForDelivery(client, text(row, "delivery_id")!, now);
+      terminalEnvelope = await terminalEnvelopeForDelivery(
+        client,
+        text(row, "delivery_id")!,
+        now,
+        "panel_complete",
+        pendingProjections,
+      );
     } else {
       const stored = await client.query(
         "SELECT result_envelope_json FROM tokenless_private_unpaid_review_deliveries WHERE delivery_id=$1",
@@ -1318,6 +1362,7 @@ export async function submitDirectPrivateReviewResponse(input: {
     client.release();
   }
   if (terminalEnvelope) await observeHumanReviewResult({ envelope: terminalEnvelope });
+  await projectFinalizedEvidence(pendingProjections, now);
   return {
     assignmentId: input.assignmentId,
     accepted: true as const,

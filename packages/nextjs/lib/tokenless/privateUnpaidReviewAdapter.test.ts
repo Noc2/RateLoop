@@ -25,6 +25,7 @@ import {
 } from "~~/lib/tokenless/assuranceResponses";
 import {
   __directPrivateReviewEvidenceTestUtils,
+  attemptDirectPrivateReviewEvidenceProjectionAfterCommit,
   projectDirectPrivateReviewDecisionEvidence,
 } from "~~/lib/tokenless/directPrivateReviewEvidence";
 import { generateAssuranceEvidencePacket } from "~~/lib/tokenless/evidencePackets";
@@ -687,6 +688,212 @@ test("direct private assignments surface in reviewer work and produce a terminal
     "SELECT aggregated_forecast_count FROM tokenless_forecast_integrity_terminal_receipts",
   );
   assert.equal(Number(forecastReceipt.rows[0]?.aggregated_forecast_count), 0);
+});
+
+function installEvidenceSigningKeys() {
+  const previousSigningKey = process.env.TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY;
+  const previousCommitmentKey = process.env.TOKENLESS_EVIDENCE_TENANT_COMMITMENT_KEY;
+  process.env.TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY = generateKeyPairSync("ed25519")
+    .privateKey.export({ format: "der", type: "pkcs8" })
+    .toString("base64url");
+  process.env.TOKENLESS_EVIDENCE_TENANT_COMMITMENT_KEY = Buffer.alloc(32, 5).toString("base64url");
+  return () => {
+    if (previousSigningKey === undefined) delete process.env.TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY;
+    else process.env.TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY = previousSigningKey;
+    if (previousCommitmentKey === undefined) delete process.env.TOKENLESS_EVIDENCE_TENANT_COMMITMENT_KEY;
+    else process.env.TOKENLESS_EVIDENCE_TENANT_COMMITMENT_KEY = previousCommitmentKey;
+  };
+}
+
+test("the inline evidence projection is attempted only after the finalising transaction commits", () => {
+  const source = readFileSync(new URL("./privateReviewResponses.ts", import.meta.url), "utf8");
+  const inlineAttempt = /projectFinalizedEvidence\(|attemptDirectPrivateReviewEvidenceProjectionAfterCommit\(/u;
+  const transactions = source.split(`await client.query("BEGIN")`).slice(1);
+  assert.equal(transactions.length, 2);
+  for (const body of transactions) {
+    const commit = body.indexOf(`await client.query("COMMIT")`);
+    assert.ok(commit > 0);
+    assert.doesNotMatch(body.slice(0, commit), inlineAttempt);
+    assert.match(body.slice(body.indexOf("client.release();")), inlineAttempt);
+  }
+});
+
+test("a terminal private review projects its decision evidence inline and keeps the queue as the retry path", async () => {
+  const restoreSigningKeys = installEvidenceSigningKeys();
+  try {
+    const setup = await fixture();
+    const delivered = await deliverPrivateFixture(setup);
+    await submitPositivePrivateResponse(setup, delivered, 0);
+    const unfinished = await dbClient.execute({
+      sql: `SELECT run_id FROM tokenless_agent_review_opportunities WHERE workspace_id=? AND opportunity_id=?`,
+      args: [setup.workspaceId, setup.opportunityId],
+    });
+    assert.equal(unfinished.rows[0]?.run_id, null);
+
+    await submitPositivePrivateResponse(setup, delivered, 1);
+
+    // No maintenance cycle has run. The evidence must already be readable.
+    const terminal = await getDirectPrivateReviewState(setup);
+    const deliveryId = terminal!.deliveryId;
+    const linked = await dbClient.execute({
+      sql: `SELECT run_id FROM tokenless_agent_review_opportunities WHERE workspace_id=? AND opportunity_id=?`,
+      args: [setup.workspaceId, setup.opportunityId],
+    });
+    const runId = String(linked.rows[0]?.run_id);
+    assert.equal(
+      runId,
+      __directPrivateReviewEvidenceTestUtils.projectedId("hau", deliveryId),
+      "the last response must link the projected run",
+    );
+    const inlinePacket = await dbClient.execute({
+      sql: "SELECT packet_id FROM tokenless_assurance_evidence_packets WHERE run_id=?",
+      args: [runId],
+    });
+    assert.equal(inlinePacket.rows.length, 1);
+    const projectionState = await dbClient.execute({
+      sql: `SELECT evidence_projection_state,evidence_projection_last_error
+            FROM tokenless_private_unpaid_review_deliveries WHERE delivery_id=?`,
+      args: [deliveryId],
+    });
+    assert.equal(projectionState.rows[0]?.evidence_projection_state, "completed");
+    assert.equal(projectionState.rows[0]?.evidence_projection_last_error, null);
+    const caseView = await getOversightRunCaseView({ accountAddress: OWNER, workspaceId: setup.workspaceId, runId });
+    assert.equal(caseView.cases.length, 1);
+
+    // The queued work item is deliberately untouched, so the cron stays the retry path.
+    const queued = await dbClient.execute({
+      sql: `SELECT state,attempt_count FROM tokenless_scheduled_work_items
+            WHERE kind='project_private_review_evidence' AND subject_key=?`,
+      args: [deliveryId],
+    });
+    assert.equal(queued.rows[0]?.state, "pending");
+    assert.equal(Number(queued.rows[0]?.attempt_count), 0);
+
+    // The cron then reprocesses an already-projected delivery. It must be a no-op.
+    const maintenance = await runTokenlessScheduledMaintenance({
+      appOrigin: "https://tokenless.example.test",
+      now: new Date("2026-07-16T10:00:00.000Z"),
+      workLimit: 20,
+    });
+    if (maintenance.status === "duplicate") assert.fail("the projection maintenance run cannot be duplicate");
+    assert.deepEqual(maintenance.summary?.directPrivateReviewEvidence, {
+      scanned: 1,
+      projected: 0,
+      packetsReady: 1,
+      retry: 0,
+      retryDeliveryIds: [],
+      dead: 0,
+      deadDeliveryIds: [],
+    });
+    const settled = await dbClient.execute({
+      sql: `SELECT
+              (SELECT run_id FROM tokenless_agent_review_opportunities
+               WHERE workspace_id=? AND opportunity_id=?) AS run_id,
+              (SELECT COUNT(*) FROM tokenless_assurance_evidence_packets WHERE run_id=?) AS packet_count,
+              (SELECT packet_id FROM tokenless_assurance_evidence_packets WHERE run_id=?) AS packet_id,
+              (SELECT COUNT(*) FROM tokenless_assurance_runs WHERE run_id=?) AS run_count,
+              (SELECT COUNT(*) FROM tokenless_assurance_assignments WHERE run_id=?) AS assignment_count,
+              (SELECT COUNT(*) FROM tokenless_assurance_responses WHERE run_id=?) AS response_count,
+              (SELECT state FROM tokenless_scheduled_work_items
+               WHERE kind='project_private_review_evidence' AND subject_key=?) AS work_state,
+              (SELECT evidence_projection_state FROM tokenless_private_unpaid_review_deliveries
+               WHERE delivery_id=?) AS projection_state`,
+      args: [setup.workspaceId, setup.opportunityId, runId, runId, runId, runId, runId, deliveryId, deliveryId],
+    });
+    assert.equal(String(settled.rows[0]?.run_id), runId);
+    assert.equal(Number(settled.rows[0]?.packet_count), 1);
+    assert.equal(Number(settled.rows[0]?.run_count), 1);
+    assert.equal(Number(settled.rows[0]?.assignment_count), 2);
+    assert.equal(Number(settled.rows[0]?.response_count), 2);
+    assert.equal(String(settled.rows[0]?.work_state), "completed");
+    assert.equal(String(settled.rows[0]?.projection_state), "completed");
+    assert.equal(
+      String(settled.rows[0]?.packet_id),
+      String(inlinePacket.rows[0]?.packet_id),
+      "the packet must not be regenerated",
+    );
+  } finally {
+    restoreSigningKeys();
+  }
+});
+
+test("a failing inline evidence projection cannot fail or roll back the finalising response", async () => {
+  const restoreSigningKeys = installEvidenceSigningKeys();
+  const events: string[] = [];
+  const previousError = console.error;
+  console.error = (...values: unknown[]) => void events.push(String(values[0]));
+  try {
+    const setup = await fixture();
+    const delivered = await deliverPrivateFixture(setup);
+    await submitPositivePrivateResponse(setup, delivered, 0);
+    // The projection needs a workspace evidence manager. Nothing else in the
+    // finalising transaction does, so this fails only the inline attempt.
+    await dbClient.execute({
+      sql: "DELETE FROM tokenless_workspace_members WHERE workspace_id=?",
+      args: [setup.workspaceId],
+    });
+
+    const finalized = await submitPositivePrivateResponse(setup, delivered, 1);
+
+    assert.equal(finalized.accepted, true);
+    assert.equal(finalized.responseCount, 2);
+    const terminal = await getDirectPrivateReviewState(setup);
+    assert.equal(terminal?.envelope?.outcome, "positive");
+    assert.equal(terminal?.lifecycle.state, "completed");
+    const unprojected = await dbClient.execute({
+      sql: `SELECT run_id FROM tokenless_agent_review_opportunities WHERE workspace_id=? AND opportunity_id=?`,
+      args: [setup.workspaceId, setup.opportunityId],
+    });
+    assert.equal(unprojected.rows[0]?.run_id, null);
+    const queued = await dbClient.execute({
+      sql: `SELECT state,attempt_count,last_error FROM tokenless_scheduled_work_items
+            WHERE kind='project_private_review_evidence' AND subject_key=?`,
+      args: [terminal!.deliveryId],
+    });
+    assert.equal(queued.rows[0]?.state, "pending");
+    assert.equal(Number(queued.rows[0]?.attempt_count), 0);
+    assert.equal(queued.rows[0]?.last_error, null);
+    assert.ok(events.includes("private_review_evidence_inline_projection_failed"), events.join(","));
+  } finally {
+    console.error = previousError;
+    restoreSigningKeys();
+  }
+});
+
+test("the inline evidence projection reports a deferred packet without throwing", async () => {
+  const events: Array<[string, unknown]> = [];
+  const previousError = console.error;
+  console.error = (...values: unknown[]) => void events.push([String(values[0]), values[1]]);
+  try {
+    assert.equal(await attemptDirectPrivateReviewEvidenceProjectionAfterCommit({ deliveryId: "hprd_missing" }), null);
+    assert.equal(events[0]?.[0], "private_review_evidence_inline_projection_failed");
+    assert.equal((events[0]?.[1] as { deliveryId: string }).deliveryId, "hprd_missing");
+
+    const setup = await fixture();
+    const delivered = await deliverPrivateFixture(setup);
+    await submitPositivePrivateResponse(setup, delivered, 0);
+    await submitPositivePrivateResponse(setup, delivered, 1);
+    const deliveryId = (await getDirectPrivateReviewState(setup))!.deliveryId;
+    events.length = 0;
+
+    const deferred = await attemptDirectPrivateReviewEvidenceProjectionAfterCommit({
+      deliveryId,
+      packetGenerator: async () => {
+        throw new Error("packet vault unavailable");
+      },
+    });
+
+    assert.equal(deferred?.packet, "retry");
+    assert.equal(deferred?.error, "packet vault unavailable");
+    assert.equal(events[0]?.[0], "private_review_evidence_inline_projection_deferred");
+    const projectionState = await dbClient.execute({
+      sql: `SELECT evidence_projection_state FROM tokenless_private_unpaid_review_deliveries WHERE delivery_id=?`,
+      args: [deliveryId],
+    });
+    assert.notEqual(projectionState.rows[0]?.evidence_projection_state, "completed");
+  } finally {
+    console.error = previousError;
+  }
 });
 
 test("scheduled private evidence projection backs off poison rows and dead-letters them after bounded attempts", async () => {

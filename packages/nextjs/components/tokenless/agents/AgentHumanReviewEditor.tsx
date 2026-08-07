@@ -557,8 +557,17 @@ export function AgentHumanReviewEditor({
     audience: "private_invited",
     feedbackBonusEnabled: true,
   }).available;
-  const paidConfigurationRelevant =
-    CONFIGURED_HUMAN_REVIEW_LANES.privateInvitedPaid.available || draft.compensationMode === "usdc";
+  const paidLaneAvailable = CONFIGURED_HUMAN_REVIEW_LANES.privateInvitedPaid.available;
+  // A stored profile can carry a lane this deployment no longer implements — a
+  // USDC bounty saved while the paid lane was configured is the reachable case.
+  // buildMutation still refuses it, but the reason belongs on the control that
+  // causes it rather than on the save the owner has already filled in.
+  const selectedLane = configuredHumanReviewLaneForSelection(
+    draft.audience,
+    draft.audience === "private_invited" ? draft.compensationMode : "usdc",
+  );
+  const unavailableLaneReason = selectedLane.available ? null : editor("reviewPathUnavailable");
+  const paidConfigurationRelevant = paidLaneAvailable || draft.compensationMode === "usdc" || !selectedLane.available;
 
   return (
     <Card as="section" id="agent-human-review-editor" className="rounded-2xl p-6">
@@ -809,13 +818,16 @@ export function AgentHumanReviewEditor({
                 label={policyCopy.payment.bounty}
                 labelClassName="text-sm"
                 value={draft.compensationMode}
+                error={unavailableLaneReason ?? undefined}
                 onChange={event => update("compensationMode", event.target.value as Draft["compensationMode"])}
               >
                 {draft.audience === "private_invited" ? (
                   <option value="unpaid">{policyCopy.payment.noBounty}</option>
                 ) : null}
-                {CONFIGURED_HUMAN_REVIEW_LANES.privateInvitedPaid.available || draft.compensationMode === "usdc" ? (
-                  <option value="usdc">{policyCopy.payment.addBounty}</option>
+                {paidLaneAvailable || draft.compensationMode === "usdc" ? (
+                  <option value="usdc" disabled={!paidLaneAvailable}>
+                    {policyCopy.payment.addBounty}
+                  </option>
                 ) : null}
               </SelectField>
             ) : null}
@@ -893,7 +905,7 @@ export function AgentHumanReviewEditor({
             {status}
           </p>
         ) : null}
-        <Button type="submit" disabled={busy}>
+        <Button type="submit" disabled={busy || Boolean(unavailableLaneReason)}>
           {busy ? ui("savingChanges") : creating ? ui("finishSetup") : ui("saveChanges")}
         </Button>
       </form>

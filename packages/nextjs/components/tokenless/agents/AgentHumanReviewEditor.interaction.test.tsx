@@ -224,3 +224,82 @@ test("the editor renders a server field error beside the matching review control
     restoreDom();
   }
 });
+
+test("a stored USDC profile states the unavailable review path up front instead of at save", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup, render } = await import("@testing-library/react");
+  const userEvent = (await import("@testing-library/user-event")).default;
+  const { AgentHumanReviewEditor } = await import("./AgentHumanReviewEditor");
+  const previousFetch = globalThis.fetch;
+  const methods: string[] = [];
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (!url.endsWith("/human-review")) throw new Error(`Unexpected request: ${url}`);
+    methods.push(init?.method ?? "GET");
+    if (init?.method === "PUT") return Response.json({});
+    return Response.json({
+      bindingRevision: 4,
+      blockingReason: null,
+      capability: { available: true, code: "ready", lane: "private_invited_paid", message: "Ready." },
+      configuration: {
+        authority: "check_only",
+        delegation: null,
+        selection: {
+          value: {
+            agreementThresholdBps: 7_000,
+            criticalRiskTiers: ["critical"],
+            enforcementMode: "advisory",
+            maximumLatencyMs: 120_000,
+            maximumUnreviewedGap: 20,
+            minimumConfidenceBps: 7_000,
+            mode: "always",
+            requiredRiskTiers: ["high"],
+          },
+        },
+        requestProfile: {
+          value: {
+            audience: "private_invited",
+            bountyPerSeatAtomic: "2000000",
+            compensationMode: "usdc",
+            criterion: "Is this response safe and correct?",
+            feedbackBonusEnabled: false,
+            negativeLabel: "Reject",
+            panelSize: 2,
+            positiveLabel: "Approve",
+            privateGroupId: "compatibility-routing-id",
+            questionAuthority: "owner_fixed",
+            rationaleMode: "required",
+            responseWindowSeconds: 3_600,
+          },
+        },
+      },
+      connection: null,
+    });
+  };
+
+  try {
+    const view = render(<AgentHumanReviewEditor workspaceId="workspace-1" agentId="agent-1" />);
+    await view.findByRole("heading", { name: "Human review" });
+
+    const compensation = view.getByRole("combobox", { name: /^Guaranteed bounty/u }) as HTMLSelectElement;
+    assert.equal(compensation.value, "usdc");
+    assert.equal((view.getByRole("option", { name: "Add USDC bounty" }) as HTMLOptionElement).disabled, true);
+    assert.equal(compensation.getAttribute("aria-invalid"), "true");
+    assert.equal(view.getByRole("alert").textContent, "This review path is not available yet.");
+    const save = view.getByRole("button", { name: "Save changes" }) as HTMLButtonElement;
+    assert.equal(save.disabled, true);
+    await userEvent.setup({ document }).click(save);
+    assert.deepEqual(methods, ["GET"]);
+
+    await userEvent.setup({ document }).selectOptions(compensation, "unpaid");
+    assert.equal(view.queryByRole("alert"), null);
+    assert.equal((view.getByRole("button", { name: "Save changes" }) as HTMLButtonElement).disabled, false);
+    await userEvent.setup({ document }).click(view.getByRole("button", { name: "Save changes" }));
+    await view.findByText("Human-review configuration saved.");
+    assert.deepEqual(methods, ["GET", "PUT", "GET"]);
+  } finally {
+    await act(async () => cleanup());
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});
