@@ -1,6 +1,6 @@
 # Before pitching German companies — readiness list
 
-Written 6 August 2026, last revised against `90b7b2d91`. Sources: four audits of the
+Written 6 August 2026, last revised against `9a0bbdec1`. Sources: four audits of the
 product and its collateral, then a second round covering internal consistency, German
 enterprise procurement, the first-run journey, architecture health, and 2026 regulatory
 change.
@@ -9,6 +9,9 @@ change.
 build items landed between `2853daf74` and `90b7b2d91` — the pitch URL, the ODR notice, the
 pricing page, the AI-literacy wording, the README caveats, the reviewer-profile empty state,
 reasons in the agent envelope, majority panel resolution, and the FINRA/ISO/NIST citations.
+A further round through `9a0bbdec1` closed the dependency audit, four security gaps, the
+`no_decision` and panel-size contract mismatches, the missing SIEM terminal events,
+deployment-drift detection, inline evidence projection and the up-front paid-lane notice.
 Each is a separate commit with tests. What remains is below.
 
 This list is long because the gap is not in one place. The German *story* is ready and the
@@ -129,21 +132,20 @@ construction**.
 by clicking cannot. This is the single biggest commercial gap in the product, and it is
 what makes every demo depend on you alt-tabbing into an IDE.
 
-### 2.2 A live demo can visibly return "inconclusive"
+### 2.2 Demo with a panel of three, not the default two
 
-Resolution requires `responseCount === panelSize` — **every assigned reviewer must
-answer** ([`privateReviewResponses.ts:621`](../packages/nextjs/lib/tokenless/privateReviewResponses.ts)).
-Default panel size is 2, default window 3600 s. A tie is `inconclusive`; a deadline passing
-without full quorum is forced `inconclusive`.
+Majority resolution shipped (B5), so a review now finalises as soon as ⌊n/2⌋+1 reviewers
+agree rather than waiting for every assignee. **At the default panel size of 2 that changes
+nothing** — the threshold is 2 — so a slow second reviewer still stalls the demo and a 1–1
+split is still `inconclusive`, correctly, because it is a real tie.
 
-At the default, one slow reviewer produces "inconclusive" in front of the prospect — and so
-does the more likely case, **two reviewers who both answer and disagree**, which is exactly
-the situation most worth demonstrating.
+**Configure the demo panel at 3.** Two agreeing reviewers then resolve immediately and the
+third's silence is invisible, which is the behaviour worth showing. A genuine disagreement
+still reads `inconclusive`; that is the honest answer and it is defensible in the room.
 
-Note that "set the panel to 1 for the demo" is not available: `MINIMUM_REVIEW_PANEL_SIZE = 2`
-([`reviewRequestProfiles.ts:40`](../packages/nextjs/lib/tokenless/reviewRequestProfiles.ts))
-is enforced server-side and mirrored in the editor. Changing it is a code change, not a
-setting. See B5.
+"Set the panel to 1" remains unavailable: the minimum of 2 is enforced server-side (now from
+[`reviewPanelPolicy.ts`](../packages/nextjs/lib/tokenless/reviewPanelPolicy.ts)) and is a
+code change, not a setting.
 
 ### 2.3 The setup chain before a first review is long and unguided
 
@@ -407,29 +409,19 @@ the migration alone.
   failure mode is worse than assumed: `AgentsLocaleProvider` renders the **raw key string**
   on a miss, not English.
 
-## Demo hardening — the smallest set
+## Demo hardening — what is left
 
-About three developer-days. Optimised strictly for "nothing embarrassing happens in the
-meeting", which is a different and smaller list than the one above.
+This list is spent. Majority resolution, inline evidence projection, the up-front paid-lane
+notice, the reviewer-profile empty state and the `/rate` landing all shipped. One thing left,
+and it is configuration rather than code:
 
-1. **B5, majority resolution only** (1 day). Without it, the most compelling thing you can
-   demo — two named experts disagreeing — prints `inconclusive`.
-2. **Project evidence immediately on completion** (2–4 hours). **This is the demo risk the
-   first draft of this document missed entirely.** Evidence projection is only *enqueued* at
-   completion; the projection itself runs on the `*/5 * * * *` cron. So the last reviewer
-   answers, you click to the evidence tab, and for up to five minutes there is nothing there
-   — including the rationales. Attempt it inline, keeping the queue as the retry path.
-3. **Stop the paid-lane error firing at save time** (2 hours). The editor throws "Dieser
-   Prüfpfad ist noch nicht verfügbar" **after** the prospect watched you fill in the whole
-   form. The setup flow already does this correctly — the option is disabled with the reason
-   shown inline. Port that behaviour.
-4. **Give the reviewer profile something to say** (2 hours). B3's first item.
-5. **Fix `/rate`** (1 hour). B1 — because the prospect's first *solo* visit after the meeting
-   is the one that matters.
+**Set the demo workspace's panel size to 3.** See 2.2 — at the default of 2 the majority
+threshold is also 2, so the slow-reviewer stall you were trying to remove is still there.
 
 **Rehearse from `e2e/hosted/core-journey.spec.ts`.** It is a complete, green, three-account
 two-reviewer private journey: connect, verify, invite, configure panel 2, request review,
-both reviewers respond, fetch result. That file is your demo script.
+both reviewers respond, fetch result. That file is your demo script — but raise its panel
+size when you rehearse, for the reason above.
 
 Two things not to do: do not open the pricing page until Tier 0.5 is done, and do not invite
 chain questions.
@@ -602,24 +594,21 @@ flag it now.
 
 ### 5.7 Contract-level inconsistencies a technical reviewer finds in an afternoon
 
-- **`no_decision` is in the SDK's published JSON Schema and forbidden by the database.**
-  Anyone generating types writes an unreachable branch; submitting it is rejected by a CHECK
-  constraint. The schema is the first artefact an enterprise reviews.
-- **Panel-size bounds disagree across six layers** — server 2–100, wizard 2–500, another
-  editor 2–100, readiness check ≥1 with no maximum, **published SDK 1–500**. The only bound
-  an integrator can read is wrong in both directions, and the wizard's own test pins 500 as
-  correct. In one German form the label is localised, the client error is English with the
-  wrong maximum, and the server error is English with a raw camelCase field name.
-- **A tied panel emits nothing to the SIEM.** `inconclusive` from a genuine tie and
-  `cancelled_before_commit` produce no event at all — and the tie is exactly the case worth
-  demonstrating. Two of nine lifecycle states are invisible to a buyer whose evidence story
-  is "everything lands in our SIEM".
+The `no_decision` schema mismatch, the six-layer panel-size disagreement, the missing SIEM
+events for a tie and a cancellation, and the `$29` billing page are all closed. What the fix
+left open:
+
+- **Customers cannot yet subscribe to the two new terminal event types.** `review.tied` and
+  `review.cancelled` are emitted and delivered, but `SiemEvidenceDelivery` keeps its own
+  event-type list for the subscription UI, so an existing endpoint has no way to ask for
+  them. Half a day, and it is the half that makes the fix visible to a buyer.
+- **A second panel-size family still disagrees.** `requestedPanelSize` is bounded 3–500
+  across six files including a published request schema, against the profile bound of 2–100
+  now enforced everywhere else. Narrowing it is a product call — 3 is a deliberate quality
+  floor for requested panels — but the published schema should not contradict the server.
 - **Five vocabularies for one outcome**: `positive/negative`, `agree/disagree`,
   `endorsed/rejected`, and two different German label pairs on two panels fed by the same
   source. No mapping table exists anywhere.
-- **The in-product billing page still shows $29** while the Terms now state that no
-  recurring list price is published. One click behind "Compare plans", which is where the
-  pricing page's own button sends the visitor.
 
 ### 5.8 Engineering health
 
@@ -654,27 +643,24 @@ Only the items that change what to do next:
   expression — with no test asserting they agree. It drives adaptive review rates and
   published confidence intervals.
 
-### 5.9 Nothing detects deployment drift
+### 5.9 Deployment drift is now detected, not prevented
 
-The deployed site sat **23 commits behind `tokenless` for an entire working session**, and
-the only reason it surfaced was a direct question. `deploymentEnabled.tokenless` is `false`,
-so pushes deliberately never deploy — but nothing compares the deployed commit against the
-branch. A CI check, or simply enabling auto-deploy, closes it.
+Closed by `scripts/check-deployed-commit.mjs` and the `Deployed commit` workflow, which
+compare the tokenless alias's `/api/release` SHA against the branch head on every push and
+every weekday morning. **It reports; it does not deploy.** `deploymentEnabled.tokenless` stays
+`false` on purpose, so a red run still means somebody must run `yarn vercel --prod`.
 
 ### 5.10 Revised order
 
-1. **The reviewer-profile regression** — shipped broken, fixed in `90b7b2d91`. Redeploy.
-2. **The German register and terminology split** (5.5) — half a day, and it is the fastest
+1. **The German register and terminology split** (5.5) — half a day, and it is the fastest
    credibility signal a Mittelstand buyer reads.
-3. **Design items 1–6** in [design-consistency-2026-08.md](design-consistency-2026-08.md) —
-   a morning, and it fixes everything a prospect can see.
-4. **The works-council pack** (5.1) — start now; it gates the calendar, not the pitch.
-5. **Data Act Article 25 terms** (5.2) folded into the Tier 4 order form and AGB work.
-6. **The German DPA qualifiers** (5.6) — counsel, but brief them this week.
-7. **Panel-size bounds and the `no_decision` schema mismatch** (5.7) — before any technical
-   diligence.
-8. **pg-mem snapshotting and the `deployedContracts` byte check** (5.8) — engineering
+2. **The works-council pack** (5.1) — start now; it gates the calendar, not the pitch.
+3. **Data Act Article 25 terms** (5.2) folded into the Tier 4 order form and AGB work.
+4. **The German DPA qualifiers** (5.6) — counsel, but brief them this week.
+5. **pg-mem snapshotting and the `deployedContracts` byte check** (5.8) — engineering
    hygiene that compounds.
+6. **Auth rate limiting** (6.4) — the limiter already exists; it is the one remaining
+   security item a questionnaire reliably asks about.
 
 ### 5.11 What B8 needs decided before it is built
 
@@ -729,25 +715,19 @@ literacy — selling literacy evidence is weaker than it was in 2025.
 it in Section 4, which is notifying authorities. The premise is wrong. Still worth counsel
 sign-off before a deck is built on it.*
 
-### 6.2 `yarn security:audit` scans nothing. Verified.
+### 6.2 The dependency audit now scans. What is left is a reading of the result.
 
-`yarn npm audit --recursive --environment production` reports **`totalDependencies: 0`**
-against **1,918 resolved packages** in the lockfile. Yarn 3.2.3's audit does not traverse
-this workspace, and the CI job has been reporting green over a scan of nothing.
+The audit was replaced (osv-scanner, digest-pinned, weekly schedule): **0 → 1,917 packages
+scanned**, sixteen accepted exceptions each with an expiry date, and the hono ReDoS
+(GHSA-8j4g-w8fx-2239) is fixed at 4.12.34 rather than pinned below it. Two things a
+questionnaire will still surface:
 
-It is not theoretical. `hono` is pinned to `4.12.27` in `packages/ponder/package.json:18`
-and three more times in root `resolutions` — pins written to clear an *older* advisory now
-hold the tree below the fix for **GHSA-8j4g-w8fx-2239**, a ReDoS in CORS middleware fixed in
-4.12.34. And `packages/ponder/src/api/index.ts:161` mounts `cors({ origin: "*" })` on every
-route of a publicly reachable Railway service. Unauthenticated remote CPU burn.
-
-**The 56 Dependabot alerts are misleading in your favour.** They are computed against the
-default branch, and `.github/dependabot.yml` targets `tokenless`, so `main` never receives
-the fixes. Tokenless is materially cleaner than the count implies — but `next` is at exactly
-the minimum fixed version, with zero headroom.
-
-*Half a day: unpin hono, replace the audit script, and add a `schedule:` trigger — the
-dependency job currently only runs on push, unlike CodeQL which runs weekly.*
+- **`next` sits at exactly the minimum fixed version, with zero headroom.** The next Next.js
+  advisory is an immediate upgrade, not a scheduled one.
+- **The 56 Dependabot alerts are misleading in your favour, and you cannot cite them.** They
+  are computed against the default branch while `.github/dependabot.yml` targets `tokenless`,
+  so `main` never receives the fixes. Tokenless is materially cleaner than the count implies;
+  a buyer reading the GitHub badge sees the opposite.
 
 ### 6.3 The AVV makes five security claims the deployment cannot evidence
 
@@ -769,27 +749,20 @@ over-claim costs a slide; an unevidenced TOM annex is a term of a signed AVV.
 
 ### 6.4 Security items a questionnaire or pentest would raise
 
-- **The Better Auth admin plugin is mounted, including impersonation.** `betterAuth.ts:156`
-  enables `admin({ defaultRole: "user" })`. The route handler deliberately blocks twelve SSO
-  and SCIM management paths and **does not block `/admin/*`**. The schema carries `role`,
-  `banned`, `banReason` and `impersonatedBy`. No application code grants admin, so the
-  endpoints 403 today — but the questionnaire item is *"can vendor staff sign in as a user?"*
-  and the honest answer is currently "an impersonation endpoint is deployed, gated by a
-  database column." Nothing uses the plugin. **One hour.**
+The admin/impersonation plugin, the raw error objects on the API error path, and the retired
+web3 origins in the CSP are closed. Three remain:
+
 - **No rate limiting on authentication.** The DB-backed limiter is well built and consumed by
   six route files; `betterAuth()` configures no `rateLimit` and no `secondaryStorage`, so the
   default is in-memory — per-lambda on Vercel, which is not a limit. Nothing throttles
   *requesting* email codes. Email-bombing an arbitrary address is a standard finding, and the
-  limiter already exists.
-- **Raw error objects on the main API error path.** `server.ts:854` logs the error object; a
-  `pg` unique-violation carries the conflicting value in `detail`, so personal data reaches
-  runtime logs. The fix is already written in `lib/auth/publicRouteError.ts` — apply it.
-- **The CSP still advertises the retired web3 stack** — thirdweb, WalletConnect, Worldcoin
-  bridge, Base mainnet. A reviewer reading it learns an architecture you no longer have. And
-  there is no `report-to`, so CSP violations, the cheapest intrusion signal available, go
-  nowhere.
+  limiter already exists. **This is now the highest-value security item on the list.**
+- **The CSP has no `report-to`.** The dead origins are gone, but violations — the cheapest
+  intrusion signal available — still go nowhere.
 - **No error tracking, APM, alerting or log drain anywhere.** The single hit is an OTLP
-  *ingest* endpoint: RateLoop receives its customers' traces and emits none of its own.
+  *ingest* endpoint: RateLoop receives its customers' traces and emits none of its own. Note
+  this is also what makes the AVV's "monitored operational failures" claim (6.3) unevidenced,
+  so the two are one fix.
 
 ### 6.5 The one capability worth building — and it is already written
 
