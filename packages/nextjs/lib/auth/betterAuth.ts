@@ -17,7 +17,7 @@ import {
 import { passkeySafetyPlugin } from "~~/lib/auth/passkeys";
 import { getAuthOrigin } from "~~/lib/auth/session";
 import { db } from "~~/lib/db";
-import { account, passkey, scimProvider, session, ssoProvider, user, verification } from "~~/lib/db/schema";
+import { account, passkey, rateLimit, scimProvider, session, ssoProvider, user, verification } from "~~/lib/db/schema";
 import { isResendConfigured, sendTokenlessLoginOtpEmail } from "~~/lib/notifications/resend";
 
 type SocialProviders = NonNullable<Parameters<typeof betterAuth>[0]["socialProviders"]>;
@@ -121,9 +121,14 @@ function createRateLoopAuth() {
     trustedOrigins: getBetterAuthTrustedOrigins(),
     database: drizzleAdapter(db, {
       provider: "pg",
-      schema: { account, passkey, scimProvider, session, ssoProvider, user, verification },
+      schema: { account, passkey, rateLimit, scimProvider, session, ssoProvider, user, verification },
     }),
     emailAndPassword: { enabled: false },
+    // Better Auth already applies its default rules — sign-in 3 per 10s, email
+    // code 3 per 60s — but stores the counters in memory, which on Vercel means
+    // one counter per lambda instance. The effective limit was therefore
+    // multiplied by however many instances happened to be warm.
+    rateLimit: { storage: "database" },
     socialProviders: configuredSocialProviders(),
     session: {
       expiresIn: 10 * 60,
@@ -145,6 +150,11 @@ function createRateLoopAuth() {
     },
     advanced: {
       cookiePrefix: BETTER_AUTH_COOKIE_PREFIX,
+      // Without this, `getIp` reads only x-forwarded-for and returns null when it
+      // carries more than one value, which collapses every visitor into a single
+      // `no-trusted-ip` bucket — a global 3-per-10s cap on sign-in rather than a
+      // per-caller one. The MCP limiter already prefers the Vercel header.
+      ipAddress: { ipAddressHeaders: ["x-vercel-forwarded-for", "x-forwarded-for"] },
       database: { generateId: () => randomUUID() },
       defaultCookieAttributes: {
         httpOnly: true,

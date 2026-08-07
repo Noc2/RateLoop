@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   boolean,
   check,
   foreignKey,
@@ -457,6 +458,23 @@ export const account = pgTable(
     userIdx: index("tokenless_better_auth_accounts_user_idx").on(table.userId),
   }),
 );
+
+/**
+ * Better Auth's rate-limit counters.
+ *
+ * Its default rules already throttle sign-in and email-code requests, but the
+ * default storage is in-memory, which on Vercel is one counter per lambda: the
+ * limit multiplies by the number of warm instances. Pointing the limiter at the
+ * database makes one counter serve the fleet. The column names are fixed by
+ * @better-auth/core, so they stay camelCase-mapped rather than following the
+ * snake_case used elsewhere in this file.
+ */
+export const rateLimit = pgTable("tokenless_better_auth_rate_limits", {
+  id: text("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  count: integer("count").notNull(),
+  lastRequest: bigint("last_request", { mode: "number" }).notNull(),
+});
 
 export const verification = pgTable(
   "tokenless_better_auth_verifications",

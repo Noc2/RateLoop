@@ -1345,6 +1345,13 @@
       "when": 1785340800000,
       "tag": "0192_assurance_event_terminal_states",
       "breakpoints": true
+    },
+    {
+      "idx": 193,
+      "version": "7",
+      "when": 1785340801000,
+      "tag": "0193_better_auth_rate_limit",
+      "breakpoints": true
     }
   ]
 }
