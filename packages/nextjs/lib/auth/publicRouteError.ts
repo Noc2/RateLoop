@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
 import { AuthError } from "~~/lib/auth/session";
+import { logRedactedError } from "~~/lib/security/redactedErrorLog";
 
 export function publicAuthRouteError(
   error: unknown,
@@ -8,11 +8,6 @@ export function publicAuthRouteError(
   if (error instanceof AuthError) {
     return { message: error.message, status: error.status };
   }
-  const errorCode =
-    error instanceof Error && /^[A-Za-z][A-Za-z0-9_]{0,79}$/u.test(error.name) ? error.name : "unknown_error";
-  const errorDigest = `sha256:${createHash("sha256")
-    .update(error instanceof Error ? `${error.name}:${error.message}` : typeof error)
-    .digest("hex")}`;
-  console.error(JSON.stringify({ event: input.event, errorCode, errorDigest }));
+  logRedactedError(input.event, error);
   return { message: input.fallbackMessage, status: input.fallbackStatus };
 }

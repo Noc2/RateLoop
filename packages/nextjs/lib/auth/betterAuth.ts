@@ -3,7 +3,7 @@ import { scim } from "@better-auth/scim";
 import { sso } from "@better-auth/sso";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { admin, emailOTP } from "better-auth/plugins";
+import { emailOTP } from "better-auth/plugins";
 import { randomUUID } from "node:crypto";
 import "server-only";
 import { BETTER_AUTH_COOKIE_PREFIX } from "~~/lib/auth/betterAuthCookies";
@@ -152,8 +152,11 @@ function createRateLoopAuth() {
         secure: process.env.NODE_ENV === "production",
       },
     },
+    // The Better Auth admin plugin is deliberately not mounted. Nothing in this
+    // application grants or reads an admin role, and mounting it would deploy
+    // user-impersonation, ban and session-revocation endpoints that no product
+    // surface needs.
     plugins: [
-      admin({ defaultRole: "user" }),
       emailOTP({
         allowedAttempts: 3,
         expiresIn: 5 * 60,

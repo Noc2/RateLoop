@@ -51,9 +51,33 @@ test("connect-src includes only the tokenless app, Base RPC, auth, and World ID 
   assert.doesNotMatch(csp, /simpleanalyticscdn/u);
   assert.match(connectSrc, /(?:^|\s)https:\/\/sepolia\.base\.org(?:\s|$)/);
   assert.match(connectSrc, /(?:^|\s)https:\/\/\*\.thirdweb\.com(?:\s|$)/);
-  assert.match(connectSrc, /(?:^|\s)wss:\/\/\*\.walletconnect\.com(?:\s|$)/);
+  assert.match(connectSrc, /(?:^|\s)wss:\/\/\*\.walletconnect\.org(?:\s|$)/);
   assert.match(connectSrc, /(?:^|\s)https:\/\/bridge\.worldcoin\.org(?:\s|$)/);
   assert.doesNotMatch(connectSrc, /developer\.world|drand|blob\.vercel-storage/);
+});
+
+test("connect-src does not advertise chains or relays no shipped code reaches", async () => {
+  const csp = await getContentSecurityPolicy();
+
+  // Base mainnet has no client anywhere in this deployment, and the shipped
+  // WalletConnect relay is wss://relay.walletconnect.org, so a wss *.com source
+  // widens the policy without covering anything.
+  assert.doesNotMatch(csp, /mainnet\.base\.org/u);
+  assert.doesNotMatch(csp, /wss:\/\/\*\.walletconnect\.com/u);
+});
+
+test("the managed in-app wallet frame is allowed only where the feature can be enabled", async () => {
+  const frameSrcOf = (csp: string) =>
+    csp
+      .split(";")
+      .map(directive => directive.trim())
+      .find(directive => directive.startsWith("frame-src ")) ?? "";
+
+  assert.doesNotMatch(frameSrcOf(await getContentSecurityPolicy()), /embedded-wallet\.thirdweb\.com/u);
+  assert.match(
+    frameSrcOf(buildContentSecurityPolicy({ isDev: true, nonce: "testnonce" })),
+    /(?:^|\s)https:\/\/embedded-wallet\.thirdweb\.com(?:\s|$)/u,
+  );
 });
 
 test("thirdweb OAuth popups retain their opener", async () => {

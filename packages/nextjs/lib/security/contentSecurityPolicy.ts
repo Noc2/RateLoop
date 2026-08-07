@@ -81,12 +81,14 @@ export function buildContentSecurityPolicy(options: ContentSecurityPolicyOptions
   ]);
   const connectSources = unique([
     "'self'",
+    // Base Sepolia is the only chain this deployment targets, so no Base mainnet
+    // source belongs here. The wallet-binding connector and the World ID widget
+    // are the only browser code that reaches a cross-origin endpoint at all.
     "https://sepolia.base.org",
-    "https://mainnet.base.org",
     "https://*.thirdweb.com",
     "https://*.walletconnect.com",
     "https://*.walletconnect.org",
-    "wss://*.walletconnect.com",
+    "wss://*.walletconnect.org",
     "https://bridge.worldcoin.org",
     httpsOrigin(options.baseRpcUrl),
     ...(options.isVercelLiveEnabled ? ["https://vercel.live", "https://*.pusher.com", "wss://*.pusher.com"] : []),
@@ -95,7 +97,9 @@ export function buildContentSecurityPolicy(options: ContentSecurityPolicyOptions
   const formActionSources = unique(["'self'", ...(options.formActionRedirectOrigins ?? [])]);
   const frameSources = unique([
     "'self'",
-    "https://embedded-wallet.thirdweb.com",
+    // The managed in-app wallet iframe is gated to non-production builds by
+    // settings/wallets, so production never needs to frame it.
+    ...(options.isDev ? ["https://embedded-wallet.thirdweb.com"] : []),
     "https://www.youtube-nocookie.com",
     ...vercelLive,
     ...(options.frameRedirectOrigins ?? []),

@@ -1,0 +1,79 @@
+# Exceptions for `yarn security:audit` (osv-scanner over yarn.lock).
+#
+# Every entry must name where the package enters the tree and why it is not
+# remediated today, and must carry an `ignoreUntil` date so the exception
+# expires and the gate fails again if nobody has acted. Anything not listed here
+# fails the audit. Do not add an entry without a reason and a date.
+#
+# Reviewed 2026-08-07 against osv-scanner 2.5.0.
+
+# --- vercel CLI (devDependency, never deployed) -------------------------------
+
+[[IgnoredVulns]]
+id = "GHSA-8xcm-r25x-g524"
+ignoreUntil = 2026-11-07
+reason = "undici 6.27.0/7.28.0, reached only through the vercel CLI, @vercel/* dev helpers and jsdom. None of these are bundled into a deployed artifact; the fix requires an upstream vercel CLI release."
+
+[[IgnoredVulns]]
+id = "GHSA-m8rv-5g2x-5cg5"
+ignoreUntil = 2026-11-07
+reason = "undici 6.27.0/7.28.0 via the vercel CLI, @vercel/* dev helpers and jsdom. Build- and test-time only."
+
+[[IgnoredVulns]]
+id = "GHSA-v3r7-h72x-cjcm"
+ignoreUntil = 2026-11-07
+reason = "undici 6.27.0/7.28.0 via the vercel CLI, @vercel/* dev helpers and jsdom. Build- and test-time only."
+
+[[IgnoredVulns]]
+id = "GHSA-4cwx-7wf7-3272"
+ignoreUntil = 2026-11-07
+reason = "undici 7.28.0 via @vercel/sandbox and jsdom. Build- and test-time only."
+
+[[IgnoredVulns]]
+id = "GHSA-jr45-8vmc-qm54"
+ignoreUntil = 2026-11-07
+reason = "undici 7.28.0 via @vercel/sandbox and jsdom. Build- and test-time only."
+
+[[IgnoredVulns]]
+id = "GHSA-fm4j-4xhm-xpwx"
+ignoreUntil = 2026-11-07
+reason = "sandbox 3.1.2 is pulled in by the vercel CLI devDependency. No fixed version exists upstream and the package never runs in a deployed service."
+
+[[IgnoredVulns]]
+id = "GHSA-gc25-3vc5-2jf9"
+ignoreUntil = 2026-11-07
+reason = "sandbox 3.1.2 via the vercel CLI devDependency. No fixed version exists upstream."
+
+[[IgnoredVulns]]
+id = "GHSA-5p4m-2wfm-xmqj"
+ignoreUntil = 2026-11-07
+reason = "js-yaml 4.3.0 via @eslint/eslintrc and @vercel/python-analysis. Lint- and CLI-time only; it never parses untrusted input in a deployed service."
+
+# --- build and test toolchain -------------------------------------------------
+
+[[IgnoredVulns]]
+id = "GHSA-fxqj-rqcc-2cmp"
+ignoreUntil = 2026-11-07
+reason = "postcss 8.5.18 is pinned by next 15.5.21, @tailwindcss/postcss and vite. It runs at build time over first-party stylesheets, and the fix needs an upstream next release."
+
+[[IgnoredVulns]]
+id = "GHSA-7p8r-x3mc-p8w7"
+ignoreUntil = 2026-11-07
+reason = "fast-uri 3.1.4 via ajv, which this workspace uses for build-time schema validation only."
+
+[[IgnoredVulns]]
+id = "GHSA-mwp4-54f8-5fhr"
+ignoreUntil = 2026-11-07
+reason = "ip-address 10.2.2 via socks, reached only through proxy-agent chains in developer tooling."
+
+[[IgnoredVulns]]
+id = "GHSA-2m8v-j782-fhvr"
+ignoreUntil = 2026-11-07
+reason = "socket.io-parser 4.2.6 via socket.io-client, used by the Ponder development UI. The deployed indexer runs with the UI disabled."
+
+# --- unmounted plugin ---------------------------------------------------------
+
+[[IgnoredVulns]]
+id = "GHSA-j8v8-g9cx-5qf4"
+ignoreUntil = 2026-11-07
+reason = "@better-auth/scim 1.6.23. The advisory needs non-organization SCIM providers; this deployment only creates organization-scoped ones, and the SCIM plugin is mounted only when enterprise identity is enabled. The only fix is a 1.7.0 beta, which is not shippable yet."

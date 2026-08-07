@@ -5,6 +5,10 @@ on:
     branches: [main, tokenless]
   pull_request:
     branches: [main, tokenless]
+  schedule:
+    # Advisories are published against dependencies that are already merged, so
+    # this workflow has to re-run on a clock and not only on a code change.
+    - cron: "47 4 * * 1"
 
 permissions:
   actions: read
@@ -19,12 +23,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      # osv-scanner reads yarn.lock directly. `yarn npm audit` cannot: on Yarn
+      # 3.2.3 it only walks the workspace it is invoked from, so the root
+      # invocation reported zero dependencies against a 1,900-package lockfile,
+      # and `--all --recursive` is rejected by the registry audit endpoint.
+      # Exceptions live in osv-scanner.toml, each with a reason and an expiry.
+      - name: Audit resolved dependencies for known vulnerabilities
+        id: dependency-scan
+        continue-on-error: true
+        run: >-
+          docker run --rm
+          --volume "$PWD:/work"
+          --workdir /work
+          ghcr.io/google/osv-scanner@sha256:5b8b38e45bb2c5c4976f0f1f07860551ea6e1f235f642cf215f74d266fec2c1b
+          scan source --lockfile=/work/yarn.lock
+          --format sarif --output-file /work/rateloop-tokenless-dependencies.sarif
+      - name: Upload dependency vulnerability results
+        if: ${{ always() && hashFiles('rateloop-tokenless-dependencies.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@7211b7c8077ea37d8641b6271f6a365a22a5fbfa # v4.36.0
         with:
-          node-version: "24"
-          cache: yarn
-      - run: yarn install --immutable
-      - run: yarn security:audit
+          sarif_file: rateloop-tokenless-dependencies.sarif
+          category: tokenless-dependencies
+      - name: Enforce dependency vulnerability gate
+        if: ${{ steps.dependency-scan.outcome == 'failure' }}
+        run: exit 1
 
   keeper-image:
     runs-on: ubuntu-latest

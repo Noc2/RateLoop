@@ -21,6 +21,7 @@ import { db, dbClient } from "~~/lib/db";
 import { AdvisoryLockUnavailableError } from "~~/lib/db/advisoryLocks";
 import { tokenlessAgentAsks, tokenlessAgentQuotes } from "~~/lib/db/schema";
 import { assertDataIngressPolicy } from "~~/lib/privacy/dataPolicy";
+import { logRedactedError } from "~~/lib/security/redactedErrorLog";
 import {
   type ProductAudienceCreationBoundary,
   evaluateProductAudienceCreation,
@@ -851,7 +852,7 @@ export function tokenlessErrorResponse(error: unknown) {
       status: error.status,
     };
   }
-  console.error("[tokenless-api] unexpected error", error);
+  logRedactedError("tokenless_api_unexpected_error", error);
   return {
     body: { code: "internal_error", message: "Tokenless API request failed.", retryable: false },
     status: 500,

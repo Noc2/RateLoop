@@ -13,6 +13,7 @@ import {
   normalizeNotificationPreferences,
   upsertTokenlessEmailNotificationSettings,
 } from "~~/lib/notifications/tokenless";
+import { logRedactedError } from "~~/lib/security/redactedErrorLog";
 import { readApiJsonRequestBody } from "~~/lib/tokenless/apiRequestBody";
 import { tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
@@ -58,7 +59,7 @@ export async function PUT(request: NextRequest) {
           verifyUrl: buildTokenlessVerificationUrl(result.verificationToken),
         });
       } catch (error) {
-        console.error("Failed to send tokenless notification verification email:", error);
+        logRedactedError("tokenless_notification_verification_email_failed", error);
         return NextResponse.json(
           { field: "email", message: "Email notifications are not configured on this deployment." },
           { status: 503, headers: noStore },
