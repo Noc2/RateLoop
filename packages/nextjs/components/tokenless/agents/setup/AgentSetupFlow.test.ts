@@ -12,6 +12,11 @@ const actionBarSource = readFileSync(new URL("./SetupActionBar.tsx", import.meta
 const stageHeaderSource = readFileSync(new URL("./SetupStageHeader.tsx", import.meta.url), "utf8");
 const messagesSource = readFileSync(new URL("../../../../messages/en/agents.json", import.meta.url), "utf8");
 const localizedFlowSource = `${flowSource}\n${messagesSource}`;
+// Call-shape assertions match against this rather than the raw source: Prettier
+// wraps a call the moment its arguments cross the line limit, and a regex written
+// against the unwrapped form then fails for a formatting reason that has nothing
+// to do with what it is checking. That is not hypothetical — it shipped red once.
+const flowCalls = flowSource.replace(/\s+/gu, " ");
 const localizedRoutingSource = `${routingSource}\n${messagesSource}`;
 const localizedProgressSource = `${progressSource}\n${messagesSource}`;
 const localizedStartSource = `${startSource}\n${messagesSource}`;
@@ -90,7 +95,10 @@ test("review setup distinguishes a saved policy decision from delivery authority
   assert.match(flowSource, /policyCopy\.limits\.maximumGap/);
   assert.match(flowSource, /policyCopy\.limits\.riskTiers/);
   assert.match(flowSource, /policyCopy\.limits\.confidence/);
-  assert.match(flowSource, /buildReviewFrequencySelection\(draft\.selection, reviewFrequency, setupLocalization\)/);
+  assert.match(
+    flowCalls,
+    /buildReviewFrequencySelection\( ?draft\.selection, reviewFrequency, setupLocalization,? ?\)/,
+  );
   assert.doesNotMatch(flowSource, /Choose when this agent should involve people/i);
   assert.doesNotMatch(flowSource, /reviewerAudience|contentBoundary: "private_workspace"/);
 });
@@ -130,7 +138,10 @@ test("review setup controls audience and shows only the relevant material bounda
   assert.match(localizedFlowSource, /Public, synthetic, or safely redacted material only/);
   assert.match(localizedFlowSource, /Public and hybrid network assignments currently require a guaranteed bounty/);
   assert.match(flowSource, /buildReviewAudienceRequestProfile\(draft\.requestProfile, reviewAudience\)/);
-  assert.match(flowSource, /privateClassificationsThrough\(reviewAudience\.privateSensitivity, setupLocalization\)/);
+  assert.match(
+    flowCalls,
+    /privateClassificationsThrough\( ?reviewAudience\.privateSensitivity, setupLocalization,? ?\)/,
+  );
   assert.match(flowSource, /audience === "public_network" \? null/);
 });
 
@@ -162,7 +173,10 @@ test("review setup resumes a controlled question and compact answer format", () 
   assert.match(flowSource, /value=\{reviewCriterion\.rationaleMode\}/);
   assert.match(flowSource, /maxLength=\{REVIEW_CRITERION_MAX_LENGTH\}/);
   assert.match(flowSource, /maxLength=\{REVIEW_ANSWER_LABEL_MAX_LENGTH\}/);
-  assert.match(flowSource, /buildReviewCriterionRequestProfile\(audienceProfile, reviewCriterion, setupLocalization\)/);
+  assert.match(
+    flowCalls,
+    /buildReviewCriterionRequestProfile\( ?audienceProfile, reviewCriterion, setupLocalization,? ?\)/,
+  );
   assert.doesNotMatch(flowSource, /form\.get\("(?:criterion|positiveLabel|negativeLabel|rationaleMode)"\)/);
 });
 
@@ -177,8 +191,8 @@ test("review setup uses one duration control for the frozen response deadline", 
   // The localised labels and translator must reach the validator, or the field
   // renders a German label above an English range error.
   assert.match(flowSource, /buildReviewTimingRequestProfile\(expertiseProfile, reviewTiming, \{/);
-  assert.match(flowSource, /labels: policyCopy\.timing,/);
-  assert.match(flowSource, /t: fieldValidationCopy,/);
+  assert.match(flowCalls, /labels: policyCopy\.timing,/);
+  assert.match(flowCalls, /t: fieldValidationCopy,/);
   assert.doesNotMatch(flowSource, /Expected active review time|Effective-hourly guidance/);
   assert.doesNotMatch(flowSource, /slo\.estimatedSeconds/);
 });
@@ -238,8 +252,8 @@ test("review setup keeps governed compensation experiments behind the shared cap
   assert.match(flowSource, /allowedWorkflowKeys: automaticGrantOffer\.allowedWorkflowKeys/);
   assert.doesNotMatch(flowSource, /maxPanelAtomic|maxDailyAtomic|maxMonthlyAtomic|maxFeeBps/);
   assert.match(
-    flowSource,
-    /buildReviewCompensationConfiguration\(\s*timingProfile,\s*reviewCompensation,\s*setupLocalization,\s*\)/,
+    flowCalls,
+    /buildReviewCompensationConfiguration\( ?timingProfile, reviewCompensation, setupLocalization,? ?\)/,
   );
   assert.match(flowSource, /requestProfile: \{ \.\.\.requestProfile, privateGroupId \}/);
   assert.match(flowSource, /\s+authority,\s+/);
