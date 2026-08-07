@@ -612,31 +612,22 @@ customer content, in which jurisdiction.* Have that answer written down.
   full key-set and placeholder parity. It was listed here as unbuilt. What is missing is a
   *terminology and register* guard — see 5.5.
 
-### 5.5 The German UI is complete but not consistent
+### 5.5 The German terminology still splits, though the register no longer does
 
-Key parity is exact at 3,988 leaves and there is **no numeric, date or legal-citation
-divergence** between the languages. Three problems sit on top of that:
+Key parity is exact and there is **no numeric, date or legal-citation divergence** between
+the languages. The register split is closed: 267 strings across the five signed-in
+catalogues moved to formal address, so the buyer is no longer greeted with *Sie* on the
+website and *du* the moment they sign in. A grammar-based guard test keeps it that way.
 
-- **The register splits exactly along the pitch boundary.** German marketing and legal copy
-  is ~200 formal *Sie*; the signed-in product is largely informal *du* — 76 in agents, 44 in
-  review, 35 in account. The buyer is addressed as *Sie* on the website and as *du* the
-  moment they sign in. For Mittelstand and enterprise this is the fastest credibility signal
-  in the product and it is mechanical to fix.
+Two terminology problems remain, and neither is mechanical:
+
 - **The same object has two German names.** The setup wizard says *Arbeitsbereich* 53 times;
   every other catalogue says *Workspace* 153 times. The evaluator creates one thing and is
   then shown another.
 - **The core deliverable has four German nouns** — *Belegpaket*, *Nachweispaket*,
   *Entscheidungspaket*, *Prüfnachweisarchiv* — and two English ones on a single screen.
 
-A catalogue test in the shape of the existing parity test would pin both register and
-terminology permanently.
-
-**Measured while fixing the wizard errors:** across `de/agents.json` informal forms
-outnumber formal roughly 58 to 22, and the `setupFlow` namespace is predominantly *du*. The
-twenty-six error strings added there use *Sie*, matching the marketing and legal register
-and the direction this item recommends — so they are currently the outliers inside their own
-namespace. That is the right direction and the wrong order: the namespace should move, not
-the new strings.
+A catalogue test in the shape of the register guard would pin terminology permanently.
 
 ### 5.6 The German DPA drops qualifiers the English carries
 
@@ -1014,11 +1005,16 @@ over-claim costs a slide; an unevidenced TOM annex is a term of a signed AVV.
 The admin/impersonation plugin, the raw error objects on the API error path, and the retired
 web3 origins in the CSP are closed. Three remain:
 
-- **No rate limiting on authentication.** The DB-backed limiter is well built and consumed by
-  six route files; `betterAuth()` configures no `rateLimit` and no `secondaryStorage`, so the
-  default is in-memory — per-lambda on Vercel, which is not a limit. Nothing throttles
-  *requesting* email codes. Email-bombing an arbitrary address is a standard finding, and the
-  limiter already exists. **This is now the highest-value security item on the list.**
+- **Email bombing is still open, and this document had the reason wrong.** Authentication was
+  never unthrottled: Better Auth applies its default rules in production — sign-in 3 per 10s,
+  email code 3 per 60s. The storage was the defect and is fixed; counters now live in the
+  database rather than in each lambda. What remains is that the bucket is keyed on IP and
+  path, not on the target address, so a distributed caller can still bomb an arbitrary inbox.
+  The interception point already exists at `/api/auth/better/[...all]`, which reads
+  `body.email` for exactly this route. It must fail open.
+- **`/api/auth/exchange` writes a hash-chained audit row per anonymous failure**, with no
+  session and no limiter, and every write takes `FOR UPDATE` on one head row — so concurrent
+  callers serialise on a single lock and the table grows unbounded. Not previously recorded.
 - **CSP reporting exists now but has no rate limit.** `report-to` and `report-uri` both
   ship to a same-origin endpoint. It is unauthenticated by necessity and bounded only by a
   content-type check and a 16 KiB cap, so a determined caller can still fill the log. The
