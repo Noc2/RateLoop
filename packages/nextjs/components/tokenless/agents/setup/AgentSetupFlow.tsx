@@ -59,6 +59,7 @@ import {
   buildReviewTimingRequestProfile,
   reviewTimingFormValues,
 } from "./reviewTiming";
+import type { SetupLocalization } from "./setupMessages";
 import { InfoPopover } from "~~/components/tokenless/InfoPopover";
 import { useRateLoopNotifications } from "~~/components/tokenless/RateLoopNotificationProvider";
 import { humanReviewConfirmationMessage } from "~~/components/tokenless/agents/humanReviewConfirmation";
@@ -136,8 +137,12 @@ function automaticGrantReady(offer: WorkspaceAgentSetupView["capabilities"]["aut
   return Boolean(offer?.available && offer.integrationId && offer.allowedWorkflowKeys.length > 0);
 }
 
-function draftAutomaticSendingEligibility(draft: AgentSetupReviewDraft | null | undefined, grantAvailable: boolean) {
-  const values = reviewCompensationFormValues(draft?.requestProfile, draft?.authority);
+function draftAutomaticSendingEligibility(
+  draft: AgentSetupReviewDraft | null | undefined,
+  grantAvailable: boolean,
+  localization?: SetupLocalization,
+) {
+  const values = reviewCompensationFormValues(draft?.requestProfile, draft?.authority, localization);
   return setupAutomaticSendingEligibility({
     audience: draft?.requestProfile.audience ?? "private_invited",
     compensationMode: values.compensationMode,
@@ -146,14 +151,18 @@ function draftAutomaticSendingEligibility(draft: AgentSetupReviewDraft | null | 
   });
 }
 
-function reviewCompensationValues(draft: AgentSetupReviewDraft | null | undefined, grantAvailable: boolean) {
-  const values = reviewCompensationFormValues(draft?.requestProfile, draft?.authority);
+function reviewCompensationValues(
+  draft: AgentSetupReviewDraft | null | undefined,
+  grantAvailable: boolean,
+  localization?: SetupLocalization,
+) {
+  const values = reviewCompensationFormValues(draft?.requestProfile, draft?.authority, localization);
   if (draft?.selection.mode === "manual") return { ...values, authority: "check_only" as const };
   return {
     ...values,
     authority: reconcileSetupAutomaticAuthority(
       values.authority,
-      draftAutomaticSendingEligibility(draft, grantAvailable),
+      draftAutomaticSendingEligibility(draft, grantAvailable, localization),
     ).authority,
   };
 }
@@ -161,11 +170,14 @@ function reviewCompensationValues(draft: AgentSetupReviewDraft | null | undefine
 function savedAutomaticAuthorityNeedsFallback(
   draft: AgentSetupReviewDraft | null | undefined,
   grantAvailable: boolean,
+  localization?: SetupLocalization,
 ) {
   if (draft?.selection.mode === "manual") return false;
-  const values = reviewCompensationFormValues(draft?.requestProfile, draft?.authority);
-  return reconcileSetupAutomaticAuthority(values.authority, draftAutomaticSendingEligibility(draft, grantAvailable))
-    .changed;
+  const values = reviewCompensationFormValues(draft?.requestProfile, draft?.authority, localization);
+  return reconcileSetupAutomaticAuthority(
+    values.authority,
+    draftAutomaticSendingEligibility(draft, grantAvailable, localization),
+  ).changed;
 }
 
 class SetupRequestError extends Error {
@@ -210,6 +222,12 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   // sentence in both surfaces rather than growing a second wording.
   const fieldValidationCopy = useAgentTranslations("reviewEditor");
   const policyCopy = useLocalizedReviewPolicyCopy();
+  // One object threaded into every step builder so each validation error is
+  // raised in the reader's language, matching the label rendered above it.
+  const setupLocalization = useMemo(
+    () => ({ editor: fieldValidationCopy, flow: t, policy: policyCopy }),
+    [fieldValidationCopy, policyCopy, t],
+  );
   const router = useRouter();
   const reviewAudienceOptions = (
     [
@@ -294,12 +312,14 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     reviewCompensationValues(
       initialSetup.reviewDraft,
       automaticGrantReady(initialSetup.capabilities.automaticGrantOffer),
+      setupLocalization,
     ),
   );
   const [authorityAdjustmentNotice, setAuthorityAdjustmentNotice] = useState<string | null>(() =>
     savedAutomaticAuthorityNeedsFallback(
       initialSetup.reviewDraft,
       automaticGrantReady(initialSetup.capabilities.automaticGrantOffer),
+      setupLocalization,
     )
       ? t("automaticFallback")
       : null,
@@ -676,11 +696,13 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
 
   useEffect(() => {
     const grantAvailable = automaticGrantReady(setup.capabilities.automaticGrantOffer);
-    setReviewCompensation(reviewCompensationValues(setup.reviewDraft, grantAvailable));
+    setReviewCompensation(reviewCompensationValues(setup.reviewDraft, grantAvailable, setupLocalization));
     setAuthorityAdjustmentNotice(
-      savedAutomaticAuthorityNeedsFallback(setup.reviewDraft, grantAvailable) ? t("automaticFallback") : null,
+      savedAutomaticAuthorityNeedsFallback(setup.reviewDraft, grantAvailable, setupLocalization)
+        ? t("automaticFallback")
+        : null,
     );
-  }, [setup.capabilities.automaticGrantOffer, setup.reviewDraft, t]);
+  }, [setup.capabilities.automaticGrantOffer, setup.reviewDraft, setupLocalization, t]);
 
   useEffect(() => {
     if (currentStep !== "connect" || !ACTIVE_CONNECTION_STATES.has(setup.connection.status ?? "")) return;
@@ -808,6 +830,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     let requirement: ReviewerExpertiseRequirement;
     try {
       requirement = requirementForDefinition({
+        localization: setupLocalization,
         audience: reviewAudience.audience,
         definition,
         panelSize: reviewTiming.panelSize,
@@ -1086,19 +1109,24 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     try {
       const draft = setup.reviewDraft;
       if (!draft) throw new Error(completion("setupUnavailable"));
-      const selection = buildReviewFrequencySelection(draft.selection, reviewFrequency);
+      const selection = buildReviewFrequencySelection(draft.selection, reviewFrequency, setupLocalization);
       const audienceProfile = buildReviewAudienceRequestProfile(draft.requestProfile, reviewAudience);
-      const criterionProfile = buildReviewCriterionRequestProfile(audienceProfile, reviewCriterion);
+      const criterionProfile = buildReviewCriterionRequestProfile(audienceProfile, reviewCriterion, setupLocalization);
       const expertiseProfile = buildReviewExpertiseRequestProfile(
         criterionProfile,
         reviewExpertise,
         reviewTiming.panelSize,
+        setupLocalization,
       );
       const timingProfile = buildReviewTimingRequestProfile(expertiseProfile, reviewTiming, {
         labels: policyCopy.timing,
         t: fieldValidationCopy,
       });
-      const compensationConfiguration = buildReviewCompensationConfiguration(timingProfile, reviewCompensation);
+      const compensationConfiguration = buildReviewCompensationConfiguration(
+        timingProfile,
+        reviewCompensation,
+        setupLocalization,
+      );
       const requestProfile = compensationConfiguration.requestProfile;
       const authority = selection.mode === "manual" ? "check_only" : compensationConfiguration.authority;
       const finalAutomaticEligibility = setupAutomaticSendingEligibility({
@@ -1180,7 +1208,10 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 purpose: "People invited to review this workspace's private material.",
                 policy: {
                   defaultCompensation: "unpaid",
-                  dataClassifications: privateClassificationsThrough(reviewAudience.privateSensitivity),
+                  dataClassifications: privateClassificationsThrough(
+                    reviewAudience.privateSensitivity,
+                    setupLocalization,
+                  ),
                 },
               }),
               credentials: "same-origin",
@@ -1197,6 +1228,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
       // the authoritative binding version so Retry does not resend a stale expectedBindingVersion
       // that the server would permanently reject (AUD-14).
       await saveReviewConfigurationAndAdvance({
+        localization: setupLocalization,
         putHumanReviewConfiguration: async () => {
           const ownerView = await readJson(
             await fetch(

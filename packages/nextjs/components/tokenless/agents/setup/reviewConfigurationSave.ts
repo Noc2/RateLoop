@@ -10,6 +10,7 @@
  * one. The caller supplies the concrete network operations, which keeps this logic pure and
  * directly testable.
  */
+import { type SetupLocalization, setupMessages } from "./setupMessages";
 import type { WorkspaceAgentSetupView } from "~~/lib/tokenless/workspaceAgentSetup";
 
 export type ReviewConfigurationSaveDeps = {
@@ -23,6 +24,8 @@ export type ReviewConfigurationSaveDeps = {
   adoptAuthoritativeSetup: (setup: WorkspaceAgentSetupView) => void;
   /** Adopt a confirmed binding revision immediately, before the setup advance. */
   adoptBindingRevision: (bindingRevision: number) => void;
+  /** Localized copy for the one error this helper raises itself. Falls back to English. */
+  localization?: SetupLocalization;
 };
 
 export async function saveReviewConfigurationAndAdvance(deps: ReviewConfigurationSaveDeps): Promise<void> {
@@ -30,7 +33,7 @@ export async function saveReviewConfigurationAndAdvance(deps: ReviewConfiguratio
   try {
     const ownerView = await deps.putHumanReviewConfiguration();
     if (!Number.isSafeInteger(ownerView.bindingRevision) || ownerView.bindingRevision < 1) {
-      throw new Error("The saved review configuration could not be confirmed.");
+      throw new Error(setupMessages(deps.localization).configurationUnconfirmed());
     }
     savedBindingRevision = ownerView.bindingRevision;
     // The binding is now advanced. Adopt it immediately so that if the wizard advance below fails,

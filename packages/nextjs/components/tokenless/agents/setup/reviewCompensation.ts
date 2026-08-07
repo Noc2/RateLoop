@@ -1,5 +1,5 @@
 import type { ReviewRequestProfileInput } from "./reviewCriterion";
-import { reviewPolicyCopy } from "~~/components/tokenless/agents/reviewPolicyCopy";
+import { type SetupLocalization, type SetupMessages, setupMessages } from "./setupMessages";
 import type { AgentSetupReviewDraft } from "~~/lib/tokenless/workspaceAgentSetup";
 
 type ReviewRequestProfile = AgentSetupReviewDraft["requestProfile"];
@@ -21,26 +21,28 @@ const MAX_USDC_ATOMIC = (1n << 256n) - 1n;
 const POSITIVE_ATOMIC_PATTERN = /^[1-9][0-9]*$/u;
 const USDC_DECIMAL_PATTERN = /^([0-9]+)(?:\.([0-9]{1,6}))?$/u;
 
-export function usdcAtomicToDecimal(value: string) {
-  if (!POSITIVE_ATOMIC_PATTERN.test(value)) throw new Error("Saved USDC bounty is invalid.");
+export function usdcAtomicToDecimal(value: string, localization?: SetupLocalization) {
+  const messages = setupMessages(localization);
+  if (!POSITIVE_ATOMIC_PATTERN.test(value)) throw new Error(messages.savedBountyInvalid());
   const atomic = BigInt(value);
-  if (atomic > MAX_USDC_ATOMIC) throw new Error("Saved USDC bounty is outside the supported range.");
+  if (atomic > MAX_USDC_ATOMIC) throw new Error(messages.savedBountyRange());
   const whole = atomic / USDC_SCALE;
   const fraction = (atomic % USDC_SCALE).toString().padStart(6, "0").replace(/0+$/u, "");
   return fraction ? `${whole}.${fraction}` : whole.toString();
 }
 
-function usdcDecimalToAtomic(value: string, panelSize: number) {
+function usdcDecimalToAtomic(value: string, panelSize: number, messages: SetupMessages) {
+  const label = messages.policy.payment.bountyPerReviewer;
   const normalized = value.trim();
   if (normalized.length > REVIEW_USDC_DECIMAL_MAX_LENGTH) {
-    throw new Error(`${reviewPolicyCopy.payment.bountyPerReviewer} is outside the supported range.`);
+    throw new Error(messages.amountRange(label));
   }
   const match = USDC_DECIMAL_PATTERN.exec(normalized);
-  if (!match) throw new Error(`${reviewPolicyCopy.payment.bountyPerReviewer} must be a decimal with up to 6 places.`);
+  if (!match) throw new Error(messages.decimalPlaces(label));
   const atomic = BigInt(match[1]!) * USDC_SCALE + BigInt((match[2] ?? "").padEnd(6, "0") || "0");
-  if (atomic <= 0n) throw new Error(`${reviewPolicyCopy.payment.bountyPerReviewer} must be greater than zero.`);
+  if (atomic <= 0n) throw new Error(messages.greaterThanZero(label));
   if (atomic > MAX_USDC_ATOMIC || atomic * BigInt(panelSize) > MAX_USDC_ATOMIC) {
-    throw new Error(`${reviewPolicyCopy.payment.bountyPerReviewer} is outside the supported range for this panel.`);
+    throw new Error(messages.amountRangeForPanel(label));
   }
   return atomic.toString();
 }
@@ -48,12 +50,17 @@ function usdcDecimalToAtomic(value: string, panelSize: number) {
 export function reviewCompensationFormValues(
   profile: ReviewRequestProfile | null | undefined,
   authority: AgentSetupReviewDraft["authority"] | null | undefined,
+  localization?: SetupLocalization,
 ): ReviewCompensationFormValues {
   return {
     compensationMode: profile?.compensationMode ?? "unpaid",
-    usdcPerReviewer: profile?.bountyPerSeatAtomic ? usdcAtomicToDecimal(profile.bountyPerSeatAtomic) : "1",
+    usdcPerReviewer: profile?.bountyPerSeatAtomic
+      ? usdcAtomicToDecimal(profile.bountyPerSeatAtomic, localization)
+      : "1",
     feedbackBonusEnabled: profile?.feedbackBonusEnabled ?? false,
-    feedbackBonusUsdc: profile?.feedbackBonusPoolAtomic ? usdcAtomicToDecimal(profile.feedbackBonusPoolAtomic) : "2",
+    feedbackBonusUsdc: profile?.feedbackBonusPoolAtomic
+      ? usdcAtomicToDecimal(profile.feedbackBonusPoolAtomic, localization)
+      : "2",
     feedbackBonusAwarderKind: profile?.feedbackBonusAwarderKind ?? "requester",
     feedbackBonusAwarderAccount: profile?.feedbackBonusAwarderAccount ?? "",
     authority: authority ?? "check_only",
@@ -63,7 +70,9 @@ export function reviewCompensationFormValues(
 export function buildReviewCompensationConfiguration(
   profile: ReviewRequestProfileInput,
   values: ReviewCompensationFormValues,
+  localization?: SetupLocalization,
 ): { requestProfile: ReviewRequestProfileInput; authority: AgentSetupReviewDraft["authority"] } {
+  const messages = setupMessages(localization);
   if (
     !(
       values.authority === "check_only" ||
@@ -71,24 +80,28 @@ export function buildReviewCompensationConfiguration(
       values.authority === "ask_automatically"
     )
   ) {
-    throw new Error("Choose a valid agent authority.");
+    throw new Error(messages.invalidAuthority());
   }
   const compensationMode = profile.audience === "private_invited" ? values.compensationMode : "usdc";
   if (!(compensationMode === "unpaid" || compensationMode === "usdc")) {
-    throw new Error("Choose a valid reviewer payment.");
+    throw new Error(messages.invalidCompensation());
   }
   const bountyPerSeatAtomic =
-    compensationMode === "unpaid" ? null : usdcDecimalToAtomic(values.usdcPerReviewer, profile.panelSize ?? 0);
+    compensationMode === "unpaid"
+      ? null
+      : usdcDecimalToAtomic(values.usdcPerReviewer, profile.panelSize ?? 0, messages);
   const feedbackBonusEnabled = values.feedbackBonusEnabled ?? false;
   const feedbackBonusAwarderKind = values.feedbackBonusAwarderKind ?? "requester";
   const feedbackBonusAwarderAccount = (values.feedbackBonusAwarderAccount ?? "").trim();
   if (!(feedbackBonusAwarderKind === "requester" || feedbackBonusAwarderKind === "designated")) {
-    throw new Error("Choose a valid Feedback Bonus awarder.");
+    throw new Error(messages.invalidBonusAwarder());
   }
   if (feedbackBonusAwarderKind === "designated" && !feedbackBonusAwarderAccount) {
-    throw new Error("Enter the authenticated account for the designated Feedback Bonus awarder.");
+    throw new Error(messages.bonusAwarderAccountRequired());
   }
-  const feedbackBonusPoolAtomic = feedbackBonusEnabled ? usdcDecimalToAtomic(values.feedbackBonusUsdc ?? "", 1) : null;
+  const feedbackBonusPoolAtomic = feedbackBonusEnabled
+    ? usdcDecimalToAtomic(values.feedbackBonusUsdc ?? "", 1, messages)
+    : null;
   return {
     requestProfile: {
       ...profile,

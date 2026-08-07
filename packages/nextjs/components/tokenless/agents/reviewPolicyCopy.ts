@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { useAgentTranslations } from "./AgentsLocaleProvider";
 
 export const reviewPolicyCopy = {
@@ -58,58 +59,67 @@ export const reviewPolicyCopy = {
   },
 } as const;
 
+/**
+ * Memoized because callers put this object in dependency arrays. Returning a
+ * fresh literal on every render made any `useEffect` depending on it re-run on
+ * every render, and one that also sets state looped until the heap gave out.
+ * `useAgentTranslations` is already stable for a given locale and namespace.
+ */
 export function useLocalizedReviewPolicyCopy() {
   const t = useAgentTranslations("reviewPolicy");
-  return {
-    question: {
-      authority: t("questionAuthority"),
-      ownerFixed: t("questionOwnerFixed"),
-      agentPerRequest: t("questionAgentPerRequest"),
-      criterion: t("questionCriterion"),
-      positiveAnswer: t("questionPositiveAnswer"),
-      negativeAnswer: t("questionNegativeAnswer"),
-      rationale: t("questionRationale"),
-      rationaleOff: t("questionRationaleOff"),
-      rationaleOptional: t("questionRationaleOptional"),
-      rationaleRequired: t("questionRationaleRequired"),
-      agentWrittenNote: t("questionAgentWrittenNote"),
-    },
-    limits: {
-      adaptiveRate: t("limitsAdaptiveRate"),
-      adaptiveSummary: t("limitsAdaptiveSummary"),
-      adaptiveConnectionHelp: t("limitsAdaptiveConnectionHelp"),
-      adaptiveDetail: t("limitsAdaptiveDetail"),
-      fixedRate: t("limitsFixedRate"),
-      maximumGap: t("limitsMaximumGap"),
-      riskTiers: t("limitsRiskTiers"),
-      confidence: t("limitsConfidence"),
-    },
-    audience: {
-      label: t("audienceLabel"),
-      invited: t("audienceInvited"),
-      rateLoopNetwork: t("audienceRateLoopNetwork"),
-    },
-    timing: {
-      responseWindow: t("timingResponseWindow"),
-      panelSize: t("timingPanelSize"),
-    },
-    payment: {
-      bounty: t("paymentBounty"),
-      noBounty: t("paymentNoBounty"),
-      addBounty: t("paymentAddBounty"),
-      bountyPerReviewer: t("paymentBountyPerReviewer"),
-      feedbackBonus: t("paymentFeedbackBonus"),
-      noBonus: t("paymentNoBonus"),
-      addBonus: t("paymentAddBonus"),
-      bonusPool: t("paymentBonusPool"),
-      awarder: t("paymentAwarder"),
-      requester: t("paymentRequester"),
-      designated: t("paymentDesignated"),
-      awarderAccount: t("paymentAwarderAccount"),
-    },
-    confirmation: {
-      title: t("confirmationTitle"),
-      action: t("confirmationAction"),
-    },
-  };
+  return useMemo(
+    () => ({
+      question: {
+        authority: t("questionAuthority"),
+        ownerFixed: t("questionOwnerFixed"),
+        agentPerRequest: t("questionAgentPerRequest"),
+        criterion: t("questionCriterion"),
+        positiveAnswer: t("questionPositiveAnswer"),
+        negativeAnswer: t("questionNegativeAnswer"),
+        rationale: t("questionRationale"),
+        rationaleOff: t("questionRationaleOff"),
+        rationaleOptional: t("questionRationaleOptional"),
+        rationaleRequired: t("questionRationaleRequired"),
+        agentWrittenNote: t("questionAgentWrittenNote"),
+      },
+      limits: {
+        adaptiveRate: t("limitsAdaptiveRate"),
+        adaptiveSummary: t("limitsAdaptiveSummary"),
+        adaptiveConnectionHelp: t("limitsAdaptiveConnectionHelp"),
+        adaptiveDetail: t("limitsAdaptiveDetail"),
+        fixedRate: t("limitsFixedRate"),
+        maximumGap: t("limitsMaximumGap"),
+        riskTiers: t("limitsRiskTiers"),
+        confidence: t("limitsConfidence"),
+      },
+      audience: {
+        label: t("audienceLabel"),
+        invited: t("audienceInvited"),
+        rateLoopNetwork: t("audienceRateLoopNetwork"),
+      },
+      timing: {
+        responseWindow: t("timingResponseWindow"),
+        panelSize: t("timingPanelSize"),
+      },
+      payment: {
+        bounty: t("paymentBounty"),
+        noBounty: t("paymentNoBounty"),
+        addBounty: t("paymentAddBounty"),
+        bountyPerReviewer: t("paymentBountyPerReviewer"),
+        feedbackBonus: t("paymentFeedbackBonus"),
+        noBonus: t("paymentNoBonus"),
+        addBonus: t("paymentAddBonus"),
+        bonusPool: t("paymentBonusPool"),
+        awarder: t("paymentAwarder"),
+        requester: t("paymentRequester"),
+        designated: t("paymentDesignated"),
+        awarderAccount: t("paymentAwarderAccount"),
+      },
+      confirmation: {
+        title: t("confirmationTitle"),
+        action: t("confirmationAction"),
+      },
+    }),
+    [t],
+  );
 }

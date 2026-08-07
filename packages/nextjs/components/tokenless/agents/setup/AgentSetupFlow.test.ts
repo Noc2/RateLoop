@@ -90,7 +90,7 @@ test("review setup distinguishes a saved policy decision from delivery authority
   assert.match(flowSource, /policyCopy\.limits\.maximumGap/);
   assert.match(flowSource, /policyCopy\.limits\.riskTiers/);
   assert.match(flowSource, /policyCopy\.limits\.confidence/);
-  assert.match(flowSource, /buildReviewFrequencySelection\(draft\.selection, reviewFrequency\)/);
+  assert.match(flowSource, /buildReviewFrequencySelection\(draft\.selection, reviewFrequency, setupLocalization\)/);
   assert.doesNotMatch(flowSource, /Choose when this agent should involve people/i);
   assert.doesNotMatch(flowSource, /reviewerAudience|contentBoundary: "private_workspace"/);
 });
@@ -130,7 +130,7 @@ test("review setup controls audience and shows only the relevant material bounda
   assert.match(localizedFlowSource, /Public, synthetic, or safely redacted material only/);
   assert.match(localizedFlowSource, /Public and hybrid network assignments currently require a guaranteed bounty/);
   assert.match(flowSource, /buildReviewAudienceRequestProfile\(draft\.requestProfile, reviewAudience\)/);
-  assert.match(flowSource, /privateClassificationsThrough\(reviewAudience\.privateSensitivity\)/);
+  assert.match(flowSource, /privateClassificationsThrough\(reviewAudience\.privateSensitivity, setupLocalization\)/);
   assert.match(flowSource, /audience === "public_network" \? null/);
 });
 
@@ -162,7 +162,7 @@ test("review setup resumes a controlled question and compact answer format", () 
   assert.match(flowSource, /value=\{reviewCriterion\.rationaleMode\}/);
   assert.match(flowSource, /maxLength=\{REVIEW_CRITERION_MAX_LENGTH\}/);
   assert.match(flowSource, /maxLength=\{REVIEW_ANSWER_LABEL_MAX_LENGTH\}/);
-  assert.match(flowSource, /buildReviewCriterionRequestProfile\(audienceProfile, reviewCriterion\)/);
+  assert.match(flowSource, /buildReviewCriterionRequestProfile\(audienceProfile, reviewCriterion, setupLocalization\)/);
   assert.doesNotMatch(flowSource, /form\.get\("(?:criterion|positiveLabel|negativeLabel|rationaleMode)"\)/);
 });
 
@@ -237,7 +237,10 @@ test("review setup keeps governed compensation experiments behind the shared cap
   assert.match(flowSource, /provision: "private_invited_unpaid"/);
   assert.match(flowSource, /allowedWorkflowKeys: automaticGrantOffer\.allowedWorkflowKeys/);
   assert.doesNotMatch(flowSource, /maxPanelAtomic|maxDailyAtomic|maxMonthlyAtomic|maxFeeBps/);
-  assert.match(flowSource, /buildReviewCompensationConfiguration\(timingProfile, reviewCompensation\)/);
+  assert.match(
+    flowSource,
+    /buildReviewCompensationConfiguration\(\s*timingProfile,\s*reviewCompensation,\s*setupLocalization,\s*\)/,
+  );
   assert.match(flowSource, /requestProfile: \{ \.\.\.requestProfile, privateGroupId \}/);
   assert.match(flowSource, /\s+authority,\s+/);
   assert.match(localizedFlowSource, /agent may prepare or fund this exact pool/i);

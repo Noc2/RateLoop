@@ -64,15 +64,22 @@ test("setup and review setup render the same canonical policy copy", () => {
 });
 
 test("canonical field names also drive setup and review-setup validation", () => {
-  for (const source of [criterionSource, timingSource, compensationSource]) {
-    assert.match(source, /reviewPolicyCopy\./);
-  }
-  assert.match(criterionSource, /reviewPolicyCopy\.question\.criterion/);
-  assert.match(criterionSource, /reviewPolicyCopy\.question\.positiveAnswer/);
-  assert.match(criterionSource, /reviewPolicyCopy\.question\.negativeAnswer/);
-  assert.match(timingSource, /reviewPolicyCopy\.timing\.responseWindow/);
-  assert.match(timingSource, /reviewPolicyCopy\.timing\.panelSize/);
-  assert.match(compensationSource, /reviewPolicyCopy\.payment\.bountyPerReviewer/);
+  // The wizard steps now read these through `messages.policy`, which is the
+  // *localized* copy when a translator is supplied and this same constant
+  // otherwise. Assert the canonical path rather than the access expression, so
+  // the intent — validation names a field exactly as the form labels it — holds
+  // whichever object supplies the string.
+  const canonical = (source: string, path: string) =>
+    assert.ok(
+      source.includes(`reviewPolicyCopy.${path}`) || source.includes(`policy.${path}`),
+      `validation must name the field with the canonical ${path}`,
+    );
+  canonical(criterionSource, "question.criterion");
+  canonical(criterionSource, "question.positiveAnswer");
+  canonical(criterionSource, "question.negativeAnswer");
+  canonical(timingSource, "timing.responseWindow");
+  canonical(timingSource, "timing.panelSize");
+  canonical(compensationSource, "payment.bountyPerReviewer");
 
   assert.doesNotMatch(
     setupSource,

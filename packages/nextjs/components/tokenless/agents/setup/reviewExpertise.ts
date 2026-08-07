@@ -1,4 +1,5 @@
 import type { ReviewRequestProfileInput } from "./reviewCriterion";
+import { type SetupLocalization, setupMessages } from "./setupMessages";
 import {
   REVIEWER_EXPERTISE,
   type ReviewerExpertiseDefinition,
@@ -37,10 +38,11 @@ export function reviewExpertiseFormValues(profile: ReviewRequestProfile | null |
 export function requirementForDefinition(input: {
   audience: ReviewRequestProfile["audience"];
   definition: ReviewerExpertiseDefinition;
+  localization?: SetupLocalization;
   panelSize: number | string;
 }): ReviewerExpertiseRequirement {
   if (input.audience === "hybrid") {
-    throw new Error("Hybrid specialist seats are not available yet.");
+    throw new Error(setupMessages(input.localization).hybridSpecialistSeats());
   }
   const reviewers = panelSize(input.panelSize);
   const network = input.audience === "public_network";
@@ -121,12 +123,13 @@ export function buildReviewExpertiseRequestProfile(
   profile: ReviewRequestProfileInput,
   values: ReviewExpertiseFormValues,
   selectedPanelSize: number | string,
+  localization?: SetupLocalization,
 ): ReviewRequestProfileInput {
   const requirements = values.needsSpecialists
     ? normalizeReviewerExpertiseRequirementsSelection(values.requirements, panelSize(selectedPanelSize))
     : [];
   if (values.needsSpecialists && requirements.length === 0) {
-    throw new Error("Choose at least one specialist area.");
+    throw new Error(setupMessages(localization).chooseSpecialist());
   }
   const reviewers = panelSize(selectedPanelSize);
   const legacyDefinitionIds = new Set<string>(

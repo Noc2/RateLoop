@@ -1,3 +1,4 @@
+import { type SetupLocalization, type SetupMessages, setupMessages } from "./setupMessages";
 import { ADAPTIVE_MONITORING_FLOOR_BPS } from "~~/lib/tokenless/adaptiveReviewPolicy";
 import type { AgentSetupReviewDraft, AgentSetupReviewMode } from "~~/lib/tokenless/workspaceAgentSetup";
 
@@ -39,32 +40,35 @@ export function reviewFrequencySummary(selection: ReviewSelection | null | undef
   return `Adaptive review, at least ${percent(selection.productionFloorBps, ADAPTIVE_MONITORING_FLOOR_BPS)}%`;
 }
 
-function percentageBps(value: string, field: string, minimumBps: number) {
+function percentageBps(value: string, field: string, minimumBps: number, messages: SetupMessages) {
   const normalized = value.trim();
   if (!/^\d{1,3}(?:\.\d{1,2})?$/u.test(normalized)) {
-    throw new Error(`${field} must be a percentage with at most two decimal places.`);
+    throw new Error(messages.percentDecimals(field));
   }
   const bps = Math.round(Number(normalized) * 100);
   if (!Number.isSafeInteger(bps) || bps < minimumBps || bps > 10_000) {
-    throw new Error(`${field} must be between ${minimumBps / 100}% and 100%.`);
+    throw new Error(messages.percentRange(field, minimumBps / 100));
   }
   return bps;
 }
 
-function optionalPercentageBps(value: string, field: string) {
-  return value.trim() ? percentageBps(value, field, 0) : null;
+function optionalPercentageBps(value: string, field: string, messages: SetupMessages) {
+  return value.trim() ? percentageBps(value, field, 0, messages) : null;
 }
 
-function maximumGap(value: string) {
-  if (!/^\d+$/u.test(value.trim())) throw new Error("Maximum outputs between reviews must be a whole number.");
+function maximumGap(value: string, messages: SetupMessages) {
+  // The label is the one rendered above the field, so the error names what the
+  // reader is looking at rather than restating it in English prose.
+  const label = messages.policy.limits.maximumGap;
+  if (!/^\d+$/u.test(value.trim())) throw new Error(messages.wholeNumber(label));
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > 10_000) {
-    throw new Error("Maximum outputs between reviews must be between 1 and 10000.");
+    throw new Error(messages.numberRange(label, 1, 10_000));
   }
   return parsed;
 }
 
-function riskTiers(value: string) {
+function riskTiers(value: string, messages: SetupMessages) {
   const tiers = [
     ...new Set(
       value
@@ -74,7 +78,7 @@ function riskTiers(value: string) {
     ),
   ];
   if (tiers.length > 20 || tiers.some(tier => !/^[a-z][a-z0-9_-]{0,63}$/u.test(tier))) {
-    throw new Error("Risk levels must be comma-separated names using letters, numbers, hyphens, or underscores.");
+    throw new Error(messages.riskTierFormat());
   }
   return tiers.sort();
 }
@@ -82,7 +86,9 @@ function riskTiers(value: string) {
 export function buildReviewFrequencySelection(
   current: ReviewSelection,
   form: ReviewFrequencyFormValues,
+  localization?: SetupLocalization,
 ): ReviewSelection {
+  const messages = setupMessages(localization);
   const next: ReviewSelection = {
     ...current,
     mode: form.mode,
@@ -94,21 +100,25 @@ export function buildReviewFrequencySelection(
     return {
       ...next,
       productionFloorBps: ADAPTIVE_MONITORING_FLOOR_BPS,
-      maximumUnreviewedGap: maximumGap(form.maximumUnreviewedGap),
+      maximumUnreviewedGap: maximumGap(form.maximumUnreviewedGap, messages),
     };
   }
   if (form.mode === "fixed") {
     return {
       ...next,
-      fixedRateBps: percentageBps(form.fixedPercent, "Fixed review rate", 1),
-      maximumUnreviewedGap: maximumGap(form.maximumUnreviewedGap),
+      fixedRateBps: percentageBps(form.fixedPercent, messages.policy.limits.fixedRate, 1, messages),
+      maximumUnreviewedGap: maximumGap(form.maximumUnreviewedGap, messages),
     };
   }
   if (form.mode === "rules") {
-    const requiredRiskTiers = riskTiers(form.requiredRiskTiers);
-    const minimumConfidenceBps = optionalPercentageBps(form.minimumConfidencePercent, "Confidence threshold");
+    const requiredRiskTiers = riskTiers(form.requiredRiskTiers, messages);
+    const minimumConfidenceBps = optionalPercentageBps(
+      form.minimumConfidencePercent,
+      messages.policy.limits.confidence,
+      messages,
+    );
     if (requiredRiskTiers.length === 0 && minimumConfidenceBps === null) {
-      throw new Error("Add at least one risk level or confidence condition.");
+      throw new Error(messages.ruleConditionRequired());
     }
     return { ...next, requiredRiskTiers, minimumConfidenceBps };
   }
