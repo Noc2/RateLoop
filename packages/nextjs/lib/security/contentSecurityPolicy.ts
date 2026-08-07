@@ -4,8 +4,17 @@ type ContentSecurityPolicyOptions = {
   frameRedirectOrigins?: string[];
   isDev?: boolean;
   isVercelLiveEnabled?: boolean;
+  isWorldIdEnabled?: boolean;
   nonce?: string;
 };
+
+// The World ID widget is the only browser code that needs WebAssembly or a
+// cross-origin font, and it renders only where `isWorldIdAssuranceEnabled()`
+// does — behind TOKENLESS_NETWORK_PANELS_ENABLED. Gating its sources on the same
+// flag keeps the policy exactly as tight as it is today wherever the widget
+// cannot appear, which is the default.
+const WORLD_ID_FONT_ORIGIN = "https://world-id-assets.com";
+const WORLD_ID_BRIDGE_ORIGIN = "https://bridge.worldcoin.org";
 
 const AGENT_OAUTH_AUTHORIZE_PATH = "/agent/oauth/authorize";
 
@@ -68,6 +77,13 @@ export function resolveRuntimeContentSecurityPolicyOptions(): ContentSecurityPol
     baseRpcUrl: process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL,
     isDev: process.env.NODE_ENV === "development",
     isVercelLiveEnabled: process.env.VERCEL_ENV === "preview" || process.env.VERCEL_ENV === "development",
+    // Either flag activating the lane is what the production readiness check
+    // treats as "enabled", so the policy grants on the same condition. Erring
+    // toward granting matters here: a header that is too tight breaks the
+    // widget outright, and both values are non-secret feature switches.
+    isWorldIdEnabled:
+      process.env.TOKENLESS_NETWORK_PANELS_ENABLED === "true" ||
+      process.env.NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED === "true",
   };
 }
 
@@ -77,6 +93,13 @@ export function buildContentSecurityPolicy(options: ContentSecurityPolicyOptions
     "'self'",
     options.nonce ? `'nonce-${options.nonce}'` : undefined,
     options.isDev ? "'unsafe-eval'" : undefined,
+    // @worldcoin/idkit-core compiles idkit_wasm_bg.wasm through
+    // WebAssembly.instantiateStreaming, which the CSP treats as script
+    // evaluation. The widget's default bridge URL lives inside that binary, so
+    // without this the verification flow cannot start at all. Development
+    // already grants 'unsafe-eval', a superset, which is exactly why this gap
+    // is invisible outside a production build.
+    options.isWorldIdEnabled && !options.isDev ? "'wasm-unsafe-eval'" : undefined,
     ...vercelLive,
   ]);
   const connectSources = unique([
@@ -89,11 +112,19 @@ export function buildContentSecurityPolicy(options: ContentSecurityPolicyOptions
     "https://*.walletconnect.com",
     "https://*.walletconnect.org",
     "wss://*.walletconnect.org",
-    "https://bridge.worldcoin.org",
+    options.isWorldIdEnabled ? WORLD_ID_BRIDGE_ORIGIN : undefined,
     httpsOrigin(options.baseRpcUrl),
     ...(options.isVercelLiveEnabled ? ["https://vercel.live", "https://*.pusher.com", "wss://*.pusher.com"] : []),
     ...(options.isDev ? ["http://localhost:*", "http://127.0.0.1:*"] : []),
   ]);
+  // @worldcoin/idkit injects five @font-face rules for TWK Lausanne into the
+  // modal's own <style> element. Self-hosting them was considered and rejected:
+  // the URLs are hardcoded absolutes inside the published bundle, the widget's
+  // style element renders after our global stylesheet so an override cannot
+  // reliably win, and TWK Lausanne is a licensed commercial typeface we have no
+  // right to re-serve from our own origin. The rules use font-display: swap, so
+  // this is presentation only — the widget works either way.
+  const fontSources = unique(["'self'", options.isWorldIdEnabled ? WORLD_ID_FONT_ORIGIN : undefined]);
   const formActionSources = unique(["'self'", ...(options.formActionRedirectOrigins ?? [])]);
   const frameSources = unique([
     "'self'",
@@ -109,7 +140,7 @@ export function buildContentSecurityPolicy(options: ContentSecurityPolicyOptions
     "default-src 'self'",
     `script-src ${scriptSources.join(" ")}`,
     "style-src 'self' 'unsafe-inline'",
-    "font-src 'self'",
+    `font-src ${fontSources.join(" ")}`,
     "img-src 'self' data: blob: https://*.thirdweb.com",
     `connect-src ${connectSources.join(" ")}`,
     `frame-src ${frameSources.join(" ")}`,

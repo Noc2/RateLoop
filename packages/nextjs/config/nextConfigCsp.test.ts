@@ -33,18 +33,22 @@ async function getContentSecurityPolicy() {
   });
 }
 
+function directiveOf(csp: string, name: string) {
+  return csp
+    .split(";")
+    .map(directive => directive.trim())
+    .find(directive => directive.startsWith(`${name} `));
+}
+
 async function getGlobalHeaderValue(key: string) {
   const headers = typeof nextConfig.headers === "function" ? await nextConfig.headers() : [];
   const globalHeaders = headers.find(header => header.source === "/(.*)")?.headers ?? [];
   return globalHeaders.find(header => header.key === key)?.value;
 }
 
-test("connect-src includes only the tokenless app, Base RPC, auth, and World ID bridge", async () => {
+test("connect-src includes only the tokenless app, Base RPC, and the wallet connector", async () => {
   const csp = await getContentSecurityPolicy();
-  const connectSrc = csp
-    .split(";")
-    .map(directive => directive.trim())
-    .find(directive => directive.startsWith("connect-src "));
+  const connectSrc = directiveOf(csp, "connect-src");
 
   assert.ok(connectSrc);
   assert.match(connectSrc, /(?:^|\s)'self'(?:\s|$)/);
@@ -52,8 +56,40 @@ test("connect-src includes only the tokenless app, Base RPC, auth, and World ID 
   assert.match(connectSrc, /(?:^|\s)https:\/\/sepolia\.base\.org(?:\s|$)/);
   assert.match(connectSrc, /(?:^|\s)https:\/\/\*\.thirdweb\.com(?:\s|$)/);
   assert.match(connectSrc, /(?:^|\s)wss:\/\/\*\.walletconnect\.org(?:\s|$)/);
-  assert.match(connectSrc, /(?:^|\s)https:\/\/bridge\.worldcoin\.org(?:\s|$)/);
   assert.doesNotMatch(connectSrc, /developer\.world|drand|blob\.vercel-storage/);
+});
+
+test("the World ID widget's three sources appear exactly where the widget can render", async () => {
+  // Every one of these exists for @worldcoin/idkit and nothing else, and the
+  // widget renders only behind TOKENLESS_NETWORK_PANELS_ENABLED. With the lane
+  // off — the default — the production policy must not carry any of them.
+  const off = buildContentSecurityPolicy({ nonce: "testnonce" });
+  assert.doesNotMatch(directiveOf(off, "script-src") ?? "", /wasm-unsafe-eval/u);
+  assert.equal(directiveOf(off, "font-src"), "font-src 'self'");
+  assert.doesNotMatch(directiveOf(off, "connect-src") ?? "", /worldcoin/u);
+
+  const on = buildContentSecurityPolicy({ isWorldIdEnabled: true, nonce: "testnonce" });
+  // idkit-core compiles idkit_wasm_bg.wasm via WebAssembly.instantiateStreaming,
+  // which without this token fails closed and the verification flow never starts.
+  assert.match(directiveOf(on, "script-src") ?? "", /(?:^|\s)'wasm-unsafe-eval'(?:\s|$)/u);
+  // The five TWK Lausanne @font-face rules the widget injects are absolute URLs
+  // inside the published bundle, so they cannot be served from our own origin.
+  assert.match(directiveOf(on, "font-src") ?? "", /(?:^|\s)https:\/\/world-id-assets\.com(?:\s|$)/u);
+  assert.match(directiveOf(on, "connect-src") ?? "", /(?:^|\s)https:\/\/bridge\.worldcoin\.org(?:\s|$)/u);
+
+  // Enabling the widget must not loosen script-src any further than the one token.
+  assert.doesNotMatch(directiveOf(on, "script-src") ?? "", /(?:^|\s)'unsafe-eval'(?:\s|$)/u);
+  assert.doesNotMatch(directiveOf(on, "script-src") ?? "", /unsafe-inline/u);
+});
+
+test("development already grants a superset, so it does not restate wasm-unsafe-eval", () => {
+  // 'unsafe-eval' covers WebAssembly compilation. Emitting both would suggest
+  // the two are independent, and it is precisely this masking that hid the gap
+  // from every local run.
+  const dev = buildContentSecurityPolicy({ isDev: true, isWorldIdEnabled: true, nonce: "testnonce" });
+  const scriptSrc = directiveOf(dev, "script-src") ?? "";
+  assert.match(scriptSrc, /(?:^|\s)'unsafe-eval'(?:\s|$)/u);
+  assert.doesNotMatch(scriptSrc, /wasm-unsafe-eval/u);
 });
 
 test("connect-src does not advertise chains or relays no shipped code reaches", async () => {
