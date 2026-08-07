@@ -8,6 +8,8 @@
     "settings": "Einstellungen"
   },
   "signIn": {
+    "reviewTitle": "Anmelden, um zugewiesene Aufgaben zu sehen",
+    "historyTitle": "Anmelden, um den Prüfverlauf zu sehen",
     "inboxTitle": "Anmelden, um den Posteingang zu sehen",
     "profileTitle": "Anmelden, um dein Profil zu sehen",
     "settingsTitle": "Anmelden, um Einstellungen zu verwalten"

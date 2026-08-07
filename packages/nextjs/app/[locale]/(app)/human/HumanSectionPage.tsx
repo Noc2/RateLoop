@@ -48,6 +48,17 @@ export async function HumanSectionPage({
   }
 
   if (navigation === "discover" || navigation === "history") {
+    // Gate on the server, as the account tabs already do. Rendering
+    // AnswerPageClient first meant a signed-out visitor got the tab strip and a
+    // loading skeleton for several seconds before a card appeared below them,
+    // while every other human surface showed a centered card immediately and no
+    // navigation at all. Same section, two different pages.
+    const reviewSession = await findAuthSession((await cookies()).get(AUTH_SESSION_COOKIE)?.value);
+    if (!reviewSession) {
+      return (
+        <HumanAccountSignInPrompt returnTo={humanAccountReturnTo({ eligibility, tab: navigation })} tab={navigation} />
+      );
+    }
     const invitation = firstQueryValue(searchParams.invite);
     return (
       <AnswerPageClient

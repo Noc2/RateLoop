@@ -1,3 +1,4 @@
+import type { HumanNavigation } from "./humanNavigation";
 import { humanSectionHref } from "./humanNavigation";
 
 export const HUMAN_PROFILE_SECTIONS = [
@@ -17,7 +18,9 @@ export function resolveHumanProfileSection(value?: string): HumanProfileSection 
 export function humanAccountReturnTo(input: {
   eligibility?: string;
   section?: HumanProfileSection;
-  tab: "inbox" | "profile" | "settings";
+  // Every gated human surface, not only the account tabs: review and history
+  // are gated on the server too, so they return here through the same helper.
+  tab: HumanNavigation;
 }) {
   const params = new URLSearchParams();
   if (input.section) params.set("section", input.section);

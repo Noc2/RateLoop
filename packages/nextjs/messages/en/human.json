@@ -8,6 +8,8 @@
     "settings": "Settings"
   },
   "signIn": {
+    "reviewTitle": "Sign in to view assigned work",
+    "historyTitle": "Sign in to view your review history",
     "inboxTitle": "Sign in to view your inbox",
     "profileTitle": "Sign in to view your profile",
     "settingsTitle": "Sign in to manage settings"
