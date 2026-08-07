@@ -272,7 +272,7 @@ function SettlementRecoveryControls() {
           ))}
         </SelectField>
         <Field
-          containerClassName="rateloop-secondary-action mt-7 cursor-pointer self-start rounded-lg px-4 py-2 text-sm"
+          containerClassName="rateloop-secondary-surface mt-7 cursor-pointer self-start rounded-lg px-4 py-2 text-sm"
           className="sr-only"
           label={t("import")}
           labelClassName="m-0 inline text-sm font-normal text-inherit"

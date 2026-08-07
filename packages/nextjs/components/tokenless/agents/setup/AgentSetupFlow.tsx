@@ -1340,7 +1340,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   const backButton = back ? (
     <Button
       variant="secondary"
-      className="rateloop-secondary-action rateloop-back-action min-h-11 w-full gap-2 sm:w-auto"
+      className="rateloop-back-action min-h-11 w-full gap-2 sm:w-auto"
       type="button"
       disabled={busy}
       onClick={() => void navigateToStep(back)}

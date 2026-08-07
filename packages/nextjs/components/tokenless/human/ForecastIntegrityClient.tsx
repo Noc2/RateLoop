@@ -190,7 +190,7 @@ export function ForecastIntegrityClient() {
                           <p className="text-xs text-warning">{t("appealOpen")}</p>
                           <button
                             type="button"
-                            className="rateloop-secondary-action rounded-lg px-3 py-2 text-sm"
+                            className="btn rateloop-secondary-action min-h-9 rounded-lg px-3 py-2 text-sm"
                             disabled={busyFinding === finding.findingId}
                             onClick={() => void withdraw(finding.openAppealId!, finding.findingId)}
                           >
@@ -216,7 +216,7 @@ export function ForecastIntegrityClient() {
                           </SelectField>
                           <button
                             type="button"
-                            className="rateloop-secondary-action rounded-lg px-3 py-2 text-sm"
+                            className="btn rateloop-secondary-action min-h-9 rounded-lg px-3 py-2 text-sm"
                             disabled={busyFinding === finding.findingId}
                             onClick={() => void appeal(finding.findingId)}
                           >

@@ -364,6 +364,21 @@
     rateloop-gradient-border-orbit 2.4s linear 2;
 }
 
+/*
+ * The secondary treatment for elements that are not buttons - a clickable label
+ * wrapping a control, for instance. `.btn.rateloop-secondary-action` is compound
+ * on purpose, so an element that carries only the second class gets no background
+ * at all; this gives those surfaces the same fill without button geometry.
+ */
+.rateloop-secondary-surface {
+  background: var(--rateloop-secondary-button-bg);
+  color: var(--color-base-content);
+}
+
+.rateloop-secondary-surface:hover {
+  background: var(--rateloop-secondary-button-bg-hover);
+}
+
 .btn.rateloop-secondary-action,
 .btn.btn-outline,
 .btn.btn-secondary:not(.btn-circle):not(.btn-square) {

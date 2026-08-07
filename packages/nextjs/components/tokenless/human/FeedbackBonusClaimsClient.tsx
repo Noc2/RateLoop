@@ -281,7 +281,7 @@ function FeedbackBonusClaimsControls() {
       ) : null}
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <Field
-          containerClassName="rateloop-secondary-action cursor-pointer rounded-lg px-4 py-2 text-sm"
+          containerClassName="rateloop-secondary-surface cursor-pointer rounded-lg px-4 py-2 text-sm"
           className="sr-only"
           label={t("import")}
           labelClassName="m-0 inline text-sm font-normal text-inherit"

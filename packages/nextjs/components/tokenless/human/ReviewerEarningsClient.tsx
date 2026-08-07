@@ -64,7 +64,7 @@ export function ReviewerEarningsClient() {
         </div>
         <button
           type="button"
-          className="rateloop-secondary-action rounded-lg px-3 py-2 text-sm"
+          className="btn rateloop-secondary-action min-h-9 rounded-lg px-3 py-2 text-sm"
           onClick={() => void refresh()}
           disabled={loading}
         >
