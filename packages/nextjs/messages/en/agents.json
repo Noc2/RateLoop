@@ -19,8 +19,7 @@
     "billing": "Settings"
   },
   "signIn": {
-    "title": "Agents",
-    "description": "Sign in to manage agents and reviews.",
+    "title": "Sign in to manage agents and reviews",
     "docs": "Agent docs"
   },
   "workspace": {

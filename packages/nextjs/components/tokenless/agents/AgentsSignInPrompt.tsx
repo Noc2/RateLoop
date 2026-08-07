@@ -17,7 +17,6 @@ export function AgentsSignInPrompt({ returnTo }: { returnTo: string }) {
 
   return (
     <SignedOutGate
-      description={t("description")}
       returnTo={browserReturnTo}
       secondaryAction={
         <Button as={Link} href="/docs/ai" size="lg" variant="secondary">

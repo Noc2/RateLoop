@@ -19,8 +19,7 @@
     "billing": "Einstellungen"
   },
   "signIn": {
-    "title": "Agenten",
-    "description": "Melden Sie sich an, um Agenten und Prüfungen zu verwalten.",
+    "title": "Anmelden, um Agenten und Prüfungen zu verwalten",
     "docs": "Agent-Dokumentation"
   },
   "workspace": {

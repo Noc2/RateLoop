@@ -22,9 +22,14 @@ test("anonymous visitors see the Agents sign-in prompt without exposing workspac
   assert.match(promptSource, /agentSignInReturnToWithHash\(returnTo, window\.location\.hash\)/);
   assert.match(promptSource, /title=\{t\("title"\)\}/);
   assert.doesNotMatch(promptSource, /For Agents/);
-  assert.match(promptSource, /description=\{t\("description"\)\}/);
-  assert.match(englishMessages, /Sign in to manage agents and reviews\./);
-  assert.match(germanMessages, /Melden Sie sich an, um Agenten und Prüfungen zu verwalten\./);
+  // The card used to be titled "Agents" — character for character the sidebar
+  // label already highlighted beside it — with the instruction demoted to a
+  // description. It now carries one instruction title, the same shape the five
+  // human gates use, and no description to repeat it.
+  assert.doesNotMatch(promptSource, /description=/);
+  assert.match(englishMessages, /Sign in to manage agents and reviews/);
+  assert.match(germanMessages, /Anmelden, um Agenten und Prüfungen zu verwalten/);
+  assert.doesNotMatch(englishMessages, /"title": "Agents"/);
   assert.doesNotMatch(promptSource, /AgentWorkspaceExample|Example workspace|preview=/);
   assert.match(promptSource, /href="\/docs\/ai"/);
   assert.match(promptSource, /\{t\("docs"\)\}/);
