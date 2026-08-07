@@ -16,6 +16,21 @@ type ContentSecurityPolicyOptions = {
 const WORLD_ID_FONT_ORIGIN = "https://world-id-assets.com";
 const WORLD_ID_BRIDGE_ORIGIN = "https://bridge.worldcoin.org";
 
+/**
+ * Where browsers send violation reports. Same-origin, so a report never leaves
+ * the deployment and no third party learns which pages a visitor loaded.
+ * `report-to` is the current Reporting API and needs the companion
+ * `Reporting-Endpoints` response header; `report-uri` is deprecated but is still
+ * the only one several engines honour, so both ship.
+ */
+export const CSP_REPORT_PATH = "/api/security/csp-report";
+export const CSP_REPORT_GROUP = "csp-endpoint";
+
+/** The `Reporting-Endpoints` header value that makes `report-to` resolvable. */
+export function contentSecurityPolicyReportingEndpoints() {
+  return `${CSP_REPORT_GROUP}="${CSP_REPORT_PATH}"`;
+}
+
 const AGENT_OAUTH_AUTHORIZE_PATH = "/agent/oauth/authorize";
 
 function httpsOrigin(value: string | undefined) {
@@ -148,5 +163,7 @@ export function buildContentSecurityPolicy(options: ContentSecurityPolicyOptions
     "base-uri 'self'",
     `form-action ${formActionSources.join(" ")}`,
     "frame-ancestors 'none'",
+    `report-to ${CSP_REPORT_GROUP}`,
+    `report-uri ${CSP_REPORT_PATH}`,
   ].join("; ");
 }

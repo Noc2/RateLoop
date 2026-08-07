@@ -22,6 +22,7 @@ import {
   readPaidEligibilityRequestBody,
 } from "~~/app/api/rater/eligibility/route";
 import { readPaidVoucherRequestBody } from "~~/app/api/rater/vouchers/route";
+import { MAX_CSP_REPORT_BODY_BYTES, readCspReportBody } from "~~/app/api/security/csp-report/route";
 import { API_JSON_REQUEST_BODY_MAX_BYTES } from "~~/lib/tokenless/apiRequestBody";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -54,6 +55,9 @@ const consumers: { errorCode?: string; limit: number; name: string; read: BodyRe
   { limit: MAX_RATER_COMMIT_BODY_BYTES, name: "rater commit", read: readRaterCommitBody },
   { limit: API_JSON_REQUEST_BODY_MAX_BYTES, name: "paid voucher", read: readPaidVoucherRequestBody },
   { limit: MAX_WORM_EXPORT_REQUEST_BODY_BYTES, name: "WORM export artifact", read: readWormExportRequestBody },
+  // Unauthenticated, so its cap is the only thing standing between an anonymous
+  // caller and an unbounded read.
+  { limit: MAX_CSP_REPORT_BODY_BYTES, name: "CSP violation report", read: readCspReportBody },
 ];
 
 function request(contentLength: number) {

@@ -3,6 +3,7 @@ import { stripLocalePrefix } from "./i18n/config";
 import { routing } from "./i18n/routing";
 import {
   buildContentSecurityPolicy,
+  contentSecurityPolicyReportingEndpoints,
   createContentSecurityPolicyNonce,
   resolveAgentOAuthFormActionRedirectOrigins,
   resolveAgentOAuthFrameRedirectOrigins,
@@ -44,6 +45,9 @@ export function middleware(request: NextRequest) {
     : handleI18nRouting(new NextRequest(request, { headers: requestHeaders }));
 
   response.headers.set("Content-Security-Policy", contentSecurityPolicy);
+  // `report-to` in the policy above only resolves when this companion header
+  // names the same group.
+  response.headers.set("Reporting-Endpoints", contentSecurityPolicyReportingEndpoints());
 
   return response;
 }

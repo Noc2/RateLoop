@@ -1,10 +1,12 @@
 import { DEFAULT_LOCALE, SUPPORTED_LOCALES } from "../i18n/config";
 import {
   buildContentSecurityPolicy,
+  contentSecurityPolicyReportingEndpoints,
   createContentSecurityPolicyNonce,
   resolveAgentOAuthFormActionRedirectOrigins,
   resolveAgentOAuthFrameRedirectOrigins,
 } from "../lib/security/contentSecurityPolicy";
+import { normalizeCspReports, safeReportUrl } from "../lib/security/contentSecurityPolicyReport";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -246,4 +248,72 @@ test("permissions policy only advertises browser-recognized directives", async (
 
   assert.equal(permissionsPolicy, "camera=(), microphone=(), geolocation=()");
   assert.doesNotMatch(permissionsPolicy ?? "", /(?:^|,\s*)tools=/);
+});
+
+test("the policy names a same-origin reporting endpoint in both supported forms", async () => {
+  // Until this existed a policy that blocked shipped code produced no signal
+  // anywhere. `report-to` is the current API and `report-uri` is deprecated but
+  // still the only one several engines honour, so dropping either loses reports.
+  const csp = await getContentSecurityPolicy();
+  assert.match(csp, /(?:^|;\s)report-to csp-endpoint(?:;|$)/u);
+  assert.match(csp, /(?:^|;\s)report-uri \/api\/security\/csp-report(?:;|$)/u);
+  // Same-origin: a report must never disclose to a third party which pages a
+  // visitor loaded, so the endpoint is a path and never an absolute URL.
+  assert.doesNotMatch(csp, /report-uri https?:\/\//u);
+  assert.equal(contentSecurityPolicyReportingEndpoints(), 'csp-endpoint="/api/security/csp-report"');
+});
+
+test("middleware sends the header that makes report-to resolvable", () => {
+  // `report-to` names a group; without a Reporting-Endpoints header defining
+  // that group the directive is silently inert, which looks identical to
+  // "no violations".
+  const middlewareSource = readFileSync(new URL("../middleware.ts", import.meta.url), "utf8");
+  assert.match(
+    middlewareSource,
+    /response\.headers\.set\("Reporting-Endpoints", contentSecurityPolicyReportingEndpoints\(\)\)/u,
+  );
+});
+
+test("violation reports keep no query string and no unbounded field", () => {
+  // Report bodies are attacker-controlled and a document-uri carries the whole
+  // page URL, which on this application can hold a return-to path, an invitation
+  // token, or an OAuth redirect_uri.
+  assert.equal(
+    safeReportUrl("https://rateloop-tokenless.vercel.app/sign-in?returnTo=%2Fsettings&token=secret#frag"),
+    "https://rateloop-tokenless.vercel.app/sign-in",
+  );
+  assert.equal(safeReportUrl("inline"), "inline");
+  assert.equal(safeReportUrl(undefined), "unknown");
+  assert.ok(safeReportUrl(`https://example.com/${"a".repeat(5_000)}`).length <= 200);
+
+  const [report] = normalizeCspReports([
+    {
+      body: {
+        blockedURL: "wasm-eval",
+        disposition: "enforce",
+        documentURL: "https://rateloop-tokenless.vercel.app/human/profile?invite=secret",
+        effectiveDirective: "script-src",
+      },
+      type: "csp-violation",
+    },
+  ]);
+  assert.deepEqual(report, {
+    blockedUri: "wasm-eval",
+    directive: "script-src",
+    disposition: "enforce",
+    documentUri: "https://rateloop-tokenless.vercel.app/human/profile",
+  });
+
+  // The legacy application/csp-report shape must still be understood.
+  const [legacy] = normalizeCspReports({
+    "csp-report": { "blocked-uri": "eval", "document-uri": "https://x.test/a?b=c", "effective-directive": "font-src" },
+  });
+  assert.equal(legacy?.directive, "font-src");
+  assert.equal(legacy?.documentUri, "https://x.test/a");
+
+  // A flood of reports in one request cannot inflate a single log burst without bound.
+  assert.ok(
+    normalizeCspReports(Array.from({ length: 500 }, () => ({ body: { effectiveDirective: "img-src" } }))).length <= 20,
+  );
+  assert.deepEqual(normalizeCspReports("nonsense"), []);
 });
