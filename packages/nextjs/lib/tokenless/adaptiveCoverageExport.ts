@@ -478,7 +478,7 @@ export async function exportAdaptiveCoverage(input: {
       trainingRecords: {
         schemaVersion: TRAINING_RECORDS_SCHEMA_VERSION,
         ...buildTrainingRecordsPayload({
-          reviewerMappingKeyring: getAssuranceResponseKeyrings().reviewerMapping,
+          reviewerMappingKeyring: () => getAssuranceResponseKeyrings().reviewerMapping,
           workspaceId: input.workspaceId,
           oversightRows: oversightResult.rows as Row[],
           qualificationRows: qualificationResult.rows as Row[],

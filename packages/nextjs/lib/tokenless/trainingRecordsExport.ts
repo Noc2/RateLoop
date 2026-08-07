@@ -137,8 +137,18 @@ export function buildTrainingRecordsPayload(input: {
   oversightRows: Row[];
   qualificationRows: Row[];
   now: Date;
-  /** Resolved by the caller so this stays a pure function of its inputs. */
-  reviewerMappingKeyring: AssuranceResponseKeyring;
+  /**
+   * Supplied by the caller so this stays a pure function of its inputs, and
+   * called **lazily** — only once a reviewer pseudonym is actually needed.
+   *
+   * Resolving it eagerly made the whole export depend on the reviewer-mapping
+   * vault even when there were no reviewer qualifications to pseudonymise, which
+   * turned a working coverage export into a 503 for any workspace without the
+   * vault configured. Where a digest *is* needed and the vault is missing this
+   * still fails closed, which is the right trade: no pseudonym at all beats a
+   * weak one.
+   */
+  reviewerMappingKeyring: () => AssuranceResponseKeyring;
 }) {
   const oversightPersons = input.oversightRows.map(row => {
     const status = text(row, "status")!;
@@ -158,9 +168,14 @@ export function buildTrainingRecordsPayload(input: {
       trainingRecords: trainingRecords(row.training_records_json),
     };
   });
+  // Resolved once, and only when there is at least one reviewer to pseudonymise:
+  // the getter reads and validates the vault, so calling it per row would repeat
+  // that work, and calling it at all with no rows would make the vault a
+  // dependency of exports that never name a reviewer.
+  const keyring = input.qualificationRows.length > 0 ? input.reviewerMappingKeyring() : null;
   const reviewerQualifications = input.qualificationRows.map(row => ({
     reviewerDigest: reviewerDigest(
-      input.reviewerMappingKeyring,
+      keyring!,
       input.workspaceId,
       text(row, "reviewer_account_address") ?? text(row, "rater_id") ?? "unknown",
     ),
@@ -220,7 +235,7 @@ export async function exportTrainingRecords(input: {
     }),
   ]);
   const body = buildTrainingRecordsPayload({
-    reviewerMappingKeyring: getAssuranceResponseKeyrings().reviewerMapping,
+    reviewerMappingKeyring: () => getAssuranceResponseKeyrings().reviewerMapping,
     workspaceId: input.workspaceId,
     oversightRows: oversightResult.rows as Row[],
     qualificationRows: qualificationResult.rows as Row[],
