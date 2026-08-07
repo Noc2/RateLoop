@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { getTranslations } from "next-intl/server";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { HumanAssuranceRaterClient } from "~~/components/tokenless/HumanAssuranceRaterClient";
 import { AccountDeletionPanel } from "~~/components/tokenless/account/AccountDeletionPanel";
@@ -69,6 +70,7 @@ export async function HumanSectionPage({
   }
 
   const tab: HumanTab = navigation;
+  const humanTabLabel = (await getTranslations("human.tabs"))(tab);
   const session = await findAuthSession((await cookies()).get(AUTH_SESSION_COOKIE)?.value);
   if (!session) {
     return (
@@ -81,6 +83,14 @@ export async function HumanSectionPage({
 
   return (
     <AppPageShell outerClassName="pb-8" contentClassName="space-y-5">
+      {/*
+        The tab strip names the destination visually, but a tab list is not a
+        heading: inbox, profile and settings each began at an h2, and at three
+        different sizes, so assistive technology had no page title to land on and
+        the document outline started a level down. The agents shell already does
+        this; the label is the active tab so the two agree by construction.
+      */}
+      <h1 className="sr-only">{humanTabLabel}</h1>
       <HumanTabs active={tab} />
       {tab === "inbox" ? (
         <ReviewerNotificationInbox />
