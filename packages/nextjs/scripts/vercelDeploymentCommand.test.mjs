@@ -1,4 +1,4 @@
-import { runTokenlessVercel } from "./deploy-tokenless-vercel.mjs";
+import { assertVercelSessionOutlivesDeploy, runTokenlessVercel } from "./deploy-tokenless-vercel.mjs";
 import { TOKENLESS_VERCEL_PROJECT } from "./tokenless-vercel-project.mjs";
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -117,3 +117,98 @@ for (const [name, links] of [
     assert.equal(spawnCount, 0);
   });
 }
+
+const HOUR = 3_600_000;
+
+test("a deploy is refused when the Vercel session cannot outlive it", () => {
+  // The CLI validates its token once, at startup, with no margin. A session that
+  // expires during the build kills the CLI while Vercel's builder finishes, which
+  // reports a failure for a deployment that succeeded. That cost a confusing hour.
+  const auth = (expiresAt) => () => JSON.stringify({ expiresAt, token: "redacted" });
+  const now = Date.UTC(2026, 7, 7, 15, 30);
+
+  assert.throws(
+    () =>
+      assertVercelSessionOutlivesDeploy({
+        env: { HOME: "/home/dev" },
+        now,
+        platform: "linux",
+        readFileSync: auth(Math.floor((now + 3 * 60_000) / 1000)),
+      }),
+    /expires in 3m/u,
+  );
+  assert.throws(
+    () =>
+      assertVercelSessionOutlivesDeploy({
+        env: { HOME: "/home/dev" },
+        now,
+        platform: "linux",
+        readFileSync: auth(Math.floor((now - HOUR) / 1000)),
+      }),
+    /has expired/u,
+  );
+  // Comfortable session, token auth, and an unreadable file all proceed: the
+  // preflight exists to catch a known failure, not to gate on its own guesses.
+  assertVercelSessionOutlivesDeploy({
+    env: { HOME: "/home/dev" },
+    now,
+    platform: "linux",
+    readFileSync: auth(Math.floor((now + 4 * HOUR) / 1000)),
+  });
+  assertVercelSessionOutlivesDeploy({
+    env: { HOME: "/home/dev", VERCEL_TOKEN: "redacted" },
+    now,
+    platform: "linux",
+    readFileSync: () => {
+      throw new Error("must not read the session file when a token is configured");
+    },
+  });
+  assertVercelSessionOutlivesDeploy({
+    env: { HOME: "/home/dev" },
+    now,
+    platform: "linux",
+    readFileSync: () => {
+      throw new Error("ENOENT");
+    },
+  });
+});
+
+test("a CLI failure over a verified new deployment reports its own exit code", () => {
+  // Exit 2 rather than 0 or 1: the site is correct but the run was not clean, so
+  // a caller neither believes it failed nor chains on as if nothing happened.
+  const paths = fixture();
+  let inspectCount = 0;
+  const spawn = (...args) => {
+    if (args[1].includes("inspect")) {
+      inspectCount += 1;
+      return {
+        status: 0,
+        stdout: JSON.stringify({
+          aliases: ["rateloop-tokenless.vercel.app"],
+          id: `dpl_${inspectCount}`,
+          name: TOKENLESS_VERCEL_PROJECT.projectName,
+          readyState: "READY",
+          target: "production",
+        }),
+      };
+    }
+    return { status: 1 };
+  };
+  assert.equal(runTokenlessVercel({ ...paths, forwardedArgs: ["--prod"], spawn }), 2);
+});
+
+test("an unauthorized verification is reported as unknown, not as failure", () => {
+  // "We could not ask" and "the deployment is wrong" must not collapse together:
+  // a blind retry could duplicate a deployment that already succeeded.
+  const paths = fixture();
+  assert.throws(
+    () =>
+      runTokenlessVercel({
+        ...paths,
+        forwardedArgs: ["--prod"],
+        spawn: (...args) =>
+          args[1].includes("inspect") ? { status: 1, stderr: "Error: Not authorized" } : { status: 1 },
+      }),
+    /status is unknown/u,
+  );
+});
