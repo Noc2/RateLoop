@@ -9,10 +9,16 @@ import { ChoiceInput, Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { Card } from "~~/components/tokenless/ui/Card";
 
+// Delivery filters on the endpoint's stored event_types_json, so a type absent
+// here can never be subscribed to and therefore never delivered. Keep this in
+// step with ASSURANCE_EVENT_TYPES in lib/tokenless/assuranceEventStreaming.ts —
+// a test asserts the two agree.
 const EVENT_TYPES = [
   "ai.rateloop.review.completed",
   "ai.rateloop.review.failed",
   "ai.rateloop.review.expired",
+  "ai.rateloop.review.inconclusive",
+  "ai.rateloop.review.cancelled",
   "ai.rateloop.packet.anchored",
   "ai.rateloop.gate.blocked",
 ] as const;

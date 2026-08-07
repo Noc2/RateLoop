@@ -1,3 +1,4 @@
+import { ASSURANCE_EVENT_TYPES } from "../../../lib/tokenless/assuranceEventStreaming";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -61,6 +62,15 @@ test("credential forms accept opaque references and status views omit secret val
   assert.match(source, /created\.token/);
   assert.doesNotMatch(source, /accessKeyId|secretAccessKey|apiToken/);
   assert.doesNotMatch(source, /\{stream\.url\}/);
+});
+
+test("every assurance event a customer can receive is offered as a subscription", () => {
+  // Webhook delivery filters on the endpoint's stored event_types_json, so a
+  // type the form cannot select is a type no endpoint can ever be subscribed
+  // to — it would be emitted, stored, and never delivered. The tie and
+  // cancellation events shipped that way until this assertion existed.
+  const offered = [...siemSource.matchAll(/"(ai\.rateloop\.[a-z.]+)"/gu)].map(match => match[1]);
+  assert.deepEqual([...new Set(offered)].sort(), [...ASSURANCE_EVENT_TYPES].sort());
 });
 
 test("newly issued secrets stay in ephemeral state until explicit dismissal", () => {
