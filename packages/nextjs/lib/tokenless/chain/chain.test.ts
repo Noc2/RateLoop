@@ -628,7 +628,7 @@ test("chain preparation fails closed for missing or invalid frozen response wind
   for (const candidate of [
     { present: false, value: undefined },
     { present: true, value: 1_199 },
-    { present: true, value: 86_401 },
+    { present: true, value: 2_592_001 },
     { present: true, value: 3_600.5 },
     { present: true, value: "3600" },
   ]) {
