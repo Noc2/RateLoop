@@ -55,8 +55,8 @@ export function HumanAssuranceLoop({
             <svg viewBox="0 0 440 440" className="h-full w-full" aria-hidden="true">
               <defs>
                 <radialGradient id="assurance-loop-glow" cx="50%" cy="50%" r="50%">
-                  <stop offset="0%" stopColor="#03CEA4" stopOpacity="0.13" />
-                  <stop offset="58%" stopColor="#359EEE" stopOpacity="0.05" />
+                  <stop offset="0%" stopColor="var(--rateloop-green)" stopOpacity="0.13" />
+                  <stop offset="58%" stopColor="var(--rateloop-blue)" stopOpacity="0.05" />
                   <stop offset="100%" stopColor="var(--rateloop-surface)" stopOpacity="0" />
                 </radialGradient>
                 <filter id="assurance-loop-tracer-glow" x="-200%" y="-200%" width="400%" height="400%">

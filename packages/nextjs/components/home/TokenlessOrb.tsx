@@ -3,7 +3,20 @@
 import { useEffect, useRef } from "react";
 
 const ELLIPSE_COUNT = 30;
-const ORB_COLORS = ["#359EEE", "#FFC43D", "#EF476F", "#03CEA4"];
+
+/**
+ * The orb draws the brand spectrum. It used to hardcode the hex values, which are
+ * the *dark* theme's tokens - so in light theme it rendered a washed-out ring beside
+ * a hero heading that recoloured correctly. The static markup now references the
+ * tokens directly, and the animation resolves them at run time because GSAP has to
+ * interpolate real colours.
+ */
+const ORB_COLOR_TOKENS = ["--rateloop-blue", "--rateloop-yellow", "--rateloop-pink", "--rateloop-green"] as const;
+
+function resolveOrbColors() {
+  const styles = getComputedStyle(document.documentElement);
+  return ORB_COLOR_TOKENS.map(token => styles.getPropertyValue(token).trim()).filter(value => value.length > 0);
+}
 
 // Keep the production RateLoop orb animation intact so the tokenless product
 // remains visually identical to the established site.
@@ -35,7 +48,8 @@ export function TokenlessOrb() {
           "M0,0 C0.266,0.412 0.297,0.582 0.453,0.775 0.53,0.87 0.78,1 1,1",
         );
         const easeOut = CustomEase.create("rateloop-orb-out", "M0,0 C0.594,0.062 0.79,0.698 1,1");
-        const colorInterpolate = gsap.utils.interpolate(ORB_COLORS);
+        const orbColors = resolveOrbColors();
+        const colorInterpolate = gsap.utils.interpolate(orbColors.length > 0 ? orbColors : ["currentColor"]);
         const ellipseCount = ellipses.length || 1;
 
         gsap.set(svg, { visibility: "visible" });
@@ -90,7 +104,7 @@ export function TokenlessOrb() {
             rx="110"
             ry="110"
             fill="none"
-            stroke={ORB_COLORS[index % ORB_COLORS.length]}
+            style={{ stroke: `var(${ORB_COLOR_TOKENS[index % ORB_COLOR_TOKENS.length]})` }}
             strokeOpacity={Math.max(0.08, 0.75 - index / ELLIPSE_COUNT)}
             strokeWidth="1.4"
           />
