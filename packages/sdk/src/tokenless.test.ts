@@ -21,6 +21,8 @@ import {
   parseTokenlessYouTubeUrl,
 } from "./tokenlessMedia";
 import {
+  MAX_REVIEW_PANEL_SIZE,
+  MIN_REVIEW_PANEL_SIZE,
   TOKENLESS_QUOTE_REQUEST_JSON_SCHEMA,
   TOKENLESS_RESULT_JSON_SCHEMA,
   parseTokenlessAskResponse,
@@ -69,6 +71,7 @@ test("package root exposes only the tokenless client, schema, types, and generic
       "HUMAN_ASSURANCE_AUDIENCE_POLICY_JSON_SCHEMA",
       "HUMAN_ASSURANCE_CAPABILITIES",
       "HUMAN_ASSURANCE_CASE_JSON_SCHEMA",
+      "HUMAN_ASSURANCE_CLIENT_DECISIONS",
       "HUMAN_ASSURANCE_CLIENT_DECISION_JSON_SCHEMA",
       "HUMAN_ASSURANCE_EVIDENCE_PACKET_JSON_SCHEMA",
       "HUMAN_ASSURANCE_INTEGRITY_ASSIGNMENT_SCHEMA_VERSION",
@@ -118,6 +121,8 @@ test("package root exposes only the tokenless client, schema, types, and generic
       "TOKENLESS_VISIBILITIES",
       "TOKENLESS_X402_DOMAIN",
       "TOKENLESS_X402_ROUND_AUTHORIZATION_DOMAIN",
+      "MAX_REVIEW_PANEL_SIZE",
+      "MIN_REVIEW_PANEL_SIZE",
       "buildTokenlessEip3009TypedData",
       "buildTokenlessPrivateReviewCommitmentQuestion",
       "buildTokenlessQuoteIntent",
@@ -1416,4 +1421,40 @@ test("quote requests must state privacy terms instead of defaulting to a server-
   assert.ok(
     TOKENLESS_QUOTE_REQUEST_JSON_SCHEMA.required.includes("dataClassification"),
   );
+});
+
+test("panel-size bounds match what the service enforces on a profile", () => {
+  // The service accepts a review panel of 2 to 100. Publishing 1 to 500 told
+  // integrators to build requests it rejects, in both directions.
+  assert.equal(MIN_REVIEW_PANEL_SIZE, 2);
+  assert.equal(MAX_REVIEW_PANEL_SIZE, 100);
+  const branches =
+    TOKENLESS_RESULT_JSON_SCHEMA.properties.reviewEconomics.anyOf.slice(
+      1,
+    ) as ReadonlyArray<{
+      properties: { panelSize: { maximum: number; minimum: number } };
+    }>;
+  for (const branch of branches) {
+    assert.equal(branch.properties.panelSize.minimum, MIN_REVIEW_PANEL_SIZE);
+    assert.equal(branch.properties.panelSize.maximum, MAX_REVIEW_PANEL_SIZE);
+  }
+  const outside = [MIN_REVIEW_PANEL_SIZE - 1, MAX_REVIEW_PANEL_SIZE + 1];
+  for (const panelSize of outside) {
+    assert.throws(
+      () =>
+        parseTokenlessResult({
+          ...resultFixture(),
+          reviewEconomics: { ...REVIEW_ECONOMICS, panelSize },
+        }),
+      /reviewEconomics\.panelSize/,
+    );
+  }
+  const largest = parseTokenlessResult({
+    ...resultFixture(),
+    reviewEconomics: {
+      ...REVIEW_ECONOMICS,
+      panelSize: MAX_REVIEW_PANEL_SIZE,
+    },
+  });
+  assert.equal(largest.reviewEconomics?.panelSize, MAX_REVIEW_PANEL_SIZE);
 });

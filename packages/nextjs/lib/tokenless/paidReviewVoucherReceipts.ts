@@ -5,6 +5,7 @@ import { getAddress } from "viem";
 import { dbPool } from "~~/lib/db";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import type { HumanReviewDerivedEconomics, HumanReviewPreparedRequest } from "~~/lib/tokenless/humanReviewApprovals";
+import { MAXIMUM_REVIEW_PANEL_SIZE, MINIMUM_REVIEW_PANEL_SIZE } from "~~/lib/tokenless/reviewPanelPolicy";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Row = Record<string, unknown>;
@@ -212,7 +213,12 @@ function validateEconomics(value: HumanReviewDerivedEconomics) {
       "paid_review_economics_required",
     );
   }
-  const panelSize = positiveInteger(value.panelSize, "Economics panel size", 1, 100);
+  const panelSize = positiveInteger(
+    value.panelSize,
+    "Economics panel size",
+    MINIMUM_REVIEW_PANEL_SIZE,
+    MAXIMUM_REVIEW_PANEL_SIZE,
+  );
   const bountyPerSeatAtomic = atomic(value.bountyPerSeatAtomic, "Bounty per seat");
   const baseBountyAtomic = atomic(value.baseBountyAtomic, "Base bounty");
   const feeAtomic = atomic(value.feeAtomic, "Fee");

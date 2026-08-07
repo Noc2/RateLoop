@@ -1,6 +1,7 @@
 import { RateLoopSdkError } from "./errors";
 import {
   HUMAN_ASSURANCE_CAPABILITIES,
+  HUMAN_ASSURANCE_CLIENT_DECISIONS,
   HUMAN_ASSURANCE_INTEGRITY_ASSIGNMENT_SCHEMA_VERSION,
   HUMAN_ASSURANCE_SCHEMA_VERSION,
   type HumanAssuranceArtifact,
@@ -834,12 +835,11 @@ export function parseHumanAssuranceClientDecision(
     schemaVersion: schemaVersion(input.schemaVersion),
     decisionId: string(input.decisionId, "decisionId"),
     runId: string(input.runId, "runId"),
-    decision: enumeration(input.decision, "decision", [
-      "go",
-      "revise",
-      "stop",
-      "no_decision",
-    ]),
+    decision: enumeration(
+      input.decision,
+      "decision",
+      HUMAN_ASSURANCE_CLIENT_DECISIONS,
+    ),
     note: optionalString(input.note, "note"),
     decidedBy: string(input.decidedBy, "decidedBy"),
     evidencePacketId: string(input.evidencePacketId, "evidencePacketId"),
@@ -1376,7 +1376,7 @@ export const HUMAN_ASSURANCE_CLIENT_DECISION_JSON_SCHEMA = {
     schemaVersion: versionSchema,
     decisionId: idSchema,
     runId: idSchema,
-    decision: { enum: ["go", "revise", "stop", "no_decision"] },
+    decision: { enum: HUMAN_ASSURANCE_CLIENT_DECISIONS },
     note: { type: "string" },
     decidedBy: idSchema,
     evidencePacketId: idSchema,

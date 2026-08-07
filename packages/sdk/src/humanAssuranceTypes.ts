@@ -27,6 +27,20 @@ export type HumanAssuranceReviewerSource =
   | "rateloop_network"
   | "hybrid";
 
+/**
+ * The sign-off values a client may record against an evidence packet. A run
+ * without a sign-off has no client decision at all, so there is no value for
+ * "did not decide": the API returns `null` until one of these is recorded.
+ */
+export const HUMAN_ASSURANCE_CLIENT_DECISIONS = [
+  "go",
+  "revise",
+  "stop",
+] as const;
+
+export type HumanAssuranceClientDecisionValue =
+  (typeof HUMAN_ASSURANCE_CLIENT_DECISIONS)[number];
+
 export interface HumanAssuranceArtifact {
   schemaVersion: typeof HUMAN_ASSURANCE_SCHEMA_VERSION;
   artifactId: string;
@@ -271,7 +285,7 @@ export interface HumanAssuranceClientDecision {
   schemaVersion: typeof HUMAN_ASSURANCE_SCHEMA_VERSION;
   decisionId: string;
   runId: string;
-  decision: "go" | "revise" | "stop" | "no_decision";
+  decision: HumanAssuranceClientDecisionValue;
   note?: string;
   decidedBy: string;
   evidencePacketId: string;

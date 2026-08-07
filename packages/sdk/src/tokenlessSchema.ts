@@ -38,6 +38,14 @@ const reviewerSources = new Set<string>(TOKENLESS_REVIEWER_SOURCES);
 const MIN_RESPONSE_WINDOW_SECONDS = 1_200;
 const MAX_RESPONSE_WINDOW_SECONDS = 86_400;
 
+/**
+ * Panel-size bounds. These mirror the bounds the RateLoop service enforces on a
+ * review request profile, which is the origin of every frozen review economics
+ * document. A request the service would reject must not parse here.
+ */
+export const MIN_REVIEW_PANEL_SIZE = 2;
+export const MAX_REVIEW_PANEL_SIZE = 100;
+
 function invalid(path: string, expectation: string): never {
   throw new RateLoopSdkError(
     `Invalid tokenless response at ${path}: expected ${expectation}.`,
@@ -126,7 +134,12 @@ function frozenReviewEconomics(
 ): TokenlessFrozenReviewEconomics | null {
   if (value === null) return null;
   const input = record(value, path);
-  const panelSize = integer(input.panelSize, `${path}.panelSize`, 1, 500);
+  const panelSize = integer(
+    input.panelSize,
+    `${path}.panelSize`,
+    MIN_REVIEW_PANEL_SIZE,
+    MAX_REVIEW_PANEL_SIZE,
+  );
   if (input.compensationMode === "unpaid") {
     if (input.bountyPerSeatAtomic !== null) {
       invalid(
@@ -839,7 +852,11 @@ const frozenReviewEconomicsSchema = {
       properties: {
         compensationMode: { const: "unpaid" },
         bountyPerSeatAtomic: { type: "null" },
-        panelSize: { maximum: 500, minimum: 1, type: "integer" },
+        panelSize: {
+          maximum: MAX_REVIEW_PANEL_SIZE,
+          minimum: MIN_REVIEW_PANEL_SIZE,
+          type: "integer",
+        },
       },
       required: ["compensationMode", "bountyPerSeatAtomic", "panelSize"],
       type: "object",
@@ -852,7 +869,11 @@ const frozenReviewEconomicsSchema = {
           pattern: "^[1-9]\\d*$",
           type: "string",
         },
-        panelSize: { maximum: 500, minimum: 1, type: "integer" },
+        panelSize: {
+          maximum: MAX_REVIEW_PANEL_SIZE,
+          minimum: MIN_REVIEW_PANEL_SIZE,
+          type: "integer",
+        },
       },
       required: ["compensationMode", "bountyPerSeatAtomic", "panelSize"],
       type: "object",

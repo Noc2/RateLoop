@@ -35,6 +35,8 @@ export const ASSURANCE_EVENT_TYPES = [
   "ai.rateloop.review.completed",
   "ai.rateloop.review.failed",
   "ai.rateloop.review.expired",
+  "ai.rateloop.review.inconclusive",
+  "ai.rateloop.review.cancelled",
   "ai.rateloop.packet.anchored",
   "ai.rateloop.gate.blocked",
 ] as const;
@@ -70,12 +72,19 @@ export type AssuranceEvidenceReference =
       digest: string;
     };
 
+export type AssuranceLifecycleOutcome = {
+  schemaVersion: "rateloop.assurance-lifecycle-outcome.v1";
+  state: string;
+  reasonCodes: string[];
+};
+
 type AssuranceLifecycleEventSource = {
   workspaceId: string;
   sourceEventId: string;
   eventType: AssuranceEventType;
   subject: string;
   evidenceReference: AssuranceEvidenceReference;
+  lifecycle?: AssuranceLifecycleOutcome;
   occurredAt: Date;
 };
 
@@ -96,6 +105,7 @@ type CloudEvent = {
     schemaVersion: "rateloop.assurance-event.v2";
     evidenceReference: AssuranceEvidenceReference;
     packetHash?: string;
+    lifecycle?: AssuranceLifecycleOutcome;
     evidenceChain: AssuranceEvidenceChainReference;
     ocsf: OcsfComplianceFinding;
   };
@@ -128,6 +138,7 @@ type OcsfComplianceFinding = {
   unmapped: {
     rateloop_evidence_chain: AssuranceEvidenceChainReference;
     rateloop_evidence_reference: AssuranceEvidenceReference;
+    rateloop_lifecycle_outcome?: AssuranceLifecycleOutcome;
     rateloop_packet_hash?: string;
   };
 };
@@ -225,8 +236,23 @@ function lifecycleSourceFromRow(row: Row): AssuranceLifecycleEventSource {
       kind: text(row, "evidence_reference_kind") as AssuranceEvidenceReference["kind"],
       digest: text(row, "evidence_reference_digest")!,
     }),
+    ...(text(row, "to_state")
+      ? {
+          lifecycle: lifecycleOutcome(text(row, "to_state")!, row.reason_codes_json),
+        }
+      : {}),
     occurredAt: validDate(row.occurred_at, "assurance event time"),
   };
+}
+
+export function assuranceEventReasonCodes(reasonCodesJson: unknown): string[] {
+  let reasons: unknown;
+  try {
+    reasons = JSON.parse(String(reasonCodesJson ?? "[]"));
+  } catch {
+    reasons = [];
+  }
+  return Array.isArray(reasons) ? reasons.map(reason => String(reason)) : [];
 }
 
 /**
@@ -234,16 +260,28 @@ function lifecycleSourceFromRow(row: Row): AssuranceLifecycleEventSource {
  * as `review.expired`; every other terminal failure projects as `review.failed`.
  */
 export function terminalFailureEventType(reasonCodesJson: unknown): AssuranceEventType {
-  let reasons: unknown;
-  try {
-    reasons = JSON.parse(String(reasonCodesJson ?? "[]"));
-  } catch {
-    reasons = [];
-  }
-  const expired =
-    Array.isArray(reasons) &&
-    reasons.some(reason => (REVIEW_EXPIRY_REASON_CODES as readonly string[]).includes(String(reason)));
+  const expired = assuranceEventReasonCodes(reasonCodesJson).some(reason =>
+    (REVIEW_EXPIRY_REASON_CODES as readonly string[]).includes(reason),
+  );
   return expired ? "ai.rateloop.review.expired" : "ai.rateloop.review.failed";
+}
+
+/**
+ * Every terminal lifecycle state reaches the stream. A round that ends
+ * inconclusive because the panel tied is not a failure and not an expiry, and a
+ * round cancelled before any reviewer committed is neither; both used to
+ * project no event at all. An inconclusive round that ran out of time keeps
+ * projecting as `review.expired` so subscriptions filtering on that type do not
+ * silently stop receiving it — `data.lifecycle` carries the state and reason
+ * codes that tell the two apart.
+ */
+export function terminalTransitionEventType(toState: string, reasonCodesJson: unknown): AssuranceEventType {
+  if (toState === "cancelled_before_commit") return "ai.rateloop.review.cancelled";
+  const type = terminalFailureEventType(reasonCodesJson);
+  if (toState === "inconclusive" && type === "ai.rateloop.review.failed") {
+    return "ai.rateloop.review.inconclusive";
+  }
+  return type;
 }
 
 function evidenceChainFromAuditRow(row: Row): AssuranceEvidenceChainReference {
@@ -260,6 +298,8 @@ const GATE_TRANSITION_EVENT_TYPES = new Set<AssuranceEventType>([
   "ai.rateloop.gate.blocked",
   "ai.rateloop.review.failed",
   "ai.rateloop.review.expired",
+  "ai.rateloop.review.inconclusive",
+  "ai.rateloop.review.cancelled",
 ]);
 
 function eventDefinition(type: AssuranceEventType) {
@@ -284,6 +324,28 @@ function eventDefinition(type: AssuranceEventType) {
         status: "Resolved" as const,
         statusId: 4 as const,
         title: "Human assurance review expired before completion",
+        typeUid: 200303 as const,
+      };
+    case "ai.rateloop.review.inconclusive":
+      return {
+        activityId: 3 as const,
+        activityName: "Close" as const,
+        severity: "High" as const,
+        severityId: 4 as const,
+        status: "Resolved" as const,
+        statusId: 4 as const,
+        title: "Human assurance review closed without a decisive panel",
+        typeUid: 200303 as const,
+      };
+    case "ai.rateloop.review.cancelled":
+      return {
+        activityId: 3 as const,
+        activityName: "Close" as const,
+        severity: "Informational" as const,
+        severityId: 1 as const,
+        status: "Resolved" as const,
+        statusId: 4 as const,
+        title: "Human assurance review was cancelled before commitment",
         typeUid: 200303 as const,
       };
     case "ai.rateloop.gate.blocked":
@@ -322,6 +384,14 @@ function eventDefinition(type: AssuranceEventType) {
   }
 }
 
+export function lifecycleOutcome(state: string, reasonCodesJson: unknown): AssuranceLifecycleOutcome {
+  return {
+    schemaVersion: "rateloop.assurance-lifecycle-outcome.v1",
+    state,
+    reasonCodes: [...assuranceEventReasonCodes(reasonCodesJson)].sort(),
+  };
+}
+
 export function buildAssuranceCloudEvent(input: {
   workspaceId: string;
   sourceEventId: string;
@@ -329,6 +399,7 @@ export function buildAssuranceCloudEvent(input: {
   subject?: string;
   evidenceReference: AssuranceEvidenceReference;
   evidenceChain: AssuranceEvidenceChainReference;
+  lifecycle?: AssuranceLifecycleOutcome;
   occurredAt: Date;
 }) {
   const type = eventType(input.eventType);
@@ -343,7 +414,7 @@ export function buildAssuranceCloudEvent(input: {
   }
   if (GATE_TRANSITION_EVENT_TYPES.has(type) && reference.kind !== "gate_transition") {
     throw new TokenlessServiceError(
-      "Blocked, failed, and expired events require a gate-transition reference.",
+      "Gate and terminal-lifecycle events require a gate-transition reference.",
       400,
       "invalid_assurance_event",
     );
@@ -387,6 +458,7 @@ export function buildAssuranceCloudEvent(input: {
     unmapped: {
       rateloop_evidence_chain: chain,
       rateloop_evidence_reference: reference,
+      ...(input.lifecycle ? { rateloop_lifecycle_outcome: input.lifecycle } : {}),
       ...(packet ? { rateloop_packet_hash: packet } : {}),
     },
   };
@@ -407,6 +479,7 @@ export function buildAssuranceCloudEvent(input: {
       schemaVersion: "rateloop.assurance-event.v2",
       evidenceReference: reference,
       ...(packet ? { packetHash: packet } : {}),
+      ...(input.lifecycle ? { lifecycle: input.lifecycle } : {}),
       evidenceChain: chain,
       ocsf,
     },
@@ -462,6 +535,7 @@ export async function enqueueAssuranceEvent(
     subject?: string;
     evidenceReference: AssuranceEvidenceReference;
     evidenceChain: AssuranceEvidenceChainReference;
+    lifecycle?: AssuranceLifecycleOutcome;
     occurredAt: Date;
     now?: Date;
   },
@@ -652,7 +726,7 @@ export async function projectAssuranceLifecycleEvents(
   const limit = Math.min(Math.max(input.limit ?? 50, 1), 100);
   const workspaceFilter = input.workspaceId ? "AND t.workspace_id=?" : "";
   const anchorWorkspaceFilter = input.workspaceId ? "AND j.workspace_id=?" : "";
-  const [completedTransitions, blockedTransitions, failedTransitions, anchors, deferred] = await Promise.all([
+  const [completedTransitions, blockedTransitions, terminalTransitions, anchors, deferred] = await Promise.all([
     dbClient.execute({
       sql: `SELECT t.event_id AS source_event_id,t.workspace_id,t.opportunity_id AS subject,
                    'decision_packet' AS evidence_reference_kind,
@@ -689,26 +763,20 @@ export async function projectAssuranceLifecycleEvents(
       args: [...(input.workspaceId ? [input.workspaceId] : []), limit],
     }),
     dbClient.execute({
+      // Every terminal state projects: a tie and a pre-commit cancellation are
+      // as much a part of the evidence story as a failure or an expiry.
       sql: `SELECT t.event_id AS source_event_id,t.workspace_id,t.opportunity_id AS subject,
                    'gate_transition' AS evidence_reference_kind,
                    t.transition_commitment AS evidence_reference_digest,t.occurred_at,
-                   t.reason_codes_json
+                   t.to_state,t.reason_codes_json
             FROM tokenless_agent_review_opportunity_transition_events t
             JOIN tokenless_agent_review_opportunities o
               ON o.workspace_id=t.workspace_id AND o.opportunity_id=t.opportunity_id
             LEFT JOIN tokenless_assurance_event_outbox e
               ON e.workspace_id=t.workspace_id AND e.source_event_id=t.event_id
-             AND e.event_type IN ('ai.rateloop.review.failed','ai.rateloop.review.expired')
-            WHERE (
-                t.to_state='failed_terminal'
-                OR (
-                  t.to_state='inconclusive'
-                  AND (
-                    t.reason_codes_json LIKE '%"response_deadline_elapsed"%'
-                    OR t.reason_codes_json LIKE '%"all_assignments_expired"%'
-                  )
-                )
-              )
+             AND e.event_type IN ('ai.rateloop.review.failed','ai.rateloop.review.expired',
+                                  'ai.rateloop.review.inconclusive','ai.rateloop.review.cancelled')
+            WHERE t.to_state IN ('failed_terminal','inconclusive','cancelled_before_commit')
               AND e.event_id IS NULL ${workspaceFilter}
             ORDER BY t.occurred_at ASC,t.event_id ASC LIMIT ?`,
       args: [...(input.workspaceId ? [input.workspaceId] : []), limit],
@@ -751,11 +819,11 @@ export async function projectAssuranceLifecycleEvents(
       args: input.workspaceId ? [input.workspaceId] : [],
     }),
   ]);
-  const failedSources = (failedTransitions.rows as Row[]).map(row => ({
+  const terminalSources = (terminalTransitions.rows as Row[]).map(row => ({
     ...row,
-    event_type: terminalFailureEventType(row.reason_codes_json),
+    event_type: terminalTransitionEventType(String(row.to_state ?? ""), row.reason_codes_json),
   }));
-  const sources = [...completedTransitions.rows, ...blockedTransitions.rows, ...failedSources, ...anchors.rows]
+  const sources = [...completedTransitions.rows, ...blockedTransitions.rows, ...terminalSources, ...anchors.rows]
     .map(value => lifecycleSourceFromRow(value as Row))
     .sort((left, right) => left.occurredAt.getTime() - right.occurredAt.getTime())
     .slice(0, limit);

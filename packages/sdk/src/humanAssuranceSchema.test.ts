@@ -17,7 +17,10 @@ import {
   parseHumanAssuranceRun,
   parseHumanAssuranceSuite,
 } from "./humanAssuranceSchema";
-import { HUMAN_ASSURANCE_SCHEMA_VERSION } from "./humanAssuranceTypes";
+import {
+  HUMAN_ASSURANCE_CLIENT_DECISIONS,
+  HUMAN_ASSURANCE_SCHEMA_VERSION,
+} from "./humanAssuranceTypes";
 
 const integrityPolicy = {
   schemaVersion: "rateloop.integrity-assignment.v1" as const,
@@ -482,5 +485,36 @@ test("v2 JSON schemas are distinct, versioned public contracts", () => {
   assert.equal(
     HUMAN_ASSURANCE_CLIENT_DECISION_JSON_SCHEMA.$id,
     "urn:rateloop:human-assurance:client-decision:v2",
+  );
+});
+
+test("the published client-decision enum is the set the service stores", () => {
+  // The database CHECK constraint allows go/revise/stop only, and the API
+  // rejects anything else. A fourth value in the published schema would tell a
+  // code generator to write a branch that can never be submitted.
+  assert.deepEqual(HUMAN_ASSURANCE_CLIENT_DECISIONS, ["go", "revise", "stop"]);
+  assert.deepEqual(
+    HUMAN_ASSURANCE_CLIENT_DECISION_JSON_SCHEMA.properties.decision.enum,
+    ["go", "revise", "stop"],
+  );
+  const decision = {
+    ...base,
+    decisionId: "had_1",
+    runId: "run_1",
+    decision: "go" as const,
+    decidedBy: "0x1111111111111111111111111111111111111111",
+    evidencePacketId: "hae_1",
+    decidedAt: now,
+  };
+  assert.equal(parseHumanAssuranceClientDecision(decision).decision, "go");
+  assert.throws(
+    () =>
+      parseHumanAssuranceClientDecision({
+        ...decision,
+        decision: "no_decision",
+      }),
+    (error: unknown) =>
+      error instanceof RateLoopSdkError &&
+      error.message.includes("go or revise or stop"),
   );
 });

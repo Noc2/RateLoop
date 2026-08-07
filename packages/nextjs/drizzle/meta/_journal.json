@@ -1338,6 +1338,13 @@
       "when": 1785337200000,
       "tag": "0191_remove_quote_api_key_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 192,
+      "version": "7",
+      "when": 1785340800000,
+      "tag": "0192_assurance_event_terminal_states",
+      "breakpoints": true
     }
   ]
 }

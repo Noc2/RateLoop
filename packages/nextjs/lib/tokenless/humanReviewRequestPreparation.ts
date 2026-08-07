@@ -8,7 +8,7 @@ import {
   resolveHumanReviewQuestion,
   serializeFrozenBinaryReviewQuestion,
 } from "~~/lib/tokenless/humanReviewQuestions";
-import { MINIMUM_REVIEW_PANEL_SIZE } from "~~/lib/tokenless/reviewRequestProfiles";
+import { MAXIMUM_REVIEW_PANEL_SIZE, MINIMUM_REVIEW_PANEL_SIZE } from "~~/lib/tokenless/reviewPanelPolicy";
 import {
   type ReviewerExpertiseRequirement,
   normalizeReviewerExpertiseRequirementsSelection,
@@ -21,7 +21,6 @@ import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 export const HUMAN_REVIEW_PLATFORM_FEE_BPS = 1_000;
 export const HUMAN_REVIEW_FIXED_BASE_BPS = 8_000;
-export const HUMAN_REVIEW_MAXIMUM_PANEL_SIZE = 100;
 export const HUMAN_REVIEW_UINT256_MAX = (1n << 256n) - 1n;
 
 const HASH_PATTERN = /^sha256:[0-9a-f]{64}$/u;
@@ -213,7 +212,7 @@ export function deriveHumanReviewEconomics(
     profile.panelSize,
     "review panel size",
     MINIMUM_REVIEW_PANEL_SIZE,
-    HUMAN_REVIEW_MAXIMUM_PANEL_SIZE,
+    MAXIMUM_REVIEW_PANEL_SIZE,
   );
   if (profile.compensationMode === "unpaid") {
     if (profile.bountyPerSeatAtomic !== null) {
@@ -350,7 +349,7 @@ function exactProfile(profile: BoundHumanReviewRequestProfile) {
     profile.panelSize,
     "review panel size",
     MINIMUM_REVIEW_PANEL_SIZE,
-    HUMAN_REVIEW_MAXIMUM_PANEL_SIZE,
+    MAXIMUM_REVIEW_PANEL_SIZE,
   );
   let expertiseRequirements: ReviewerExpertiseRequirement[];
   try {

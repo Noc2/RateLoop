@@ -12,6 +12,7 @@ import {
   type HumanReviewContentBoundary,
 } from "~~/lib/tokenless/reviewCapabilities";
 import { assertHumanReviewMutationAvailable } from "~~/lib/tokenless/reviewConfigurationMutation";
+import { MAXIMUM_REVIEW_PANEL_SIZE, MINIMUM_REVIEW_PANEL_SIZE } from "~~/lib/tokenless/reviewPanelPolicy";
 import { validateReviewerExpertiseRequirementsWithClient } from "~~/lib/tokenless/reviewerExpertiseDefinitions";
 import {
   type ReviewerExpertiseRequirement,
@@ -37,8 +38,7 @@ export type ReviewRequestPrivateSensitivity = (typeof REVIEW_REQUEST_PRIVATE_SEN
 
 export const MINIMUM_REVIEW_RESPONSE_WINDOW_SECONDS = 1_200;
 export const MAXIMUM_REVIEW_RESPONSE_WINDOW_SECONDS = 86_400;
-export const MINIMUM_REVIEW_PANEL_SIZE = 2;
-export const MAXIMUM_REVIEW_PANEL_SIZE = 100;
+export { MAXIMUM_REVIEW_PANEL_SIZE, MINIMUM_REVIEW_PANEL_SIZE };
 export const MAXIMUM_REVIEW_USDC_ATOMIC = (1n << 256n) - 1n;
 export const MINIMUM_FEEDBACK_BONUS_AWARD_WINDOW_SECONDS = 3_600;
 export const MAXIMUM_FEEDBACK_BONUS_AWARD_WINDOW_SECONDS = 31_536_000;

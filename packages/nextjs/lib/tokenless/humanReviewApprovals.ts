@@ -4,7 +4,11 @@ import "server-only";
 import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbPool } from "~~/lib/db";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
-import { MINIMUM_REVIEW_PANEL_SIZE } from "~~/lib/tokenless/reviewRequestProfiles";
+import {
+  MAXIMUM_REVIEW_PANEL_SIZE,
+  MINIMUM_REVIEW_PANEL_SIZE,
+  minimumReviewPanelSizeForAudience,
+} from "~~/lib/tokenless/reviewPanelPolicy";
 import {
   type ReviewerExpertiseRequirement,
   normalizeReviewerExpertiseRequirementsSelection,
@@ -347,8 +351,8 @@ function preparedRequest(value: unknown): HumanReviewPreparedRequest {
   const panelSize = integer(
     panel.size,
     "panel size",
-    audienceKind === "private_invited" ? MINIMUM_REVIEW_PANEL_SIZE : 3,
-    100,
+    minimumReviewPanelSizeForAudience(audienceKind),
+    MAXIMUM_REVIEW_PANEL_SIZE,
   );
   let requiredExpertiseKeys: ReviewerExpertiseKey[];
   let expertiseRequirements: ReviewerExpertiseRequirement[];
@@ -482,7 +486,12 @@ function economics(value: unknown): HumanReviewDerivedEconomics {
   }
   const compensationMode = oneOf(root.compensationMode, "compensation mode", ["unpaid", "usdc"] as const);
   const bountyPerSeatAtomic = atomic(root.bountyPerSeatAtomic, "bounty per seat");
-  const panelSize = integer(root.panelSize, "economics panel size", 1, 100);
+  const panelSize = integer(
+    root.panelSize,
+    "economics panel size",
+    MINIMUM_REVIEW_PANEL_SIZE,
+    MAXIMUM_REVIEW_PANEL_SIZE,
+  );
   const baseBountyAtomic = atomic(root.baseBountyAtomic, "base bounty");
   const feeBps = integer(root.feeBps, "fee", 0, 2_000);
   const feeAtomic = atomic(root.feeAtomic, "fee");

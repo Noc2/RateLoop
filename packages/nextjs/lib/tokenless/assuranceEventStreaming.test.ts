@@ -15,6 +15,7 @@ import {
   listAssuranceEvents,
   projectAssuranceLifecycleEvents,
   terminalFailureEventType,
+  terminalTransitionEventType,
 } from "~~/lib/tokenless/assuranceEventStreaming";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -490,12 +491,31 @@ test("lifecycle projection emits completed, blocked, and anchored events with ex
   assert.equal(Number(auditCount.rows[0]?.count), 4);
 });
 
-test("terminal failures project as review.failed or review.expired with gate-transition evidence", async () => {
+test("every terminal lifecycle state reaches the stream with gate-transition evidence", async () => {
   // Classification: expiry signals mark the event as expired; everything else fails.
   assert.equal(terminalFailureEventType(JSON.stringify(["all_assignments_expired"])), "ai.rateloop.review.expired");
   assert.equal(terminalFailureEventType(JSON.stringify(["response_deadline_elapsed"])), "ai.rateloop.review.expired");
   assert.equal(terminalFailureEventType(JSON.stringify(["adapter_failure"])), "ai.rateloop.review.failed");
   assert.equal(terminalFailureEventType("not json"), "ai.rateloop.review.failed");
+
+  // A tie is neither a failure nor an expiry, and a pre-commit cancellation is
+  // neither of those either. Both used to emit nothing at all.
+  const tied = JSON.stringify(["private_panel_complete", "responses_recorded"]);
+  assert.equal(terminalTransitionEventType("inconclusive", tied), "ai.rateloop.review.inconclusive");
+  assert.equal(
+    terminalTransitionEventType("cancelled_before_commit", JSON.stringify(["owner_declined"])),
+    "ai.rateloop.review.cancelled",
+  );
+  assert.equal(
+    terminalTransitionEventType("failed_terminal", JSON.stringify(["adapter_failure"])),
+    "ai.rateloop.review.failed",
+  );
+  // An inconclusive round that ran out of time keeps the type existing
+  // subscriptions filter on; the lifecycle block is what tells them apart.
+  assert.equal(
+    terminalTransitionEventType("inconclusive", JSON.stringify(["response_deadline_elapsed"])),
+    "ai.rateloop.review.expired",
+  );
 
   // The new event types carry gate-transition evidence, never a decision packet.
   const failed = buildAssuranceCloudEvent({
@@ -523,7 +543,7 @@ test("terminal failures project as review.failed or review.expired with gate-tra
         evidenceChain: CHAIN_REFERENCE,
         occurredAt: NOW,
       }),
-    /Blocked, failed, and expired events require a gate-transition reference/u,
+    /Gate and terminal-lifecycle events require a gate-transition reference/u,
   );
 
   const fixture = await seedLifecycleEventSources();
@@ -532,8 +552,10 @@ test("terminal failures project as review.failed or review.expired with gate-tra
     eventId: string,
     reasonCodes: string[],
     commitment: string,
-    terminalState: "failed_terminal" | "inconclusive" = "failed_terminal",
+    terminalState: "failed_terminal" | "inconclusive" | "cancelled_before_commit" = "failed_terminal",
   ) => {
+    // Only a pre-commit state can cancel; `pending` cannot.
+    const fromState = terminalState === "cancelled_before_commit" ? "request_ready" : "pending";
     await dbClient.execute({
       sql: `INSERT INTO tokenless_agent_review_opportunity_lifecycles
             (workspace_id,opportunity_id,state,state_revision,reason_codes_json,state_entered_at,terminal_at,
@@ -545,12 +567,13 @@ test("terminal failures project as review.failed or review.expired with gate-tra
       sql: `INSERT INTO tokenless_agent_review_opportunity_transition_events
             (event_id,workspace_id,opportunity_id,transition_key,from_state,to_state,from_revision,to_revision,
              reason_codes_json,actor_kind,actor_reference,details_json,transition_commitment,occurred_at)
-            VALUES (?,?,?,?,'pending',?,2,3,?,'service','stream-test','{}',?,?)`,
+            VALUES (?,?,?,?,?,?,2,3,?,'service','stream-test','{}',?,?)`,
       args: [
         eventId,
         fixture.workspaceId,
         opportunityId,
         `terminal:${opportunityId}`,
+        fromState,
         terminalState,
         JSON.stringify(reasonCodes),
         commitment,
@@ -563,6 +586,7 @@ test("terminal failures project as review.failed or review.expired with gate-tra
   const expiredOpportunity = "aop_lifecycle_stream_expired";
   const inconclusiveExpiredOpportunity = "aop_lifecycle_stream_inconclusive_expired";
   const tiedOpportunity = "aop_lifecycle_stream_tied";
+  const cancelledOpportunity = "aop_lifecycle_stream_cancelled";
   const seedOpportunity = async (opportunityId: string, externalId: string) => {
     const template = await dbClient.execute({
       sql: `SELECT * FROM tokenless_agent_review_opportunities WHERE workspace_id=? LIMIT 1`,
@@ -603,10 +627,12 @@ test("terminal failures project as review.failed or review.expired with gate-tra
   await seedOpportunity(expiredOpportunity, "external-lifecycle-expired");
   await seedOpportunity(inconclusiveExpiredOpportunity, "external-lifecycle-inconclusive-expired");
   await seedOpportunity(tiedOpportunity, "external-lifecycle-tied");
+  await seedOpportunity(cancelledOpportunity, "external-lifecycle-cancelled");
   const failedEventId = `hrtr_${"7".repeat(40)}`;
   const expiredEventId = `hrtr_${"8".repeat(40)}`;
   const inconclusiveExpiredEventId = `hrtr_${"9".repeat(40)}`;
   const tiedEventId = `hrtr_${"6".repeat(40)}`;
+  const cancelledEventId = `hrtr_${"5".repeat(40)}`;
   await insertTerminal(failedOpportunity, failedEventId, ["adapter_failure"], HASH("7"));
   await insertTerminal(expiredOpportunity, expiredEventId, ["all_assignments_expired"], HASH("8"));
   await insertTerminal(
@@ -616,17 +642,32 @@ test("terminal failures project as review.failed or review.expired with gate-tra
     HASH("9"),
     "inconclusive",
   );
-  await insertTerminal(tiedOpportunity, tiedEventId, ["complete_panel_tied"], HASH("6"), "inconclusive");
+  await insertTerminal(
+    tiedOpportunity,
+    tiedEventId,
+    ["private_panel_complete", "responses_recorded"],
+    HASH("6"),
+    "inconclusive",
+  );
+  await insertTerminal(
+    cancelledOpportunity,
+    cancelledEventId,
+    ["owner_declined"],
+    HASH("5"),
+    "cancelled_before_commit",
+  );
 
   await projectAssuranceLifecycleEvents({ now: NOW, limit: 20 });
   const stored = await dbClient.execute({
-    sql: `SELECT source_event_id,event_type,evidence_reference_kind,evidence_reference_digest,packet_hash
+    sql: `SELECT source_event_id,event_type,evidence_reference_kind,evidence_reference_digest,packet_hash,
+                 cloud_event_json
           FROM tokenless_assurance_event_outbox
-          WHERE workspace_id=? AND event_type IN ('ai.rateloop.review.failed','ai.rateloop.review.expired')
+          WHERE workspace_id=? AND event_type IN ('ai.rateloop.review.failed','ai.rateloop.review.expired',
+                                                  'ai.rateloop.review.inconclusive','ai.rateloop.review.cancelled')
           ORDER BY event_type ASC`,
     args: [fixture.workspaceId],
   });
-  assert.equal(stored.rows.length, 3);
+  assert.equal(stored.rows.length, 5);
   const bySource = new Map(stored.rows.map(row => [String(row.source_event_id), row]));
   assert.equal(String(bySource.get(failedEventId)?.event_type), "ai.rateloop.review.failed");
   assert.equal(String(bySource.get(failedEventId)?.evidence_reference_digest), HASH("7"));
@@ -634,11 +675,35 @@ test("terminal failures project as review.failed or review.expired with gate-tra
   assert.equal(String(bySource.get(expiredEventId)?.evidence_reference_digest), HASH("8"));
   assert.equal(String(bySource.get(inconclusiveExpiredEventId)?.event_type), "ai.rateloop.review.expired");
   assert.equal(String(bySource.get(inconclusiveExpiredEventId)?.evidence_reference_digest), HASH("9"));
-  assert.equal(bySource.has(tiedEventId), false);
+  // The tie is the case a buyer most wants to see, and it now lands.
+  assert.equal(String(bySource.get(tiedEventId)?.event_type), "ai.rateloop.review.inconclusive");
+  assert.equal(String(bySource.get(tiedEventId)?.evidence_reference_digest), HASH("6"));
+  assert.equal(String(bySource.get(cancelledEventId)?.event_type), "ai.rateloop.review.cancelled");
+  assert.equal(String(bySource.get(cancelledEventId)?.evidence_reference_digest), HASH("5"));
   for (const row of stored.rows) {
     assert.equal(row.evidence_reference_kind, "gate_transition");
     assert.equal(row.packet_hash, null);
   }
+  // Two rounds share `review.expired`; only the lifecycle block separates the
+  // terminal failure from the round that expired without a decisive panel.
+  const lifecycleOf = (sourceEventId: string) =>
+    (JSON.parse(String(bySource.get(sourceEventId)?.cloud_event_json)) as { data: { lifecycle: unknown } }).data
+      .lifecycle;
+  assert.deepEqual(lifecycleOf(expiredEventId), {
+    schemaVersion: "rateloop.assurance-lifecycle-outcome.v1",
+    state: "failed_terminal",
+    reasonCodes: ["all_assignments_expired"],
+  });
+  assert.deepEqual(lifecycleOf(inconclusiveExpiredEventId), {
+    schemaVersion: "rateloop.assurance-lifecycle-outcome.v1",
+    state: "inconclusive",
+    reasonCodes: ["private_panel_under_quorum", "response_deadline_elapsed"],
+  });
+  assert.deepEqual(lifecycleOf(tiedEventId), {
+    schemaVersion: "rateloop.assurance-lifecycle-outcome.v1",
+    state: "inconclusive",
+    reasonCodes: ["private_panel_complete", "responses_recorded"],
+  });
 
   const replay = await projectAssuranceLifecycleEvents({ now: new Date(NOW.getTime() + 60_000), limit: 20 });
   assert.equal(replay.scanned, 0);

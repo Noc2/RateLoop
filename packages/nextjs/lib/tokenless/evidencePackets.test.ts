@@ -6,6 +6,7 @@ import {
   sha256EvidenceValue,
   sha256LegacyEvidenceValue,
 } from "../../scripts/assurance-evidence-core.mjs";
+import { HUMAN_ASSURANCE_CLIENT_DECISIONS, HUMAN_ASSURANCE_CLIENT_DECISION_JSON_SCHEMA } from "@rateloop/sdk";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createPublicKey, generateKeyPairSync, sign } from "node:crypto";
@@ -1623,4 +1624,34 @@ test("sampled runs require an explained decision even for go", async () => {
     if (originalRate === undefined) delete process.env.TOKENLESS_DECISION_EXPLANATION_RATE_BPS;
     else process.env.TOKENLESS_DECISION_EXPLANATION_RATE_BPS = originalRate;
   }
+});
+
+test("the published decision enum, the API and the database CHECK are one list", async () => {
+  // A value in the published schema that the CHECK constraint forbids makes
+  // every generated client write a branch it can never submit.
+  assert.deepEqual([...HUMAN_ASSURANCE_CLIENT_DECISIONS], ["go", "revise", "stop"]);
+  assert.deepEqual(
+    [...HUMAN_ASSURANCE_CLIENT_DECISION_JSON_SCHEMA.properties.decision.enum],
+    [...HUMAN_ASSURANCE_CLIENT_DECISIONS],
+  );
+  const migration = readFileSync(
+    fileURLToPath(new URL("../../drizzle/0013_assurance_evidence_packets.sql", import.meta.url)),
+    "utf8",
+  );
+  const check = /CHECK \("decision" IN \(([^)]+)\)\)/u.exec(migration);
+  assert.ok(check, "the decision CHECK constraint must stay in the migration");
+  assert.deepEqual(
+    check[1].split(",").map(value => value.trim().replaceAll("'", "")),
+    [...HUMAN_ASSURANCE_CLIENT_DECISIONS],
+  );
+  await assert.rejects(
+    () =>
+      recordAssuranceClientDecision({
+        accountAddress: OWNER,
+        workspaceId: "ws_unused",
+        runId: "run_unused",
+        decision: "no_decision" as never,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_assurance_decision",
+  );
 });

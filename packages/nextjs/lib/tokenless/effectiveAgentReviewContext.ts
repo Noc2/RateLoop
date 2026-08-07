@@ -17,9 +17,9 @@ import {
   deployedHumanReviewReadiness,
   resolveHumanReviewCapability,
 } from "~~/lib/tokenless/reviewCapabilities";
+import { MAXIMUM_REVIEW_PANEL_SIZE, MINIMUM_REVIEW_PANEL_SIZE } from "~~/lib/tokenless/reviewPanelPolicy";
 import { REVIEW_POLICY_MODES } from "~~/lib/tokenless/reviewPolicyManagement";
 import {
-  MINIMUM_REVIEW_PANEL_SIZE,
   REVIEW_REQUEST_PRIVATE_SENSITIVITIES,
   REVIEW_REQUEST_RATIONALE_MODES,
 } from "~~/lib/tokenless/reviewRequestProfiles";
@@ -479,7 +479,7 @@ export async function getEffectiveAgentReviewContext(principal: IntegrationPrinc
   }
   if (
     (responseWindowSeconds !== null && (responseWindowSeconds < 1_200 || responseWindowSeconds > 86_400)) ||
-    (panelSize !== null && (panelSize < MINIMUM_REVIEW_PANEL_SIZE || panelSize > 100)) ||
+    (panelSize !== null && (panelSize < MINIMUM_REVIEW_PANEL_SIZE || panelSize > MAXIMUM_REVIEW_PANEL_SIZE)) ||
     (profileStatus === "ready" && (responseWindowSeconds === null || panelSize === null)) ||
     (requiredExpertiseKeys.length > 0 && expertiseRequirements.length > 0) ||
     (expertiseRequirements.length > 0 &&

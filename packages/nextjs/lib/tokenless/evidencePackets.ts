@@ -9,6 +9,7 @@ import {
   sha256LegacyEvidenceValue,
   verifyEvidenceExport as verifyEvidenceExportCore,
 } from "../../scripts/assurance-evidence-core.mjs";
+import { HUMAN_ASSURANCE_CLIENT_DECISIONS, type HumanAssuranceClientDecisionValue } from "@rateloop/sdk";
 import { type KeyObject, createHmac, createPrivateKey, createPublicKey, randomUUID, sign } from "node:crypto";
 import "server-only";
 import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/accountSubject";
@@ -27,7 +28,7 @@ import { TokenlessServiceError } from "~~/lib/tokenless/server";
 type Queryable = { query: (text: string, values?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> };
 type QueryRow = Record<string, unknown>;
 type ReviewerSource = "customer_invited" | "rateloop_network";
-type ClientDecision = "go" | "revise" | "stop";
+type ClientDecision = HumanAssuranceClientDecisionValue;
 type EvidenceSigner = { kind?: "local-test" | "platform-secret"; keyId?: string; privateKey: KeyObject };
 type SelectionTriggerKind =
   | "adaptive_sample"
@@ -1397,7 +1398,7 @@ export async function recordAssuranceClientDecision(input: {
   note?: string | null;
   now?: Date;
 }) {
-  if (input.decision !== "go" && input.decision !== "revise" && input.decision !== "stop") {
+  if (!(HUMAN_ASSURANCE_CLIENT_DECISIONS as readonly string[]).includes(input.decision)) {
     throw new TokenlessServiceError("Decision must be go, revise, or stop.", 400, "invalid_assurance_decision");
   }
   const note = normalizeDecisionNote(input.note);
