@@ -53,5 +53,9 @@
   },
   "accessibility": {
     "skipToContent": "Skip to main content"
+  },
+  "siteMetadata": {
+    "title": "RateLoop — Human assurance for AI",
+    "description": "Get blind human feedback before you ship AI work."
   }
 }

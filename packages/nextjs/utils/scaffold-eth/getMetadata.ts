@@ -33,23 +33,32 @@ const titleTemplate = "%s | RateLoop";
 const socialImageVersion = "20260713a";
 const socialImageAlt = "RateLoop orbital loop mark for human assurance in AI-enabled workflows";
 
-export const getMetadata = ({ title, description }: { title: string; description: string }): Metadata => {
+/**
+ * A nested segment restating the site title would otherwise have the parent
+ * segment's template applied to it, producing "RateLoop … | RateLoop".
+ */
+export const getMetadata = ({
+  title,
+  description,
+  ignoreInheritedTitleTemplate = false,
+}: {
+  title: string;
+  description: string;
+  ignoreInheritedTitleTemplate?: boolean;
+}): Metadata => {
   const baseUrl = resolveMetadataBaseUrl();
   const socialImageUrl = `${baseUrl}/favicon.png?v=${socialImageVersion}`;
+  const resolvedTitle = ignoreInheritedTitleTemplate
+    ? { absolute: title, template: titleTemplate }
+    : { default: title, template: titleTemplate };
 
   return {
     metadataBase: new URL(baseUrl),
     manifest: "/manifest.json",
-    title: {
-      default: title,
-      template: titleTemplate,
-    },
+    title: resolvedTitle,
     description: description,
     openGraph: {
-      title: {
-        default: title,
-        template: titleTemplate,
-      },
+      title: resolvedTitle,
       description: description,
       images: [
         {
@@ -62,10 +71,7 @@ export const getMetadata = ({ title, description }: { title: string; description
     },
     twitter: {
       card: "summary",
-      title: {
-        default: title,
-        template: titleTemplate,
-      },
+      title: resolvedTitle,
       description: description,
       images: [
         {

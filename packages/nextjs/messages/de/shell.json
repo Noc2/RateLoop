@@ -53,5 +53,9 @@
   },
   "accessibility": {
     "skipToContent": "Zum Hauptinhalt springen"
+  },
+  "siteMetadata": {
+    "title": "RateLoop — Menschliche Prüfung für KI",
+    "description": "Holen Sie verblindetes menschliches Feedback ein, bevor Sie KI-Arbeit ausliefern."
   }
 }

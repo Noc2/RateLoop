@@ -115,7 +115,7 @@
     "Loading workspace…": "Workspace wird geladen…",
     "Managed by": "Verwaltet von",
     "Maximum 2 MB. Verification runs in this browser; the verifier does not upload the packet or send telemetry about its contents. This page only fetches the public verification keys.": "Maximal 2 MB. Die Prüfung läuft in diesem Browser; das Prüfwerkzeug lädt das Paket nicht hoch und sendet keine Telemetrie über seinen Inhalt. Diese Seite lädt nur die öffentlichen Prüfschlüssel.",
-    "Maximum 2 MB. Your packet stays in this browser. RateLoop does not upload, store, or send telemetry about its contents; this page only fetches the public verification keys.": "Maximal 2 MB. Dein Paket bleibt in diesem Browser. RateLoop lädt seinen Inhalt nicht hoch, speichert ihn nicht und sendet keine Telemetrie darüber; diese Seite lädt nur die öffentlichen Prüfschlüssel.",
+    "Maximum 2 MB. Your packet stays in this browser. RateLoop does not upload, store, or send telemetry about its contents; this page only fetches the public verification keys.": "Maximal 2 MB. Ihr Paket bleibt in diesem Browser. RateLoop lädt seinen Inhalt nicht hoch, speichert ihn nicht und sendet keine Telemetrie darüber; diese Seite lädt nur die öffentlichen Prüfschlüssel.",
     "Member": "Mitglied",
     "Members": "Mitglieder",
     "Minimum reveals": "Mindestens erforderliche Antworten",

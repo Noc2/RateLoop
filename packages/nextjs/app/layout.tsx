@@ -11,10 +11,8 @@ import { getMetadata } from "~~/utils/scaffold-eth/getMetadata";
 // Keep this at the root so framework error and not-found pages receive a nonce too.
 export const dynamic = "force-dynamic";
 
-export const metadata = getMetadata({
-  title: "RateLoop — Human assurance for AI",
-  description: "Get blind human feedback before you ship AI work.",
-});
+// The default-locale copy, so the root and the [locale] segment cannot drift apart.
+export const metadata = getMetadata(getMessagesForLocale(DEFAULT_LOCALE).shell.siteMetadata);
 
 const spaceGrotesk = Space_Grotesk({
   display: "swap",

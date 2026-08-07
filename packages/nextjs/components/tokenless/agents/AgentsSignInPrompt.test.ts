@@ -24,14 +24,16 @@ test("anonymous visitors see the Agents sign-in prompt without exposing workspac
   assert.doesNotMatch(promptSource, /For Agents/);
   assert.match(promptSource, /description=\{t\("description"\)\}/);
   assert.match(englishMessages, /Sign in to manage agents and reviews\./);
-  assert.match(germanMessages, /Melde dich an, um Agenten und Prüfungen zu verwalten\./);
+  assert.match(germanMessages, /Melden Sie sich an, um Agenten und Prüfungen zu verwalten\./);
   assert.doesNotMatch(promptSource, /AgentWorkspaceExample|Example workspace|preview=/);
   assert.match(promptSource, /href="\/docs\/ai"/);
   assert.match(promptSource, /\{t\("docs"\)\}/);
   assert.match(promptSource, /<Button/);
   assert.match(promptSource, /variant="secondary"/);
-  assert.match(promptSource, /h-10 min-h-10 px-\[0\.9rem\] text-base font-bold leading-none/);
-  assert.doesNotMatch(promptSource, /btn-sm|min-h-11 w-full px-4/);
+  // The secondary action used to hand-copy the sign-in control's geometry so the two
+  // would line up. Both now ask for the same named size instead.
+  assert.match(promptSource, /size="lg"/);
+  assert.doesNotMatch(promptSource, /h-10|min-h-10|px-\[0\.9rem\]|btn-sm|min-h-11 w-full px-4/);
   assert.doesNotMatch(promptSource, /AgentWorkspacePanels|WorkspaceSettingsClient|Agent API keys|Create workspace/);
   assert.match(sharedSurfaceSource, /flex min-h-\[calc\(100vh-9rem\)\] grow items-center justify-center px-6 py-16/);
   assert.match(sharedSurfaceSource, /<Card as="section"/);
