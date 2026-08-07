@@ -79,7 +79,8 @@ function inspectTokenlessProduction({ packageRoot, repoRoot, spawn }) {
     ["exec", "vercel", "inspect", TOKENLESS_PRODUCTION_ALIAS, "--format=json", "--non-interactive", "--cwd", repoRoot],
     { cwd: packageRoot, encoding: "utf8" },
   );
-  if (/not authorized|credentials|token/iu.test(String(result.stderr ?? ""))) return { ok: false, reason: "unauthorized" };
+  if (/not authorized|credentials|token/iu.test(String(result.stderr ?? "")))
+    return { ok: false, reason: "unauthorized" };
   if (result.error || result.status !== 0 || typeof result.stdout !== "string") return null;
   const jsonStart = result.stdout.indexOf("{");
   if (jsonStart < 0) return null;

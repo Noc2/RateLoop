@@ -124,7 +124,7 @@ test("a deploy is refused when the Vercel session cannot outlive it", () => {
   // The CLI validates its token once, at startup, with no margin. A session that
   // expires during the build kills the CLI while Vercel's builder finishes, which
   // reports a failure for a deployment that succeeded. That cost a confusing hour.
-  const auth = (expiresAt) => () => JSON.stringify({ expiresAt, token: "redacted" });
+  const auth = expiresAt => () => JSON.stringify({ expiresAt, token: "redacted" });
   const now = Date.UTC(2026, 7, 7, 15, 30);
 
   assert.throws(
