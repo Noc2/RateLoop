@@ -384,8 +384,12 @@ test("response windows, panel sizes, and USDC liability use exact bounded intege
   };
   const normalize = (overrides: Record<string, unknown>) =>
     __reviewRequestProfileTestUtils.normalizeReviewRequestProfileInput({ ...base, ...overrides });
-  assert.throws(() => normalize({ responseWindowSeconds: 1_199 }), /1200 to 86400/i);
-  assert.throws(() => normalize({ responseWindowSeconds: 86_401 }), /1200 to 86400/i);
+  assert.throws(() => normalize({ responseWindowSeconds: 1_199 }), /1200 to 2592000/i);
+  assert.throws(() => normalize({ responseWindowSeconds: 2_592_001 }), /1200 to 2592000/i);
+  // A window that spans a weekend is the ordinary case for a named internal
+  // reviewer, so the old 24-hour ceiling has to keep accepting well past itself.
+  assert.equal(normalize({ responseWindowSeconds: 259_200 }).responseWindowSeconds, 259_200);
+  assert.equal(normalize({ responseWindowSeconds: 2_592_000 }).responseWindowSeconds, 2_592_000);
   assert.throws(() => normalize({ panelSize: 101 }), /2 to 100/i);
   assert.throws(
     () =>

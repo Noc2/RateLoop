@@ -8,6 +8,8 @@ import {
   MAXIMUM_REVIEW_PANEL_SIZE,
   MINIMUM_REVIEW_PANEL_SIZE,
   minimumReviewPanelSizeForAudience,
+  MAXIMUM_REVIEW_RESPONSE_WINDOW_SECONDS,
+  MINIMUM_REVIEW_RESPONSE_WINDOW_SECONDS,
 } from "~~/lib/tokenless/reviewPanelPolicy";
 import {
   type ReviewerExpertiseRequirement,
@@ -347,7 +349,7 @@ function preparedRequest(value: unknown): HumanReviewPreparedRequest {
   ) {
     throw new Error("Stored audience and content-boundary terms are inconsistent.");
   }
-  const responseWindowSeconds = integer(timing.responseWindowSeconds, "response window", 1_200, 86_400);
+  const responseWindowSeconds = integer(timing.responseWindowSeconds, "response window", MINIMUM_REVIEW_RESPONSE_WINDOW_SECONDS, MAXIMUM_REVIEW_RESPONSE_WINDOW_SECONDS);
   const panelSize = integer(
     panel.size,
     "panel size",

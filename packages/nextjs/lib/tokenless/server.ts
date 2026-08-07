@@ -26,7 +26,12 @@ import {
   type ProductAudienceCreationBoundary,
   evaluateProductAudienceCreation,
 } from "~~/lib/tokenless/productAudienceCreationBoundary";
-import { MAXIMUM_REVIEW_PANEL_SIZE, MINIMUM_PUBLIC_REVIEW_PANEL_SIZE } from "~~/lib/tokenless/reviewPanelPolicy";
+import {
+  MAXIMUM_REVIEW_PANEL_SIZE,
+  MAXIMUM_REVIEW_RESPONSE_WINDOW_SECONDS,
+  MINIMUM_PUBLIC_REVIEW_PANEL_SIZE,
+  MINIMUM_REVIEW_RESPONSE_WINDOW_SECONDS,
+} from "~~/lib/tokenless/reviewPanelPolicy";
 
 const QUOTE_TTL_MS = 15 * 60_000;
 const DEFAULT_WAIT_TIMEOUT_MS = 30_000;
@@ -160,11 +165,11 @@ export function parseTokenlessQuoteRequest(value: unknown): TokenlessQuoteReques
   }
   if (
     !Number.isSafeInteger(request.responseWindowSeconds) ||
-    (request.responseWindowSeconds ?? 0) < 1_200 ||
-    (request.responseWindowSeconds ?? 0) > 86_400
+    (request.responseWindowSeconds ?? 0) < MINIMUM_REVIEW_RESPONSE_WINDOW_SECONDS ||
+    (request.responseWindowSeconds ?? 0) > MAXIMUM_REVIEW_RESPONSE_WINDOW_SECONDS
   ) {
     throw new TokenlessServiceError(
-      "responseWindowSeconds must be an integer from 1200 to 86400.",
+      `responseWindowSeconds must be an integer from ${MINIMUM_REVIEW_RESPONSE_WINDOW_SECONDS} to ${MAXIMUM_REVIEW_RESPONSE_WINDOW_SECONDS}.`,
       400,
       "invalid_quote",
     );

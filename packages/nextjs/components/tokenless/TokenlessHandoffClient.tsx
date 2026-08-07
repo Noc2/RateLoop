@@ -26,7 +26,12 @@ import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { Link } from "~~/i18n/navigation";
 import { readBrowserSession, subscribeToBrowserAuthSessionChanges } from "~~/lib/auth/client";
-import { MAXIMUM_REVIEW_PANEL_SIZE, MINIMUM_PUBLIC_REVIEW_PANEL_SIZE } from "~~/lib/tokenless/reviewPanelPolicy";
+import {
+  MAXIMUM_REVIEW_PANEL_SIZE,
+  MAXIMUM_REVIEW_RESPONSE_WINDOW_SECONDS,
+  MINIMUM_PUBLIC_REVIEW_PANEL_SIZE,
+  MINIMUM_REVIEW_RESPONSE_WINDOW_SECONDS,
+} from "~~/lib/tokenless/reviewPanelPolicy";
 
 const HANDOFF_VERSION = "rateloop.handoff.v1" as const;
 const MAX_FRAGMENT_LENGTH = 16 * 1024;
@@ -178,7 +183,7 @@ export function validateTokenlessQuoteRequest(value: unknown): TokenlessQuoteReq
     MINIMUM_PUBLIC_REVIEW_PANEL_SIZE,
     MAXIMUM_REVIEW_PANEL_SIZE,
   );
-  const responseWindowSeconds = integer(request.responseWindowSeconds, "request.responseWindowSeconds", 1_200, 86_400);
+  const responseWindowSeconds = integer(request.responseWindowSeconds, "request.responseWindowSeconds", MINIMUM_REVIEW_RESPONSE_WINDOW_SECONDS, MAXIMUM_REVIEW_RESPONSE_WINDOW_SECONDS);
   const budget = record(request.budget, "request.budget");
   const bountyAtomic = atomic(budget.bountyAtomic, "request.budget.bountyAtomic");
   const attemptReserveAtomic = atomic(budget.attemptReserveAtomic, "request.budget.attemptReserveAtomic");

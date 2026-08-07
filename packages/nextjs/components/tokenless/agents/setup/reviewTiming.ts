@@ -2,16 +2,19 @@ import type { ReviewRequestProfileInput } from "./reviewCriterion";
 import { SetupValidationError } from "./setupMessages";
 import { reviewPolicyCopy } from "~~/components/tokenless/agents/reviewPolicyCopy";
 import {
+  DEFAULT_REVIEW_RESPONSE_WINDOW_SECONDS,
   MAXIMUM_REVIEW_PANEL_SIZE,
+  MAXIMUM_REVIEW_RESPONSE_WINDOW_SECONDS,
   MINIMUM_REVIEW_PANEL_SIZE,
+  MINIMUM_REVIEW_RESPONSE_WINDOW_SECONDS,
   minimumReviewPanelSizeForAudience,
 } from "~~/lib/tokenless/reviewPanelPolicy";
 import type { AgentSetupReviewDraft } from "~~/lib/tokenless/workspaceAgentSetup";
 
 type ReviewRequestProfile = AgentSetupReviewDraft["requestProfile"];
 
-export const MIN_REVIEW_RESPONSE_WINDOW_SECONDS = 1_200;
-export const MAX_REVIEW_RESPONSE_WINDOW_SECONDS = 86_400;
+export const MIN_REVIEW_RESPONSE_WINDOW_SECONDS = MINIMUM_REVIEW_RESPONSE_WINDOW_SECONDS;
+export const MAX_REVIEW_RESPONSE_WINDOW_SECONDS = MAXIMUM_REVIEW_RESPONSE_WINDOW_SECONDS;
 // The server rejects anything outside these bounds when the profile is saved;
 // the wizard must not offer a panel the service will refuse.
 export const MIN_REVIEW_PANEL_SIZE = MINIMUM_REVIEW_PANEL_SIZE;
@@ -24,7 +27,7 @@ export type ReviewTimingFormValues = {
 
 export function reviewTimingFormValues(profile: ReviewRequestProfile | null | undefined): ReviewTimingFormValues {
   return {
-    responseWindowSeconds: String(profile?.responseWindowSeconds ?? 3_600),
+    responseWindowSeconds: String(profile?.responseWindowSeconds ?? DEFAULT_REVIEW_RESPONSE_WINDOW_SECONDS),
     panelSize: String(profile?.panelSize ?? MIN_REVIEW_PANEL_SIZE),
   };
 }

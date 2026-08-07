@@ -17,7 +17,12 @@ import {
   deployedHumanReviewReadiness,
   resolveHumanReviewCapability,
 } from "~~/lib/tokenless/reviewCapabilities";
-import { MAXIMUM_REVIEW_PANEL_SIZE, MINIMUM_REVIEW_PANEL_SIZE } from "~~/lib/tokenless/reviewPanelPolicy";
+import {
+  MAXIMUM_REVIEW_PANEL_SIZE,
+  MAXIMUM_REVIEW_RESPONSE_WINDOW_SECONDS,
+  MINIMUM_REVIEW_PANEL_SIZE,
+  MINIMUM_REVIEW_RESPONSE_WINDOW_SECONDS,
+} from "~~/lib/tokenless/reviewPanelPolicy";
 import { REVIEW_POLICY_MODES } from "~~/lib/tokenless/reviewPolicyManagement";
 import {
   REVIEW_REQUEST_PRIVATE_SENSITIVITIES,
@@ -478,7 +483,8 @@ export async function getEffectiveAgentReviewContext(principal: IntegrationPrinc
     invalidContext("Stored reviewer expertise requirements are invalid.");
   }
   if (
-    (responseWindowSeconds !== null && (responseWindowSeconds < 1_200 || responseWindowSeconds > 86_400)) ||
+    (responseWindowSeconds !== null &&
+      (responseWindowSeconds < MINIMUM_REVIEW_RESPONSE_WINDOW_SECONDS || responseWindowSeconds > MAXIMUM_REVIEW_RESPONSE_WINDOW_SECONDS)) ||
     (panelSize !== null && (panelSize < MINIMUM_REVIEW_PANEL_SIZE || panelSize > MAXIMUM_REVIEW_PANEL_SIZE)) ||
     (profileStatus === "ready" && (responseWindowSeconds === null || panelSize === null)) ||
     (requiredExpertiseKeys.length > 0 && expertiseRequirements.length > 0) ||

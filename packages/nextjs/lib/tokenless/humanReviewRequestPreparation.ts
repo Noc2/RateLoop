@@ -8,7 +8,12 @@ import {
   resolveHumanReviewQuestion,
   serializeFrozenBinaryReviewQuestion,
 } from "~~/lib/tokenless/humanReviewQuestions";
-import { MAXIMUM_REVIEW_PANEL_SIZE, MINIMUM_REVIEW_PANEL_SIZE } from "~~/lib/tokenless/reviewPanelPolicy";
+import {
+  MAXIMUM_REVIEW_PANEL_SIZE,
+  MAXIMUM_REVIEW_RESPONSE_WINDOW_SECONDS,
+  MINIMUM_REVIEW_PANEL_SIZE,
+  MINIMUM_REVIEW_RESPONSE_WINDOW_SECONDS,
+} from "~~/lib/tokenless/reviewPanelPolicy";
 import {
   type ReviewerExpertiseRequirement,
   normalizeReviewerExpertiseRequirementsSelection,
@@ -25,8 +30,6 @@ export const HUMAN_REVIEW_UINT256_MAX = (1n << 256n) - 1n;
 
 const HASH_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const ATOMIC_PATTERN = /^(0|[1-9][0-9]*)$/u;
-const MINIMUM_RESPONSE_WINDOW_SECONDS = 1_200;
-const MAXIMUM_RESPONSE_WINDOW_SECONDS = 86_400;
 const MAXIMUM_PROMPT_LENGTH = 4_000;
 
 export type BoundHumanReviewRequestProfile = {
@@ -341,8 +344,8 @@ function exactProfile(profile: BoundHumanReviewRequestProfile) {
   const responseWindowSeconds = boundedInteger(
     profile.responseWindowSeconds,
     "review response window",
-    MINIMUM_RESPONSE_WINDOW_SECONDS,
-    MAXIMUM_RESPONSE_WINDOW_SECONDS,
+    MINIMUM_REVIEW_RESPONSE_WINDOW_SECONDS,
+    MAXIMUM_REVIEW_RESPONSE_WINDOW_SECONDS,
   );
   const requiredExpertiseKeys = normalizeReviewerExpertiseKeys(profile.requiredExpertiseKeys ?? []);
   const panelSize = boundedInteger(

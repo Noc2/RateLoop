@@ -20,6 +20,7 @@ import { hashReviewRequestProfile } from "~~/lib/tokenless/reviewRequestProfiles
 import { normalizeReviewerExpertiseRequirementsSelection } from "~~/lib/tokenless/reviewerExpertiseOptions";
 import { normalizeReviewerExpertiseKeys } from "~~/lib/tokenless/reviewerExpertiseVocabulary";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
+import { MAXIMUM_REVIEW_RESPONSE_WINDOW_SECONDS, MINIMUM_REVIEW_RESPONSE_WINDOW_SECONDS } from "~~/lib/tokenless/reviewPanelPolicy";
 
 type Row = Record<string, unknown>;
 type IntegrationPrincipal = Extract<AgentMcpPrincipal, { kind: "integration" }>;
@@ -200,7 +201,7 @@ function profileFromRow(row: Row): BoundHumanReviewRequestProfile {
       stringArray(row.required_expertise_keys_json, "required expertise keys"),
     ),
     expertiseRequirements,
-    responseWindowSeconds: integer(row, "response_window_seconds", 1_200, 86_400),
+    responseWindowSeconds: integer(row, "response_window_seconds", MINIMUM_REVIEW_RESPONSE_WINDOW_SECONDS, MAXIMUM_REVIEW_RESPONSE_WINDOW_SECONDS),
     panelSize,
     compensationMode: oneOf(row, "compensation_mode", ["unpaid", "usdc"] as const),
     bountyPerSeatAtomic: text(row, "bounty_per_seat_atomic"),

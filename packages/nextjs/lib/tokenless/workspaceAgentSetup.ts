@@ -12,7 +12,12 @@ import { sameAutomaticHumanReviewGrantScopes } from "~~/lib/tokenless/humanRevie
 import { recordWorkspaceSetupFunnelEvent } from "~~/lib/tokenless/onboardingObservability";
 import { createPrivateGroupInvitationInTransaction } from "~~/lib/tokenless/privateGroups";
 import { configuredHumanReviewLaneForSelection, configuredHumanReviewLanes } from "~~/lib/tokenless/reviewCapabilities";
-import { MAXIMUM_REVIEW_PANEL_SIZE, MINIMUM_REVIEW_PANEL_SIZE } from "~~/lib/tokenless/reviewPanelPolicy";
+import {
+  DEFAULT_REVIEW_RESPONSE_WINDOW_SECONDS,
+  MAXIMUM_REVIEW_PANEL_SIZE,
+  MINIMUM_REVIEW_PANEL_SIZE,
+  MINIMUM_REVIEW_RESPONSE_WINDOW_SECONDS,
+} from "~~/lib/tokenless/reviewPanelPolicy";
 import {
   type ReviewerExpertiseRequirement,
   normalizeReviewerExpertiseRequirementsSelection,
@@ -129,7 +134,7 @@ const DEFAULT_REVIEW_DRAFT: AgentSetupReviewDraft = {
     privateGroupId: null,
     requiredExpertiseKeys: [],
     expertiseRequirements: [],
-    responseWindowSeconds: 3_600,
+    responseWindowSeconds: DEFAULT_REVIEW_RESPONSE_WINDOW_SECONDS,
     panelSize: MINIMUM_REVIEW_PANEL_SIZE,
     compensationMode: "unpaid",
     bountyPerSeatAtomic: null,
@@ -364,7 +369,7 @@ function isReviewDraftReady(draft: AgentSetupReviewDraft | null): draft is Agent
           draft.requestProfile.contentBoundary === "public_or_test" &&
           draft.selection.mode !== "adaptive")) &&
       Number.isSafeInteger(draft.requestProfile.responseWindowSeconds) &&
-      Number(draft.requestProfile.responseWindowSeconds) >= 1_200 &&
+      Number(draft.requestProfile.responseWindowSeconds) >= MINIMUM_REVIEW_RESPONSE_WINDOW_SECONDS &&
       Number.isSafeInteger(draft.requestProfile.panelSize) &&
       Number(draft.requestProfile.panelSize) >= MINIMUM_REVIEW_PANEL_SIZE &&
       Number(draft.requestProfile.panelSize) <= MAXIMUM_REVIEW_PANEL_SIZE,

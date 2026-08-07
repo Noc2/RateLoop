@@ -50,6 +50,7 @@ import { requirePaidLaneComplianceApproval } from "~~/lib/tokenless/paidLaneComp
 import { normalizedX402Authorization } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import { reserveSurpriseBountyCapacity } from "~~/lib/tokenless/surpriseBountyService";
+import { MAXIMUM_REVIEW_RESPONSE_WINDOW_SECONDS, MINIMUM_REVIEW_RESPONSE_WINDOW_SECONDS } from "~~/lib/tokenless/reviewPanelPolicy";
 
 // A single server-funded execution holds an exclusive claim lease for this long.
 // It must comfortably cover approval + createRound broadcast and receipt
@@ -332,11 +333,11 @@ function buildRoundTerms(row: QueryRow, config: TokenlessChainConfig, now: Date)
   if (
     typeof responseWindowSeconds !== "number" ||
     !Number.isSafeInteger(responseWindowSeconds) ||
-    responseWindowSeconds < 1_200 ||
-    responseWindowSeconds > 86_400
+    responseWindowSeconds < MINIMUM_REVIEW_RESPONSE_WINDOW_SECONDS ||
+    responseWindowSeconds > MAXIMUM_REVIEW_RESPONSE_WINDOW_SECONDS
   ) {
     throw new TokenlessServiceError(
-      "The frozen response window must be an integer from 1200 to 86400 seconds.",
+      `The frozen response window must be an integer from ${MINIMUM_REVIEW_RESPONSE_WINDOW_SECONDS} to ${MAXIMUM_REVIEW_RESPONSE_WINDOW_SECONDS} seconds.`,
       409,
       "invalid_response_window",
     );

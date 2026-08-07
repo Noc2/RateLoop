@@ -59,6 +59,7 @@ import {
   hashTokenlessQuoteRequest,
 } from "~~/lib/tokenless/server";
 import { isWorldIdAssuranceEnabled } from "~~/lib/tokenless/worldIdAssurance";
+import { MAXIMUM_REVIEW_RESPONSE_WINDOW_SECONDS, MINIMUM_REVIEW_RESPONSE_WINDOW_SECONDS } from "~~/lib/tokenless/reviewPanelPolicy";
 
 type Row = Record<string, unknown>;
 const BYTES32_PATTERN = /^0x[0-9a-f]{64}$/u;
@@ -397,7 +398,7 @@ async function loadFrozenOpportunity(
       JSON.parse(text(row, "expertise_requirements_json") ?? "[]"),
       panelSize,
     ),
-    responseWindowSeconds: integer(row, "response_window_seconds", 1_200, 86_400),
+    responseWindowSeconds: integer(row, "response_window_seconds", MINIMUM_REVIEW_RESPONSE_WINDOW_SECONDS, MAXIMUM_REVIEW_RESPONSE_WINDOW_SECONDS),
     panelSize,
     compensationMode: oneOf(row, "compensation_mode", ["unpaid", "usdc"] as const),
     bountyPerSeatAtomic: text(row, "bounty_per_seat_atomic"),

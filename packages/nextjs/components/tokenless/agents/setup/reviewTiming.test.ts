@@ -102,7 +102,7 @@ test("response window accepts only the protocol range", () => {
   );
   assert.throws(
     () => buildReviewTimingRequestProfile(profile, { responseWindowSeconds: "1199", panelSize: "2" }),
-    /Response window must be between 1200 and 86400/,
+    /Response window must be between 1200 and 2592000/,
   );
   assert.throws(
     () => buildReviewTimingRequestProfile(profile, { responseWindowSeconds: "3600.5", panelSize: "2" }),
