@@ -1,8 +1,12 @@
-import { createHash } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import "server-only";
 import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient } from "~~/lib/db";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
+import {
+  type AssuranceResponseKeyring,
+  getAssuranceResponseKeyrings,
+} from "~~/lib/tokenless/assuranceResponses";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Row = Record<string, unknown>;
@@ -103,9 +107,29 @@ function qualificationKeys(value: unknown) {
   }
 }
 
-/** Deterministic per-workspace reviewer digest: never the raw account. */
-function reviewerDigest(workspaceId: string, subject: string) {
-  return `revr_${createHash("sha256").update(`${workspaceId}\0${subject}`).digest("hex").slice(0, 24)}`;
+const TRAINING_REVIEWER_DIGEST_DOMAIN = "training_reviewer_digest";
+
+/**
+ * Deterministic per-workspace reviewer pseudonym: never the raw account.
+ *
+ * This is **keyed**, and it has to be. Both inputs are known to the caller —
+ * `workspaceId` is in the request URL and the customer legitimately holds real
+ * reviewer principal ids from `listWorkspaceReviewers` — so an unkeyed digest is
+ * a confirmation oracle rather than a pseudonym: hash each person you already
+ * know and match against the digests, and every row labelled
+ * `reviewerSource: "rateloop_network"` names a specific individual as a paid
+ * RateLoop reviewer. That is precisely the fact this export withholds.
+ *
+ * Uses the same keyring as `assuranceReviewerKey`, so rotating the reviewer
+ * mapping key rotates these pseudonyms too.
+ */
+function reviewerDigest(keyring: AssuranceResponseKeyring, workspaceId: string, subject: string) {
+  const key = keyring.keys.get(keyring.currentVersion);
+  if (!key) throw new Error(`Reviewer mapping key ${keyring.currentVersion} is unavailable.`);
+  return `revr_${createHmac("sha256", key)
+    .update(`${TRAINING_REVIEWER_DIGEST_DOMAIN}:${keyring.currentVersion}:${workspaceId}:${subject}`)
+    .digest("hex")
+    .slice(0, 24)}`;
 }
 
 export function buildTrainingRecordsPayload(input: {
@@ -113,6 +137,8 @@ export function buildTrainingRecordsPayload(input: {
   oversightRows: Row[];
   qualificationRows: Row[];
   now: Date;
+  /** Resolved by the caller so this stays a pure function of its inputs. */
+  reviewerMappingKeyring: AssuranceResponseKeyring;
 }) {
   const oversightPersons = input.oversightRows.map(row => {
     const status = text(row, "status")!;
@@ -134,6 +160,7 @@ export function buildTrainingRecordsPayload(input: {
   });
   const reviewerQualifications = input.qualificationRows.map(row => ({
     reviewerDigest: reviewerDigest(
+      input.reviewerMappingKeyring,
       input.workspaceId,
       text(row, "reviewer_account_address") ?? text(row, "rater_id") ?? "unknown",
     ),
@@ -193,6 +220,7 @@ export async function exportTrainingRecords(input: {
     }),
   ]);
   const body = buildTrainingRecordsPayload({
+    reviewerMappingKeyring: getAssuranceResponseKeyrings().reviewerMapping,
     workspaceId: input.workspaceId,
     oversightRows: oversightResult.rows as Row[],
     qualificationRows: qualificationResult.rows as Row[],

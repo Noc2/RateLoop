@@ -8,6 +8,7 @@ import { enqueueAssuranceAttestation } from "~~/lib/tokenless/assuranceAttestati
 import { summarizeOversightDesignationsForExport } from "~~/lib/tokenless/oversightAttestations";
 import { estimateOperationalComparableAgreement } from "~~/lib/tokenless/populationEstimates";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
+import { getAssuranceResponseKeyrings } from "~~/lib/tokenless/assuranceResponses";
 import { TRAINING_RECORDS_SCHEMA_VERSION, buildTrainingRecordsPayload } from "~~/lib/tokenless/trainingRecordsExport";
 
 type Row = Record<string, unknown>;
@@ -477,6 +478,7 @@ export async function exportAdaptiveCoverage(input: {
       trainingRecords: {
         schemaVersion: TRAINING_RECORDS_SCHEMA_VERSION,
         ...buildTrainingRecordsPayload({
+          reviewerMappingKeyring: getAssuranceResponseKeyrings().reviewerMapping,
           workspaceId: input.workspaceId,
           oversightRows: oversightResult.rows as Row[],
           qualificationRows: qualificationResult.rows as Row[],

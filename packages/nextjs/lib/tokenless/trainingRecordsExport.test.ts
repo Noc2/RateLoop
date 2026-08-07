@@ -5,6 +5,7 @@ import { GET } from "~~/app/api/account/workspaces/[workspaceId]/oversight/train
 import { resolveBetterAuthPrincipal } from "~~/lib/auth/principal";
 import { AUTH_SESSION_COOKIE, createAuthSession } from "~~/lib/auth/session";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
+import { __setAssuranceResponseKeyringsForTests } from "~~/lib/tokenless/assuranceResponses";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -16,8 +17,24 @@ const REVIEWER = "0x4444444444444444444444444444444444444444";
 const NOW = new Date("2026-07-17T12:00:00.000Z");
 const COMPETENCE_FREE_TEXT = "Free-text competence basis that must never leave the workspace UI.";
 
-beforeEach(() => __setDatabaseResourcesForTests(createMemoryDatabaseResources()));
-afterEach(() => __setDatabaseResourcesForTests(null));
+// The reviewer pseudonym in this export is keyed, so a test must supply the key.
+// A fixed 32-byte key keeps the digests deterministic across runs.
+const REVIEWER_MAPPING_KEYRING = {
+  currentVersion: "v1",
+  keys: new Map([["v1", Buffer.alloc(32, 7)]]),
+};
+
+beforeEach(() => {
+  __setDatabaseResourcesForTests(createMemoryDatabaseResources());
+  __setAssuranceResponseKeyringsForTests({
+    rationale: REVIEWER_MAPPING_KEYRING,
+    reviewerMapping: REVIEWER_MAPPING_KEYRING,
+  });
+});
+afterEach(() => {
+  __setDatabaseResourcesForTests(null);
+  __setAssuranceResponseKeyringsForTests(null);
+});
 
 async function fixture(label: string) {
   const identity = await resolveBetterAuthPrincipal({
