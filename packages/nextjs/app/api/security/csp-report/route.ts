@@ -28,7 +28,23 @@ export function readCspReportBody(request: Pick<Request, "body" | "headers">) {
   return readApiJsonRequestBody(request, MAX_CSP_REPORT_BODY_BYTES);
 }
 
+/**
+ * The two content types browsers actually use for reports. Requiring one of them
+ * is what stops any third-party page making its visitors write here: both are
+ * CORS-preflighted, whereas the `text/plain` a crafted `fetch` would send is a
+ * simple request that needs no preflight and no cooperation from this origin.
+ */
+const REPORT_CONTENT_TYPES = ["application/csp-report", "application/reports+json"];
+
+export function isCspReportContentType(header: string | null) {
+  const value = (header ?? "").split(";")[0]!.trim().toLowerCase();
+  return REPORT_CONTENT_TYPES.includes(value);
+}
+
 export async function POST(request: NextRequest) {
+  if (!isCspReportContentType(request.headers.get("content-type"))) {
+    return new NextResponse(null, NO_CONTENT);
+  }
   let payload: unknown;
   try {
     payload = await readCspReportBody(request);

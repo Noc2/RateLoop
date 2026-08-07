@@ -45,12 +45,22 @@ export function safeReportUrl(value: unknown) {
   try {
     const url = new URL(raw);
     if (url.protocol !== "https:" && url.protocol !== "http:") return url.protocol.replace(":", "");
-    return `${url.origin}${url.pathname}`.slice(0, MAX_FIELD_LENGTH);
+    return `${url.origin}${redactCapabilitySegments(url.pathname)}`.slice(0, MAX_FIELD_LENGTH);
   } catch {
     // `inline`, `eval`, `data`, and scheme-only values are not URLs and carry
     // nothing sensitive, but anything unrecognised is still length-capped.
     return raw;
   }
+}
+
+/**
+ * Blanks path segments that are themselves capabilities rather than identifiers.
+ * `/connect/aci_<32 hex>` is 128 bits of randomness that returns workspace agent
+ * metadata to anyone who knows it, so it must not sit in a log line even though
+ * it is a path rather than a query parameter.
+ */
+function redactCapabilitySegments(pathname: string) {
+  return pathname.replace(/\/(aci_|shr_|gnt_)[A-Za-z0-9_-]+/gu, "/$1redacted");
 }
 
 function normalizeOne(body: Record<string, unknown> | undefined): NormalizedCspReport | null {

@@ -87,6 +87,17 @@ export function createContentSecurityPolicyNonce() {
   return crypto.randomUUID().replaceAll("-", "");
 }
 
+/**
+ * Reads the flag the way `isWorldIdAssuranceEnabled` does. The two disagreeing is
+ * not academic: that function trims and lowercases, so `True` or a trailing
+ * space renders the widget, and a stricter reader here would then omit
+ * 'wasm-unsafe-eval' and leave it broken in production only — the exact failure
+ * this gating was added to prevent.
+ */
+function worldIdFlagEnabled(value: string | undefined) {
+  return value?.trim().toLowerCase() === "true";
+}
+
 export function resolveRuntimeContentSecurityPolicyOptions(): ContentSecurityPolicyOptions {
   return {
     baseRpcUrl: process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL,
@@ -97,8 +108,8 @@ export function resolveRuntimeContentSecurityPolicyOptions(): ContentSecurityPol
     // toward granting matters here: a header that is too tight breaks the
     // widget outright, and both values are non-secret feature switches.
     isWorldIdEnabled:
-      process.env.TOKENLESS_NETWORK_PANELS_ENABLED === "true" ||
-      process.env.NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED === "true",
+      worldIdFlagEnabled(process.env.TOKENLESS_NETWORK_PANELS_ENABLED) ||
+      worldIdFlagEnabled(process.env.NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED),
   };
 }
 

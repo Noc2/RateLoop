@@ -5,6 +5,7 @@ import {
   createContentSecurityPolicyNonce,
   resolveAgentOAuthFormActionRedirectOrigins,
   resolveAgentOAuthFrameRedirectOrigins,
+  resolveRuntimeContentSecurityPolicyOptions,
 } from "../lib/security/contentSecurityPolicy";
 import { normalizeCspReports, safeReportUrl } from "../lib/security/contentSecurityPolicyReport";
 import assert from "node:assert/strict";
@@ -40,6 +41,21 @@ function directiveOf(csp: string, name: string) {
     .split(";")
     .map(directive => directive.trim())
     .find(directive => directive.startsWith(`${name} `));
+}
+
+function runtimeOptionsFor(flag: string | undefined) {
+  const previous = process.env.TOKENLESS_NETWORK_PANELS_ENABLED;
+  const previousPublic = process.env.NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED;
+  delete process.env.NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED;
+  if (flag === undefined) delete process.env.TOKENLESS_NETWORK_PANELS_ENABLED;
+  else process.env.TOKENLESS_NETWORK_PANELS_ENABLED = flag;
+  try {
+    return resolveRuntimeContentSecurityPolicyOptions();
+  } finally {
+    if (previous === undefined) delete process.env.TOKENLESS_NETWORK_PANELS_ENABLED;
+    else process.env.TOKENLESS_NETWORK_PANELS_ENABLED = previous;
+    if (previousPublic !== undefined) process.env.NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED = previousPublic;
+  }
 }
 
 async function getGlobalHeaderValue(key: string) {
@@ -316,4 +332,71 @@ test("violation reports keep no query string and no unbounded field", () => {
     normalizeCspReports(Array.from({ length: 500 }, () => ({ body: { effectiveDirective: "img-src" } }))).length <= 20,
   );
   assert.deepEqual(normalizeCspReports("nonsense"), []);
+});
+
+test("the report endpoint answers 204 and logs only real reports", async () => {
+  // Nothing exercised POST itself, so the two claims that matter — a malformed
+  // body writes no log line, and every path answers 204 — were untested.
+  const { POST, isCspReportContentType } = (await import(
+    "../app/api/security/csp-report/route"
+  )) as typeof import("../app/api/security/csp-report/route");
+
+  const lines: string[] = [];
+  const warn = console.warn;
+  console.warn = (line: string) => lines.push(line);
+  const post = (body: string, contentType = "application/reports+json") =>
+    POST(
+      new Request("https://rateloop-tokenless.vercel.app/api/security/csp-report", {
+        body,
+        headers: { "content-type": contentType },
+        method: "POST",
+      }) as never,
+    );
+  try {
+    const valid = await post(
+      JSON.stringify([
+        { body: { blockedURL: "wasm-eval", documentURL: "https://x.test/a?s=1", effectiveDirective: "script-src" } },
+      ]),
+    );
+    assert.equal(valid.status, 204);
+    assert.equal(lines.length, 1);
+    assert.match(lines[0]!, /"event":"csp_violation"/u);
+    assert.doesNotMatch(lines[0]!, /s=1/u);
+
+    // Malformed, oversized, and cross-origin-shaped requests are all silent.
+    lines.length = 0;
+    assert.equal((await post("{not json")).status, 204);
+    assert.equal((await post(JSON.stringify([{ body: {} }]), "text/plain")).status, 204);
+    assert.equal((await post(`[{"body":{"documentURL":"${"a".repeat(20_000)}"}}]`)).status, 204);
+    assert.deepEqual(lines, []);
+  } finally {
+    console.warn = warn;
+  }
+
+  assert.ok(isCspReportContentType("application/csp-report; charset=utf-8"));
+  assert.ok(!isCspReportContentType("text/plain"));
+  assert.ok(!isCspReportContentType(null));
+});
+
+test("an unguessable capability in a path is redacted, not just query strings", () => {
+  // /connect/aci_<32 hex> is 128 bits of randomness that returns workspace agent
+  // metadata to whoever knows it, so stripping the query alone is not enough.
+  assert.equal(
+    safeReportUrl("https://x.test/connect/aci_0123456789abcdef0123456789abcdef"),
+    "https://x.test/connect/aci_redacted",
+  );
+  assert.equal(safeReportUrl("https://x.test/evidence/share/gnt_abc123"), "https://x.test/evidence/share/gnt_redacted");
+  assert.equal(safeReportUrl("https://x.test/human/profile"), "https://x.test/human/profile");
+});
+
+test("the World ID flag is read the way the widget's own gate reads it", () => {
+  // isWorldIdAssuranceEnabled trims and lowercases. A stricter reader here would
+  // render the widget under a policy that blocks it — production only.
+  for (const value of ["true", "TRUE", "True", " true "]) {
+    const options = { ...runtimeOptionsFor(value) };
+    assert.equal(options.isWorldIdEnabled, true, `${JSON.stringify(value)} must enable the sources`);
+  }
+  for (const value of [undefined, "", "false", "1", "yes"]) {
+    assert.equal(runtimeOptionsFor(value).isWorldIdEnabled, false, `${JSON.stringify(value)} must not`);
+  }
 });
