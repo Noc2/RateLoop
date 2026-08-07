@@ -37,7 +37,7 @@ export function DocsDiagramFrame({
           <h3 className={`${eyebrow ? "mt-1 " : ""}text-xl font-semibold leading-tight text-base-content`}>{title}</h3>
         </div>
         {description ? (
-          <figcaption className="max-w-xl text-sm leading-6 text-base-content/62 sm:text-right">
+          <figcaption className="max-w-xl text-sm leading-6 text-base-content/60 sm:text-right">
             {description}
           </figcaption>
         ) : null}
@@ -67,7 +67,7 @@ export function DiagramNode({
     >
       <div className="border-l-[3px] border-[var(--diagram-accent)] pl-3">
         <p className="text-sm font-semibold leading-snug text-base-content">{title}</p>
-        <div className="mt-2 text-xs leading-5 text-base-content/62">{children}</div>
+        <div className="mt-2 text-xs leading-5 text-base-content/60">{children}</div>
       </div>
     </div>
   );

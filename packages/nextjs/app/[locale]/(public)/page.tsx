@@ -150,7 +150,7 @@ export function TokenlessLandingPage({
                 </Link>
               </div>
               {socialProofItems.length > 0 ? (
-                <div className="mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-center text-sm text-base-content/76 sm:text-[0.95rem] lg:justify-start lg:text-left">
+                <div className="mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-center text-sm text-base-content/75 sm:text-[0.95rem] lg:justify-start lg:text-left">
                   {socialProofItems.map((item, index) => {
                     const formatted = formatLandingSocialProofItem(item, locale, homeMessages.socialProof);
                     return (

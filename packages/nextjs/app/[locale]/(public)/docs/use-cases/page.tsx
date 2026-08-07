@@ -153,13 +153,13 @@ export function UseCasesContent({ locale }: { locale: Locale }) {
                 <UseCaseIcon kind={useCase.icon} color={useCase.color} />
                 <h2 className="text-2xl font-bold text-base-content">{useCase.title}</h2>
               </div>
-              <p className="mt-3 max-w-3xl text-base leading-7 text-base-content/68">{useCase.scenario}</p>
+              <p className="mt-3 max-w-3xl text-base leading-7 text-base-content/70">{useCase.scenario}</p>
               {useCase.legalContext ? (
                 <aside className="mt-5 max-w-3xl rounded-xl border border-[var(--rateloop-yellow)]/25 bg-warning/[0.06] p-4">
                   <p className="font-mono text-xs font-semibold uppercase tracking-wider text-[var(--rateloop-yellow)]">
                     {useCase.legalContext.label}
                   </p>
-                  <p className="mt-2 text-sm leading-6 text-base-content/72">{useCase.legalContext.body}</p>
+                  <p className="mt-2 text-sm leading-6 text-base-content/70">{useCase.legalContext.body}</p>
                   <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs font-semibold">
                     {useCase.legalContext.sources.map(source => (
                       <a
@@ -232,7 +232,7 @@ function UseCaseDetail({ children, label }: { children: string; label: string })
   return (
     <div>
       <dt className="font-mono text-xs font-semibold uppercase tracking-wider text-base-content/55">{label}</dt>
-      <dd className="mt-1 text-sm leading-6 text-base-content/72">{children}</dd>
+      <dd className="mt-1 text-sm leading-6 text-base-content/70">{children}</dd>
     </div>
   );
 }
