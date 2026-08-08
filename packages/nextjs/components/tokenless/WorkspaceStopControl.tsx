@@ -60,8 +60,13 @@ export function WorkspaceStopBanner({ workspaceId }: { workspaceId: string }) {
       <div className="rounded-xl border border-error/40 bg-error/10 p-4 text-sm leading-6 text-error" role="alert">
         <p className="font-semibold">All agent activity is stopped for this workspace.</p>
         <p className="mt-1 text-error/80">
-          Stopped {new Date(stop.engagedAt).toLocaleString(locale)} — {stop.reason}. New outputs stay blocked and no
-          review-triggered release can occur.
+          {/* The reason is operator-written free text. Unwrapped it goes through the
+              phrase catalogue, whose miss path does longest-first substring
+              replacement — so an English word inside a German reason, or vice
+              versa, comes back mangled. The banner below already guards it. */}
+          Stopped {new Date(stop.engagedAt).toLocaleString(locale)} —{" "}
+          <UntranslatedContent>{stop.reason}</UntranslatedContent>. New outputs stay blocked and no review-triggered
+          release can occur.
         </p>
       </div>
     </LocalizedSharedContent>
