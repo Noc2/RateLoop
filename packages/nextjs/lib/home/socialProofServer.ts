@@ -1,6 +1,7 @@
 import { type LandingSocialProofItem, buildLandingPageSocialProofItems } from "./socialProof";
 import "server-only";
 import { dbClient } from "~~/lib/db";
+import { paidLaneCodeReleased } from "~~/lib/tokenless/paidLaneActivation";
 
 const LANDING_STATS_REVALIDATE_SECONDS = 300;
 const LANDING_STATS_TIMEOUT_MS = 5_000;
@@ -107,6 +108,7 @@ async function loadLandingPageSocialProofItems(loaders: LandingSocialProofLoader
       : { totalVerifiedHumans: "0", totalRatings: "0", totalBonusPaidAtomic: 0n };
   const totalClaimedAtomic = claimedResult.status === "fulfilled" ? claimedResult.value : 0n;
   return buildLandingPageSocialProofItems({
+    paidLaneReleased: paidLaneCodeReleased("private_invited_paid") || paidLaneCodeReleased("hybrid_public_safe"),
     totalVerifiedHumans: applicationStats.totalVerifiedHumans,
     totalRatings: applicationStats.totalRatings,
     totalPaidAtomic: totalClaimedAtomic + applicationStats.totalBonusPaidAtomic,

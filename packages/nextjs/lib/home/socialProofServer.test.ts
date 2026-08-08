@@ -19,7 +19,6 @@ test("landing social proof keeps healthy application totals when Ponder is unava
   assert.deepEqual(items, [
     { value: 10, labelKey: "verifiedHumans" },
     { value: 21, labelKey: "reviewResponses" },
-    { value: "$2", labelKey: "usdcPaid" },
   ]);
   assert.deepEqual(warnings, ["[landing-social-proof] Claimed USDC total is unavailable. Ponder unavailable"]);
 });
@@ -33,7 +32,8 @@ test("landing social proof keeps healthy claimed USDC when the application datab
     warn: () => undefined,
   });
 
-  assert.deepEqual(items, [{ value: "$3", labelKey: "usdcPaid" }]);
+  // No paid lane has shipped, so a USDC total must not reach the landing page.
+  assert.deepEqual(items, []);
 });
 
 test("landing social proof combines healthy sources and hides only when both fail", async () => {
@@ -42,7 +42,7 @@ test("landing social proof combines healthy sources and hides only when both fai
     claimedUsdc: async () => 3_000_000n,
     warn: () => undefined,
   });
-  assert.deepEqual(healthy.at(-1), { value: "$5", labelKey: "usdcPaid" });
+  assert.ok(!healthy.some(item => item.labelKey === "usdcPaid"), "no USDC claim while every paid lane is frozen");
 
   const unavailable = await __landingSocialProofServerTestUtils.loadLandingPageSocialProofItems({
     application: async () => Promise.reject(new Error("database unavailable")),

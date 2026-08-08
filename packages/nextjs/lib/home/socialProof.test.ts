@@ -8,6 +8,7 @@ test("landing social proof formats live identity, rating, and USDC totals", () =
     buildLandingPageSocialProofItems({
       totalVerifiedHumans: 10,
       totalRatings: 21,
+      paidLaneReleased: true,
       totalPaidAtomic: "12000000",
     }),
     [
@@ -55,4 +56,22 @@ test("landing social proof formats counts and singular labels in the active loca
     value: "1",
     label: "verifizierte Person",
   });
+});
+
+test("a USDC total never reaches the landing page while every paying lane is frozen", () => {
+  // The figure is summed from a Base Sepolia MockERC20 plus application bonus
+  // rows, so one test transaction would put mock money on the most-visited page
+  // in the product — and "RateLoop paid reviewers $X in USDC" is precisely the
+  // present-tense claim the readiness list forbids in either language. The
+  // counts describe things that did happen and are unaffected.
+  const stats = { totalPaidAtomic: "9000000", totalRatings: "4", totalVerifiedHumans: "3" };
+  const frozen = buildLandingPageSocialProofItems(stats);
+  assert.ok(!frozen.some(item => item.labelKey === "usdcPaid"), "no USDC row without a released paid lane");
+  assert.deepEqual(
+    frozen.map(item => item.labelKey),
+    ["verifiedHumans", "reviewResponses"],
+  );
+
+  const released = buildLandingPageSocialProofItems({ ...stats, paidLaneReleased: true });
+  assert.deepEqual(released.at(-1), { value: "$9", labelKey: "usdcPaid" });
 });
