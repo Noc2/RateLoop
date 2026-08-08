@@ -7,11 +7,44 @@ import { appendSecurityAuditEvent, appendSecurityAuditEventOrReportFailure } fro
 
 export const runtime = "nodejs";
 
-export async function POST(request: NextRequest) {
+/**
+ * Refused before anything is written.
+ *
+ * Both of these are reachable without credentials, and every audit append takes
+ * `FOR UPDATE` on the single head row for ("system", "authentication") — so an
+ * anonymous caller could make each request serialise on one lock and add a row
+ * to a table that has no bound. Neither carries a signal worth that: a request
+ * with the wrong Origin or no Better Auth session is an unauthenticated request,
+ * which nothing else in this application audits either.
+ *
+ * Everything after this point requires a valid Better Auth session, so the
+ * denials that remain are attributable and worth recording.
+ */
+function unauthenticatedRefusal(request: NextRequest) {
   try {
     assertAuthRequestOrigin(request.headers.get("origin"));
+  } catch (error) {
+    return error instanceof AuthError ? error : new AuthError("The request origin is not allowed.", 403);
+  }
+  return null;
+}
+
+export async function POST(request: NextRequest) {
+  const refusal = unauthenticatedRefusal(request);
+  if (refusal) {
+    return NextResponse.json(
+      { error: refusal.message },
+      { status: refusal.status, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+  try {
     const betterSession = await getBetterAuth().api.getSession({ headers: request.headers });
-    if (!betterSession?.user?.id) throw new AuthError("Complete Better Auth sign-in before exchanging a session.", 401);
+    if (!betterSession?.user?.id) {
+      return NextResponse.json(
+        { error: "Complete Better Auth sign-in before exchanging a session." },
+        { status: 401, headers: { "Cache-Control": "no-store" } },
+      );
+    }
     const authenticationMethod =
       typeof betterSession.session.authenticationMethod === "string"
         ? betterSession.session.authenticationMethod
