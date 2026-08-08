@@ -433,7 +433,12 @@
     "Ask submitted": "Ask submitted",
     "Binary": "Binary",
     "Platform fee": "Platform fee",
-    "reviewers · expires": "reviewers · expires"
+    "reviewers · expires": "reviewers · expires",
+    "No redaction applied": "No redaction applied",
+    "No selection": "No selection",
+    "Public": "Public",
+    "Synthetic": "Synthetic",
+    "Redacted": "Redacted"
   },
   "notifications": {
     "dismiss": "Dismiss notification"

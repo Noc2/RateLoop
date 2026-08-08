@@ -433,7 +433,12 @@
     "Ask submitted": "Anfrage übermittelt",
     "Binary": "Binär",
     "Platform fee": "Plattformgebühr",
-    "reviewers · expires": "Prüfende · läuft ab"
+    "reviewers · expires": "Prüfende · läuft ab",
+    "No redaction applied": "Keine Schwärzung angewendet",
+    "No selection": "Keine Auswahl",
+    "Public": "Öffentlich",
+    "Synthetic": "Synthetisch",
+    "Redacted": "Geschwärzt"
   },
   "notifications": {
     "dismiss": "Benachrichtigung schließen"

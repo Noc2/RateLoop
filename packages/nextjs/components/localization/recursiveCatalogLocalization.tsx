@@ -18,6 +18,16 @@ const PROTECTED_SEGMENT_PATTERNS = [
 
 type RecursiveCatalogLocalizationOptions = {
   attributes: readonly string[];
+  /**
+   * Props translated only on components, never on intrinsic elements.
+   *
+   * `value` is the reason this exists. Several components take their display
+   * text through a `value` prop, so without this those strings can never reach
+   * the catalogue — but `value` is also the attribute that carries an input's
+   * contents and an option's key, and translating those would corrupt forms.
+   * The distinction is the element kind, not the prop name.
+   */
+  componentAttributes?: readonly string[];
   elementProps?: (
     element: ReactElement<Record<string, unknown>>,
     translate: (source: string) => string,
@@ -102,7 +112,10 @@ export function localizeCatalogNode(node: ReactNode, options: RecursiveCatalogLo
   }
 
   const props: Record<string, unknown> = options.elementProps?.(element, translate) ?? {};
-  for (const attribute of options.attributes) {
+  const translatable = elementName
+    ? options.attributes
+    : [...options.attributes, ...(options.componentAttributes ?? [])];
+  for (const attribute of translatable) {
     const value = element.props[attribute];
     if (typeof value === "string") props[attribute] = translate(value);
     else if (isValidElement(value) || Array.isArray(value)) {

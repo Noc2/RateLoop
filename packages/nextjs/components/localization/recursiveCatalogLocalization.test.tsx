@@ -1,4 +1,5 @@
 import React from "react";
+import { localizeCatalogNode } from "./recursiveCatalogLocalization";
 import { NextIntlClientProvider } from "next-intl";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -75,4 +76,32 @@ test("shared and public recursive localization use the same untranslated-value b
   assert.match(publicHtml, /id="public-date">2026-08-04T12:30:00Z</u);
   assert.match(publicHtml, /id="public-json">\{&quot;label&quot;:&quot;Review&quot;\}</u);
   assert.match(publicHtml, /id="public-signature">-----BEGIN SIGNATURE----- Review -----END SIGNATURE-----</u);
+});
+
+test("a component-only attribute is translated while the same prop on an input is not", () => {
+  // SummaryItem and friends pass their display text through `value`, so without
+  // this those strings could never reach the catalogue however many phrases were
+  // added — "Not available" was already catalogued and still rendered English.
+  // But `value` also carries an input's contents and an option's key, and
+  // translating those would corrupt forms and change submitted data. The
+  // distinction is the element kind, not the prop name.
+  function Summary({ value }: { value: React.ReactNode }) {
+    return <span>{value}</span>;
+  }
+  const localized = localizeCatalogNode(
+    <div>
+      <Summary value="Not available" />
+      <input readOnly value="Not available" />
+      <option value="Not available">Not available</option>
+    </div>,
+    { attributes: ["title"], componentAttributes: ["value"], phrases: { "Not available": "Nicht verfügbar" } },
+  );
+  const html = renderToStaticMarkup(localized as React.ReactElement);
+  assert.match(html, /<span>Nicht verfügbar<\/span>/u, "the component prop should translate");
+  assert.match(html, /<input[^>]*value="Not available"/u, "an input's value must survive untouched");
+  assert.match(
+    html,
+    /<option value="Not available">Nicht verfügbar<\/option>/u,
+    "an option key stays, its label translates",
+  );
 });

@@ -35,6 +35,9 @@ export function LocalizedSharedContent({ children }: { children: ReactNode }) {
   if (locale === "en") return children;
   return localizeCatalogNode(children, {
     attributes: TRANSLATABLE_ATTRIBUTES,
+    // Component-only: SummaryItem and friends carry their display text here,
+    // while `value` on an input or option must never be touched.
+    componentAttributes: ["value"],
     phrases: locale === "de" ? deShared.phrases : enShared.phrases,
   });
 }
