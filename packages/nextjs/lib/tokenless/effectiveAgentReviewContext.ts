@@ -484,7 +484,8 @@ export async function getEffectiveAgentReviewContext(principal: IntegrationPrinc
   }
   if (
     (responseWindowSeconds !== null &&
-      (responseWindowSeconds < MINIMUM_REVIEW_RESPONSE_WINDOW_SECONDS || responseWindowSeconds > MAXIMUM_REVIEW_RESPONSE_WINDOW_SECONDS)) ||
+      (responseWindowSeconds < MINIMUM_REVIEW_RESPONSE_WINDOW_SECONDS ||
+        responseWindowSeconds > MAXIMUM_REVIEW_RESPONSE_WINDOW_SECONDS)) ||
     (panelSize !== null && (panelSize < MINIMUM_REVIEW_PANEL_SIZE || panelSize > MAXIMUM_REVIEW_PANEL_SIZE)) ||
     (profileStatus === "ready" && (responseWindowSeconds === null || panelSize === null)) ||
     (requiredExpertiseKeys.length > 0 && expertiseRequirements.length > 0) ||

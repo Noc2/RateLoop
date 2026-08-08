@@ -183,7 +183,12 @@ export function validateTokenlessQuoteRequest(value: unknown): TokenlessQuoteReq
     MINIMUM_PUBLIC_REVIEW_PANEL_SIZE,
     MAXIMUM_REVIEW_PANEL_SIZE,
   );
-  const responseWindowSeconds = integer(request.responseWindowSeconds, "request.responseWindowSeconds", MINIMUM_REVIEW_RESPONSE_WINDOW_SECONDS, MAXIMUM_REVIEW_RESPONSE_WINDOW_SECONDS);
+  const responseWindowSeconds = integer(
+    request.responseWindowSeconds,
+    "request.responseWindowSeconds",
+    MINIMUM_REVIEW_RESPONSE_WINDOW_SECONDS,
+    MAXIMUM_REVIEW_RESPONSE_WINDOW_SECONDS,
+  );
   const budget = record(request.budget, "request.budget");
   const bountyAtomic = atomic(budget.bountyAtomic, "request.budget.bountyAtomic");
   const attemptReserveAtomic = atomic(budget.attemptReserveAtomic, "request.budget.attemptReserveAtomic");

@@ -3,10 +3,7 @@ import "server-only";
 import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient } from "~~/lib/db";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
-import {
-  type AssuranceResponseKeyring,
-  getAssuranceResponseKeyrings,
-} from "~~/lib/tokenless/assuranceResponses";
+import { type AssuranceResponseKeyring, getAssuranceResponseKeyrings } from "~~/lib/tokenless/assuranceResponses";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Row = Record<string, unknown>;

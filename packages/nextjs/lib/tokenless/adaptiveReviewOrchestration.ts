@@ -26,8 +26,11 @@ import {
   normalizePublicPaidReviewPublication,
   requestPublicPaidHumanReview,
 } from "~~/lib/tokenless/publicPaidHumanReviewAdapter";
+import {
+  MAXIMUM_REVIEW_RESPONSE_WINDOW_SECONDS,
+  MINIMUM_REVIEW_RESPONSE_WINDOW_SECONDS,
+} from "~~/lib/tokenless/reviewPanelPolicy";
 import { TokenlessServiceError, getTokenlessResult, waitForTokenlessAsk } from "~~/lib/tokenless/server";
-import { MAXIMUM_REVIEW_RESPONSE_WINDOW_SECONDS, MINIMUM_REVIEW_RESPONSE_WINDOW_SECONDS } from "~~/lib/tokenless/reviewPanelPolicy";
 
 type QueryRow = Record<string, unknown>;
 
@@ -236,7 +239,12 @@ async function loadBoundOpportunity(
           ? null
           : rowEnum(row, "private_sensitivity", ["internal", "confidential", "restricted", "regulated"] as const),
       privateGroupId: rowString(row, "private_group_id"),
-      responseWindowSeconds: rowInteger(row, "response_window_seconds", MINIMUM_REVIEW_RESPONSE_WINDOW_SECONDS, MAXIMUM_REVIEW_RESPONSE_WINDOW_SECONDS),
+      responseWindowSeconds: rowInteger(
+        row,
+        "response_window_seconds",
+        MINIMUM_REVIEW_RESPONSE_WINDOW_SECONDS,
+        MAXIMUM_REVIEW_RESPONSE_WINDOW_SECONDS,
+      ),
       panelSize: rowInteger(row, "panel_size", 1, 100),
       compensationMode: rowEnum(row, "compensation_mode", ["unpaid", "usdc"] as const),
       bountyPerSeatAtomic: rowString(row, "bounty_per_seat_atomic"),

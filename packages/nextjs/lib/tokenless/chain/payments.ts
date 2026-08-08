@@ -48,9 +48,12 @@ import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { throwIfMaintenanceCancelled } from "~~/lib/tokenless/maintenanceCancellation";
 import { requirePaidLaneComplianceApproval } from "~~/lib/tokenless/paidLaneCompliance";
 import { normalizedX402Authorization } from "~~/lib/tokenless/productCore";
+import {
+  MAXIMUM_REVIEW_RESPONSE_WINDOW_SECONDS,
+  MINIMUM_REVIEW_RESPONSE_WINDOW_SECONDS,
+} from "~~/lib/tokenless/reviewPanelPolicy";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import { reserveSurpriseBountyCapacity } from "~~/lib/tokenless/surpriseBountyService";
-import { MAXIMUM_REVIEW_RESPONSE_WINDOW_SECONDS, MINIMUM_REVIEW_RESPONSE_WINDOW_SECONDS } from "~~/lib/tokenless/reviewPanelPolicy";
 
 // A single server-funded execution holds an exclusive claim lease for this long.
 // It must comfortably cover approval + createRound broadcast and receipt
