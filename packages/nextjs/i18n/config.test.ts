@@ -89,6 +89,17 @@ test("one English concept keeps one German noun", () => {
   // ("im Workspace", "den Workspace") are correct as they stand.
   assert.doesNotMatch(germanCopy, /\b(?:des|dieses|eines|jedes) Workspace\b(?!s)/u);
 
+  // "Owner" was „Eigentümer" nine times and „Verantwortliche Person" once, on
+  // the agent detail panel — a different job title for the same field.
+  assert.doesNotMatch(germanCopy, /Verantwortliche Person/u, "an Owner is an Eigentümer everywhere");
+  assert.match(germanCopy, /Eigentümer/u);
+
+  // German compounds a borrowed noun with a hyphen. Four strings wrote
+  // „Feedback Bonus" open, and one pluralised it as the English "Bonuses".
+  assert.doesNotMatch(germanCopy, /Feedback Bonus/u, "a borrowed compound takes a hyphen");
+  assert.doesNotMatch(germanCopy, /Bonuses/u, "the German plural is Boni");
+  assert.match(germanCopy, /Feedback-Bonus/u);
+
   // Decision packet and assurance archive are different English concepts, so
   // their distinct German nouns are correct and must not be collapsed into one.
   assert.match(germanCopy, /Entscheidungspaket/u);
