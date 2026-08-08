@@ -662,3 +662,62 @@ test("membership grants, upgrades, and invite redemptions land in the workspace 
     assert.equal(rows[index]!.previous_digest, rows[index - 1]!.event_digest);
   }
 });
+
+test("a member who still holds an active reviewer seat cannot be silently offboarded", async () => {
+  // Membership and reviewer access are independent and managed on different
+  // pages, and member removal only ever deleted membership rows. An admin
+  // offboarding a departing employee did the obvious thing, saw it succeed, and
+  // the person kept their access grant and any in-flight review assignment.
+  const owner = await betterAuthPrincipal("reviewer_seat_owner", "reviewer-seat-owner@workspace.test");
+  const leaver = await betterAuthPrincipal("reviewer_seat_leaver", "reviewer-seat-leaver@workspace.test");
+  const { workspaceId } = await createWorkspace({ name: "Reviewer seat", ownerAddress: owner.principalId });
+  const now = new Date();
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_workspace_members (workspace_id, account_address, role, created_at)
+          VALUES (?, ?, 'member', ?)`,
+    args: [workspaceId, leaver.principalId, now],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_workspace_reviewers
+          (workspace_id, principal_address, status, activated_at, created_by, updated_at)
+          VALUES (?, ?, 'active', ?, ?, ?)`,
+    args: [workspaceId, leaver.principalId, now, owner.principalId, now],
+  });
+
+  await assert.rejects(
+    () =>
+      removeWorkspaceMember({
+        accountAddress: owner.principalId,
+        workspaceId,
+        principalId: leaver.principalId,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "workspace_member_is_active_reviewer",
+  );
+
+  // The refusal must leave membership intact rather than half-removing it.
+  assert.equal(
+    (await listWorkspaceMembers({ accountAddress: owner.principalId, workspaceId })).some(
+      value => value.principalId === leaver.principalId,
+    ),
+    true,
+  );
+
+  // Once the reviewer seat is ended, offboarding proceeds normally.
+  await dbClient.execute({
+    sql: `UPDATE tokenless_workspace_reviewers
+          SET status='removed', ended_at=?, end_reason='test_removed', updated_at=?
+          WHERE workspace_id=? AND principal_address=?`,
+    args: [now, now, workspaceId, leaver.principalId],
+  });
+  await removeWorkspaceMember({
+    accountAddress: owner.principalId,
+    workspaceId,
+    principalId: leaver.principalId,
+  });
+  assert.equal(
+    (await listWorkspaceMembers({ accountAddress: owner.principalId, workspaceId })).some(
+      value => value.principalId === leaver.principalId,
+    ),
+    false,
+  );
+});

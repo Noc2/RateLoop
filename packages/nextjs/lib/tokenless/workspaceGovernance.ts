@@ -1071,6 +1071,41 @@ export async function changeWorkspaceMemberAccessRole(input: {
   return { principalId, accessRole: input.accessRole };
 }
 
+/**
+ * Refuses to remove a workspace member who still holds an active reviewer seat.
+ *
+ * Membership and reviewer access are deliberately independent, and they are
+ * managed on different pages: members in Workspace, reviewers in Reviews. The
+ * hazard was that member removal deleted three rows and stopped, leaving the
+ * reviewer seat, its access grant, its group membership and any in-flight
+ * assignments untouched. An admin offboarding a departing employee did the
+ * obvious thing, saw it succeed, and the person kept access to confidential
+ * artifacts.
+ *
+ * This does not cascade on the member's behalf. `endWorkspaceReviewer` already
+ * performs the correct revocation — grants, memberships, artifact leases,
+ * assignment leases, released assignments and cohort reservation counters — and
+ * doing it implicitly here would collapse a separation the design of record
+ * relies on. Failing loudly with the destination named is what turns a silent
+ * security gap into a two-step task.
+ */
+async function assertNotAnActiveReviewer(client: PoolClient, workspaceId: string, principalId: string) {
+  const reviewer = await client.query(
+    `SELECT 1 FROM tokenless_workspace_reviewers
+     WHERE workspace_id = $1 AND principal_address = $2 AND status = 'active'
+     LIMIT 1`,
+    [workspaceId, principalId],
+  );
+  if (reviewer.rowCount) {
+    throw new TokenlessServiceError(
+      "This person is also an active reviewer. Remove their reviewer access in Reviews first, which revokes their " +
+        "access grant and expires any review they are still assigned, then remove them from the workspace.",
+      409,
+      "workspace_member_is_active_reviewer",
+    );
+  }
+}
+
 export async function removeWorkspaceMember(input: {
   accountAddress: string;
   workspaceId: string;
@@ -1086,6 +1121,7 @@ export async function removeWorkspaceMember(input: {
     const target = await managedWorkspaceMemberForUpdate(client, input.workspaceId, principalId);
     assertMutableWorkspaceMember({ actor: manager, principalId, ...target });
     previousRole = target.role;
+    await assertNotAnActiveReviewer(client, input.workspaceId, principalId);
     await client.query(
       "DELETE FROM tokenless_workspace_member_clients WHERE workspace_id = $1 AND account_address = $2",
       [input.workspaceId, principalId],
