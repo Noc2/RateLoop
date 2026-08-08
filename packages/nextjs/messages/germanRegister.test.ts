@@ -22,9 +22,18 @@ const INFORMAL_PRONOUNS = /(?<![\p{L}])(?:du|dich|dir|dein(?:e|em|en|er|es)?)(?!
  * so "Wähle eine Antwort" is informal with nothing to match on but the verb.
  * Only sentence-initial forms count — "Lade" mid-sentence is usually a noun
  * ("Ladezustand") or another part of speech.
+ *
+ * This is a verb list, which means it is only ever as complete as the last time
+ * somebody extended it: four informal strings sat in human.json for the whole
+ * life of this test because `Verbinde` and `Vervollständige` were not on it.
+ * A verb belongs here whether or not the catalogues currently use it — the
+ * entries below that match nothing are the point, not dead weight.
  */
 const INFORMAL_IMPERATIVES =
-  /(?:^|[.!?…]\s+|\n)(?:Wähle|Gib|Prüfe|Melde|Füge|Trage|Lade|Kopiere|Öffne|Sende|Erstelle|Bestätige|Verwende|Wechsle|Speichere|Entferne|Klicke|Starte|Beende|Schließe|Wiederhole|Versuche|Nimm|Gehe|Sieh|Lies)(?![\p{L}])/u;
+  /(?:^|[.!?…]\s+|\n)(?:Wähle|Gib|Prüfe|Melde|Füge|Trage|Lade|Kopiere|Öffne|Sende|Erstelle|Bestätige|Verwende|Wechsle|Speichere|Entferne|Klicke|Starte|Beende|Schließe|Wiederhole|Versuche|Nimm|Gehe|Sieh|Lies|Verbinde|Vervollständige|Aktiviere|Deaktiviere|Richte|Zeige|Kontaktiere|Warte|Fahre|Verknüpfe|Hinterlege|Bearbeite|Ändere|Setze|Rufe|Teile|Exportiere|Importiere|Lösche|Beantworte|Notiere|Bewerte|Ergänze|Wende|Halte|Lege)(?![\p{L}])/u;
+// Deliberately absent: Suche, Stelle, Teile. Each is a common noun as well as an
+// imperative — „Suche und Beratungskalibrierung bleiben verfügbar" is correct
+// formal German and the noun reading is the one the product actually uses.
 
 /**
  * Words that merely contain a pronoun as a substring, or where the match is a
