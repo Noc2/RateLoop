@@ -1,5 +1,6 @@
 import React from "react";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import test from "node:test";
 
@@ -97,4 +98,29 @@ test("terms restrict paid services and require commissioned-panel disclosure", a
   assert.match(html, /not an organic consumer review, testimonial, endorsement, or measure of general public opinion/i);
   assert.match(html, /must not present paid reviewer feedback as unsolicited customer or consumer feedback/i);
   assert.match(html, /href="\/docs\/evidence#commissioned-paid-panels"/i);
+});
+
+test("every legal page is served in the same shell", () => {
+  // /legal/imprint used its own: no max width, so it rendered 1057px wide at
+  // 32px top padding against the other pages' 896px at 48px, with a back link
+  // that said something different in a different colour. It was the widest of
+  // the five and the shortest in content — the measure ran to 1025px for an
+  // address block. A visitor moving between two legal pages saw the column
+  // change under them.
+  const here = new URL(".", import.meta.url);
+  const shells = new Map<string, string>();
+  for (const page of ["cookies", "dpa", "imprint", "privacy", "subprocessors", "terms"]) {
+    const source = readFileSync(new URL(`./${page}/page.tsx`, here), "utf8");
+    const article = /<article className="([^"]+)"/u.exec(source);
+    assert.ok(article, `${page} should render a legal <article>`);
+    shells.set(page, article[1]!);
+    assert.match(source, /<Link href="\/legal">&larr; Legal<\/Link>/u, `${page} needs the shared back link`);
+  }
+
+  // subprocessors is the one documented exception: it carries a wide provider
+  // table and widens the column for it. Everything else is one string.
+  const wide = shells.get("subprocessors");
+  shells.delete("subprocessors");
+  assert.equal(wide, "prose legal-prose mx-auto max-w-5xl px-4 py-12");
+  assert.deepEqual([...new Set(shells.values())], ["prose legal-prose mx-auto max-w-4xl px-4 py-12"]);
 });

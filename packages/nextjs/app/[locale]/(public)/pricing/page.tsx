@@ -39,7 +39,7 @@ export default async function PricingPage({
     <LocalizedPublicContent locale={locale} section="site">
       <div className="flex grow flex-col items-center px-4 pb-20 pt-12 sm:pt-16 lg:pt-20">
         <div className="w-full max-w-6xl">
-          <header className="max-w-4xl">
+          <header className="mx-auto max-w-4xl">
             <h1 className="hero-headline text-[3.25rem] leading-[0.95] text-base-content sm:text-[4.6rem] lg:text-[5.4rem]">
               Start free. <span className="rateloop-text-gradient">Scale when you need it.</span>
             </h1>
