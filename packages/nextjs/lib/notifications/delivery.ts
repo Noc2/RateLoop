@@ -26,8 +26,34 @@ type LifecycleCandidate = {
 
 type DeliveryState = "dead" | "delivered" | "parked" | "retry" | "suppressed";
 
+/**
+ * How many emails one cycle may hand to the transport. This one is network bound
+ * and shares a 60-second cron invocation with roughly two dozen other
+ * processors, so it stays small.
+ */
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
+
+/**
+ * How many notification rows one cycle may create. Deliberately much larger than
+ * the delivery limit, because these are cheap INSERTs and throttling them was
+ * throttling the wrong thing.
+ *
+ * One limit used to govern both, applied as a total across all six notification
+ * categories via `interleave`. A panel of three over fifty items is 150
+ * notifications, so at twenty per five-minute cycle the last reviewer was not
+ * even *recorded* as notified for about 35 minutes — past the 20-minute floor on
+ * the response window, and well past the old one-hour default. The product
+ * manufactured its own late deliveries at trivial volume.
+ *
+ * Recording promptly is what matters: the in-app inbox is accurate the moment a
+ * row exists, and the reviewer sees the work as soon as they open the product.
+ * Email then drains at its own safe rate through the retry queue, which is what
+ * that queue is for.
+ */
+const MATERIALIZE_DEFAULT_LIMIT = 200;
+const MATERIALIZE_MAX_LIMIT = 1_000;
+
 const MAX_ATTEMPTS = 8;
 const MAX_RECOVERIES = 6;
 const STALE_CLAIM_MS = 10 * 60_000;
@@ -45,6 +71,16 @@ function bounded(value: number | undefined) {
   if (value === undefined) return DEFAULT_LIMIT;
   if (!Number.isSafeInteger(value) || value < 1) throw new Error("Notification worker limit is invalid.");
   return Math.min(value, MAX_LIMIT);
+}
+
+/**
+ * An explicit caller limit still raises materialization to its own ceiling, so a
+ * maintenance run asking for "50" does not silently cap recording at 50 too.
+ */
+function boundedMaterialization(value: number | undefined) {
+  if (value === undefined) return MATERIALIZE_DEFAULT_LIMIT;
+  if (!Number.isSafeInteger(value) || value < 1) throw new Error("Notification worker limit is invalid.");
+  return Math.min(Math.max(value, MATERIALIZE_DEFAULT_LIMIT), MATERIALIZE_MAX_LIMIT);
 }
 
 function notificationId(candidate: Pick<LifecycleCandidate, "principalAddress" | "sourceKey" | "sourceType">) {
@@ -424,7 +460,7 @@ export async function materializeTokenlessLifecycleNotifications(
   input: { fetchImpl?: typeof fetch; limit?: number; now?: Date; ponderUrl?: string; signal?: AbortSignal } = {},
 ) {
   const now = input.now ?? new Date();
-  const candidates = await loadLifecycleCandidates(now, bounded(input.limit), {
+  const candidates = await loadLifecycleCandidates(now, boundedMaterialization(input.limit), {
     fetchImpl: input.fetchImpl,
     ponderUrl: input.ponderUrl,
     signal: input.signal,
@@ -446,7 +482,7 @@ export async function enqueueTokenlessNotificationEmails(input: { limit?: number
               'oversightAlerts'
             )
           ORDER BY n.created_at ASC LIMIT ?`,
-    args: [bounded(input.limit)],
+    args: [boundedMaterialization(input.limit)],
   });
   let inserted = 0;
   for (const value of notifications.rows) {
@@ -707,13 +743,19 @@ export async function runTokenlessNotificationCycle(input: {
 }) {
   const now = input.now ?? new Date();
   const limit = bounded(input.limit);
-  const materialized = await materializeTokenlessLifecycleNotifications({ now, limit, signal: input.signal });
+  // Recording is cheap and must keep up with dispatch; sending is not.
+  const materializeLimit = boundedMaterialization(input.limit);
+  const materialized = await materializeTokenlessLifecycleNotifications({
+    now,
+    limit: materializeLimit,
+    signal: input.signal,
+  });
   const alerts = maintenanceCancellationRequested(input.signal)
     ? { inserted: 0 }
-    : await materializeOversightAlertNotifications({ now, limit });
+    : await materializeOversightAlertNotifications({ now, limit: materializeLimit });
   const enqueued = maintenanceCancellationRequested(input.signal)
     ? { inserted: 0 }
-    : await enqueueTokenlessNotificationEmails({ now, limit });
+    : await enqueueTokenlessNotificationEmails({ now, limit: materializeLimit });
   const outcomes = maintenanceCancellationRequested(input.signal)
     ? []
     : await deliverPendingTokenlessNotificationEmails({
@@ -766,6 +808,8 @@ export async function runTokenlessNotificationCycle(input: {
 
 export const __notificationDeliveryTestUtils = {
   actionUrl,
+  bounded,
+  boundedMaterialization,
   deliveryConfiguration,
   dueSoonRows,
   insertLifecycleCandidates,

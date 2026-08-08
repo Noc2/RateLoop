@@ -2,7 +2,8 @@ import { DEADLINE_REMINDER_REMAINING_FRACTION, __notificationDeliveryTestUtils }
 import assert from "node:assert/strict";
 import test from "node:test";
 
-const { dueSoonRows, privateUnpaidAssignmentCandidateSql } = __notificationDeliveryTestUtils;
+const { bounded, boundedMaterialization, dueSoonRows, privateUnpaidAssignmentCandidateSql } =
+  __notificationDeliveryTestUtils;
 
 const NOW = new Date("2026-08-07T12:00:00.000Z");
 
@@ -62,6 +63,29 @@ test("an elapsed or unusable deadline never produces a reminder", () => {
       .length,
     0,
   );
+});
+
+test("recording notifications is not throttled by the email send budget", () => {
+  // One limit used to govern both, applied as a total across all six categories.
+  // A panel of three over fifty items is 150 notifications, so at 20 per
+  // five-minute cycle the last reviewer was not even recorded as notified for
+  // about 35 minutes -- past the 20-minute floor on the response window.
+  assert.equal(bounded(undefined), 20);
+  assert.ok(
+    boundedMaterialization(undefined) >= 150,
+    "a panel of three over fifty items must be recordable in one cycle",
+  );
+
+  // An explicit caller limit must not drag recording back down to the send budget.
+  assert.equal(bounded(50), 50);
+  assert.ok(boundedMaterialization(50) >= boundedMaterialization(undefined));
+
+  // Both still refuse nonsense and stay bounded above.
+  for (const invalid of [0, -1, 1.5]) {
+    assert.throws(() => bounded(invalid), /limit is invalid/u);
+    assert.throws(() => boundedMaterialization(invalid), /limit is invalid/u);
+  }
+  assert.ok(boundedMaterialization(1_000_000) <= 1_000);
 });
 
 test("the reminder query carries the same reviewer eligibility as the original notice", () => {
