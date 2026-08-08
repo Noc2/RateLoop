@@ -1,10 +1,15 @@
 # Before pitching German companies — readiness list
 
-Written 6 August 2026, last revised against `9a0bbdec1`. Sources: four audits of the
+Written 6 August 2026, last revised against `dcc2ddfcf` (8 August 2026). Sources: four
+audits of the
 product and its collateral, then a second round covering internal consistency, German
 enterprise procurement, the first-run journey, architecture health, and 2026 regulatory
 change, then a **sourcing round on 7 August 2026** that re-verified the sales collateral
-against the code and graded every regulatory claim against a primary source.
+against the code and graded every regulatory claim against a primary source, then a
+**fourth round on 8 August 2026**: a line-by-line re-verification of every open item
+against the code, a fresh gap audit, a market and competitor research pass, and a
+skeptical-buyer weakness review. The fourth round's new findings are Tier 8; its status
+changes and corrections are folded in place below.
 
 **Read [docs/sales/quellen-und-belege.md](sales/quellen-und-belege.md) before quoting any
 number or legal proposition from this document.** It grades each claim as primary source,
@@ -27,7 +32,15 @@ deployment-drift detection, inline evidence projection and the up-front paid-lan
 A third round closed the World ID content-security-policy gap, CSP violation reporting, the
 tie and cancellation subscriptions, the `requestedPanelSize` contradiction inside the SDK,
 the blinding claim in the tagline, and the twenty-six untranslated German errors in the
-setup wizard. Each is a separate commit with tests. What remains is below.
+setup wizard. Each is a separate commit with tests. A fourth round through `49a99ee86`
+closed the reviewer deadline reminder (7.1.1.A), the reviewer leaver process for both
+manual removal and SCIM deprovisioning, the weekend-hostile response-window ceiling, an
+unkeyed reviewer-digest confirmation oracle in the training and coverage exports,
+plaintext-capable database connections, the `X-Powered-By` header, integrity secrets
+reachable from the browser bundle, and unbounded statement time on the request pool.
+While this revision was being written, two more 6.4 items landed: the per-address
+email-code cap with its test (`2f607647e`) and the anonymous audit-chain write on
+`/api/auth/exchange` (`dcc2ddfcf`). What remains is below.
 
 This list is long because the gap is not in one place. The German *story* is ready and the
 German *surface* is unusually good. The German *paper* is not, the *product* has one
@@ -72,8 +85,12 @@ mailbox is an hour of work and changes how every legal document is received.
 
 ### 0.2 There is no working booking link
 
-`TOKENLESS_DEMO_BOOKING_URL` is empty (`.env.example:290`), so "Book demo" falls back to
-`mailto:` ([`demoBooking.ts:12-26`](../packages/nextjs/lib/marketing/demoBooking.ts)).
+`TOKENLESS_DEMO_BOOKING_URL` is empty (`.env.example:293`), so "Book demo" falls back to
+`mailto:` ([`demoBooking.ts:12-26`](../packages/nextjs/lib/marketing/demoBooking.ts)) —
+and the fallback address is the same personal ProtonMail compose window, hardcoded at
+[`WorkspacePlanCards.tsx:33`](../packages/nextjs/components/pricing/WorkspacePlanCards.tsx).
+Fixing 0.1 must include that constant, or the money page's primary button still opens a
+personal mailbox.
 
 ## Tier 1 — the claim problem
 
@@ -211,9 +228,11 @@ Four independent gates, each fatal on its own.
    (`:131-135`). Even with Stripe fully live, every checkout returns 403.
 4. **The deployment is code-forbidden from live money.** The readiness script fails the
    deploy if `STRIPE_SECRET_KEY` starts with `sk_live_`
-   ([`check-tokenless-production-readiness.mjs:657`](../packages/nextjs/scripts/check-tokenless-production-readiness.mjs)).
-   Taking real money means promoting to `main`, which trips all six frozen release
-   capabilities.
+   ([`check-tokenless-production-readiness.mjs:693`](../packages/nextjs/scripts/check-tokenless-production-readiness.mjs)) —
+   and the same script *requires* `sk_live_` once subscriptions or top-ups are enabled in
+   real production, so live money is impossible on tokenless and mandatory-live on a
+   promote. Taking real money means promoting to `main`, which trips all six frozen
+   release capabilities.
 
 **And the currency is wrong.** Pricing is USD-only and hard-enforced (`currency: "usd"` in
 three places), and prepaid top-ups require `us_bank_transfer`
@@ -348,7 +367,10 @@ Verify each before saying it, but the code is real:
 
 - **A complete German UI.** 3,981 message keys, **zero** missing German translations, and
   the legal pages fully localised with idiomatic terminology. Most competitors at this
-  stage have machine-translated marketing and English legal pages. Lead with this.
+  stage have machine-translated marketing and English legal pages. Lead with this — but
+  note the caveat found in the fourth round: the *key-based* layer is complete, while the
+  *exact-string phrase catalogue* used by several signed-in panels has misses that render
+  half-German (8.5). Fix those before a live walkthrough of members, settings or billing.
 - **SAML/OIDC SSO and SCIM**, admin-configurable in-product
   ([`betterAuth.ts:86-110`](../packages/nextjs/lib/auth/betterAuth.ts)).
 - **Hash-chained append-only audit log** with `home_region: 'eu'` on every event and chain
@@ -362,6 +384,31 @@ Verify each before saying it, but the code is real:
   capability.
 - **A stated, dated security-questionnaire posture** that answers against deployed
   configuration rather than substituting a trust claim.
+- **A complete reviewer leaver process** *(new, 8 August)*: both manual member removal
+  (`e8ff52414`) and SCIM deprovisioning (`c8d7aa0ce`) now revoke the reviewer seat, access
+  grant, group membership and in-flight assignments — the joiner/mover/leaver question
+  every German security questionnaire asks, previously the finding most likely to fail one
+  outright.
+- **Weekend-survivable review deadlines** *(new, 8 August)*: response windows now run up
+  to 30 days with a 3-day default (`5018d147c`), so a Friday-afternoon request no longer
+  dies over a German weekend. Deliberately not Feiertag-aware — say "3-day default", not
+  "business-day aware".
+- **Uniformly keyed reviewer pseudonyms** *(new, 8 August)*: the training and coverage
+  exports' reviewer digest was an unkeyed SHA-256 — a confirmation oracle for whether a
+  named person is a reviewer — and is now a keyed, rotatable, workspace-scoped HMAC
+  (`55c265dbd`, `ca9048b41`). This also resolves the research-list item "Confirm
+  'Pseudonyme pro Run' or drop it": pseudonyms are keyed HMACs; describe them that way.
+- **Certificate-verified TLS to the database** (`e5fa4d0dd`) — TOM-annex substance.
+- **Transactional-email plumbing done properly**: One-Click `List-Unsubscribe` with a real
+  POST handler, plain-text parts on all four senders, per-recipient tokens, idempotency
+  keys, a verified-and-opted-in gate before any send. The domain-authentication layer
+  (SPF/DKIM/DMARC) is the gap — see 8.4.
+- **A public surface with no third-party scripts at all**: fonts self-hosted via
+  `next/font`, zero external CDNs, analytics or trackers, no non-essential cookies, no
+  consent banner needed and none falsely claimed, HMAC-hashed rate-limit identities, and a
+  35-day IP purge on a five-minute cron. For a German DPO this is an audit answer most
+  vendors cannot give — but two functional cookies and the stored IP are missing from the
+  privacy notices; see 8.5.
 
 ## The build list — what to implement before outreach
 
@@ -472,7 +519,9 @@ chain questions.
    specs, how to interpret output and logs.
 4. **Draft the Art. 25(4) compliance-cooperation annex before a buyer drafts it for you.**
    Buyers are lifting clauses from the Commission's MCC-AI.
-5. **Confirm "Pseudonyme pro Run"** or drop it (1.2).
+5. ~~Confirm "Pseudonyme pro Run" or drop it (1.2).~~ **Resolved 8 August**: reviewer
+   pseudonyms are now uniformly keyed, rotatable, workspace-scoped HMACs (`55c265dbd`);
+   describe them as keyed pseudonyms, not anonymity.
 6. **The BAFA lever is checked, and it does not apply. Stop planning around it.** The
    programme is real — basis €3,570 capped at **€3,500**, **50%** in the western Länder and
    **up to 80%** in the eastern Länder and Berlin, max five engagements and no more than two
@@ -494,6 +543,9 @@ commercial research document has been removed, so `docs/sales/` and the business
 now the single owners of price.
 
 ## Ordering
+
+**Superseded by § 8.6**, which re-ranks the whole document after the fourth round; kept
+because its logic still holds.
 
 If you do nothing else, do Tier 0 — it is a day of work and it changes the first
 impression completely.
@@ -621,11 +673,13 @@ website and *du* the moment they sign in. A grammar-based guard test keeps it th
 
 Two terminology problems remain, and neither is mechanical:
 
-- **The same object has two German names.** The setup wizard says *Arbeitsbereich* 53 times;
-  every other catalogue says *Workspace* 153 times. The evaluator creates one thing and is
-  then shown another.
-- **The core deliverable has four German nouns** — *Belegpaket*, *Nachweispaket*,
-  *Entscheidungspaket*, *Prüfnachweisarchiv* — and two English ones on a single screen.
+- **The same object has two German names.** The setup wizard says *Arbeitsbereich* 54 times;
+  the other catalogues say *Workspace* 204 times — and nine of those *Workspace* uses are
+  now inside `agents.json` itself, so the wizard mixes both nouns in one catalogue. The
+  evaluator creates one thing and is then shown another. *(Re-counted 8 August 2026.)*
+- **The core deliverable has four German nouns** — *Belegpaket* (7), *Nachweispaket* (5),
+  *Entscheidungspaket* (6), *Prüfnachweisarchiv* (1) — and two English ones on a single
+  screen.
 
 A catalogue test in the shape of the register guard would pin terminology permanently.
 
@@ -653,15 +707,19 @@ The `no_decision` schema mismatch, the six-layer panel-size disagreement, the mi
 events for a tie and a cancellation, the `$29` billing page, the unsubscribable terminal
 events and the `requestedPanelSize` 3–500 family are all closed. What remains:
 
-- **The quote floor of 3 rejects a legal private panel of 2.** `requestedPanelSize` is now
-  bounded 3–100, matching the profile maximum, but a `private_invited` profile is legal at
-  `panelSize` 2 and `createInternalPrivateReviewQuote` parses the same request. A
-  two-reviewer private *paid* group therefore produces a quote that cannot validate. The
-  floor is older than the narrowing, and the unpaid lane that ships today does not reach it,
-  so this bites only when private paid reviews are switched on.
-- **A stored quote from 101 to 500 can no longer be replayed.** `createTokenlessAsk`
-  re-parses stored quote JSON, so an idempotent replay against a historical quote now
-  returns 400. The 15-minute quote TTL bounds this to replays of expired quotes.
+- **The quote floor of 3 rejects a legal private panel of 2 — now with an official
+  rationale attached.** `2205baecf` narrowed the bound to 3–100 across all six layers and
+  named the floor `MINIMUM_PUBLIC_REVIEW_PANEL_SIZE`, declaring that private panels never
+  reach this validator. The code contradicts the declaration: the paid private path builds
+  a `customer_invited` quote from `input.economics.panelSize`
+  (`paidAssignmentOperations.ts:1085`) and routes it through
+  `createInternalPrivateReviewQuote` into the audience-blind floor-3 validator. A
+  two-reviewer private *paid* group still cannot quote. Still bites only when private paid
+  reviews are switched on.
+- **A stored quote from 101 to 500 can no longer be replayed — accepted as a decision.**
+  `2205baecf` explicitly accepted that the narrowing "turns a silent dead end into an
+  immediate 400". The 15-minute quote TTL bounds this to replays of expired quotes. No
+  longer a defect; recorded so nobody re-finds it.
 - **Seven stored-row readers still accept a panel of 1**, below the profile minimum of 2,
   and the guard in `reviewPanelPolicy.test.ts` covers six `lib/tokenless` modules and cannot
   match a bare `3`, so it caught none of them.
@@ -722,8 +780,9 @@ every weekday morning. **It reports; it does not deploy.** `deploymentEnabled.to
 4. **The German DPA qualifiers** (5.6) — counsel, but brief them this week.
 5. **pg-mem snapshotting and the `deployedContracts` byte check** (5.8) — engineering
    hygiene that compounds.
-6. **Auth rate limiting** (6.4) — the limiter already exists; it is the one remaining
-   security item a questionnaire reliably asks about.
+6. **Finish the email-code rate limit's residuals** (6.4) — the cap and its test landed
+   (`2f607647e`); what remains is a translated 429 message and a pruning path for the
+   rate-limit table.
 
 ### 5.11 What B8 needs decided before it is built
 
@@ -795,23 +854,22 @@ Two small builds would make it demonstrable rather than merely true:
 answers „how many reviews". It says nothing about what one review costs a human, and that is
 where the objection really lives. Ranked by effort saved per hour of work.
 
-**A. Nothing reminds a reviewer. This is the biggest single defect on the live lane.**
-The reviewer lifecycle has exactly four notification types
-([`reviewerInbox.ts:1-7`](../packages/nextjs/lib/notifications/reviewerInbox.ts)):
-`assignment.available`, `assignment.completed`, `settlement.reveal_required`,
-`settlement.claim_expiring`. **The only deadline warning that exists is about money on the
-paid lane.** On the live unpaid lane a reviewer is told once that work exists and then never
-hears about it again until the deadline has passed and the review is dead.
-
-*Build: an `assignment.deadline_approaching` source type* (½ day). The delivery worker,
-the dedupe key derivation and the fairness interleave already exist in
-[`delivery.ts`](../packages/nextjs/lib/notifications/delivery.ts) and the cron already runs
-every five minutes. This is one new query and one new href against machinery that is built.
-**It is the cheapest reliability improvement available anywhere in this document.**
+**A. ~~Nothing reminds a reviewer.~~ Closed, 8 August 2026, and then reinforced twice.**
+`assignment.deadline_approaching` shipped in `280caaa2a`
+([`reviewerInbox.ts:3`](../packages/nextjs/lib/notifications/reviewerInbox.ts) now carries
+five source types), with the reminder query and dedupe in
+[`delivery.ts`](../packages/nextjs/lib/notifications/delivery.ts) and its own test file.
+Two adjacent commits matter for the same objection: `5018d147c` raised the response-window
+ceiling from 24 hours to 30 days and the default from 1 hour to **3 days**, so a Friday
+review request survives a German weekend — deliberately *not* business-hours or
+Feiertag-aware, which would need a calendar — and `49a99ee86` stopped notification
+*recording* being throttled behind the email budget, so every reviewer on a large panel is
+recorded as notified in the first cycle rather than the last one waiting ~35 minutes.
+The delivery cron runs every 60 seconds, not the five minutes an earlier draft claimed.
 
 **B. An unanswered seat kills the review instead of moving.** On
 `response_deadline_elapsed` without quorum the outcome is forced `inconclusive`
-([`privateReviewResponses.ts:747-772`](../packages/nextjs/lib/tokenless/privateReviewResponses.ts)).
+([`privateReviewResponses.ts:746-751`](../packages/nextjs/lib/tokenless/privateReviewResponses.ts)).
 There is **no reassignment, substitution or backfill** — the seat expires and the work is
 wasted, including the effort of the reviewer who *did* answer.
 
@@ -858,10 +916,10 @@ connect step. A prospect who hits that concludes „extra work" about *operation
 reviewing. Completing the wizard is already on the list; it belongs to this objection too.
 
 **Ordering for a pre-launch product**, where nothing is deployed and there is no customer to
-disturb: **A, then B, then C-1.** A and C-1 are a day together and remove a failure mode and
-a pointless click. B is the one that changes what the product *is* — a panel that survives an
-unresponsive human is a materially different proposition from one that does not, and it is
-the difference between „we record reviews" and „we deliver decisions".
+disturb: A shipped, so **B, then C-1.** C-1 is half a day and removes a pointless click. B
+is the one that changes what the product *is* — a panel that survives an unresponsive human
+is a materially different proposition from one that does not, and it is the difference
+between „we record reviews" and „we deliver decisions".
 
 ### 7.2 The works-council hazard — build the mode, do not write the promise
 
@@ -968,6 +1026,24 @@ literacy — selling literacy evidence is weaker than it was in 2025.
 it in Section 4, which is notifying authorities. The premise is wrong. Still worth counsel
 sign-off before a deck is built on it.*
 
+**Re-verified 8 August 2026, and the deferral is now settled law, not a reading.** The
+Digital Omnibus on AI received final Council approval on 29 June 2026 (Parliament 16 June,
+423–57): standalone Annex-III high-risk obligations — including Article 26 deployer duties
+and Article 27 FRIA — moved to **2 December 2027**, AI embedded in regulated products to
+2 August 2028, and **Article 50 was not deferred and has applied since 2 August 2026**.
+Corroborated across Gibson Dunn, DLA Piper, Cooley and Covington client alerts; the
+dissenting source above is dead. Two German additions worth using in the room: the
+**KI-MIG** (the German AI Act implementation act) passed the Bundestag in June 2026, making
+the **Bundesnetzagentur** the central market-surveillance authority and complaints office
+since 2 August 2026, with the KoKIVO coordination centre operating the KI-Service-Desk —
+so the research-list item "get a documented classification from the BNetzA KI-Servicedesk"
+now has a statutory footing, and "there is now a German authority with an address" is
+itself a Mittelstand conversation opener. A competent buyer will know Article 26 slid;
+pitching it as an August-2026 urgency lever mis-signals. The honest frame: Article 50(4)
+for the public-interest-text segment today, and December 2027 as the runway argument —
+stand up oversight evidence now, be audit-ready when Article 26 bites — for everyone else,
+alongside the date-independent drivers (works council, ISO 42001 programmes, liability).
+
 ### 6.2 The dependency audit now scans. What is left is a reading of the result.
 
 The audit was replaced (osv-scanner, digest-pinned, weekly schedule): **0 → 1,917 packages
@@ -975,8 +1051,10 @@ scanned**, sixteen accepted exceptions each with an expiry date, and the hono Re
 (GHSA-8j4g-w8fx-2239) is fixed at 4.12.34 rather than pinned below it. Two things a
 questionnaire will still surface:
 
-- **`next` sits at exactly the minimum fixed version, with zero headroom.** The next Next.js
-  advisory is an immediate upgrade, not a scheduled one.
+- **`next` has fallen two patches behind** (15.5.21 installed; 15.5.22 and 15.5.23 are on
+  npm as of 8 August). Check whether either patch is security-relevant and upgrade; the
+  general point stands — the pin sits close enough to the minimum fixed version that any
+  Next.js advisory is an immediate upgrade, not a scheduled one.
 - **The 56 Dependabot alerts are misleading in your favour, and you cannot cite them.** They
   are computed against the default branch while `.github/dependabot.yml` targets `tokenless`,
   so `main` never receives the fixes. Tokenless is materially cleaner than the count implies;
@@ -1005,16 +1083,26 @@ over-claim costs a slide; an unevidenced TOM annex is a term of a signed AVV.
 The admin/impersonation plugin, the raw error objects on the API error path, and the retired
 web3 origins in the CSP are closed. Three remain:
 
-- **Email bombing is still open, and this document had the reason wrong.** Authentication was
-  never unthrottled: Better Auth applies its default rules in production — sign-in 3 per 10s,
-  email code 3 per 60s. The storage was the defect and is fixed; counters now live in the
-  database rather than in each lambda. What remains is that the bucket is keyed on IP and
-  path, not on the target address, so a distributed caller can still bomb an arbitrary inbox.
-  The interception point already exists at `/api/auth/better/[...all]`, which reads
-  `body.email` for exactly this route. It must fail open.
-- **`/api/auth/exchange` writes a hash-chained audit row per anonymous failure**, with no
-  session and no limiter, and every write takes `FOR UPDATE` on one head row — so concurrent
-  callers serialise on a single lock and the table grows unbounded. Not previously recorded.
+- **Email bombing: closed with two residuals** (`2f607647e`, with a test).
+  `lib/auth/emailCodeRateLimit.ts` implements exactly what this item specified: 10 codes
+  per hour keyed on an HMAC of the target address (never stored raw), intercepted at
+  `/api/auth/better/[...all]` scoped to `/email-otp/send-verification-otp` — the only
+  sending endpoint, since `betterAuth.ts` hard-rejects every OTP type but `sign-in` —
+  returning 429 with `Retry-After`, failing open on DB error. Two residuals: the 429 body
+  is hardcoded English (`route.ts:72`) with no client mapping for its
+  `email_code_rate_limited` code — the same class of defect as 8.5's `useFormErrors`
+  findings, fix them together — and nothing ever prunes `tokenless_mcp_rate_limits`: no
+  DELETE exists anywhere, the schema's `updated_at` index presumes a sweeper that was
+  never written, and address-keying adds a permanent row per email. The fixed UTC-hour
+  window also allows ~20 codes in a burst straddling the boundary; acceptable, but worth
+  knowing when answering a questionnaire.
+- **~~`/api/auth/exchange` writes a hash-chained audit row per anonymous failure~~ —
+  closed** (`dcc2ddfcf`): the two refusals that need no credentials (wrong Origin, no
+  session) now return before the audited block, so anonymous callers can no longer reach
+  the `FOR UPDATE` head-row lock or grow the table. The fix chose not-writing over rate
+  limiting — an unauthenticated request is not a security event — which is the right
+  answer and worth repeating in a questionnaire. `ce163e4a0`'s pool timeouts bound the
+  remaining authenticated path.
 - **CSP reporting exists now but has no rate limit.** `report-to` and `report-uri` both
   ship to a same-origin endpoint. It is unauthenticated by necessity and bounded only by a
   content-type check and a 16 KiB cap, so a determined caller can still fill the log. The
@@ -1079,3 +1167,324 @@ One tiering insight worth more than any certificate: German industrial buyers gr
 to the data class. *Intern* gets a management-signed self-assessment; only *vertraulich* and
 above demand TISAX or ISO 27001. **Argue the data classification down to *intern* wherever
 it is true and you are in the self-assessment tier, not the certificate tier.**
+
+## Tier 8 — the fourth round: market shape, repackaging, and what the buyer's advisor sees
+
+Added 8 August 2026 from four parallel audits: a line-by-line re-verification (folded in
+place above), a market and competitor research pass, a skeptical-buyer weakness review,
+and a fresh code gap audit. Sources for the market claims are cited inline; several are
+vendor-authored and marked as such.
+
+### 8.1 The market has a shape now, and RateLoop sits in an open seam
+
+Gartner published its **first Magic Quadrant for AI Governance Platforms in July 2026**
+(13 vendors; IBM, ServiceNow and Truyo as Leaders — placements sourced from vendor PR, not
+the report itself). Those platforms sell AI inventory, regulation-mapped assessments and
+policy workflow at $50k+ entry — **paperwork, not actual human review of outputs**.
+RateLoop does not compete there; it *feeds* that layer evidence, so integrate rather than
+fight (ServiceNow/Jira ticketing, below).
+
+The functional neighbours are elsewhere, and the field moved in 2025–26:
+
+- **Humanloop no longer exists** — acquired by Anthropic, sunset 8 September 2025. Remove
+  it from any competitive note that still carries it.
+- **LLM observability + annotation** (LangSmith annotation queues, Langfuse — German-founded,
+  open-source, strong DACH developer mindshare): engineering tools, single-annotator,
+  no compliance framing.
+- **Human-in-the-loop approval infrastructure** — the closest neighbours:
+  **gotoHuman** (Berlin, EU servers, ~€350–950/month) and **HumanLayer** (approvals via
+  Slack/email). Single-approver clicks; no panels, no adaptive sampling, no
+  regulator-mapped evidence.
+- **The most direct rhetorical competitor is KLA (kla.digital)**: "runtime checkpoints,
+  human approval routing, cryptographically sealed evidence an auditor can independently
+  verify", auto-generated DORA/MiFID II/AI-Act reports, aimed at finance/insurance/health.
+  Their language overlaps this product's almost word for word. Watch them; differentiate
+  on panel verdicts, adaptive-sampling economics and named-expert accountability versus
+  their per-action policy gating.
+- **Platform risk is real and dated:** Microsoft Foundry added native human approval
+  gates, manual review queues and Agent-365 governance at Build 2026. For an M365-centric
+  Mittelstand that is the default answer. The counter: independence (the evidence is not
+  held by the AI vendor being overseen), cross-stack MCP intake, and the regulator mapping.
+- German governance-paperwork vendors you will meet in deals: **trail** (Munich),
+  **caralegal** (Berlin), **Kertos**, **Modulos** (Zurich). **TÜV SÜD/NORD and DEKRA sell
+  ISO 42001 audits — they are channel and validation partners, not competitors.** "The
+  evidence pack your TÜV auditor can verify offline" is a strong line.
+
+**Differentiators, ranked:** (1) named-expert *panel* verdicts — everyone else is a
+single-approver click; (2) offline-verifiable hash-chained evidence — only KLA claims
+similar; (3) adaptive sampling as a cost story — nobody else prices oversight *down* over
+time; (4) MCP-native intake — genuinely early; (5) complete German surface + EEA hosting +
+SSO/SCIM at a price the MQ vendors cannot touch.
+
+**And the moat question answered honestly:** "evidence record" alone is one sprint from
+commodity for any bundler. What no US bundler will build, because it makes no sense
+outside Germany and Austria, is **a review system designed to pass a German works
+council** — the twelve-gate `employmentDataGovernance` mode, aggregate-only reviewer
+views, a shipped Betriebsvereinbarung template and a § 90 BetrVG pack. §§ 6.5/7.2 frame
+this as risk mitigation; it is also the **positioning headline**. Ship the mode, then make
+it slide 3 rather than an objection answer. The second moat is already in the business
+plan and absent from every sales document: **the compounding signed archive under one key
+lineage** — leaving RateLoop loses no data (Data Act export), but a new vendor's evidence
+history starts at zero for the next surveillance audit. That is a switching cost a
+German auditor-minded buyer respects, and it is pro-customer enough to say out loud.
+
+### 8.2 Feature and integration opportunities, ranked for German outreach
+
+| # | Build | Why | Size |
+| - | ----- | --- | ---- |
+| 1 | **Microsoft Teams notifications, then approve-from-Teams** | M365 dominates the Mittelstand; every neighbour leads with channel integrations | Webhook notify small; Adaptive Cards + bot medium |
+| 2 | **n8n community node + template workflows** | n8n is German and huge in DACH automation; its own docs push per-tool-call human approval — RateLoop as the compliance-grade approval target | Small — thin wrapper over the existing API |
+| 3 | **Article 50(4) evidence view** — mark reviewed outputs as disclosed/labelled, mapped to the Commission's transparency guidelines and Code of Practice | The only AI-Act obligation live *today*; makes the pitch date-relevant post-Omnibus | Small — reporting over existing records |
+| 4 | **Works-council pack + `employmentDataGovernance` mode** | The gate every German deployment must pass; nobody in the neighbour set addresses it | Small-medium; §§ 6.5/7.2 |
+| 5 | **Lightweight KI-Anwendungsregister** auto-populated from MCP intake | German SME guidance treats the AI use-case register as step 1 (~7.5 person-days quoted for manual builds); RateLoop already knows which agents submit reviews — a free by-product | Medium |
+| 6 | **Slack parity** | Table stakes for the startup segment | Small |
+| 7 | **Article 73-shaped incident log** — escalate a Stop verdict into a serious-incident record | Asked for in governance checklists; deferred with high-risk timing, so runway feature | Medium |
+| 8 | **LangChain/LangGraph interrupt + OpenAI SDK middleware** | Reaches teams not on MCP; LangGraph interrupts are the standard HITL pattern | Medium |
+| 9 | **Jira/ServiceNow ticket on Revise/Stop** | Enterprise ops expectation; integrates with the MQ layer instead of fighting it | Small-medium |
+
+**Skip deliberately:** DATEV and Personio (no demand evidence in this category), Zapier/Make
+(low compliance-buyer overlap), and **on-prem** — a real Mittelstand ask but ruinous for a
+one-person company; offer EEA single-tenant instead. One trust-signal addition to § 6.6:
+a full **BSI C5:2026 attestation is unrealistic at this size, but a C5-criteria
+self-assessment that inherits the hosting providers' own C5 attestations** is the German
+way to answer the question, alongside CSA STAR Level 1 and the EU Cloud CoC already listed.
+
+### 8.3 The pilot is priced right and packaged wrong
+
+Market check: €2,500 is far under the OneTrust-class entry (~$50k) and comparable to a few
+months of gotoHuman; paid-pilot norms are 10–30% of target ACV, creditable on conversion,
+45–90 days, one workflow, one owner, one metric. The number is fine. Three structural
+problems around it:
+
+- **The price is smaller than the buyer's cost of buying it.** Onboarding any new
+  processor costs a German enterprise €10–30k of internal effort (AVV negotiation, DPO
+  review, questionnaire, works-council process). €2,500 next to that reads as "this vendor
+  does not know what you are about to spend on him". Repackage, don't reprice: make the
+  pilot's named deliverables the buyer's own procurement artifacts — Betriebsrats-Pack,
+  signed AVV + TOM annex, subprocessor dossier, evidence packet + verifier walkthrough for
+  the interne Revision. Then the pilot buys *down* their internal cost. For >250-employee
+  prospects (works council near-certain) make the larger scoped pilot the default.
+- **"Price after the pilot unknown" is a budgeting veto, not an objection.** Einkauf
+  cannot open a pilot leading to an unbounded commitment. Do not publish the list price;
+  put a **binding price corridor in the signed order form** ("Anschluss-Jahresvertrag
+  zwischen €X und €Y netto p.a., 50% des Piloten anrechenbar"). One clause, counsel
+  review.
+- **The 30-day conversion deadline on the 50% credit is mathematically unusable by the
+  ICP** — the buyer's own AVV plus works-council cycle alone runs longer. It reads as a
+  US-SaaS pressure tactic. Change to 90 days or "bis zum Ende des auf den Piloten
+  folgenden Quartals".
+
+### 8.4 Weaknesses the earlier rounds under-weighted, with their mitigations
+
+- **The Bonitätsprüfung is the first gate, and it is silent.** Before any questionnaire,
+  Einkauf runs a Creditreform check on "Hawig Ventures UG". A UG with minimal
+  Stammkapital, no filed revenue and one Geschäftsführer scores into "Vorkasse only / no
+  strategic dependency" flags automatically — a disqualification that never generates a
+  question you could answer. Mitigations: UG→GmbH conversion with €25k capital is the
+  strongest single Bonität signal (~€1–2k notary, weeks of latency); a one-page voluntary
+  financial self-disclosure for the vendor file; and align the brand/entity mismatch —
+  the product says RateLoop, the Impressum says Hawig Ventures UG; "handelnd als RateLoop"
+  plus a registered Marke (~€900 EUIPO, and IP warranty questions appear in every German
+  vendor contract) closes it.
+- **Breach notification is contractually promised and operationally impossible.** The AVV
+  commits to Art. 33-chain notification "without undue delay"; § 6.4 records that no
+  alerting of any kind exists, so the operator would learn of an incident from the
+  customer. One person asleep or on holiday makes the promise structurally false, and
+  German DPOs ask "who is on call?" verbatim. Cheap, honest fix set: uptime + error
+  monitoring with paging (1–2 days — also closes the § 6.3 "monitored operational
+  failures" gap); a **cyber policy with incident-response services** (~€1–2k/yr — the
+  insurer's 24/7 IR hotline is the honest answer to "what is your incident response
+  team?"); a written Notfallhandbuch naming a deputy with contractual access.
+- **The MIT license is the unused continuity asset.** The business plan treats open source
+  purely as a moat problem. Inverted, it is the best answer to "what if you are gone":
+  escrow stops being a source-code negotiation and becomes a **runbook + keys + database
+  escrow**, because the code is already public. A published continuity plan — "MIT-licensed
+  at [repo]; signing keys and an operations runbook in escrow with a German notary; on
+  trigger events your data and archive are released; any IT service provider can operate
+  it" — folds into the § 7.3 switching page and answers the one-person-UG objection with
+  mechanics instead of reassurance. Runbook 2–3 days; escrow ~€500–1,500/yr.
+- **Support hours are nowhere stated.** German buyers do not expect 24/7 from a small
+  vendor; they expect a stated, honest commitment (Werktage 9–17 Uhr CET, Reaktion am
+  nächsten Arbeitstag, Vertretungsregelung). Absence reads as "there is no support".
+  Half a day.
+- **There is no channel, and the plan's own kill-criteria assume one.** Cold email is
+  UWG-banned and personal introductions are not a channel. Best fit, ranked:
+  (1) **AI-Act/ISO-42001 consultancies and external-DSB providers** — hundreds of
+  Mittelstand retainers, trusted by exactly the privacy/legal budget owner, UWG-clean
+  referrals, and their policy deliverables need precisely this evidence to survive a
+  surveillance audit. **This is also the only live route to the BAFA lever** the research
+  list pronounced dead: a registered Berater delivering the policy mapping as fundable
+  consulting with RateLoop underneath. One partnership, two problems. (2) The BMWK-funded
+  **Mittelstand-Digital Zentren**, which actively hunt SME demo cases. (3) **Bitkom
+  membership + AK KI** — cheap, a credibility logo the Impressum lacks, compliant contact
+  surface. (4) Bechtle/adesso-class systems houses: **explicitly not yet** — no margin, no
+  certificates, nothing referrable until three references and a pentest exist.
+- **The reviewer cold-start is motivational, not just mechanical.** § 7.1.1 fixes friction;
+  it does not answer why an unpaid expert responds to name-attributed judgment with
+  recorded rationale — accountability without authority, and § 9.9 of the Leitfaden admits
+  the personal-liability question has no prepared answer. Three non-code levers: make
+  "the reviewed step **replaces an existing approval**, performed by the people who
+  already do it" a hard pilot-qualification criterion (net-new review work is an unwinnable
+  cold-start — the stop rule should fire); put **named reviewers and a time budget into
+  the order form as a Mitwirkungspflicht** agreed at kickoff; and write the one-page
+  German **reviewer notice** — what is recorded, what the export strips, that the owner
+  and not the reviewer carries the decision. The same artifact the works-council pack
+  needs, written for the reviewer.
+- **Flip the demo so the prospect plays reviewer.** The buying meeting is Fachabteilung +
+  DSB + Einkauf + eventually a works-council assessor; none of them can reproduce the
+  MCP side, and alt-tabbing into an IDE recodes the product as Entwicklerwerkzeug. The
+  reviewer path and evidence view are fully browser-based and German: invite two of the
+  prospect's own people as reviewers live, fire the request from the presenter's machine
+  off-screen, close on `/docs/evidence/verify`. Zero code. Add a 3–4 minute German
+  screencast of the full loop for the DSB to re-watch internally, and prefer a chat
+  surface (Claude Desktop / ChatGPT connector) over an IDE when the request side must be
+  shown.
+
+### 8.5 New defects found in this round's code audit
+
+**Collateral and surface:**
+
+- **The sales `.pptx`/`.docx` binaries are stale by their own README's admission** — they
+  predate the correction rounds and still carry claims the markdown has since forbidden,
+  and the claim gate cannot read OOXML (§ 1.1), so this recurs after every correction
+  cycle forever. Delete the binaries and present from rendered markdown/PDF, or add a
+  markdown→Office build step so the binaries are outputs, never artifacts. This is the
+  exact "German buyers verify before they sign" failure mode, living inside `docs/sales/`.
+- **The deck has no company, no team, no reference.** A German buyer finds the one-person
+  UG in the Impressum within minutes; finding it *after* a polished anonymous deck
+  converts "small vendor" into "vendor hiding something". One honest founder slide —
+  background, the continuity mechanics from 8.4, the open-source fact — turns the
+  weakness into the transparency posture the rest of the deck trades on.
+- **The homepage leads with AI-assisted *hiring* as a flagship use case**
+  (`page.tsx`, `docs/use-cases`) — the worst possible example for this market: Annex III
+  high-risk, § 95 BetrVG Auswahlrichtlinien, AGG exposure, and it hands the works council
+  its strongest framing on first visit while the deck carefully avoids high-risk anchors.
+  Swap for a low-risk example that also feeds the Article 50(4) segment (marketing,
+  customer replies, publishing). Hours.
+- **The landing page's social-proof strip is wired to mock-money chain stats**
+  ([`socialProof.ts`](../packages/nextjs/lib/home/socialProof.ts)): "USDC paid" and
+  "verified humans" render from indexer totals that belong to the frozen paid lane, where
+  "USDC" is a Base-Sepolia `MockERC20`. Zero-guards hide them today; any nonzero test
+  activity puts fabricated-looking dollar figures on the most-visited page. Gate both
+  items behind the capability flags like everything else. Hours, and it closes a latent
+  Tier 1 violation.
+- **English headings leak into the German docs pages** a technical evaluator will open:
+  the phrase catalogue has no entries for the `/docs/smart-contracts` H1 "Inspect Fund
+  Custody" and two H2s, the evidence page's "OSCAL 1.2.2 component definition" link text,
+  and an SDK-page heading — so `/de` renders them in English amid German body copy.
+  Five phrases, minutes. Systemically: nothing enforces phrase-catalogue coverage, so
+  every future English literal ships silently on `/de`; a literal-extraction coverage
+  test (~half a day) pins it shut.
+- **The Impressum has no USt-IdNr. and one contact channel.** § 5 Abs. 1 Nr. 6 DDG
+  requires the VAT ID *soweit vorhanden* — and a UG invoicing reverse-charge will have
+  one. § 3.1 covers validating the *customer's* ID; nothing lists your own. Add it and a
+  second fast contact channel. Minutes once the ID exists.
+- **The root error boundary is hardcoded English** (`app/error.tsx`) while the localized
+  one sits a level down — and the root one catches exactly the failures upstream of locale
+  resolution, the database-outage class a demo would hit. No `global-error.tsx` exists.
+- **The operational documentation a German admin needs is English-only** — the owner
+  guide and everything in `docs/`. The works-council external assessor (§ 80 Abs. 3
+  BetrVG — statutorily presumed, employer-paid, reads *your* documentation) would receive
+  an English manual for a German labor-law assessment. 1–2 days — **after** the
+  Arbeitsbereich/Workspace terminology fix (5.5), or the guide fossilises the split.
+
+**The signed-in German UI — the phrase-catalogue layer has holes the key layer hides:**
+
+The app translates through two layers: next-intl keys (verified complete — an AST scan of
+every namespace against `messages/de` finds **zero** missing keys) and an exact-string
+phrase catalogue used by several client panels, where `translateCatalogString` falls back
+on a miss to **per-substring substitution and then raw English, without warning**. That
+fallback produces the worst class of defect for a live demo — half-German sentences:
+
+- The members panel's destructive confirm buttons render **„Entfernen member"** and
+  **„Widerrufen invitation"** (`WorkspaceMembersPanel.tsx:429`), and the removal prompt
+  renders „Entfernen Max Mustermann **from this workspace?**" (`:418`). The worst-looking
+  finding of the round, on a panel every evaluator opens.
+- The billing card mixes languages mid-sentence: „**Aktualisieren** the payment method
+  below before upgrading.", „Online upgrades are temporarily **unverfügbar** for this
+  workspace." (`WorkspaceSettingsClient.tsx:159-174`), plus untranslated "Free",
+  "Creating invoice…", "Loading this workspace's billing status…".
+- The SSO/SCIM section — the one an enterprise admin will open — is largely English:
+  "Configure SSO and SCIM", "Copy this SCIM bearer token now", "domain verified /
+  verification required", and a German dialog heading over an English deletion warning
+  (`WorkspaceSettingsClient.tsx:1465-1825`).
+- All four workspace-deletion summary sentences, one half-substituted („…its balance
+  remain **aktiv**…") (`WorkspaceDeletionPanel.tsx:195-200`).
+- **Raw server error text reaches German screens**: `useFormErrors.ts:68-76` prefers the
+  raw `Error.message` over the caller's localized fallback, so API validation strings like
+  "Workspace name must be 1-120 characters." and "Choose a workspace role." surface
+  verbatim under German fields — including on the wizard's first step. A failed fetch
+  prints "Failed to fetch" into a `role="alert"`. `WorkspaceReviewersPanel.tsx:255` shows
+  the correct pattern (discard the cause); the inconsistency is accidental. Also
+  `welcome/actions.ts:12` throws untranslated English that escapes to the error boundary.
+- Fix shape: add the missing phrases to the catalogue, flip `useFormErrors` to prefer the
+  localized fallback, and — same lesson as the public surface — add a coverage test, since
+  the catalogue fails silent by design. Also: the role dropdown maps "Admin" →
+  „Administration"; it should be „Administrator".
+- Verified clean on the same pass, worth keeping: no raw next-intl keys anywhere, sign-in
+  fully translated, no dead-end routes on the journey, empty states present, no console
+  noise, no hardcoded literals in the 2,633-line setup flow.
+
+**Infrastructure and privacy:**
+
+- **No SPF/DKIM/DMARC story exists anywhere in the repo** — no DNS records, docs, or
+  checks; the sender address is validated only for shape, and the readiness preflight
+  checks only non-emptiness. Deliverability of the reviewer invitation — the product's
+  most important email — currently rests on undocumented Resend dashboard state. Document
+  the DNS records and add a preflight check for the expected sender domain.
+- **No unauthenticated health endpoint** — nothing an uptime monitor can probe without
+  credentials; combined with § 6.4's no-alerting finding, the 8.4 monitoring fix should
+  add one.
+- **The request pool has no `max` or idle timeout configured** — `pg` defaults to 10 per
+  lambda instance, unbounded from Postgres's view under concurrency. One config object.
+- **The privacy notice never names the IP address** although sessions store it in full
+  (35-day purge is real and runs every five minutes — say so), and **two functional
+  cookies (`rateloop_locale`, `rateloop-theme`, both 365-day) are missing from the cookie
+  inventory**. Both consent-exempt; the gap is disclosure, not consent. Minutes each.
+- **Text contrast has a systemic hole**: the token remap covers opacity variants up to
+  `/55`, but `/60` (173 uses) and `/65` (116 uses) fall at or below 4.5:1 on white for
+  body text — and the axe `color-contrast` rule is explicitly disabled in the
+  accessibility test suite that covers the landing page. Extend the remap and re-enable
+  the rule. Relevant to the § 5.4 EN 301 549 conformance report.
+- **An 11 MB unreferenced promo video ships in `public/`** (plus its poster and captions),
+  and the prepared `og-image.jpg`/`twitter-image.jpg` are unused while metadata points at
+  the 158 KB favicon with a `summary` card — so a link shared into Teams or LinkedIn by a
+  prospect renders with no real preview image. Delete the dead files, wire the OG images,
+  and add per-page `openGraph` metadata: `getLocalizedPublicMetadata` currently gives ~14
+  public pages one shared description. Also: no sitemap exists and `robots.txt` has no
+  `Sitemap:` line; hreflang is HTTP-header-only. 1–2 hours together.
+- **Deadline reminders share the `assignmentAvailable` preference toggle** — a reviewer
+  cannot mute reminders while keeping availability notices. Design note, not a defect;
+  record it so nobody re-finds it.
+- **The CSP grants the four wallet origins unconditionally** while its own comment claims
+  they are gated like World ID. The origins are load-bearing (see the connector rule in
+  `AGENTS.md`) — do not remove them; either gate them with the connector flag or fix the
+  comment so an auditor reading the file is not told something the grants contradict.
+
+### 8.6 Revised ordering, whole document
+
+1. **Tier 0 plus its new neighbours, one batch, 1–2 days**: domain mailbox everywhere
+   (including `WorkspacePlanCards.tsx:33`), booking link, Impressum USt-IdNr. + second
+   contact channel, support-hours page, swap the hiring use case, gate the social-proof
+   chain stats — and the German-surface fixes from 8.5: the five public phrase-catalogue
+   entries, the signed-in panels' missing phrases, and the `useFormErrors` flip so raw
+   English API errors stop reaching German screens. These are the strings a live
+   evaluation actually renders.
+2. **Finish the email-code rate limit's residuals** (translated 429, table pruning), and
+   land the monitoring fix-set from 8.4: uptime/error alerting with paging + an
+   unauthenticated health endpoint — it simultaneously closes § 6.3's "monitored
+   operational failures", the breach-notification gap, and a questionnaire line.
+3. **The decision that governs everything else** (top of this document), then Tier 1
+   claims, then the Tier 4 paper (order form with price corridor and Mitwirkungspflicht
+   clause, AVV PDF, TOM annex) — now including the Data Act terms from 5.2 and the
+   continuity/escrow statement from 8.4 folded into the § 7.3 switching page.
+4. **The works-council pack and `employmentDataGovernance` mode** (6.5/7.2/8.1) — the
+   moat, the calendar gate, and the positioning headline in one build.
+5. **Demo repackaging** (8.4): reviewer-plays-the-buyer script, German screencast,
+   panel of 3.
+6. **Channel before volume outreach** (8.4): two consultancy/DSB partnerships and a
+   Mittelstand-Digital Zentrum slot are worth more than any list of cold contacts, and
+   the BAFA lever only exists through the first.
+7. Then the standing build list: B8 browser path (unchanged scope, § 5.11), seat
+   substitution (7.1.1.B), B4 verifier download, B7 email localisation — plus Teams
+   notifications and the n8n node from 8.2 as the first post-pilot integrations.
