@@ -12,12 +12,15 @@ import {
   type HumanReviewAudienceSource,
   configuredHumanReviewAudienceSources,
 } from "~~/lib/tokenless/reviewCapabilities";
-import { MAXIMUM_REVIEW_PANEL_SIZE, MINIMUM_PUBLIC_REVIEW_PANEL_SIZE } from "~~/lib/tokenless/reviewPanelPolicy";
+import {
+  DEFAULT_REVIEW_RESPONSE_WINDOW_SECONDS,
+  MAXIMUM_REVIEW_PANEL_SIZE,
+  MINIMUM_PUBLIC_REVIEW_PANEL_SIZE,
+} from "~~/lib/tokenless/reviewPanelPolicy";
 import { getTokenlessAskByIdempotencyKey } from "~~/lib/tokenless/server";
 
 export const TOKENLESS_HANDOFF_VERSION = "rateloop.handoff.v1" as const;
 const HANDOFF_TTL_MS = 24 * 60 * 60_000;
-const DEFAULT_RESPONSE_WINDOW_SECONDS = 3_600;
 const MAX_FRAGMENT_BYTES = 16 * 1024;
 const HANDOFF_ID_PATTERN = /^rhl_[A-Za-z0-9_-]{32}$/;
 const HANDOFF_TOKEN_PATTERN = /^rht_[A-Za-z0-9_-]{43}_([0-9a-z]{6,12})$/;
@@ -137,7 +140,7 @@ export function parseMcpQuoteRequest(
       question: parsedQuestion,
       redactionSummary: privacy.redactionSummary,
       requestedPanelSize,
-      responseWindowSeconds: DEFAULT_RESPONSE_WINDOW_SECONDS,
+      responseWindowSeconds: DEFAULT_REVIEW_RESPONSE_WINDOW_SECONDS,
       visibility: "public",
     });
   } catch (error) {

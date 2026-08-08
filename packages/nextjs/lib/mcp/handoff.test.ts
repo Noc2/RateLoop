@@ -15,6 +15,7 @@ import {
   __setPublicQuestionMediaPreviewKeyForTests,
   issuePublicQuestionMediaPreviewCapability,
 } from "~~/lib/tokenless/publicQuestionMediaPreview";
+import { DEFAULT_REVIEW_RESPONSE_WINDOW_SECONDS } from "~~/lib/tokenless/reviewPanelPolicy";
 import { createTokenlessAsk, createTokenlessQuote } from "~~/lib/tokenless/server";
 
 const imageAssetId = `pqm_${"A".repeat(24)}`;
@@ -139,7 +140,9 @@ test("creates a 24-hour fragment-only bearer handoff without persisting raw capa
   );
   assert.deepEqual(payload.request, {
     ...quoteRequest(),
-    responseWindowSeconds: 3_600,
+    // The shared default, not a literal: the handoff kept handing out the
+    // retired one hour long after the server default moved to three days.
+    responseWindowSeconds: DEFAULT_REVIEW_RESPONSE_WINDOW_SECONDS,
     visibility: "public",
     dataClassification: "redacted",
     redactionSummary: "Customer identifiers and confidential inputs were removed.",

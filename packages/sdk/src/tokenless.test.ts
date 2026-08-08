@@ -122,8 +122,10 @@ test("package root exposes only the tokenless client, schema, types, and generic
       "TOKENLESS_VISIBILITIES",
       "TOKENLESS_X402_DOMAIN",
       "TOKENLESS_X402_ROUND_AUTHORIZATION_DOMAIN",
+      "MAX_RESPONSE_WINDOW_SECONDS",
       "MAX_REVIEW_PANEL_SIZE",
       "MIN_PUBLIC_REVIEW_PANEL_SIZE",
+      "MIN_RESPONSE_WINDOW_SECONDS",
       "MIN_REVIEW_PANEL_SIZE",
       "buildTokenlessEip3009TypedData",
       "buildTokenlessPrivateReviewCommitmentQuestion",
@@ -1024,7 +1026,34 @@ test("tokenless client performs quote and ask with a required idempotency header
         requestedPanelSize: 15,
         responseWindowSeconds: 1_199,
       }),
-    /responseWindowSeconds must be a safe integer between 1200 and 86400/,
+    /responseWindowSeconds must be a safe integer between 1200 and 2592000/,
+  );
+  // The ceiling was 24h while the service defaulted to three days, so the
+  // shipped default was rejected before any request left the process. Asserted
+  // through the pure validator rather than `quote()`, which would also spend a
+  // stubbed fetch response this test has already budgeted.
+  assert.doesNotThrow(() =>
+    normalizeTokenlessQuoteRequest({
+      audience: {
+        admissionPolicyHash: TEST_ADMISSION_POLICY_HASH,
+        source: "customer_invited",
+      },
+      audiencePolicy: TEST_AUDIENCE_POLICY,
+      visibility: "private",
+      dataClassification: "internal",
+      budget: {
+        attemptReserveAtomic: "5000000",
+        bountyAtomic: "25000000",
+        feeBps: 750,
+      },
+      question: {
+        kind: "binary",
+        prompt: "Ship it?",
+        rationale: { mode: "optional" },
+      },
+      requestedPanelSize: 15,
+      responseWindowSeconds: 259_200,
+    }),
   );
   assert.throws(
     () =>

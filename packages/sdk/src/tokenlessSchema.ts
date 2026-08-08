@@ -35,8 +35,20 @@ type JsonRecord = Record<string, unknown>;
 const ATOMIC_AMOUNT_PATTERN = /^(0|[1-9]\d*)$/;
 const verdictStatuses = new Set<string>(TOKENLESS_VERDICT_STATUSES);
 const reviewerSources = new Set<string>(TOKENLESS_REVIEWER_SOURCES);
-const MIN_RESPONSE_WINDOW_SECONDS = 1_200;
-const MAX_RESPONSE_WINDOW_SECONDS = 86_400;
+/**
+ * Response-window bounds, in seconds. Like the panel bounds below, these mirror
+ * what the RateLoop service enforces, and for the same reason: a window the
+ * service accepts must parse here.
+ *
+ * The ceiling is thirty days because the service's default is *three* — a
+ * Friday review is still open on Monday. A 24-hour ceiling here rejected the
+ * shipped default, so `parseTokenlessResult` threw on ordinary results and
+ * `ask()` refused to send an ordinary request. Both bounds are exported and
+ * imported by `tokenless.ts` rather than restated there, so the request-side
+ * guard and the response-side parser cannot drift apart again.
+ */
+export const MIN_RESPONSE_WINDOW_SECONDS = 1_200;
+export const MAX_RESPONSE_WINDOW_SECONDS = 2_592_000;
 
 /**
  * Panel-size bounds. These mirror the bounds the RateLoop service enforces on a

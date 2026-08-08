@@ -14,8 +14,10 @@ import type {
   HumanAssuranceProjectCreateRequest,
 } from "./humanAssuranceApiTypes";
 import {
+  MAX_RESPONSE_WINDOW_SECONDS,
   MAX_REVIEW_PANEL_SIZE,
   MIN_PUBLIC_REVIEW_PANEL_SIZE,
+  MIN_RESPONSE_WINDOW_SECONDS,
   parseTokenlessAskResponse,
   parseTokenlessPaymentInstructions,
   parseTokenlessQuoteResponse,
@@ -60,8 +62,6 @@ const ATOMIC_AMOUNT_PATTERN = /^(0|[1-9]\d*)$/;
 const EVM_ADDRESS_PATTERN = /^0x[0-9a-fA-F]{40}$/;
 const BYTES32_PATTERN = /^0x[0-9a-fA-F]{64}$/;
 const reviewerSources = new Set<string>(TOKENLESS_REVIEWER_SOURCES);
-const MIN_RESPONSE_WINDOW_SECONDS = 1_200;
-const MAX_RESPONSE_WINDOW_SECONDS = 86_400;
 
 interface NormalizedTokenlessClientOptions {
   apiBaseUrl: string;
