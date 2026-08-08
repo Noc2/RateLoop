@@ -5,6 +5,11 @@ import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { deriveMcpHandoffIdempotencyKey } from "~~/lib/mcp/handoff";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import {
+  DEFAULT_REVIEW_RESPONSE_WINDOW_SECONDS,
+  MAXIMUM_REVIEW_RESPONSE_WINDOW_SECONDS,
+  MINIMUM_REVIEW_RESPONSE_WINDOW_SECONDS,
+} from "~~/lib/tokenless/reviewPanelPolicy";
+import {
   TokenlessServiceError,
   createTokenlessQuote as createOwnedTokenlessQuote,
   createTokenlessAsk,
@@ -199,7 +204,22 @@ test("quotes freeze explicit review timing, profile provenance, and economics", 
   assert.equal(quote.responseWindowSeconds, 7_200);
   assert.deepEqual(quote.requestProfile, requestProfile);
   assert.deepEqual(quote.reviewEconomics, reviewEconomics);
-  for (const responseWindowSeconds of [undefined, 1_199, 86_401, 3_600.5, "3600"]) {
+  // The service's own default is three days, and it used to be rejected here:
+  // validation runs through the SDK, whose ceiling was 24h. So the quote path
+  // refused the window the rest of the product hands it.
+  const atDefault = await createTokenlessQuote({
+    ...quoteRequest(),
+    responseWindowSeconds: DEFAULT_REVIEW_RESPONSE_WINDOW_SECONDS,
+  });
+  assert.equal(atDefault.responseWindowSeconds, DEFAULT_REVIEW_RESPONSE_WINDOW_SECONDS);
+
+  for (const responseWindowSeconds of [
+    undefined,
+    MINIMUM_REVIEW_RESPONSE_WINDOW_SECONDS - 1,
+    MAXIMUM_REVIEW_RESPONSE_WINDOW_SECONDS + 1,
+    3_600.5,
+    "3600",
+  ]) {
     await assert.rejects(
       () => createTokenlessQuote({ ...quoteRequest(), responseWindowSeconds }),
       (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_quote",
