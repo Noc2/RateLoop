@@ -65,7 +65,7 @@ const tokenlessTestOperationalSecrets = () => ({
   ...tokenlessEvidenceSigning(),
 });
 const tokenlessTestDatabase = () => {
-  const DATABASE_URL = "postgresql://rateloop:secret@tokenless-db.example/tokenless?sslmode=require";
+  const DATABASE_URL = "postgresql://rateloop:secret@tokenless-db.example/tokenless?sslmode=verify-full";
   return { DATABASE_URL, TOKENLESS_DATABASE_IDENTITY: deriveHostedDatabaseIdentity(DATABASE_URL) };
 };
 const tokenlessTestRpc = () => {
@@ -210,9 +210,9 @@ function validFixture() {
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
     BETTER_AUTH_SECRET: "b".repeat(48),
     BETTER_AUTH_PASSKEY_RP_ID: "rateloop-tokenless.vercel.app",
-    DATABASE_URL: "postgresql://rateloop:secret@eu-postgres.example/tokenless?sslmode=require",
+    DATABASE_URL: "postgresql://rateloop:secret@eu-postgres.example/tokenless?sslmode=verify-full",
     TOKENLESS_DATABASE_IDENTITY: deriveHostedDatabaseIdentity(
-      "postgresql://rateloop:secret@eu-postgres.example/tokenless?sslmode=require",
+      "postgresql://rateloop:secret@eu-postgres.example/tokenless?sslmode=verify-full",
     ),
     TOKENLESS_THIRDWEB_WALLET_ENABLED: "false",
     BASE_SEPOLIA_RPC_URL: "https://sepolia.base.org",
@@ -1313,6 +1313,35 @@ test("hosted release rejects in-memory and local database URLs", () => {
       /DATABASE_URL must identify a non-local hosted Postgres database/,
     );
   }
+});
+
+test("hosted release requires a certificate-verified database connection", () => {
+  // The pool sets no `ssl` option, so this string is the only thing deciding
+  // whether app-to-database traffic is encrypted and the certificate checked.
+  // An absent sslmode used to pass through untouched and connect in plaintext.
+  for (const search of ["", "?sslmode=require", "?sslmode=prefer", "?sslmode=disable", "?sslmode=verify-ca"]) {
+    const fixture = validFixture();
+    fixture.env.DATABASE_URL = `postgresql://rateloop:secret@tokenless-db.example/tokenless${search}`;
+    fixture.env.TOKENLESS_DATABASE_IDENTITY = deriveHostedDatabaseIdentity(fixture.env.DATABASE_URL);
+    assert.match(
+      validateTokenlessProductionReadiness(fixture).join("\n"),
+      /DATABASE_URL must set sslmode=verify-full/,
+      search || "(no sslmode)",
+    );
+  }
+});
+
+test("hosted release rejects the libpq compatibility mode that disables certificate checks", () => {
+  // `pg-connection-string` maps sslmode=require to rejectUnauthorized:false in this
+  // mode, so the option that reads like it asks for TLS accepts any certificate.
+  const fixture = validFixture();
+  fixture.env.DATABASE_URL =
+    "postgresql://rateloop:secret@tokenless-db.example/tokenless?sslmode=verify-full&uselibpqcompat=true";
+  fixture.env.TOKENLESS_DATABASE_IDENTITY = deriveHostedDatabaseIdentity(fixture.env.DATABASE_URL);
+  assert.match(
+    validateTokenlessProductionReadiness(fixture).join("\n"),
+    /DATABASE_URL must not set uselibpqcompat=true/,
+  );
 });
 
 test("hosted release rejects public secrets, reused roles, and mixed deployment identity without leaking values", () => {

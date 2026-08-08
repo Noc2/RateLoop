@@ -340,6 +340,29 @@ function validateRpcFallbacks(env, errors) {
   }
 }
 
+function databaseTlsErrors(raw) {
+  if (!raw) return [];
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return [];
+  }
+  if (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") return [];
+  if (["localhost", "127.0.0.1", "::1"].includes(parsed.hostname.toLowerCase())) return [];
+  const errors = [];
+  if (parsed.searchParams.get("uselibpqcompat") === "true") {
+    errors.push(
+      "DATABASE_URL must not set uselibpqcompat=true: that mode maps sslmode=require to rejectUnauthorized=false, " +
+        "so any certificate is accepted.",
+    );
+  }
+  if (parsed.searchParams.get("sslmode") !== "verify-full") {
+    errors.push("DATABASE_URL must set sslmode=verify-full so the database certificate is validated.");
+  }
+  return errors;
+}
+
 function hostedPostgresUrl(raw) {
   try {
     const parsed = new URL(raw);
@@ -829,6 +852,13 @@ export function validateTokenlessProductionReadiness({
   if (value(env, "DATABASE_URL") && !hostedPostgresUrl(value(env, "DATABASE_URL"))) {
     errors.push("DATABASE_URL must identify a non-local hosted Postgres database.");
   }
+  // The pool sets no `ssl` option, so the connection string is the only thing
+  // deciding whether app-to-database traffic is encrypted and the certificate
+  // checked. `getDatabaseConfig` now forces `verify-full` for remote hosts, but the
+  // deploy gate must fail on a value that asks for something weaker rather than
+  // silently rewriting it -- otherwise the configured intent and the actual
+  // transport disagree, which is exactly what a security questionnaire asks about.
+  for (const error of databaseTlsErrors(value(env, "DATABASE_URL"))) errors.push(error);
   if (value(env, "TOKENLESS_ARTIFACT_MASTER_KEY")) {
     errors.push(
       "TOKENLESS_ARTIFACT_MASTER_KEY is migration-only; hosted releases must use the versioned platform-secret wrapping keyring.",
