@@ -2,6 +2,7 @@ import { DEFAULT_LOCALE, SUPPORTED_LOCALES, isLocale, stripLocalePrefix } from "
 import { getMessagesForLocale } from "./messages";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { translateCatalogString } from "~~/components/localization/recursiveCatalogLocalization";
 
 function messageKeys(value: unknown, prefix = ""): string[] {
   if (typeof value !== "object" || value === null) {
@@ -92,4 +93,34 @@ test("one English concept keeps one German noun", () => {
   // their distinct German nouns are correct and must not be collapsed into one.
   assert.match(germanCopy, /Entscheidungspaket/u);
   assert.match(germanCopy, /Prüfnachweisarchiv/u);
+});
+
+test("a product name survives the phrase catalogue's substring fallback", () => {
+  // The docs section translated "Human Assurance" by splitting it into two
+  // single-word rules — Human → „Prüfung", Assurance → „durch Menschen" — which
+  // composes only while the two words are adjacent. They are not adjacent in
+  // "Proof of Human", so /de/docs/tech-stack shipped the heading
+  // „Proof of Prüfung": half English, and the German half meaning *examination*
+  // where the English says *human*.
+  //
+  // The fallback is the mechanism, not the bug, and it is worth keeping: it is
+  // why most docs copy is translated at all. What it cannot be trusted with is
+  // a term whose meaning is not the sum of its words. Those need an exact entry,
+  // and the longest-first ordering then makes the exact entry win.
+  const sections = getMessagesForLocale("de") as Record<string, { phrases?: Record<string, string> }>;
+  for (const [name, section] of Object.entries(sections)) {
+    const phrases = section?.phrases;
+    if (!phrases) continue;
+    for (const term of ["Proof of Human", "Human Assurance"]) {
+      // Only sections that already claim the term are asserted on; a section
+      // with no opinion about it renders no copy containing it.
+      if (!Object.keys(phrases).some(english => english.includes(term))) continue;
+      const translated = translateCatalogString(term, phrases);
+      assert.doesNotMatch(
+        translated,
+        /Proof|Human|Assurance/u,
+        `${name} leaves "${term}" partly English: ${translated}`,
+      );
+    }
+  }
 });
