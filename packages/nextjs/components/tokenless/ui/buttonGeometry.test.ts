@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
@@ -49,4 +50,44 @@ test("the secondary default height makes min-h-9 and min-h-10 inert", () => {
   // 2.5rem = 40px. A min-height at or below that cannot raise the box.
   assert.match(daisy, /\.btn\{[^}]*height:var\(--size\)/su);
   assert.match(daisy, /\.btn-md\{[^}]*--size:calc\(var\(--size-field,\.25rem\)\*10\)/su);
+});
+
+test("every branded class a component writes is a class globals.css actually defines", () => {
+  // `rateloop-primary-action` is not a real class and never was. It sat on the
+  // reviewer's accept-assignment button, which therefore rendered as a bare
+  // 32px DaisyUI btn-sm where a 48px brand primary was intended. Nothing caught
+  // it because an undefined class is not an error anywhere — it is simply
+  // ignored, so the button looked plausible and was wrong.
+  //
+  // Custom properties are checked too, and separately: `bg-[var(--rateloop-x)]`
+  // is a different kind of name from `class="rateloop-x"`, and a missing one
+  // fails differently — the declaration is dropped rather than the rule.
+  const root = new URL("../../../", import.meta.url);
+  const sources = execFileSync("git", ["ls-files", "*.tsx"], { cwd: root.pathname, encoding: "utf8" })
+    .trim()
+    .split("\n")
+    .filter(name => !name.includes(".test."));
+
+  const classes = new Map<string, string>();
+  const properties = new Map<string, string>();
+  for (const name of sources) {
+    const source = readFileSync(new URL(name, root), "utf8");
+    for (const [, attribute] of source.matchAll(/className\s*=\s*\{?("[^"]*"|`[^`]*`|[^}\n]*)/gu)) {
+      for (const [token] of attribute!.matchAll(/(?:--)?\brateloop-[a-z\d-]+/gu)) {
+        const seen = token.startsWith("--") ? properties : classes;
+        if (!seen.has(token)) seen.set(token, name);
+      }
+    }
+  }
+
+  // Guard against the check passing because the scan found nothing.
+  assert.ok(classes.size >= 5, `expected branded classes in the tree, found ${classes.size}`);
+  assert.ok(properties.size >= 10, `expected branded custom properties, found ${properties.size}`);
+
+  const undefinedClasses = [...classes].filter(([name]) => !new RegExp(`\\.${name}[\\s,:.{]`, "u").test(globals));
+  const undefinedProperties = [...properties].filter(([name]) => !globals.includes(`${name}:`));
+  assert.deepEqual(
+    [...undefinedClasses, ...undefinedProperties].map(([name, file]) => `${name} (${file})`),
+    [],
+  );
 });

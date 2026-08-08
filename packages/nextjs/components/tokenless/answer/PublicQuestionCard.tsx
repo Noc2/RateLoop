@@ -885,14 +885,15 @@ export function PublicQuestionCard({
           />
           <span>{t("acceptTerms")}</span>
         </label>
-        <button
+        <Button
           type="button"
-          className="btn btn-sm mt-4 rateloop-primary-action"
+          variant="primary"
+          className="mt-4"
           disabled={!networkTermsAccepted || busy || expired}
           onClick={() => void acceptNetworkAssignment()}
         >
           {busy ? (busyLabel ?? t("accepting")) : expired ? t("expired") : t("acceptOpen")}
-        </button>
+        </Button>
         {error ? (
           <p role="alert" className="mt-4 rounded-lg bg-error/10 p-3 text-sm text-error">
             {error}

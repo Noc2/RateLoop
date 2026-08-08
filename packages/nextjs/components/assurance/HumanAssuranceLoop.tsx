@@ -46,7 +46,7 @@ export function HumanAssuranceLoop({
 
   return (
     <section
-      className={`rateloop-assurance-loop rounded-2xl border border-base-content/10 bg-base-content/[0.025] p-5 sm:p-8 ${className}`}
+      className={`rounded-2xl border border-base-content/10 bg-base-content/[0.025] p-5 sm:p-8 ${className}`}
       aria-labelledby="human-assurance-loop-title"
     >
       <div className="grid items-center gap-8 lg:grid-cols-[minmax(19rem,0.9fr)_minmax(0,1.1fr)] lg:gap-12">
