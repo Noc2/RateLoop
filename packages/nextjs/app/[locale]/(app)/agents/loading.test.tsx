@@ -16,6 +16,6 @@ const deAgents = require("../../../../messages/de/agents.json") as {
 test("renders the agents loading fallback in German", () => {
   const html = renderToStaticMarkup(<AgentsLoadingStatus loadingLabel={deAgents.loadingWorkspace} />);
 
-  assert.match(html, />Arbeitsbereich wird geladen</u);
+  assert.match(html, />Workspace wird geladen</u);
   assert.doesNotMatch(html, />Loading workspace</u);
 });

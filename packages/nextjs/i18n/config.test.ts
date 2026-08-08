@@ -67,3 +67,29 @@ test("German copy uses the established plain-language review vocabulary", () => 
   );
   assert.doesNotMatch(germanCopy, /Absicher|Assurance|Evidenz|Review(?:er|s)?|eingefror|\bPrincipal\b/iu);
 });
+
+test("one English concept keeps one German noun", () => {
+  // The setup wizard called it „Arbeitsbereich" 54 times while navigation and
+  // every other surface said „Workspace" 204 times, so a visitor created one
+  // thing and was then shown another. And "evidence packet" had two renderings —
+  // „Belegpaket" (a receipt) and „Nachweispaket" (the compliance term). Both are
+  // the kind of split a Mittelstand evaluator notices in the first five minutes.
+  const germanCopy = messageValues(getMessagesForLocale("de")).join("\n");
+
+  assert.doesNotMatch(germanCopy, /Arbeitsbereich/u, "the workspace is a Workspace everywhere");
+  assert.doesNotMatch(
+    germanCopy,
+    /(?<!Standard)Belegpaket/u,
+    "an evidence packet is a Nachweispaket; Standardbelegpaket survives only in the AVV, where wording is counsel's",
+  );
+  assert.match(germanCopy, /Nachweispaket/u, "and the surviving term is actually used");
+
+  // A masculine loanword takes -s in the genitive. Dative and accusative
+  // ("im Workspace", "den Workspace") are correct as they stand.
+  assert.doesNotMatch(germanCopy, /\b(?:des|dieses|eines|jedes) Workspace\b(?!s)/u);
+
+  // Decision packet and assurance archive are different English concepts, so
+  // their distinct German nouns are correct and must not be collapsed into one.
+  assert.match(germanCopy, /Entscheidungspaket/u);
+  assert.match(germanCopy, /Prüfnachweisarchiv/u);
+});
