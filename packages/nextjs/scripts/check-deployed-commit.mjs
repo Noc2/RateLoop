@@ -2,11 +2,15 @@
 /**
  * Reports whether the deployed tokenless site is serving the branch head.
  *
- * Auto-deploy is deliberately disabled for `tokenless` (`vercel.json` sets
- * `deploymentEnabled.tokenless: false`), so a push never reaches the site. Nothing
- * observed the gap that created: the deployment once sat twenty-three commits
+ * Auto-deploy used to be disabled for `tokenless`, so a push never reached the
+ * site and nothing observed the gap: the deployment once sat twenty-three commits
  * behind for a full working session, and the only reason it surfaced was somebody
- * asking. This turns "please check" into a signal.
+ * asking. `vercel.json` now sets `deploymentEnabled.tokenless: true`, so a push
+ * deploys and this check should normally pass.
+ *
+ * It is still worth running. A build can fail its readiness gate and leave the
+ * previous deployment serving, which is the correct outcome but looks identical
+ * from the outside to never having pushed — this is what tells the two apart.
  *
  * It only ever reads. It targets the isolated tokenless alias and nothing else —
  * the legacy production project is never contacted.
