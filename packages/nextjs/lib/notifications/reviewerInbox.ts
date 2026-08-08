@@ -1,5 +1,6 @@
 export const REVIEWER_LIFECYCLE_NOTIFICATION_SOURCE_TYPES = [
   "assignment.available",
+  "assignment.deadline_approaching",
   "assignment.completed",
   "settlement.reveal_required",
   "settlement.claim_expiring",
@@ -9,6 +10,7 @@ export type ReviewerLifecycleNotificationSourceType = (typeof REVIEWER_LIFECYCLE
 
 export const REVIEWER_LIFECYCLE_NOTIFICATION_HREFS: Record<ReviewerLifecycleNotificationSourceType, string> = {
   "assignment.available": "/human/review",
+  "assignment.deadline_approaching": "/human/review",
   "assignment.completed": "/human/history",
   "settlement.reveal_required": "/human/profile?section=paid-settlement",
   "settlement.claim_expiring": "/human/profile?section=paid-settlement",
@@ -33,7 +35,9 @@ export function isReviewerLifecycleNotification<T extends { sourceType?: string 
 
 export function isReviewerDeadlineOrMoneyNotification(notification: Pick<ReviewerInboxNotification, "sourceType">) {
   return (
-    notification.sourceType === "settlement.reveal_required" || notification.sourceType === "settlement.claim_expiring"
+    notification.sourceType === "assignment.deadline_approaching" ||
+    notification.sourceType === "settlement.reveal_required" ||
+    notification.sourceType === "settlement.claim_expiring"
   );
 }
 

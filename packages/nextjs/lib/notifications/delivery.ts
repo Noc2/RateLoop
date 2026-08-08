@@ -82,6 +82,32 @@ function interleave<T>(groups: T[][], limit: number) {
   return values;
 }
 
+/**
+ * Fraction of the configured response window that may remain before a reviewer is
+ * reminded. Expressed as a fraction rather than a fixed lead time because the
+ * window itself now ranges from 20 minutes to 30 days: a fixed 24-hour warning
+ * would never fire on a short window and would fire immediately on a long one.
+ */
+export const DEADLINE_REMINDER_REMAINING_FRACTION = 0.25;
+
+/**
+ * Kept in TypeScript rather than SQL on purpose. Computing "a quarter of the
+ * window remains" in SQL needs interval arithmetic over two columns, which is the
+ * kind of expression that behaves differently under pg-mem than under Postgres --
+ * and this is a reminder, so a silent no-op would be invisible.
+ */
+function dueSoonRows(rows: readonly Row[], now: Date) {
+  return rows.filter(row => {
+    const deadline = row.response_deadline;
+    const parsed = deadline instanceof Date ? deadline : new Date(String(deadline));
+    const windowSeconds = Number(row.response_window_seconds);
+    if (!Number.isFinite(parsed.getTime()) || !Number.isSafeInteger(windowSeconds) || windowSeconds <= 0) return false;
+    const remainingMs = parsed.getTime() - now.getTime();
+    if (remainingMs <= 0) return false;
+    return remainingMs <= windowSeconds * 1_000 * DEADLINE_REMINDER_REMAINING_FRACTION;
+  });
+}
+
 function rowsToCandidates(
   rows: readonly Row[],
   template: Omit<LifecycleCandidate, "principalAddress" | "sourceKey" | "href"> & {
@@ -104,6 +130,76 @@ function workspaceHref(row: Row, tab: "overview" | "evaluations") {
   return `/agents/${tab === "evaluations" ? "results" : "overview"}${search ? `?${search}` : ""}`;
 }
 
+/**
+ * The live private unpaid lane's reviewer-eligibility predicate: active reviewer,
+ * active principal, active group and membership, an unrevoked access grant that
+ * covers this project and data classification through the response deadline, and
+ * no notification of this kind already recorded.
+ *
+ * Shared by the `assignment.available` and `assignment.deadline_approaching`
+ * queries so the two cannot drift. A reminder must be subject to exactly the
+ * same eligibility as the original notice: there is no point chasing someone
+ * whose grant has since expired, and no excuse for skipping someone who is still
+ * able to answer.
+ */
+function privateUnpaidAssignmentCandidateSql(input: {
+  sourceType: "assignment.available" | "assignment.deadline_approaching";
+  selectColumns?: string;
+  orderBy: string;
+}) {
+  const sourceType = input.sourceType;
+  return `SELECT b.principal_address, a.assignment_id AS source_key${input.selectColumns ?? ""}
+            FROM tokenless_private_unpaid_review_assignments a
+            JOIN tokenless_private_unpaid_review_deliveries d ON d.delivery_id = a.delivery_id
+            JOIN tokenless_agent_review_request_profiles rp
+              ON rp.workspace_id = d.workspace_id AND rp.profile_id = d.request_profile_id
+             AND rp.version = d.request_profile_version AND rp.profile_hash = d.request_profile_hash
+            JOIN tokenless_browser_identities b
+              ON b.principal_address = lower(a.reviewer_account_address)
+            JOIN tokenless_private_groups g
+              ON g.group_id = a.private_group_id AND g.workspace_id = a.workspace_id AND g.status = 'active'
+            JOIN tokenless_workspace_reviewers reviewer
+              ON reviewer.workspace_id = a.workspace_id
+             AND reviewer.principal_address = a.reviewer_account_address
+             AND reviewer.status = 'active'
+            JOIN tokenless_principals principal
+              ON principal.principal_id = reviewer.principal_address AND principal.status = 'active'
+            JOIN tokenless_workspace_reviewer_access_grants access_grant
+              ON access_grant.workspace_id = a.workspace_id
+             AND access_grant.principal_address = a.reviewer_account_address
+             AND access_grant.grant_id = a.workspace_reviewer_access_grant_id
+             AND access_grant.grant_hash = a.workspace_reviewer_access_grant_hash
+            LEFT JOIN tokenless_workspace_reviewer_access_grant_projects grant_project
+              ON grant_project.workspace_id = a.workspace_id AND grant_project.grant_id = access_grant.grant_id
+             AND grant_project.project_id = a.project_id
+            LEFT JOIN tokenless_notifications n
+              ON n.principal_address = b.principal_address
+             AND n.source_type = '${sourceType}' AND n.source_key = a.assignment_id
+            WHERE rp.compensation_mode = 'unpaid'
+              AND (
+                (a.status = 'reserved' AND a.reservation_expires_at > ?)
+                OR (a.status = 'accepted' AND a.assignment_expires_at > ?)
+              )
+              AND a.response_deadline > ?
+              AND (a.membership_expires_at IS NULL OR a.membership_expires_at >= a.response_deadline)
+              AND access_grant.revoked_at IS NULL AND access_grant.valid_from <= ?
+              AND (access_grant.valid_until IS NULL OR access_grant.valid_until >= a.response_deadline)
+              AND (
+                access_grant.project_scope = 'all'
+                OR (access_grant.project_scope = 'selected' AND grant_project.project_id = a.project_id)
+              )
+              AND CASE rp.private_sensitivity
+                    WHEN 'internal' THEN 1 WHEN 'confidential' THEN 2
+                    WHEN 'restricted' THEN 3 WHEN 'regulated' THEN 4 ELSE 99
+                  END
+                  <= CASE access_grant.max_private_sensitivity
+                    WHEN 'internal' THEN 1 WHEN 'confidential' THEN 2
+                    WHEN 'restricted' THEN 3 WHEN 'regulated' THEN 4 ELSE 0
+                  END
+              AND n.notification_id IS NULL
+            ORDER BY ${input.orderBy} LIMIT ?`;
+}
+
 async function loadLifecycleCandidates(
   now: Date,
   limit: number,
@@ -123,9 +219,10 @@ async function loadLifecycleCandidates(
     console.error("[tokenless-notifications] Settlement notices deferred.", error);
     return [];
   });
-  const [available, directAvailable, completed, payments, directResults, workspaceResults] = await Promise.all([
-    dbClient.execute({
-      sql: `SELECT b.principal_address, a.assignment_id AS source_key
+  const [available, directAvailable, deadlineReminders, completed, payments, directResults, workspaceResults] =
+    await Promise.all([
+      dbClient.execute({
+        sql: `SELECT b.principal_address, a.assignment_id AS source_key
             FROM tokenless_assurance_assignments a
             JOIN tokenless_browser_identities b
               ON b.principal_address = lower(a.reviewer_account_address)
@@ -154,63 +251,25 @@ async function loadLifecycleCandidates(
                 )
               )
             ORDER BY a.created_at ASC LIMIT ?`,
-      args: [now, now, now, perSource],
-    }),
-    dbClient.execute({
-      sql: `SELECT b.principal_address, a.assignment_id AS source_key
-            FROM tokenless_private_unpaid_review_assignments a
-            JOIN tokenless_private_unpaid_review_deliveries d ON d.delivery_id = a.delivery_id
-            JOIN tokenless_agent_review_request_profiles rp
-              ON rp.workspace_id = d.workspace_id AND rp.profile_id = d.request_profile_id
-             AND rp.version = d.request_profile_version AND rp.profile_hash = d.request_profile_hash
-            JOIN tokenless_browser_identities b
-              ON b.principal_address = lower(a.reviewer_account_address)
-            JOIN tokenless_private_groups g
-              ON g.group_id = a.private_group_id AND g.workspace_id = a.workspace_id AND g.status = 'active'
-            JOIN tokenless_workspace_reviewers reviewer
-              ON reviewer.workspace_id = a.workspace_id
-             AND reviewer.principal_address = a.reviewer_account_address
-             AND reviewer.status = 'active'
-            JOIN tokenless_principals principal
-              ON principal.principal_id = reviewer.principal_address AND principal.status = 'active'
-            JOIN tokenless_workspace_reviewer_access_grants access_grant
-              ON access_grant.workspace_id = a.workspace_id
-             AND access_grant.principal_address = a.reviewer_account_address
-             AND access_grant.grant_id = a.workspace_reviewer_access_grant_id
-             AND access_grant.grant_hash = a.workspace_reviewer_access_grant_hash
-            LEFT JOIN tokenless_workspace_reviewer_access_grant_projects grant_project
-              ON grant_project.workspace_id = a.workspace_id AND grant_project.grant_id = access_grant.grant_id
-             AND grant_project.project_id = a.project_id
-            LEFT JOIN tokenless_notifications n
-              ON n.principal_address = b.principal_address
-             AND n.source_type = 'assignment.available' AND n.source_key = a.assignment_id
-            WHERE rp.compensation_mode = 'unpaid'
-              AND (
-                (a.status = 'reserved' AND a.reservation_expires_at > ?)
-                OR (a.status = 'accepted' AND a.assignment_expires_at > ?)
-              )
-              AND a.response_deadline > ?
-              AND (a.membership_expires_at IS NULL OR a.membership_expires_at >= a.response_deadline)
-              AND access_grant.revoked_at IS NULL AND access_grant.valid_from <= ?
-              AND (access_grant.valid_until IS NULL OR access_grant.valid_until >= a.response_deadline)
-              AND (
-                access_grant.project_scope = 'all'
-                OR (access_grant.project_scope = 'selected' AND grant_project.project_id = a.project_id)
-              )
-              AND CASE rp.private_sensitivity
-                    WHEN 'internal' THEN 1 WHEN 'confidential' THEN 2
-                    WHEN 'restricted' THEN 3 WHEN 'regulated' THEN 4 ELSE 99
-                  END
-                  <= CASE access_grant.max_private_sensitivity
-                    WHEN 'internal' THEN 1 WHEN 'confidential' THEN 2
-                    WHEN 'restricted' THEN 3 WHEN 'regulated' THEN 4 ELSE 0
-                  END
-              AND n.notification_id IS NULL
-            ORDER BY a.created_at ASC LIMIT ?`,
-      args: [now, now, now, now, perSource],
-    }),
-    dbClient.execute({
-      sql: `SELECT b.principal_address, a.assignment_id AS source_key
+        args: [now, now, now, perSource],
+      }),
+      dbClient.execute({
+        sql: privateUnpaidAssignmentCandidateSql({
+          orderBy: "a.created_at ASC",
+          sourceType: "assignment.available",
+        }),
+        args: [now, now, now, now, perSource],
+      }),
+      dbClient.execute({
+        sql: privateUnpaidAssignmentCandidateSql({
+          orderBy: "a.response_deadline ASC",
+          selectColumns: ", a.response_deadline, rp.response_window_seconds",
+          sourceType: "assignment.deadline_approaching",
+        }),
+        args: [now, now, now, now, perSource],
+      }),
+      dbClient.execute({
+        sql: `SELECT b.principal_address, a.assignment_id AS source_key
             FROM tokenless_assurance_assignments a
             JOIN tokenless_browser_identities b
               ON b.principal_address = lower(a.reviewer_account_address)
@@ -219,10 +278,10 @@ async function loadLifecycleCandidates(
                 AND n.source_type = 'assignment.completed' AND n.source_key = a.assignment_id
             WHERE a.status = 'completed' AND n.notification_id IS NULL
             ORDER BY a.updated_at ASC LIMIT ?`,
-      args: [perSource],
-    }),
-    dbClient.execute({
-      sql: `SELECT b.principal_address, e.entry_id AS source_key, e.workspace_id
+        args: [perSource],
+      }),
+      dbClient.execute({
+        sql: `SELECT b.principal_address, e.entry_id AS source_key, e.workspace_id
             FROM tokenless_prepaid_ledger_entries e
             JOIN tokenless_workspace_members m ON m.workspace_id = e.workspace_id
             JOIN tokenless_browser_identities b ON b.principal_address = lower(m.account_address)
@@ -232,10 +291,10 @@ async function loadLifecycleCandidates(
             WHERE e.settlement_status = 'settled' AND e.settled_at IS NOT NULL
               AND m.role IN ('owner', 'admin', 'billing') AND n.notification_id IS NULL
             ORDER BY e.settled_at ASC LIMIT ?`,
-      args: [perSource],
-    }),
-    dbClient.execute({
-      sql: `SELECT b.principal_address, o.operation_key AS source_key, o.workspace_id
+        args: [perSource],
+      }),
+      dbClient.execute({
+        sql: `SELECT b.principal_address, o.operation_key AS source_key, o.workspace_id
             FROM tokenless_ask_ownership o
             JOIN tokenless_browser_identities b ON b.principal_address = lower(o.owner_account_address)
             JOIN tokenless_result_publications p ON p.operation_key = o.operation_key
@@ -245,10 +304,10 @@ async function loadLifecycleCandidates(
             WHERE o.owner_account_address IS NOT NULL AND n.notification_id IS NULL
             GROUP BY b.principal_address, o.operation_key, o.workspace_id
             ORDER BY min(p.published_at) ASC LIMIT ?`,
-      args: [perSource],
-    }),
-    dbClient.execute({
-      sql: `SELECT b.principal_address, o.operation_key AS source_key, o.workspace_id
+        args: [perSource],
+      }),
+      dbClient.execute({
+        sql: `SELECT b.principal_address, o.operation_key AS source_key, o.workspace_id
             FROM tokenless_ask_ownership o
             JOIN tokenless_workspaces w ON w.workspace_id = o.workspace_id AND w.status = 'active'
             JOIN tokenless_workspace_members m
@@ -261,9 +320,9 @@ async function loadLifecycleCandidates(
             WHERE o.owner_account_address IS NULL AND n.notification_id IS NULL
             GROUP BY b.principal_address, o.operation_key, o.workspace_id
             ORDER BY min(p.published_at) ASC LIMIT ?`,
-      args: [perSource],
-    }),
-  ]);
+        args: [perSource],
+      }),
+    ]);
 
   const resultRows = new Map<string, Row>();
   for (const row of [...directResults.rows, ...workspaceResults.rows] as Row[]) {
@@ -282,6 +341,13 @@ async function loadLifecycleCandidates(
         preferenceKey: "assignmentAvailable",
         sourceType: "assignment.available",
         title: "Assignment available",
+      }),
+      rowsToCandidates(dueSoonRows(deadlineReminders.rows as Row[], now), {
+        body: "A review you accepted is close to its deadline.",
+        href: REVIEWER_LIFECYCLE_NOTIFICATION_HREFS["assignment.deadline_approaching"],
+        preferenceKey: "assignmentAvailable",
+        sourceType: "assignment.deadline_approaching",
+        title: "Review deadline approaching",
       }),
       rowsToCandidates(completed.rows as Row[], {
         body: "Your human-assurance response was recorded.",
@@ -701,9 +767,11 @@ export async function runTokenlessNotificationCycle(input: {
 export const __notificationDeliveryTestUtils = {
   actionUrl,
   deliveryConfiguration,
+  dueSoonRows,
   insertLifecycleCandidates,
   isDeliveryConfigurationError,
   notificationId,
+  privateUnpaidAssignmentCandidateSql,
   recoveryAt,
   retryAt,
 };
