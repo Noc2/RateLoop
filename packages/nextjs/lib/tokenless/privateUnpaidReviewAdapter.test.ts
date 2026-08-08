@@ -819,9 +819,11 @@ test("a terminal private review projects its decision evidence inline and keeps 
 
 test("a failing inline evidence projection cannot fail or roll back the finalising response", async () => {
   const restoreSigningKeys = installEvidenceSigningKeys();
+  // These failures now emit one JSON line with a stable `event` field, so an
+  // alert rule can match them; read that field rather than the first argument.
   const events: string[] = [];
   const previousError = console.error;
-  console.error = (...values: unknown[]) => void events.push(String(values[0]));
+  console.error = (line: unknown) => void events.push(String(JSON.parse(String(line)).event));
   try {
     const setup = await fixture();
     const delivered = await deliverPrivateFixture(setup);
@@ -863,7 +865,10 @@ test("a failing inline evidence projection cannot fail or roll back the finalisi
 test("the inline evidence projection reports a deferred packet without throwing", async () => {
   const events: Array<[string, unknown]> = [];
   const previousError = console.error;
-  console.error = (...values: unknown[]) => void events.push([String(values[0]), values[1]]);
+  console.error = (line: unknown) => {
+    const record = JSON.parse(String(line)) as Record<string, unknown>;
+    events.push([String(record.event), record]);
+  };
   try {
     assert.equal(await attemptDirectPrivateReviewEvidenceProjectionAfterCommit({ deliveryId: "hprd_missing" }), null);
     assert.equal(events[0]?.[0], "private_review_evidence_inline_projection_failed");

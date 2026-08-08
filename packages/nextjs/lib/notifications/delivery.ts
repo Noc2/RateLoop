@@ -8,6 +8,7 @@ import {
 } from "~~/lib/notifications/reviewerInbox";
 import { type TokenlessNotificationKey, buildTokenlessSignedUnsubscribeToken } from "~~/lib/notifications/tokenless";
 import { deliverPendingWorkspaceReviewerInvitationEmails } from "~~/lib/notifications/workspaceReviewerInvitations";
+import { logRedactedError } from "~~/lib/security/redactedErrorLog";
 import { maintenanceCancellationRequested } from "~~/lib/tokenless/maintenanceCancellation";
 import { materializeOversightAlertNotifications } from "~~/lib/tokenless/oversightAlerts";
 import { listRaterSettlementNotificationCandidates } from "~~/lib/tokenless/raterSettlementService";
@@ -252,7 +253,7 @@ async function loadLifecycleCandidates(
     ponderUrl: settlementSource.ponderUrl,
     signal: settlementSource.signal,
   }).catch(error => {
-    console.error("[tokenless-notifications] Settlement notices deferred.", error);
+    logRedactedError("settlement_notices_deferred", error);
     return [];
   });
   const [available, directAvailable, deadlineReminders, completed, payments, directResults, workspaceResults] =

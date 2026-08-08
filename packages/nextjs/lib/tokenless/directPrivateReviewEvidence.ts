@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
 import { dbPool } from "~~/lib/db";
+import { logOperatorAttention, logRedactedError } from "~~/lib/security/redactedErrorLog";
 import {
   decryptWorkspaceOwnedRationale,
   encryptAssuranceRationale,
@@ -702,19 +703,17 @@ export async function attemptDirectPrivateReviewEvidenceProjectionAfterCommit(in
   try {
     const result = await projectDirectPrivateReviewDecisionEvidence(input);
     if (result.packet !== "ready") {
-      console.error("private_review_evidence_inline_projection_deferred", {
+      logOperatorAttention("private_review_evidence_inline_projection_deferred", {
         deliveryId: input.deliveryId,
-        projected: result.projected,
-        reason: result.error,
+        projected: String(result.projected),
         runId: result.runId,
       });
     }
     return result;
   } catch (error) {
-    console.error("private_review_evidence_inline_projection_failed", {
-      deliveryId: input.deliveryId,
-      reason: error instanceof Error ? error.message.slice(0, 500) : "unknown",
-    });
+    // The message is redacted rather than truncated: it can carry a driver
+    // payload, and the delivery id is what an operator needs to find the run.
+    logRedactedError("private_review_evidence_inline_projection_failed", error, { deliveryId: input.deliveryId });
     return null;
   }
 }

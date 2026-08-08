@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { constructStripeEvent, processStripeWebhook } from "~~/lib/billing/webhooks";
+import { logOperatorAttention, logRedactedError } from "~~/lib/security/redactedErrorLog";
 import { BoundedRequestBodyError, readBoundedRequestText } from "~~/lib/tokenless/boundedRequestBody";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
     if (error instanceof Stripe.errors.StripeSignatureVerificationError) {
       return NextResponse.json({ code: "invalid_signature", message: "Invalid Stripe signature." }, { status: 400 });
     }
-    console.error("[stripe-webhook] signature verification failed", error);
+    logRedactedError("stripe_webhook_signature_verification_failed", error);
     return NextResponse.json({ code: "webhook_unavailable", message: "Webhook verification failed." }, { status: 503 });
   }
 
@@ -46,7 +47,7 @@ export async function POST(request: NextRequest) {
     if ("attention" in result && result.attention) {
       // Retrying will not resolve these, so the event is answered with a 200 and reported here as
       // well as being left un-processed in tokenless_billing_webhook_events for an operator.
-      console.error("[stripe-webhook] event needs operator attention", {
+      logOperatorAttention("stripe_webhook_needs_operator_attention", {
         attention: result.attention,
         eventId: event.id,
         eventType: event.type,
@@ -54,11 +55,9 @@ export async function POST(request: NextRequest) {
     }
     return NextResponse.json({ received: true, ...result });
   } catch (error) {
-    console.error("[stripe-webhook] processing failed", {
-      eventId: event.id,
-      eventType: event.type,
-      error: error instanceof Error ? error.message : "unknown_error",
-    });
+    // The error payload is redacted rather than logged: a driver error carries
+    // caller data, and the two ids are what an operator actually needs.
+    logRedactedError("stripe_webhook_processing_failed", error, { eventId: event.id, eventType: event.type });
     return NextResponse.json(
       { code: "webhook_processing_failed", message: "Webhook processing failed." },
       { status: 500 },

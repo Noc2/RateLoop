@@ -4,6 +4,7 @@ import type { PoolClient } from "pg";
 import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient, dbPool } from "~~/lib/db";
+import { logRedactedError } from "~~/lib/security/redactedErrorLog";
 import {
   assuranceRationaleDigest,
   assuranceReviewerKey,
@@ -736,10 +737,7 @@ async function terminalEnvelopeForDelivery(
         .map(value => decryptWorkspaceOwnedRationale(value));
     } catch (cause) {
       rationaleBodies = [];
-      console.error("private_review_rationale_aggregate_unavailable", {
-        deliveryId,
-        reason: cause instanceof Error ? cause.message : "unknown",
-      });
+      logRedactedError("private_review_rationale_aggregate_unavailable", cause, { deliveryId });
     }
   }
 
