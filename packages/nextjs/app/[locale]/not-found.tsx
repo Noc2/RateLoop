@@ -30,7 +30,7 @@ export default async function LocalizedNotFound() {
           readDocs: t("readDocs"),
         }}
         actions={
-          <Button as={Link} variant="secondary" size="none" className="min-h-11 px-4" href="/">
+          <Button as={Link} variant="secondary" size="none" className="min-h-11" href="/">
             {t("notFound.home")}
           </Button>
         }

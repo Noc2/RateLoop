@@ -293,7 +293,7 @@ function FeedbackBonusClaimsControls() {
         <Button
           variant="primary"
           size="none"
-          className="px-4 text-sm"
+          className="text-sm"
           type="button"
           disabled={busy || !selectedSource || (needsRecoverySecret && recoverySecret.length < 12)}
           onClick={() => void checkEntitlements()}
@@ -318,7 +318,7 @@ function FeedbackBonusClaimsControls() {
                   <Button
                     variant="primary"
                     size="none"
-                    className="px-4 text-sm"
+                    className="text-sm"
                     type="button"
                     disabled={!account || claimingPoolId === item.poolId}
                     onClick={() => void claim(item)}

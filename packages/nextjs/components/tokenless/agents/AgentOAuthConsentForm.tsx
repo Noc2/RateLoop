@@ -124,7 +124,7 @@ export function AgentOAuthConsentForm({ autoAuthorize, values }: Props) {
               ? t("returning")
               : t("finishing")}
         </p>
-        <Button as={Link} variant="primary" size="none" className="mt-6 min-h-11 px-5" href={OAUTH_WORKSPACE_RETURN}>
+        <Button as={Link} variant="primary" className="mt-6 px-5" href={OAUTH_WORKSPACE_RETURN}>
           {t("back")}
         </Button>
         <iframe
@@ -158,21 +158,13 @@ export function AgentOAuthConsentForm({ autoAuthorize, values }: Props) {
           <p className="text-sm text-base-content/65" role="status">
             {t("completing")}
           </p>
-          <Button variant="primary" size="none" block className="min-h-11 px-4" type="submit">
+          <Button variant="primary" size="none" block type="submit">
             {submitting ? t("connecting") : t("continue")}
           </Button>
         </>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
-          <Button
-            variant="primary"
-            size="none"
-            className="min-h-11 px-4"
-            type="submit"
-            name="decision"
-            value="approve"
-            disabled={submitting}
-          >
+          <Button variant="primary" size="none" type="submit" name="decision" value="approve" disabled={submitting}>
             {submitting ? t("connecting") : t("allow")}
           </Button>
           <button className="btn btn-outline min-h-11" type="submit" name="decision" value="deny" disabled={submitting}>

@@ -85,14 +85,7 @@ export function WorkspacePlanCards({ workspaceId, demoBookingUrl = null, locale 
           ]}
           footer={
             pilotHref.startsWith("mailto:") ? (
-              <Button
-                as="a"
-                variant="primary"
-                size="none"
-                block
-                className="min-h-12 justify-center px-5"
-                href={pilotHref}
-              >
+              <Button as="a" variant="primary" block className="justify-center px-5" href={pilotHref}>
                 {pilotCta}
               </Button>
             ) : (
@@ -102,9 +95,8 @@ export function WorkspacePlanCards({ workspaceId, demoBookingUrl = null, locale 
               <Button
                 as="a"
                 variant="primary"
-                size="none"
                 block
-                className="min-h-12 justify-center px-5"
+                className="justify-center px-5"
                 href={pilotHref}
                 target="_blank"
                 rel="noopener noreferrer"

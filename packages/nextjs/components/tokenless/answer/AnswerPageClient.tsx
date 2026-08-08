@@ -157,7 +157,7 @@ export function AnswerPageClient({
           principalId && view === "active" && (hasPublicTasks || hasPrivateAssignments) ? (
             <Button
               variant="secondary"
-              size="none"
+              size="sm"
               className="btn-sm ml-auto"
               type="button"
               aria-controls="discover-invitation-panel"

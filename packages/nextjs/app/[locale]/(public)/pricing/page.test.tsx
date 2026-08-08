@@ -41,9 +41,14 @@ test("pricing page shows the sandbox and the founding pilot without a dollar anc
   assert.ok(pilot, "the founding-pilot action should render as an anchor");
   assert.match(pilot[1]!, /href="mailto:hawigxyz@proton\.me\?subject=RateLoop%20Founding%20Pilot"/u);
   pilot[1] = pilot[1]!.match(/class="([^"]*)"/u)?.[1] ?? "";
-  for (const expected of ["rateloop-gradient-action", "min-h-12", "px-5", "w-full", "justify-center"]) {
+  // min-h-12 is gone on purpose and nothing moved: .rateloop-gradient-action is
+  // unlayered and already pins min-height: 3rem, which is the same 48px, so the
+  // utility could never have applied. What must remain is the variant that
+  // produces the height and the classes that genuinely do something.
+  for (const expected of ["rateloop-gradient-action", "px-5", "w-full", "justify-center"]) {
     assert.ok(pilot[1]!.split(" ").includes(expected), `pilot action keeps ${expected}`);
   }
+  assert.ok(!pilot[1]!.split(" ").includes("min-h-12"), "an inert height utility should not be restated");
   assert.doesNotMatch(html, /target="_blank"/);
   // The retired dollar anchor, the struck list price and the discount promise must not return.
   assert.doesNotMatch(html, /\$0|\$29|\$99|<s[ >]|20% off|First 12 months|Choose Early Access/);

@@ -152,7 +152,7 @@ export function SiemEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
 
       <Button
         variant="secondary"
-        size="none"
+        size="sm"
         className="btn-sm mt-4"
         type="button"
         aria-expanded={showForm}

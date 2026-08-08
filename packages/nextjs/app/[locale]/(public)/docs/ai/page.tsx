@@ -53,7 +53,7 @@ export function TokenlessAgentDocsContent({ locale }: { locale: Locale }) {
           <Button
             as={Link}
             variant="secondary"
-            size="none"
+            size="sm"
             className="btn-sm mt-4 px-3 no-underline"
             href="/agents/connections"
           >

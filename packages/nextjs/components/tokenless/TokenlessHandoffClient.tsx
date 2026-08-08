@@ -1139,8 +1139,7 @@ export function TokenlessHandoffClient() {
             </div>
             <Button
               variant="primary"
-              size="none"
-              className="min-h-11 shrink-0 px-5 disabled:cursor-not-allowed disabled:opacity-40"
+              className="shrink-0 px-5 disabled:cursor-not-allowed disabled:opacity-40"
               type="button"
               disabled={busy !== null || submitted || handoff.status !== "ready" || !mediaReady || !privacyConfirmed}
               onClick={() => void createQuote()}
@@ -1296,8 +1295,7 @@ export function TokenlessHandoffClient() {
             <div className="mt-6 flex justify-end border-t border-base-content/10 pt-6">
               <Button
                 variant="primary"
-                size="none"
-                className="min-h-11 shrink-0 px-5 disabled:cursor-not-allowed disabled:opacity-40"
+                className="shrink-0 px-5 disabled:cursor-not-allowed disabled:opacity-40"
                 type="button"
                 disabled={
                   busy !== null ||
@@ -1338,7 +1336,6 @@ export function TokenlessHandoffClient() {
                 <Button
                   variant="secondary"
                   size="none"
-                  className="min-h-10 px-4"
                   type="button"
                   disabled={busy !== null}
                   onClick={() => void waitForResult(activeOperationKey)}

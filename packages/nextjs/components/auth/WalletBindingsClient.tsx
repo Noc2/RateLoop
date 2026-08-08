@@ -320,8 +320,7 @@ function WalletBindingControls({
           <p className="text-sm text-base-content/65">{t("connected", { address: shortAddress(account.address) })}</p>
           <Button
             variant="primary"
-            size="none"
-            className="mt-4 min-h-11 px-5"
+            className="mt-4 px-5"
             type="button"
             disabled={busy}
             onClick={() => void bindActiveWallet()}

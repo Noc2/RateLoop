@@ -133,7 +133,7 @@ export function EvidenceShareViewer({ grantId }: { grantId: string }) {
           <Button
             variant="secondary"
             size="none"
-            className="mt-4 min-h-10 px-4"
+            className="mt-4"
             type="button"
             onClick={() => void verifyPacket(packet)}
           >

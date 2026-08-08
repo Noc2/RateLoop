@@ -16,7 +16,7 @@ export default function NotFound() {
         title="Page not found"
         description="This address may be wrong, or the page may have moved."
         actions={
-          <Button as={Link} variant="secondary" size="none" className="min-h-11 px-4" href="/">
+          <Button as={Link} variant="secondary" size="none" className="min-h-11" href="/">
             Home
           </Button>
         }

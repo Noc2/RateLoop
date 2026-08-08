@@ -147,7 +147,7 @@ export function ReviewerAccessPanel() {
           </ul>
         </AsyncSection>
         {!loading && !loadError && activeAccess.length === 0 ? (
-          <Button as={Link} variant="secondary" size="none" className="btn-sm mt-3" href="/human/review?invite=1">
+          <Button as={Link} variant="secondary" size="sm" className="btn-sm mt-3" href="/human/review?invite=1">
             {t("useInvitation")}
           </Button>
         ) : null}

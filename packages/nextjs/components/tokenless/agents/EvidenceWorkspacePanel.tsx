@@ -353,7 +353,7 @@ function ProjectAuditorAccess({ workspaceId }: { workspaceId: string }) {
           onChange={event => setExpiresAt(event.target.value)}
           min={new Date().toISOString().slice(0, 16)}
         />
-        <Button variant="primary" size="none" className="btn-sm w-fit" type="submit" disabled={busy || !projectId}>
+        <Button variant="primary" size="sm" className="btn-sm w-fit" type="submit" disabled={busy || !projectId}>
           <AgentText id="translated131" />
         </Button>
       </form>
@@ -937,7 +937,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
           </p>
           <Button
             variant="secondary"
-            size="none"
+            size="sm"
             className="btn-sm mt-4"
             type="button"
             onClick={() => updateUrlState({ runId: null, packetId: null })}

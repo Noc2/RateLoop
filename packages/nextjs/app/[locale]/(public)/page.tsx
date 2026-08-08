@@ -129,7 +129,7 @@ export function TokenlessLandingPage({
                   as={Link}
                   variant="primary"
                   size="none"
-                  className="group min-h-11 gap-2 px-5 text-base"
+                  className="group gap-2 px-5 text-base"
                   href="/agents/connections"
                 >
                   <span>Connect Agent</span>

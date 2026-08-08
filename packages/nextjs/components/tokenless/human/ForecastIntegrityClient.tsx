@@ -192,7 +192,7 @@ export function ForecastIntegrityClient() {
                           <Button
                             variant="secondary"
                             size="none"
-                            className="min-h-9 rounded-lg px-3 py-2 text-sm"
+                            className="rounded-lg px-3 py-2 text-sm"
                             type="button"
                             disabled={busyFinding === finding.findingId}
                             onClick={() => void withdraw(finding.openAppealId!, finding.findingId)}
@@ -220,7 +220,7 @@ export function ForecastIntegrityClient() {
                           <Button
                             variant="secondary"
                             size="none"
-                            className="min-h-9 rounded-lg px-3 py-2 text-sm"
+                            className="rounded-lg px-3 py-2 text-sm"
                             type="button"
                             disabled={busyFinding === finding.findingId}
                             onClick={() => void appeal(finding.findingId)}

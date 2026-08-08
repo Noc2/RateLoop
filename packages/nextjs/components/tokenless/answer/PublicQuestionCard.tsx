@@ -1211,7 +1211,7 @@ export function PublicQuestionCard({
                 variant="primary"
                 size="none"
                 block
-                className="mt-5 px-4 text-center text-sm"
+                className="mt-5 text-center text-sm"
                 href={
                   paidAccess.state === "payout_wallet_required"
                     ? "/settings/wallets?use=payout"

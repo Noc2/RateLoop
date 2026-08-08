@@ -120,8 +120,7 @@ export function AgentReviewsPanel({ canManage, workspaceId }: { canManage: boole
           <Button
             as={Link}
             variant="primary"
-            size="none"
-            className="mt-5 inline-flex min-h-11 items-center px-5"
+            className="mt-5 inline-flex items-center px-5"
             href={agentTabHref("connect", workspaceId)}
           >
             {t("goConnection")}

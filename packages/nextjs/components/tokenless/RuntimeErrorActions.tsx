@@ -13,16 +13,10 @@ export function RuntimeErrorActions({
 }) {
   return (
     <>
-      <Button variant="primary" size="none" className="min-h-11 px-4" type="button" onClick={reset}>
+      <Button variant="primary" size="none" type="button" onClick={reset}>
         {tryAgainLabel}
       </Button>
-      <Button
-        variant="secondary"
-        size="none"
-        className="min-h-11 px-4"
-        type="button"
-        onClick={() => window.history.back()}
-      >
+      <Button variant="secondary" size="none" className="min-h-11" type="button" onClick={() => window.history.back()}>
         {goBackLabel}
       </Button>
     </>

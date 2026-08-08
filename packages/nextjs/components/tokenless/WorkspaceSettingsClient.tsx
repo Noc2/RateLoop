@@ -819,7 +819,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
         maxLength={120}
         required
       />
-      <Button variant="primary" size="none" className="min-h-12 px-5" disabled={busy} type="submit">
+      <Button variant="primary" className="px-5" disabled={busy} type="submit">
         {busy ? "Creating…" : "Create workspace"}
       </Button>
       {error ? (
@@ -873,7 +873,6 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                       <Button
                         variant="secondary"
                         size="none"
-                        className="min-h-10 px-4"
                         type="button"
                         aria-controls="workspace-api-key-settings"
                         aria-expanded={showApiAccess}
@@ -956,7 +955,6 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                         <Button
                           variant="primary"
                           size="none"
-                          className="min-h-10 px-4"
                           ref={upgradeActionRef}
                           type="button"
                           disabled={billingBusy}
@@ -969,7 +967,6 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                         <Button
                           variant="secondary"
                           size="none"
-                          className="min-h-10 px-4"
                           type="button"
                           disabled={billingBusy}
                           onClick={() => void openBillingDestination("portal")}
@@ -1268,7 +1265,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                         <Button
                           variant="primary"
                           size="none"
-                          className="mt-4 min-h-10 px-4"
+                          className="mt-4"
                           type="submit"
                           disabled={billingProfileBusy}
                         >
@@ -1369,13 +1366,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                         placeholder="500.00"
                         required
                       />
-                      <Button
-                        variant="primary"
-                        size="none"
-                        className="min-h-10 self-end px-4"
-                        type="submit"
-                        disabled={topupBusy}
-                      >
+                      <Button variant="primary" size="none" className="self-end" type="submit" disabled={topupBusy}>
                         {topupBusy ? "Creating invoice…" : "Create invoice"}
                       </Button>
                     </form>
@@ -1457,7 +1448,6 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                     <Button
                       variant="secondary"
                       size="none"
-                      className="min-h-10 px-4"
                       type="button"
                       aria-expanded={showIdentity}
                       onClick={() => void toggleIdentitySettings()}
@@ -1688,7 +1678,6 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                               <Button
                                 variant="primary"
                                 size="none"
-                                className="min-h-10 px-4"
                                 type="submit"
                                 disabled={identityBusy || !identityFormDirty}
                               >
@@ -1698,7 +1687,6 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                                 <Button
                                   variant="secondary"
                                   size="none"
-                                  className="min-h-10 px-4"
                                   type="button"
                                   onClick={() =>
                                     setIdentityForm(current => ({
@@ -1730,7 +1718,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                                 <Button
                                   variant="secondary"
                                   size="none"
-                                  className="min-h-9 px-3"
+                                  className="px-3"
                                   disabled={identityBusy}
                                   onClick={() => void scimAction()}
                                   type="button"
@@ -1801,7 +1789,6 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
             <Button
               variant="secondary"
               size="none"
-              className="min-h-10 px-4"
               type="button"
               aria-controls="create-workspace-form"
               aria-expanded={showWorkspaceCreation}

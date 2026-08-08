@@ -264,13 +264,7 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
             <option value="admin">Admin</option>
             <option value="billing">Billing</option>
           </SelectField>
-          <Button
-            variant="primary"
-            size="none"
-            className="min-h-12 px-5"
-            type="submit"
-            disabled={busyTarget === "invite"}
-          >
+          <Button variant="primary" className="px-5" type="submit" disabled={busyTarget === "invite"}>
             {busyTarget === "invite" ? "Creating…" : "Create invitation"}
           </Button>
         </form>

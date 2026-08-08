@@ -302,7 +302,7 @@ function SettlementRecoveryControls() {
       <Button
         variant="primary"
         size="none"
-        className="mt-3 px-4 text-sm"
+        className="mt-3 text-sm"
         type="button"
         disabled={busy || !selectedSource || (needsRecoverySecret && recoverySecret.length < 12)}
         onClick={() => void checkSettlement()}
@@ -344,7 +344,7 @@ function SettlementRecoveryControls() {
             <Button
               variant="primary"
               size="none"
-              className="mt-4 px-4 text-sm"
+              className="mt-4 text-sm"
               type="button"
               disabled={busy}
               onClick={() => void execute(snapshot.canReveal ? "reveal" : "claim")}

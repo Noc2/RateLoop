@@ -1476,7 +1476,6 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 />
                 <Button
                   variant="secondary"
-                  size="none"
                   className="mt-3 px-5"
                   type="button"
                   onClick={() => void copyVisibleConnectionMessage()}
@@ -1838,7 +1837,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                                 </div>
                                 <Button
                                   variant="secondary"
-                                  size="none"
+                                  size="sm"
                                   className="btn-sm shrink-0"
                                   type="button"
                                   onClick={() => removeExpertiseRequirement(requirement.definitionId)}
@@ -2224,7 +2223,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                       </p>
                       <Button
                         variant="secondary"
-                        size="none"
+                        size="sm"
                         className="btn-sm mt-3"
                         type="button"
                         onClick={() => retryConfirmedReviewerCount()}
@@ -2532,7 +2531,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     <code className="mt-2 block break-all text-sm">{inviteToken}</code>
                     <Button
                       variant="secondary"
-                      size="none"
+                      size="sm"
                       className="btn-sm mt-3"
                       type="button"
                       onClick={() => void copyInvitationLink()}

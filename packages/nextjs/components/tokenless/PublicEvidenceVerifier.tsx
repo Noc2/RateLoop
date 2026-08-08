@@ -155,8 +155,7 @@ export function PublicEvidenceVerifier({
             </div>
             <Button
               variant="primary"
-              size="none"
-              className="min-h-11 px-5 disabled:cursor-not-allowed disabled:opacity-50"
+              className="px-5 disabled:cursor-not-allowed disabled:opacity-50"
               disabled={busy || !packetJson.trim()}
               type="submit"
             >

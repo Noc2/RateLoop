@@ -369,7 +369,6 @@ export function NotificationSettingsPanel() {
             </div>
             <Button
               variant="primary"
-              size="none"
               className="mt-4 px-5"
               type="button"
               disabled={savingEmail || !emailDirty}

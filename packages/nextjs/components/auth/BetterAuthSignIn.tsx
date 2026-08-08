@@ -266,7 +266,6 @@ export function BetterAuthSignIn() {
           variant="primary"
           size="none"
           block
-          className="min-h-11 px-4"
           disabled={busy}
           onClick={() => window.location.assign(safeReturnPath())}
           type="button"
@@ -321,15 +320,7 @@ export function BetterAuthSignIn() {
       {verified ? (
         <div className="space-y-3">
           <p className="text-sm leading-6 text-base-content/70">{t("verified")}</p>
-          <Button
-            variant="primary"
-            size="none"
-            block
-            className="min-h-11 px-4"
-            type="button"
-            disabled={busy}
-            onClick={() => void finishSignIn()}
-          >
+          <Button variant="primary" size="none" block type="button" disabled={busy} onClick={() => void finishSignIn()}>
             {t("finish")}
           </Button>
           <button className="btn btn-outline min-h-11 w-full" disabled={busy} onClick={() => void addPasskey()}>
@@ -356,14 +347,7 @@ export function BetterAuthSignIn() {
                 setOtp(event.target.value.replace(/\D/g, ""));
               }}
             />
-            <Button
-              variant="primary"
-              size="none"
-              block
-              className="min-h-11 px-4"
-              type="submit"
-              disabled={busy || otp.length !== 6}
-            >
+            <Button variant="primary" size="none" block type="submit" disabled={busy || otp.length !== 6}>
               {t("verifyCode")}
             </Button>
           </form>
@@ -407,7 +391,7 @@ export function BetterAuthSignIn() {
             }}
           />
           {visibleMethods.emailCode ? (
-            <Button variant="primary" size="none" block className="min-h-11 px-4" type="submit" disabled={busy}>
+            <Button variant="primary" size="none" block type="submit" disabled={busy}>
               {t("emailCode")}
             </Button>
           ) : null}

@@ -119,7 +119,7 @@ function InstallAffordanceRow({
         </pre>
         <Button
           variant="secondary"
-          size="none"
+          size="sm"
           className="btn-sm shrink-0"
           type="button"
           onClick={() => onCopy(affordance.value)}

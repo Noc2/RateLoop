@@ -198,7 +198,7 @@ export function AccountDeletionPanel() {
         {!reviewing ? (
           <Button
             variant="secondary"
-            size="none"
+            size="sm"
             className="btn-sm text-error"
             type="button"
             onClick={startDeletionReview}

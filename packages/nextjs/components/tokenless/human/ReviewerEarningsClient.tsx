@@ -66,7 +66,7 @@ export function ReviewerEarningsClient() {
         <Button
           variant="secondary"
           size="none"
-          className="min-h-9 rounded-lg px-3 py-2 text-sm"
+          className="rounded-lg px-3 py-2 text-sm"
           type="button"
           onClick={() => void refresh()}
           disabled={loading}
