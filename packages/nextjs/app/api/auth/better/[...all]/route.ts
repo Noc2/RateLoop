@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getBetterAuth } from "~~/lib/auth/betterAuth";
+import { consumeEmailCodeRateLimit } from "~~/lib/auth/emailCodeRateLimit";
 import {
   type ScimUserProjection,
   assertEnterpriseSignInAllowed,
@@ -59,7 +60,21 @@ async function handler(
         .clone()
         .json()
         .catch(() => null)) as { email?: unknown } | null;
-      if (typeof body?.email === "string") await assertEnterpriseSignInAllowed(body.email, "email-otp");
+      if (typeof body?.email === "string") {
+        await assertEnterpriseSignInAllowed(body.email, "email-otp");
+        // Better Auth throttles this route per caller IP, which bounds one
+        // client and not a distributed one sending code after code to somebody
+        // else's inbox. Only the address bounds that.
+        if (relativePath === "/email-otp/send-verification-otp") {
+          const limit = await consumeEmailCodeRateLimit(body.email);
+          if (!limit.allowed) {
+            return NextResponse.json(
+              { code: "email_code_rate_limited", message: "Too many sign-in codes were requested for this address." },
+              { headers: { "Retry-After": String(limit.retryAfterSeconds) }, status: 429 },
+            );
+          }
+        }
+      }
     }
     const scimUserMatch = relativePath.match(/^\/scim\/v2\/Users\/([^/]+)$/u);
     const scimUserId = scimUserMatch ? decodeURIComponent(scimUserMatch[1]!) : null;
