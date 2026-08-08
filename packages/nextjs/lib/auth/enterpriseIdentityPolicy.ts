@@ -4,6 +4,7 @@ import { resolveBetterAuthPrincipal } from "~~/lib/auth/principal";
 import { AuthError, revokePrincipalAuthSessions } from "~~/lib/auth/session";
 import { dbClient, dbPool } from "~~/lib/db";
 import { acquireTransactionAdvisoryLock } from "~~/lib/db/advisoryLocks";
+import { revokeWorkspaceReviewerAccessInTransaction } from "~~/lib/tokenless/workspaceReviewers";
 
 type QueryRow = Record<string, unknown> | undefined;
 
@@ -250,6 +251,24 @@ export async function synchronizeScimUser(input: {
         input.projection.workspaceId,
         input.projection.principalId,
       ]);
+      // Membership and reviewer access are independent, so deleting the membership
+      // rows left a deprovisioned employee holding an active reviewer seat and an
+      // access grant to confidential artifacts. This is the path an enterprise
+      // wires to its identity provider precisely so that offboarding is complete,
+      // and it already revokes sessions, OAuth families and project assignments --
+      // which is what made the omission easy to miss.
+      //
+      // `requireActiveReviewer: false` because most deprovisioned users are not
+      // reviewers, and a missing seat must not fail the deprovision.
+      const revokedReviewer = await revokeWorkspaceReviewerAccessInTransaction(client, {
+        actorAddress: "system:better_auth_scim",
+        now,
+        principalAddress: input.projection.principalId,
+        reason: "enterprise_scim_deprovision",
+        requireActiveReviewer: false,
+        status: "removed",
+        workspaceId: input.projection.workspaceId,
+      });
       const revokedProjectAssignments = await client.query(
         `UPDATE tokenless_project_access_assignments
          SET status='revoked',revoked_at=$1,revoked_by='system:better_auth_scim'
@@ -318,6 +337,9 @@ export async function synchronizeScimUser(input: {
           metadata: {
             revokedAgentOauthFamilyCount: revokedFamilies.rowCount ?? 0,
             revokedProjectAssignmentCount: revokedProjectAssignments.rowCount ?? 0,
+            // Recorded either way: an auditor asking "did offboarding remove their
+            // reviewer access" needs the answer for people who held no seat too.
+            revokedReviewerSeat: revokedReviewer.ended,
           },
         },
         client,

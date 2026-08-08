@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { afterEach, beforeEach, test } from "node:test";
 import { __enterpriseAuthRouteTestUtils } from "~~/app/api/auth/better/[...all]/route";
 import { synchronizeScimUser } from "~~/lib/auth/enterpriseIdentityPolicy";
@@ -111,6 +112,32 @@ async function seedScimUser(suffix: string) {
           VALUES (?,?,?,?,'scim','active',?,?,NULL)`,
     args: [workspace.workspaceId, providerId, betterAuthUserId, identity.principalId, now, now],
   });
+  // A SCIM-managed user who is also a reviewer is the whole point of the
+  // deprovision path: an enterprise wires SCIM to its IdP so that offboarding is
+  // complete, and reviewer access is the part that reaches confidential artifacts.
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_workspace_reviewers
+          (workspace_id,principal_address,status,activated_at,created_by,updated_at)
+          VALUES (?,?,'active',?,?,?)`,
+    args: [workspace.workspaceId, identity.principalId, now, identity.principalId, now],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_workspace_reviewer_access_grants
+          (grant_id,workspace_id,principal_address,project_scope,max_private_sensitivity,
+           valid_from,valid_until,source_invitation_id,grant_hash,revoked_at,revoked_by,created_by,created_at)
+          VALUES (?,?,?,'all','confidential',?,NULL,NULL,?,NULL,NULL,?,?)`,
+    args: [
+      `wrag_scim_${suffix}`,
+      workspace.workspaceId,
+      identity.principalId,
+      now,
+      // The column requires a real sha256 shape, so derive one rather than
+      // inventing a label the CHECK constraint rejects.
+      `sha256:${createHash("sha256").update(`scim_grant_${suffix}`).digest("hex")}`,
+      identity.principalId,
+      now,
+    ],
+  });
   const session = await createAuthSession(identity, now);
   return { betterAuthUserId, identity, oauthClientId, projectId, providerId, session, tokenFamilyId, workspace };
 }
@@ -157,6 +184,23 @@ async function assertDeactivated(input: Awaited<ReturnType<typeof seedScimUser>>
     args: [input.identity.principalId],
   });
   assert.equal(audit.rows[0]?.delivery_state, "pending");
+  // Deprovisioning previously stopped at the membership rows, leaving the reviewer
+  // seat and its access grant active -- so a person removed in the corporate IdP
+  // kept reading confidential artifacts.
+  const reviewer = await dbClient.execute({
+    sql: `SELECT status,end_reason FROM tokenless_workspace_reviewers
+          WHERE workspace_id=? AND principal_address=?`,
+    args: [input.workspace.workspaceId, input.identity.principalId],
+  });
+  assert.equal(reviewer.rows[0]?.status, "removed");
+  assert.equal(reviewer.rows[0]?.end_reason, "enterprise_scim_deprovision");
+  const grant = await dbClient.execute({
+    sql: `SELECT revoked_at,revoked_by FROM tokenless_workspace_reviewer_access_grants
+          WHERE workspace_id=? AND principal_address=?`,
+    args: [input.workspace.workspaceId, input.identity.principalId],
+  });
+  assert.ok(grant.rows[0]?.revoked_at);
+  assert.equal(grant.rows[0]?.revoked_by, "system:better_auth_scim");
 }
 
 test("SCIM PATCH active=false projects a 204 response into workspace-local deprovisioning", async () => {

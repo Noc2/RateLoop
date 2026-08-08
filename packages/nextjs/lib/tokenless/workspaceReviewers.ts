@@ -1128,6 +1128,167 @@ export async function revokeWorkspaceReviewerInvitation(input: {
   }
 }
 
+/**
+ * Ends a reviewer seat and revokes everything that hangs off it, inside a
+ * transaction the caller owns.
+ *
+ * Extracted so more than one offboarding path can reuse it. It was previously
+ * inline in `endWorkspaceReviewer`, which meant SCIM deprovisioning -- the path an
+ * enterprise actually wires to its identity provider -- deleted the membership
+ * rows and revoked sessions, OAuth families and project assignments while leaving
+ * the reviewer seat and its access grant active. A deprovisioned employee kept
+ * access to confidential artifacts, and because that path already revoked so much
+ * else it looked thorough.
+ *
+ * The caller is responsible for authorisation and for BEGIN/COMMIT. Pass
+ * `requireActiveReviewer: false` when the subject may legitimately not be a
+ * reviewer, as in SCIM deprovisioning, where a missing seat must not fail the
+ * whole deprovision.
+ */
+export async function revokeWorkspaceReviewerAccessInTransaction(
+  client: PoolClient,
+  input: {
+    workspaceId: string;
+    /** Already normalised by the caller. */
+    principalAddress: string;
+    /** Already normalised and authorised by the caller. */
+    actorAddress: string;
+    status: "removed" | "left";
+    reason: string;
+    now: Date;
+    requireActiveReviewer?: boolean;
+  },
+): Promise<{ ended: boolean }> {
+  const principalAddress = input.principalAddress;
+  const actorAddress = input.actorAddress;
+  const ended = await client.query(
+    `UPDATE tokenless_workspace_reviewers
+       SET status=$1,ended_at=$2,end_reason=$3,updated_at=$2
+       WHERE workspace_id=$4 AND principal_address=$5 AND status='active'
+       RETURNING principal_address`,
+    [input.status, input.now, input.reason, input.workspaceId, principalAddress],
+  );
+  if (ended.rowCount !== 1) {
+    if (input.requireActiveReviewer === false) return { ended: false };
+    throw new TokenlessServiceError("Workspace reviewer not found.", 404, "workspace_reviewer_not_found");
+  }
+  const revoked = await client.query(
+    `UPDATE tokenless_workspace_reviewer_access_grants
+       SET revoked_at=$1,revoked_by=$2
+       WHERE workspace_id=$3 AND principal_address=$4 AND revoked_at IS NULL
+       RETURNING grant_id`,
+    [input.now, actorAddress, input.workspaceId, principalAddress],
+  );
+  await client.query(
+    `UPDATE tokenless_private_group_memberships
+       SET status=$1,ended_at=$2,end_reason=$3,updated_at=$2
+       WHERE group_id IN (
+         SELECT group_id FROM tokenless_private_groups WHERE workspace_id=$4
+       ) AND principal_address=$5 AND status='active'`,
+    [input.status, input.now, input.reason, input.workspaceId, principalAddress],
+  );
+  const revokedLeases = await client.query(
+    `UPDATE tokenless_assurance_artifact_leases
+       SET revoked_at=$1
+       WHERE workspace_id=$2 AND account_address=$3
+         AND assignment_id IS NOT NULL AND revoked_at IS NULL
+       RETURNING lease_id`,
+    [input.now, input.workspaceId, principalAddress],
+  );
+  const expiredAccepted = await client.query(
+    `UPDATE tokenless_assurance_assignments
+       SET lease_state='expired',updated_at=$1
+       WHERE workspace_id=$2 AND reviewer_account_address=$3
+         AND status='accepted' AND lease_state<>'expired'
+       RETURNING assignment_id`,
+    [input.now, input.workspaceId, principalAddress],
+  );
+  const expiredAcceptedDirect = await client.query(
+    `UPDATE tokenless_private_unpaid_review_assignments
+       SET lease_state='expired',updated_at=$1
+       WHERE workspace_id=$2 AND reviewer_account_address=$3
+         AND status='accepted' AND lease_state<>'expired'
+       RETURNING assignment_id,project_id,cohort_id,reviewer_account_address`,
+    [input.now, input.workspaceId, principalAddress],
+  );
+  for (const value of expiredAcceptedDirect.rows) {
+    const row = value as Row;
+    await client.query(
+      `UPDATE tokenless_assurance_cohorts
+         SET active_reservations = active_reservations - 1, updated_at = $1
+         WHERE project_id = $2 AND cohort_id = $3 AND active_reservations > 0`,
+      [input.now, text(row, "project_id"), text(row, "cohort_id")],
+    );
+    await client.query(
+      `UPDATE tokenless_assurance_cohort_reviewers
+         SET active_reservations = active_reservations - 1, updated_at = $1
+         WHERE project_id = $2 AND cohort_id = $3 AND reviewer_account_address = $4
+           AND active_reservations > 0`,
+      [input.now, text(row, "project_id"), text(row, "cohort_id"), text(row, "reviewer_account_address")],
+    );
+  }
+  const released = await client.query(
+    `UPDATE tokenless_assurance_assignments
+       SET status='released',lease_state='expired',updated_at=$1
+       WHERE workspace_id=$2 AND reviewer_account_address=$3 AND status='reserved'
+       RETURNING subpanel_id,project_id,cohort_id`,
+    [input.now, input.workspaceId, principalAddress],
+  );
+  for (const value of released.rows) {
+    const row = value as Row;
+    await client.query(
+      `UPDATE tokenless_assurance_run_subpanels SET active_reservations=active_reservations-1
+         WHERE subpanel_id=$1 AND active_reservations>0`,
+      [text(row, "subpanel_id")],
+    );
+    await client.query(
+      `UPDATE tokenless_assurance_cohorts SET active_reservations=active_reservations-1,updated_at=$1
+         WHERE project_id=$2 AND cohort_id=$3 AND active_reservations>0`,
+      [input.now, text(row, "project_id"), text(row, "cohort_id")],
+    );
+    await client.query(
+      `UPDATE tokenless_assurance_cohort_reviewers SET active_reservations=active_reservations-1,updated_at=$1
+         WHERE project_id=$2 AND cohort_id=$3 AND reviewer_account_address=$4 AND active_reservations>0`,
+      [input.now, text(row, "project_id"), text(row, "cohort_id"), principalAddress],
+    );
+  }
+  const expiredDirect = await client.query(
+    `UPDATE tokenless_private_unpaid_review_assignments
+       SET status='expired',lease_state='expired',updated_at=$1
+       WHERE workspace_id=$2 AND reviewer_account_address=$3 AND status='reserved'
+       RETURNING project_id,cohort_id`,
+    [input.now, input.workspaceId, principalAddress],
+  );
+  for (const value of expiredDirect.rows) {
+    const row = value as Row;
+    await client.query(
+      `UPDATE tokenless_assurance_cohorts SET active_reservations=active_reservations-1,updated_at=$1
+         WHERE project_id=$2 AND cohort_id=$3 AND active_reservations>0`,
+      [input.now, text(row, "project_id"), text(row, "cohort_id")],
+    );
+    await client.query(
+      `UPDATE tokenless_assurance_cohort_reviewers SET active_reservations=active_reservations-1,updated_at=$1
+         WHERE project_id=$2 AND cohort_id=$3 AND reviewer_account_address=$4 AND active_reservations>0`,
+      [input.now, text(row, "project_id"), text(row, "cohort_id"), principalAddress],
+    );
+  }
+  await appendEvent(client, {
+    workspaceId: input.workspaceId,
+    principalAddress,
+    eventType: input.status === "removed" ? "reviewer_removed" : "reviewer_left",
+    actorReference: actorAddress,
+    details: {
+      reason: input.reason,
+      revokedGrantCount: revoked.rowCount,
+      revokedArtifactLeaseCount: revokedLeases.rowCount,
+      expiredAcceptedAssignmentCount: (expiredAccepted.rowCount ?? 0) + (expiredAcceptedDirect.rowCount ?? 0),
+      releasedReservationCount: (released.rowCount ?? 0) + (expiredDirect.rowCount ?? 0),
+    },
+    now: input.now,
+  });
+  return { ended: true };
+}
+
 async function endWorkspaceReviewer(input: {
   actorAddress: string;
   workspaceId: string;
@@ -1147,130 +1308,17 @@ async function endWorkspaceReviewer(input: {
     if (input.status === "left" && actorAddress !== principalAddress) {
       throw new TokenlessServiceError("Workspace reviewer not found.", 404, "workspace_reviewer_not_found");
     }
-    const ended = await client.query(
-      `UPDATE tokenless_workspace_reviewers
-       SET status=$1,ended_at=$2,end_reason=$3,updated_at=$2
-       WHERE workspace_id=$4 AND principal_address=$5 AND status='active'
-       RETURNING principal_address`,
-      [input.status, input.now, input.reason, input.workspaceId, principalAddress],
-    );
-    if (ended.rowCount !== 1) {
+    const revocation = await revokeWorkspaceReviewerAccessInTransaction(client, {
+      actorAddress,
+      now: input.now,
+      principalAddress,
+      reason: input.reason,
+      status: input.status,
+      workspaceId: input.workspaceId,
+    });
+    if (!revocation.ended) {
       throw new TokenlessServiceError("Workspace reviewer not found.", 404, "workspace_reviewer_not_found");
     }
-    const revoked = await client.query(
-      `UPDATE tokenless_workspace_reviewer_access_grants
-       SET revoked_at=$1,revoked_by=$2
-       WHERE workspace_id=$3 AND principal_address=$4 AND revoked_at IS NULL
-       RETURNING grant_id`,
-      [input.now, actorAddress, input.workspaceId, principalAddress],
-    );
-    await client.query(
-      `UPDATE tokenless_private_group_memberships
-       SET status=$1,ended_at=$2,end_reason=$3,updated_at=$2
-       WHERE group_id IN (
-         SELECT group_id FROM tokenless_private_groups WHERE workspace_id=$4
-       ) AND principal_address=$5 AND status='active'`,
-      [input.status, input.now, input.reason, input.workspaceId, principalAddress],
-    );
-    const revokedLeases = await client.query(
-      `UPDATE tokenless_assurance_artifact_leases
-       SET revoked_at=$1
-       WHERE workspace_id=$2 AND account_address=$3
-         AND assignment_id IS NOT NULL AND revoked_at IS NULL
-       RETURNING lease_id`,
-      [input.now, input.workspaceId, principalAddress],
-    );
-    const expiredAccepted = await client.query(
-      `UPDATE tokenless_assurance_assignments
-       SET lease_state='expired',updated_at=$1
-       WHERE workspace_id=$2 AND reviewer_account_address=$3
-         AND status='accepted' AND lease_state<>'expired'
-       RETURNING assignment_id`,
-      [input.now, input.workspaceId, principalAddress],
-    );
-    const expiredAcceptedDirect = await client.query(
-      `UPDATE tokenless_private_unpaid_review_assignments
-       SET lease_state='expired',updated_at=$1
-       WHERE workspace_id=$2 AND reviewer_account_address=$3
-         AND status='accepted' AND lease_state<>'expired'
-       RETURNING assignment_id,project_id,cohort_id,reviewer_account_address`,
-      [input.now, input.workspaceId, principalAddress],
-    );
-    for (const value of expiredAcceptedDirect.rows) {
-      const row = value as Row;
-      await client.query(
-        `UPDATE tokenless_assurance_cohorts
-         SET active_reservations = active_reservations - 1, updated_at = $1
-         WHERE project_id = $2 AND cohort_id = $3 AND active_reservations > 0`,
-        [input.now, text(row, "project_id"), text(row, "cohort_id")],
-      );
-      await client.query(
-        `UPDATE tokenless_assurance_cohort_reviewers
-         SET active_reservations = active_reservations - 1, updated_at = $1
-         WHERE project_id = $2 AND cohort_id = $3 AND reviewer_account_address = $4
-           AND active_reservations > 0`,
-        [input.now, text(row, "project_id"), text(row, "cohort_id"), text(row, "reviewer_account_address")],
-      );
-    }
-    const released = await client.query(
-      `UPDATE tokenless_assurance_assignments
-       SET status='released',lease_state='expired',updated_at=$1
-       WHERE workspace_id=$2 AND reviewer_account_address=$3 AND status='reserved'
-       RETURNING subpanel_id,project_id,cohort_id`,
-      [input.now, input.workspaceId, principalAddress],
-    );
-    for (const value of released.rows) {
-      const row = value as Row;
-      await client.query(
-        `UPDATE tokenless_assurance_run_subpanels SET active_reservations=active_reservations-1
-         WHERE subpanel_id=$1 AND active_reservations>0`,
-        [text(row, "subpanel_id")],
-      );
-      await client.query(
-        `UPDATE tokenless_assurance_cohorts SET active_reservations=active_reservations-1,updated_at=$1
-         WHERE project_id=$2 AND cohort_id=$3 AND active_reservations>0`,
-        [input.now, text(row, "project_id"), text(row, "cohort_id")],
-      );
-      await client.query(
-        `UPDATE tokenless_assurance_cohort_reviewers SET active_reservations=active_reservations-1,updated_at=$1
-         WHERE project_id=$2 AND cohort_id=$3 AND reviewer_account_address=$4 AND active_reservations>0`,
-        [input.now, text(row, "project_id"), text(row, "cohort_id"), principalAddress],
-      );
-    }
-    const expiredDirect = await client.query(
-      `UPDATE tokenless_private_unpaid_review_assignments
-       SET status='expired',lease_state='expired',updated_at=$1
-       WHERE workspace_id=$2 AND reviewer_account_address=$3 AND status='reserved'
-       RETURNING project_id,cohort_id`,
-      [input.now, input.workspaceId, principalAddress],
-    );
-    for (const value of expiredDirect.rows) {
-      const row = value as Row;
-      await client.query(
-        `UPDATE tokenless_assurance_cohorts SET active_reservations=active_reservations-1,updated_at=$1
-         WHERE project_id=$2 AND cohort_id=$3 AND active_reservations>0`,
-        [input.now, text(row, "project_id"), text(row, "cohort_id")],
-      );
-      await client.query(
-        `UPDATE tokenless_assurance_cohort_reviewers SET active_reservations=active_reservations-1,updated_at=$1
-         WHERE project_id=$2 AND cohort_id=$3 AND reviewer_account_address=$4 AND active_reservations>0`,
-        [input.now, text(row, "project_id"), text(row, "cohort_id"), principalAddress],
-      );
-    }
-    await appendEvent(client, {
-      workspaceId: input.workspaceId,
-      principalAddress,
-      eventType: input.status === "removed" ? "reviewer_removed" : "reviewer_left",
-      actorReference: actorAddress,
-      details: {
-        reason: input.reason,
-        revokedGrantCount: revoked.rowCount,
-        revokedArtifactLeaseCount: revokedLeases.rowCount,
-        expiredAcceptedAssignmentCount: (expiredAccepted.rowCount ?? 0) + (expiredAcceptedDirect.rowCount ?? 0),
-        releasedReservationCount: (released.rowCount ?? 0) + (expiredDirect.rowCount ?? 0),
-      },
-      now: input.now,
-    });
     await client.query("COMMIT");
     return { principalAddress, status: input.status, endedAt: input.now.toISOString() };
   } catch (error) {
