@@ -33,6 +33,20 @@ test("removed public build-error bypass fails closed", () => {
   assert.throws(() => require("../next.config"), /no longer supported/);
 });
 
+test("the framework banner and browser source maps stay off in production", () => {
+  delete process.env.NEXT_PUBLIC_IGNORE_BUILD_ERROR;
+  const config = require("../next.config") as {
+    poweredByHeader?: boolean;
+    productionBrowserSourceMaps?: boolean;
+  };
+  // `X-Powered-By: Next.js` ships unless this is explicitly false, and an absent
+  // key reads the same as a deliberate one -- so assert the value, not its absence.
+  assert.equal(config.poweredByHeader, false);
+  // Source maps must never become truthy: they would publish the server-rendered
+  // bundle's original sources to any visitor.
+  assert.notEqual(config.productionBrowserSourceMaps, true);
+});
+
 test("Next traces both Linux x64 sharp runtime packages into every server route", () => {
   const config = require("../next.config") as {
     outputFileTracingIncludes?: Record<string, string[]>;

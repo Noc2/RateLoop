@@ -38,6 +38,11 @@ const evidenceShareSources = [
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   devIndicators: false,
+  // Next sends `X-Powered-By: Next.js` unless this is switched off. It is a free
+  // hint to anyone fingerprinting the stack and the first line of a pentest
+  // report's "information disclosure" section, so it costs nothing to remove and
+  // an explanation to keep.
+  poweredByHeader: false,
   transpilePackages: ["@rateloop/sdk"],
   typescript: {
     ignoreBuildErrors: false,
