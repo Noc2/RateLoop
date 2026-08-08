@@ -52,6 +52,30 @@ test("the secondary default height makes min-h-9 and min-h-10 inert", () => {
   assert.match(daisy, /\.btn-md\{[^}]*--size:calc\(var\(--size-field,\.25rem\)\*10\)/su);
 });
 
+test("no primary asks for a height it cannot have", () => {
+  // A primary is 48px because `.rateloop-gradient-action` pins min-height: 3rem
+  // unlayered. Nine call sites wrote `min-h-11` on one anyway and rendered 48,
+  // so the source said 44 and the screen said 48 — and the secondaries beside
+  // them, where the class is live, really were 44. The pairs looked wrong and
+  // the code looked right.
+  const root = new URL("../../../", import.meta.url);
+  const sources = execFileSync("git", ["ls-files", "*.tsx"], { cwd: root.pathname, encoding: "utf8" })
+    .trim()
+    .split("\n")
+    .filter(name => !name.includes(".test."));
+
+  const offenders: string[] = [];
+  for (const name of sources) {
+    const source = readFileSync(new URL(name, root), "utf8");
+    // A <Button …> with no `variant` is a primary: the component defaults to it.
+    for (const [element] of source.matchAll(/<Button\b[^>]*>/gsu)) {
+      if (/variant=/u.test(element) || !/\bmin-h-\d/u.test(element)) continue;
+      offenders.push(`${name}: ${element.replace(/\s+/gu, " ").slice(0, 80)}`);
+    }
+  }
+  assert.deepEqual(offenders, [], "a min-height on a primary is inert; drop it or change the variant");
+});
+
 test("every branded class a component writes is a class globals.css actually defines", () => {
   // `rateloop-primary-action` is not a real class and never was. It sat on the
   // reviewer's accept-assignment button, which therefore rendered as a bare

@@ -78,7 +78,7 @@ export function WorkspaceSetupStart() {
           />
         </div>
         <SetupActionBar>
-          <Button className="min-h-11 w-full sm:w-auto" type="submit" disabled={busy || !hydrated}>
+          <Button className="w-full sm:w-auto" type="submit" disabled={busy || !hydrated}>
             {busy ? t("creating") : t("createWorkspace")}
           </Button>
         </SetupActionBar>

@@ -34,7 +34,7 @@ function ChoiceForm({
     <form action={completeWelcomeAction}>
       <input type="hidden" name="choice" value={choice} />
       <input type="hidden" name="locale" value={locale} />
-      <Button className="min-h-11 w-full" type="submit" variant={secondary ? "secondary" : "primary"}>
+      <Button className="min-h-12 w-full" type="submit" variant={secondary ? "secondary" : "primary"}>
         {children}
       </Button>
     </form>

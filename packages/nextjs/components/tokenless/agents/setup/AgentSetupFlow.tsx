@@ -1382,7 +1382,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   const backButton = back ? (
     <Button
       variant="secondary"
-      className="rateloop-back-action min-h-11 w-full gap-2 sm:w-auto"
+      className="rateloop-back-action min-h-12 w-full gap-2 sm:w-auto"
       type="button"
       disabled={busy}
       onClick={() => void navigateToStep(back)}
@@ -1424,7 +1424,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
             </div>
             <SetupActionBar>
               {backButton}
-              <Button className="min-h-11 w-full sm:w-auto" type="submit" disabled={busy || !workspaceName.trim()}>
+              <Button className="w-full sm:w-auto" type="submit" disabled={busy || !workspaceName.trim()}>
                 {busy ? t("saving") : workspaceName.trim() === setup.workspaceName ? t("continue") : t("saveContinue")}
               </Button>
             </SetupActionBar>
@@ -1444,7 +1444,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
               {backButton}
               {setup.connection.status === "connected" ? (
                 <Button
-                  className="min-h-11 w-full sm:w-auto"
+                  className="w-full sm:w-auto"
                   type="button"
                   disabled={busy}
                   onClick={() => void navigateToStep("agent")}
@@ -1453,7 +1453,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 </Button>
               ) : (
                 <Button
-                  className="min-h-11 w-full sm:w-auto"
+                  className="w-full sm:w-auto"
                   type="button"
                   disabled={busy}
                   onClick={() => void createConnectionMessage()}
@@ -1527,7 +1527,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
             </div>
             <SetupActionBar>
               {backButton}
-              <Button className="min-h-11 w-full sm:w-auto" type="submit" disabled={busy}>
+              <Button className="w-full sm:w-auto" type="submit" disabled={busy}>
                 {busy ? t("confirming") : t("confirmWorkflow")}
               </Button>
             </SetupActionBar>
@@ -2198,7 +2198,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
             ) : null}
             <SetupActionBar>
               {backButton}
-              <Button className="min-h-11 w-full sm:w-auto" type="submit" disabled={busy}>
+              <Button className="w-full sm:w-auto" type="submit" disabled={busy}>
                 {busy ? t("saving") : t("saveContinue")}
               </Button>
             </SetupActionBar>
@@ -2515,7 +2515,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 ) : null}
                 <SetupActionBar>
                   {backButton}
-                  <Button className="min-h-11 w-full sm:w-auto" type="submit" disabled={busy}>
+                  <Button className="w-full sm:w-auto" type="submit" disabled={busy}>
                     {busy ? t("finishing") : t("finish")}
                   </Button>
                 </SetupActionBar>
@@ -2594,12 +2594,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 ) : null}
                 <SetupActionBar className="mt-0">
                   {backButton}
-                  <Button
-                    className="min-h-11 w-full sm:w-auto"
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void finishSetup()}
-                  >
+                  <Button className="w-full sm:w-auto" type="button" disabled={busy} onClick={() => void finishSetup()}>
                     {busy ? t("finishing") : setup.complete ? t("goToAgents") : t("finish")}
                   </Button>
                 </SetupActionBar>

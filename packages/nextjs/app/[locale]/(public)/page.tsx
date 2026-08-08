@@ -140,9 +140,12 @@ export function TokenlessLandingPage({
                     &gt;
                   </span>
                 </Button>
-                <Link
+                <Button
+                  as={Link}
+                  variant="secondary"
+                  size="none"
                   href="/human/review"
-                  className="group btn min-h-11 gap-2 rounded-lg border-0 bg-base-content/[0.11] px-5 text-base hover:bg-base-content/[0.18]"
+                  className="group min-h-12 gap-2 rounded-lg px-5 text-base"
                 >
                   <span>Start Reviewing</span>
                   <span
@@ -151,7 +154,7 @@ export function TokenlessLandingPage({
                   >
                     &gt;
                   </span>
-                </Link>
+                </Button>
               </div>
               {socialProofItems.length > 0 ? (
                 <div className="mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-center text-sm text-base-content/75 sm:text-[0.95rem] lg:justify-start lg:text-left">

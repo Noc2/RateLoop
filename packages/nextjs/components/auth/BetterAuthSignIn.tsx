@@ -273,7 +273,7 @@ export function BetterAuthSignIn() {
           {t("continueAs", { account: accountLabel })}
         </Button>
         <button
-          className="btn btn-outline min-h-11 w-full"
+          className="btn btn-outline min-h-12 w-full"
           disabled={busy}
           onClick={() => void switchAccount()}
           type="button"
@@ -295,7 +295,7 @@ export function BetterAuthSignIn() {
         <p className="text-sm text-error" role="alert">
           {t("errors.configuration")}
         </p>
-        <button className="btn btn-outline min-h-11 w-full" type="button" onClick={() => void loadConfiguration()}>
+        <button className="btn btn-outline min-h-12 w-full" type="button" onClick={() => void loadConfiguration()}>
           {t("tryAgain")}
         </button>
       </div>
@@ -323,7 +323,7 @@ export function BetterAuthSignIn() {
           <Button variant="primary" size="none" block type="button" disabled={busy} onClick={() => void finishSignIn()}>
             {t("finish")}
           </Button>
-          <button className="btn btn-outline min-h-11 w-full" disabled={busy} onClick={() => void addPasskey()}>
+          <button className="btn btn-outline min-h-12 w-full" disabled={busy} onClick={() => void addPasskey()}>
             {t("addPasskey")}
           </button>
         </div>
@@ -353,7 +353,7 @@ export function BetterAuthSignIn() {
           </form>
           <div className="grid gap-3 sm:grid-cols-2">
             <button
-              className="btn btn-outline min-h-11 w-full"
+              className="btn btn-outline min-h-12 w-full"
               disabled={busy}
               onClick={() => {
                 setError(null);
@@ -366,7 +366,7 @@ export function BetterAuthSignIn() {
               {t("changeEmail")}
             </button>
             <button
-              className="btn btn-outline min-h-11 w-full"
+              className="btn btn-outline min-h-12 w-full"
               disabled={busy || resendCooldown > 0}
               onClick={() => void requestCode()}
               type="button"
@@ -397,7 +397,7 @@ export function BetterAuthSignIn() {
           ) : null}
           {visibleMethods.sso ? (
             <button
-              className="btn btn-outline min-h-11 w-full"
+              className="btn btn-outline min-h-12 w-full"
               disabled={busy || !email.includes("@")}
               onClick={() => void signInWithSso()}
               type="button"
@@ -419,7 +419,7 @@ export function BetterAuthSignIn() {
           ) : null}
           {visibleMethods.passkey ? (
             <button
-              className="btn btn-outline min-h-11 w-full"
+              className="btn btn-outline min-h-12 w-full"
               disabled={busy}
               onClick={() => void signInWithPasskey()}
             >
@@ -432,7 +432,7 @@ export function BetterAuthSignIn() {
                 <Button
                   variant="secondary"
                   size="none"
-                  className="gap-3"
+                  className="min-h-12 gap-3"
                   type="button"
                   disabled={busy}
                   onClick={() => void social("google")}
@@ -445,7 +445,7 @@ export function BetterAuthSignIn() {
                 <Button
                   variant="secondary"
                   size="none"
-                  className="gap-3"
+                  className="min-h-12 gap-3"
                   type="button"
                   disabled={busy}
                   onClick={() => void social("apple")}
